@@ -3,4 +3,4 @@
 *.secret
 *.key
 *.pem
-screenshot.png
+# screenshot.png is now tracked intentionally

@@ -2,7 +2,6 @@
 
 > Arch Linux · Hyprland · Matugen — dynamic wallpaper-based theming
 
-<!-- Screenshot placeholder -->
 ![screenshot](./screenshot.png)
 
 ---
@@ -101,7 +100,7 @@ the result to each app's config directory.
 ├── .config/
 │   ├── ghostty/         # Terminal config
 │   ├── waybar/          # Bar + scripts
-│   ├── hypr/            # Hyprland, hyprlock, hypridle, scripts, shaders
+│   ├── hypr/            # Hyprland, hyprlock, hypridle, scripts
 │   ├── fastfetch/       # Fetch config
 │   ├── cava/            # Audio visualizer
 │   ├── btop/            # System monitor
@@ -111,7 +110,11 @@ the result to each app's config directory.
 │       └── templates/   # Per-app color templates
 ├── .config/starship.toml
 ├── .zshrc
+├── Pictures/
+│   └── logo.png         # Fastfetch logo (stowed to ~/Pictures/logo.png)
+├── wallpapers/          # Wallpaper collection (not stowed)
 ├── theme-fallback/      # Static snow_black colors (used before matugen runs)
+├── screenshot.png       # README header
 ├── install.sh
 └── README.md
 ```

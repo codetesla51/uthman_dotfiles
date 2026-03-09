@@ -1,0 +1,277 @@
+/* ── Matugen color variables ─────────────────────────────── */
+@define-color background     {{ colors.background.default.hex }};
+@define-color foreground     {{ colors.on_background.default.hex }};
+@define-color black          {{ colors.background.default.hex }};
+@define-color red            {{ colors.error.default.hex }};
+@define-color green          {{ colors.secondary.default.hex }};
+@define-color yellow         {{ colors.tertiary.default.hex }};
+@define-color blue           {{ colors.primary.default.hex }};
+@define-color magenta        {{ colors.primary.default.hex }};
+@define-color cyan           {{ colors.secondary.default.hex }};
+@define-color white          {{ colors.on_background.default.hex }};
+@define-color bright_black   {{ colors.surface_variant.default.hex }};
+@define-color bright_red     {{ colors.error.default.hex }};
+@define-color bright_green   {{ colors.secondary.default.hex }};
+@define-color bright_yellow  {{ colors.tertiary.default.hex }};
+@define-color bright_blue    {{ colors.primary.default.hex }};
+@define-color bright_magenta {{ colors.primary.default.hex }};
+@define-color bright_cyan    {{ colors.secondary.default.hex }};
+@define-color bright_white   {{ colors.on_background.default.hex }};
+
+@define-color surface        {{ colors.surface.default.hex }};
+@define-color surface_variant {{ colors.surface_variant.default.hex }};
+@define-color outline        {{ colors.outline.default.hex }};
+@define-color primary        {{ colors.primary.default.hex }};
+@define-color on_primary     {{ colors.on_primary.default.hex }};
+@define-color error          {{ colors.error.default.hex }};
+
+@define-color accent_bg_color @blue;
+@define-color accent_fg_color @on_primary;
+@define-color accent_color @blue;
+
+
+
+window, .window {
+    background-color: @background;
+    color: @foreground;
+}
+
+/* ── Headerbar ───────────────────────────────────────────── */
+headerbar {
+    background-color: @surface;
+    color: @foreground;
+    border-bottom: 1px solid alpha(@outline, 0.15);
+    box-shadow: none;
+    padding: 6px 10px;
+    min-height: 42px;
+}
+
+headerbar .title {
+    font-weight: 600;
+    font-size: 13px;
+}
+
+headerbar button {
+    background: transparent;
+    border: none;
+    border-radius: 8px;
+    color: alpha(@foreground, 0.7);
+    padding: 4px 8px;
+    transition: 150ms ease;
+}
+
+headerbar button:hover {
+    background: alpha(@surface_variant, 0.5);
+    color: @foreground;
+}
+
+headerbar button:active {
+    background: alpha(@primary, 0.2);
+    color: @primary;
+}
+
+/* ── Buttons ─────────────────────────────────────────────── */
+button {
+    background: alpha(@surface_variant, 0.3);
+    border: 1px solid alpha(@outline, 0.15);
+    border-radius: 8px;
+    color: @foreground;
+    padding: 6px 14px;
+    transition: 150ms ease;
+    box-shadow: none;
+}
+
+button:hover {
+    background: alpha(@surface_variant, 0.5);
+    border-color: alpha(@outline, 0.3);
+}
+
+button:active,
+button:checked {
+    background: alpha(@primary, 0.25);
+    border-color: alpha(@primary, 0.4);
+    color: @primary;
+}
+
+button.suggested-action {
+    background: @primary;
+    color: @on_primary;
+    border: none;
+}
+
+button.suggested-action:hover {
+    background: alpha(@primary, 0.85);
+}
+
+button.destructive-action {
+    background: alpha(@error, 0.15);
+    color: @error;
+    border-color: alpha(@error, 0.3);
+}
+
+/* ── Entries ─────────────────────────────────────────────── */
+entry {
+    background: alpha(@surface_variant, 0.2);
+    border: 1px solid alpha(@outline, 0.2);
+    border-radius: 8px;
+    color: @foreground;
+    padding: 6px 12px;
+    caret-color: @primary;
+    transition: 150ms ease;
+}
+
+entry:focus {
+    border-color: alpha(@primary, 0.6);
+    background: alpha(@surface_variant, 0.3);
+    box-shadow: 0 0 0 2px alpha(@primary, 0.12);
+}
+
+/* ── Lists & rows ────────────────────────────────────────── */
+listview,
+listbox {
+    background: transparent;
+    color: @foreground;
+}
+
+listview row,
+listboxrow {
+    padding: 6px 12px;
+    border-radius: 8px;
+    transition: 150ms ease;
+}
+
+listview row:hover,
+listboxrow:hover {
+    background: alpha(@surface_variant, 0.3);
+}
+
+listview row:selected,
+listboxrow:selected {
+    background: alpha(@primary, 0.2);
+    color: @primary;
+}
+
+/* ── Scrollbars ──────────────────────────────────────────── */
+scrollbar {
+    background: transparent;
+    border: none;
+}
+
+scrollbar slider {
+    background: alpha(@outline, 0.3);
+    border-radius: 4px;
+    min-width: 4px;
+    min-height: 4px;
+    margin: 2px;
+    transition: 150ms ease;
+}
+
+scrollbar slider:hover {
+    background: alpha(@outline, 0.5);
+}
+
+/* ── Menus & popovers ────────────────────────────────────── */
+menu,
+.menu,
+popover {
+    background: @surface;
+    border: 1px solid alpha(@outline, 0.15);
+    border-radius: 12px;
+    padding: 6px;
+    box-shadow: 0 4px 24px alpha(#000000, 0.3);
+}
+
+menuitem {
+    padding: 7px 14px;
+    border-radius: 8px;
+    color: @foreground;
+    transition: 150ms ease;
+}
+
+menuitem:hover {
+    background: alpha(@surface_variant, 0.4);
+}
+
+/* ── Checkboxes & radios ─────────────────────────────────── */
+checkbutton check,
+radiobutton radio {
+    background: alpha(@surface_variant, 0.3);
+    border: 1px solid alpha(@outline, 0.3);
+    border-radius: 4px;
+    transition: 150ms ease;
+}
+
+checkbutton check:checked,
+radiobutton radio:checked {
+    background: @primary;
+    border-color: @primary;
+    color: @on_primary;
+}
+
+/* ── Progress bars ───────────────────────────────────────── */
+progressbar trough {
+    background: alpha(@outline, 0.15);
+    border-radius: 4px;
+    min-height: 6px;
+}
+
+progressbar progress {
+    background: @primary;
+    border-radius: 4px;
+}
+
+/* ── Switches ────────────────────────────────────────────── */
+switch {
+    background: alpha(@outline, 0.2);
+    border-radius: 14px;
+    min-width: 44px;
+    min-height: 24px;
+    border: none;
+    transition: 150ms ease;
+}
+
+switch:checked {
+    background: alpha(@primary, 0.8);
+}
+
+switch slider {
+    background: @foreground;
+    border-radius: 50%;
+    min-width: 18px;
+    min-height: 18px;
+    margin: 3px;
+}
+
+/* ── Tooltips ────────────────────────────────────────────── */
+tooltip {
+    background: alpha(@surface, 0.95);
+    border: 1px solid alpha(@outline, 0.2);
+    border-radius: 8px;
+    color: @foreground;
+    padding: 6px 10px;
+}
+
+/* ── Notebook tabs ───────────────────────────────────────── */
+notebook header {
+    background: @surface;
+    border-bottom: 1px solid alpha(@outline, 0.1);
+}
+
+notebook tab {
+    padding: 8px 16px;
+    color: alpha(@foreground, 0.6);
+    border: none;
+    transition: 150ms ease;
+}
+
+notebook tab:checked {
+    color: @primary;
+    border-bottom: 2px solid @primary;
+}
+
+/* ── Separators ──────────────────────────────────────────── */
+separator {
+    background: alpha(@outline, 0.1);
+    min-height: 1px;
+    min-width: 1px;
+}

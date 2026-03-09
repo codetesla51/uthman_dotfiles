@@ -1,0 +1,34 @@
+:root {
+  --background: {{ colors.background.default.hex }};
+  --foreground: {{ colors.on_background.default.hex }};
+  --accent: {{ colors.primary.default.hex }};
+  --color0: {{ colors.background.default.hex }};
+  --color1: {{ colors.error.default.hex }};
+  --color2: {{ colors.secondary.default.hex }};
+  --color3: {{ colors.tertiary.default.hex }};
+  --color4: {{ colors.primary.default.hex }};
+  --color5: {{ colors.primary.default.hex }};
+  --color6: {{ colors.secondary.default.hex }};
+  --color7: {{ colors.on_background.default.hex }};
+  --color8: {{ colors.surface_variant.default.hex }};
+  --color9: {{ colors.error.default.hex }};
+  --color10: {{ colors.secondary.default.hex }};
+  --color11: {{ colors.tertiary.default.hex }};
+  --color12: {{ colors.primary.default.hex }};
+  --color13: {{ colors.primary.default.hex }};
+  --color14: {{ colors.secondary.default.hex }};
+  --color15: {{ colors.on_background.default.hex }};
+}
+
+* {
+  background-color: var(--background) !important;
+  color: var(--foreground) !important;
+}
+
+scrollbar {
+  background-color: var(--color0) !important;
+}
+
+scrollbar thumb {
+  background-color: var(--color4) !important;
+}

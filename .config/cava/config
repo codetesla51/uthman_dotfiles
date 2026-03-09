@@ -1,0 +1,20 @@
+## Configuration file for CAVA.
+
+[general]
+framerate = 60
+autosens = 1
+bar_width = 2
+bar_spacing = 1
+
+[input]
+method = pipewire
+source = auto
+
+[output]
+channels = stereo
+
+[color]
+theme = 'matugen'
+
+[smoothing]
+noise_reduction = 60

@@ -1,0 +1,346 @@
+/* ─── Matugen colors ─── */
+@import "colors.css";
+
+/* ════════════════════════════════════════════════════════
+   ░░░  WAYBAR  ·  Glassmorphic Floating Island  ░░░
+   ════════════════════════════════════════════════════════ */
+
+/* ─── Reset ─── */
+* {
+    border: none;
+    margin: 0;
+    padding: 0;
+    font-family: "FiraCode Nerd Font";
+    font-size: 12px;
+    font-weight: 500;
+    min-height: 0;
+}
+
+#tray {
+    background: alpha(@surface, 0.6);
+    border: 1px solid alpha(@outline, 0.15);
+    border-radius: 14px;
+    padding: 5px 10px;
+    margin: 4px 3px;
+}
+
+#tray > .passive {
+    -gtk-icon-effect: dim;
+}
+
+#tray > .needs-attention {
+    -gtk-icon-effect: highlight;
+    border-color: alpha(@error, 0.5);
+}
+#custom-arch {
+    background: alpha(@surface, 0.65);
+    border: 1px solid alpha(@outline, 0.15);
+    border-radius: 14px;
+    padding: 5px 16px;
+    margin: 4px 3px;
+    color: @primary;
+    font-size: 16px;
+    transition: all 0.3s ease;
+}
+
+#custom-arch:hover {
+    background: alpha(@surface, 0.85);
+    border-color: alpha(@primary, 0.45);
+}
+/* ─── Bar canvas ─── */
+window#waybar {
+    background: transparent;
+    color: @foreground;
+}
+
+/* ─── Tooltips — floating glass cards ─── */
+tooltip {
+    background: alpha(@background, 0.85);
+    border: 1px solid alpha(@outline, 0.3);
+    border-radius: 16px;
+    padding: 12px 18px;
+}
+
+tooltip label {
+    color: @on_surface;
+    font-size: 11px;
+    letter-spacing: 0.3px;
+}
+
+/* ═══════════════════════════════════════
+   LEFT SIDE — Logo + Workspaces + Media
+   ═══════════════════════════════════════ */
+
+/* ─── Logo ─── */
+
+/* ─── Workspaces — segmented control ─── */
+#workspaces {
+    background: alpha(@surface, 0.65);
+    border: 1px solid alpha(@outline, 0.15);
+    border-radius: 14px;
+    padding: 3px 5px;
+    margin: 4px 0;
+}
+
+#workspaces button {
+    padding: 4px 10px;
+    border-radius: 11px;
+    background: transparent;
+    color: alpha(@outline, 0.7);
+    font-weight: 700;
+    font-size: 13px;
+    transition: all 0.25s ease;
+    min-width: 18px;
+}
+
+#workspaces button:hover {
+    color: @foreground;
+    background: alpha(@surface_variant, 0.4);
+}
+
+#workspaces button.active {
+    color: @background;
+    background: linear-gradient(135deg, @primary, alpha(@secondary, 0.9));
+    box-shadow: 0 2px 8px alpha(@primary, 0.35);
+}
+
+#workspaces button.empty {
+    color: alpha(@outline, 0.35);
+    font-size: 9px;
+}
+
+#workspaces button.urgent {
+    color: @background;
+    background: @error;
+}
+
+/* ─── Separators ─── */
+#custom-separator,
+#custom-separator-r {
+    color: alpha(@outline, 0);
+    font-size: 6px;
+    padding: 0 3px;
+    background: transparent;
+}
+
+/* ─── Mpris base ─── */
+#mpris {
+    background: alpha(@surface, 0.55);
+    border: 1px solid alpha(@outline, 0.12);
+    border-radius: 14px;
+    padding: 4px 14px;
+    margin: 4px 0;
+    font-size: 11px;
+    color: @foreground;
+    letter-spacing: 0.2px;
+    transition: all 0.3s ease;
+}
+
+#mpris:hover {
+    background: alpha(@surface, 0.75);
+}
+
+#mpris.paused {
+    color: alpha(@outline, 0.7);
+    font-style: italic;
+}
+
+#mpris.stopped {
+    color: alpha(@outline, 0.4);
+}
+
+/* ─── Spotify — green tint ─── */
+#mpris.spotify {
+    color: #1db954;
+    border-color: alpha(#1db954, 0.25);
+}
+
+#mpris.spotify:hover {
+    border-color: alpha(#1db954, 0.5);
+    background: alpha(@surface, 0.75);
+}
+
+#mpris.spotify.paused {
+    color: alpha(#1db954, 0.5);
+    border-color: alpha(#1db954, 0.15);
+}
+
+/* ─── Firefox / YouTube — red/orange tint ─── */
+#mpris.firefox {
+    color: #ff6611;
+    border-color: alpha(#ff6611, 0.25);
+}
+
+#mpris.firefox:hover {
+    border-color: alpha(#ff6611, 0.5);
+    background: alpha(@surface, 0.75);
+}
+
+#mpris.firefox.paused {
+    color: alpha(#ff6611, 0.5);
+    border-color: alpha(#ff6611, 0.15);
+}
+
+/* ─── Chromium / YouTube ─── */
+#mpris.chromium {
+    color: #4285f4;
+    border-color: alpha(#4285f4, 0.25);
+}
+
+#mpris.chromium:hover {
+    border-color: alpha(#4285f4, 0.5);
+    background: alpha(@surface, 0.75);
+}
+
+#mpris.chromium.paused {
+    color: alpha(#4285f4, 0.5);
+    border-color: alpha(#4285f4, 0.15);
+}
+
+/* ─── VLC — orange ─── */
+#mpris.vlc {
+    color: #ff7800;
+    border-color: alpha(#ff7800, 0.25);
+}
+
+#mpris.vlc:hover {
+    border-color: alpha(#ff7800, 0.5);
+}
+
+/* ─── MPV / local media — neutral ─── */
+#mpris.mpv {
+    color: @secondary;
+    border-color: alpha(@secondary, 0.25);
+}
+
+#mpris.mpv:hover {
+    border-color: alpha(@secondary, 0.5);
+}
+/* ════════════════════════════
+   CENTER — Clock island
+   ════════════════════════════ */
+
+#clock {
+    background: alpha(@surface, 0.7);
+    border: 1px solid alpha(@outline, 0.15);
+    border-radius: 16px;
+    padding: 8px 20px;
+    margin: 3px 0;
+    font-weight: 800;
+    font-size: 13px;
+    letter-spacing: 1.2px;
+    color: @primary;
+    transition: all 0.3s ease;
+}
+
+#clock:hover {
+    background: alpha(@surface, 0.85);
+    border-color: alpha(@primary, 0.4);
+    letter-spacing: 2px;
+}
+
+/* ═══════════════════════════════════════
+   RIGHT SIDE — Individual glass pills
+   ═══════════════════════════════════════ */
+
+/* ─── Shared base for all right modules ─── */
+#custom-screenrecord,
+#memory,
+#cpu,
+#network,
+#battery {
+    background: alpha(@surface, 0.6);
+    border: 1px solid alpha(@outline, 0.15);
+    border-radius: 14px;
+    padding: 5px 16px;
+    margin: 4px 3px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    transition: all 0.3s ease;
+}
+
+/* ─── Screen Recording ─── */
+#custom-screenrecord {
+    color: @foreground;
+}
+
+#custom-screenrecord:hover {
+    background: alpha(@surface, 0.8);
+    border-color: alpha(@error, 0.45);
+}
+
+#custom-screenrecord.recording {
+    color: @error;
+    border-color: alpha(@error, 0.5);
+    animation: blink 1s ease-in-out infinite;
+}
+
+#custom-screenrecord.idle {
+    color: alpha(@outline, 0.7);
+}
+
+/* ─── Memory ─── */
+#memory {
+    color: @tertiary;
+}
+
+#memory:hover {
+    background: alpha(@surface, 0.8);
+    border-color: alpha(@tertiary, 0.45);
+    color: @foreground;
+}
+
+/* ─── CPU ─── */
+#cpu {
+    color: @secondary;
+}
+
+#cpu:hover {
+    background: alpha(@surface, 0.8);
+    border-color: alpha(@secondary, 0.45);
+    color: @foreground;
+}
+
+/* ─── Network ─── */
+#network {
+    color: @primary;
+}
+
+#network:hover {
+    background: alpha(@surface, 0.8);
+    border-color: alpha(@primary, 0.45);
+    color: @foreground;
+}
+
+#network.disconnected {
+    color: @error;
+    border-color: alpha(@error, 0.3);
+}
+
+/* ─── Battery ─── */
+#battery {
+    color: @foreground;
+    margin-right: 4px;
+}
+
+#battery:hover {
+    background: alpha(@surface, 0.8);
+    border-color: alpha(@primary, 0.35);
+}
+
+/* ─── Battery states ─── */
+#battery.charging {
+    color: @secondary;
+    border-color: alpha(@secondary, 0.35);
+}
+
+#battery.warning {
+    color: @tertiary;
+    border-color: alpha(@tertiary, 0.35);
+}
+
+#battery.critical {
+    color: @error;
+    border-color: alpha(@error, 0.5);
+}

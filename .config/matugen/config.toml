@@ -1,0 +1,90 @@
+[config]
+contrast = 0.5
+variation = "standard"
+
+[config.reload_apps]
+waybar = true
+
+[templates.waybar]
+input_path = "~/.config/matugen/templates/waybar-colors.css"
+output_path = "~/.config/waybar/colors.css"
+
+[templates.hyprland-theme]
+input_path = "~/.config/matugen/templates/hyprland-colors.conf"
+output_path = "~/.config/theme/themes/snow_black/colors.conf"
+
+[templates.hyprland-current]
+input_path = "~/.config/matugen/templates/hyprland-colors.conf"
+output_path = "~/.config/theme/current/colors.conf"
+
+[templates.hyprlock-current]
+input_path = "~/.config/matugen/templates/hyprlock-colors.conf"
+output_path = "~/.config/theme/current/hyprlock.conf"
+
+[templates.ghostty-theme]
+input_path = "~/.config/matugen/templates/ghostty-theme.conf"
+output_path = "~/.config/theme/themes/snow_black/ghostty.conf"
+
+[templates.ghostty-current]
+input_path = "~/.config/matugen/templates/ghostty-theme.conf"
+output_path = "~/.config/theme/current/ghostty.conf"
+
+[templates.mako-theme]
+input_path = "~/.config/matugen/templates/mako.ini"
+output_path = "~/.config/theme/themes/snow_black/mako.ini"
+
+[templates.mako-current]
+input_path = "~/.config/matugen/templates/mako.ini"
+output_path = "~/.config/theme/current/mako.ini"
+
+[templates.gtk-theme]
+input_path = "~/.config/matugen/templates/gtk.css"
+output_path = "~/.config/theme/themes/snow_black/gtk.css"
+
+[templates.gtk-current]
+input_path = "~/.config/matugen/templates/gtk.css"
+output_path = "~/.config/theme/current/gtk.css"
+
+[templates.chromium-theme]
+input_path = "~/.config/matugen/templates/chromium.theme"
+output_path = "~/.config/theme/themes/snow_black/chromium.theme"
+
+[templates.chromium-current]
+input_path = "~/.config/matugen/templates/chromium.theme"
+output_path = "~/.config/theme/current/chromium.theme"
+
+[templates.btop-theme]
+input_path = "~/.config/matugen/templates/btop.theme"
+output_path = "~/.config/theme/themes/snow_black/btop.theme"
+
+[templates.btop-current]
+input_path = "~/.config/matugen/templates/btop.theme"
+output_path = "~/.config/theme/current/btop.theme"
+
+[templates.cava-theme]
+input_path = "~/.config/matugen/templates/cava_theme"
+output_path = "~/.config/theme/themes/snow_black/cava_theme"
+
+[templates.cava-current]
+input_path = "~/.config/matugen/templates/cava_theme"
+output_path = "~/.config/theme/current/cava_theme"
+
+[templates.walker-theme]
+input_path = "~/.config/matugen/templates/walker.css"
+output_path = "~/.config/theme/themes/snow_black/walker.css"
+
+[templates.walker-current]
+input_path = "~/.config/matugen/templates/walker.css"
+output_path = "~/.config/theme/current/walker.css"
+
+[templates.swaync-current]
+input_path = "~/.config/matugen/templates/swaync-colors.css"
+output_path = "~/.config/swaync/colors.css"
+
+[templates.firefox-theme]
+input_path = "~/.config/matugen/templates/firefox.css"
+output_path = "~/.config/theme/themes/snow_black/firefox.css"
+
+[templates.firefox-current]
+input_path = "~/.config/matugen/templates/firefox.css"
+output_path = "~/.config/theme/current/firefox.css"

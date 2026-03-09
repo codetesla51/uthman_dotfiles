@@ -1,0 +1,12 @@
+# matugen fallback — snow_black
+[color]
+gradient = 1
+gradient_count = 8
+gradient_color_1 = "#afd0b3"
+gradient_color_2 = "#afd0b3"
+gradient_color_3 = "#bdcabc"
+gradient_color_4 = "#bdcabc"
+gradient_color_5 = "#efbac1"
+gradient_color_6 = "#efbac1"
+gradient_color_7 = "#8c928b"
+gradient_color_8 = "#424842"

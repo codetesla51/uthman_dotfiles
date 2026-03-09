@@ -1,0 +1,101 @@
+{
+  "$schema": "/etc/xdg/swaync/configSchema.json",
+  "ignore-gtk-theme": true,
+  "positionX": "right",
+  "positionY": "top",
+  "layer": "overlay",
+  "control-center-layer": "top",
+  "layer-shell": true,
+  "layer-shell-cover-screen": false,
+  "cssPriority": "user",
+  "control-center-margin-top": 8,
+  "control-center-margin-bottom": 8,
+  "control-center-margin-right": 8,
+  "control-center-margin-left": 0,
+  "notification-2fa-action": true,
+  "notification-inline-replies": true,
+  "notification-body-image-height": 100,
+  "notification-body-image-width": 200,
+  "timeout": 5,
+  "timeout-low": 3,
+  "timeout-critical": 0,
+  "fit-to-screen": false,
+  "relative-timestamps": true,
+  "control-center-width": 400,
+  "control-center-height": 600,
+  "notification-window-width": 360,
+  "keyboard-shortcuts": true,
+  "notification-grouping": true,
+  "image-visibility": "when-available",
+  "transition-time": 180,
+  "hide-on-clear": false,
+  "hide-on-action": true,
+  "text-empty": "No notifications",
+  "script-fail-notify": false,
+  "widgets": [
+    "menubar",
+    "buttons-grid",
+    "backlight",
+    "volume",
+    "mpris",
+    "label#notifications",
+    "dnd",
+    "notifications"
+  ],
+  "widget-config": {
+    "menubar": {
+      "menu#power": {
+        "label": "",
+        "position": "right",
+        "actions": [
+          { "label": "  Lock", "command": "hyprlock" },
+          { "label": "  Logout", "command": "hyprctl dispatch exit" },
+          { "label": "  Suspend", "command": "systemctl suspend" },
+          { "label": "  Reboot", "command": "systemctl reboot" },
+          { "label": "  Shutdown", "command": "systemctl poweroff" }
+        ]
+      },
+      "menu#close": {
+        "label": "",
+        "position": "right",
+        "actions": [{ "label": "Close panel", "command": "swaync-client -t" }]
+      }
+    },
+    "label#notifications": {
+      "text": "Notifications"
+    },
+    "buttons-grid": {
+      "actions": [
+        { "label": "", "command": "xdg-terminal-exec impala" },
+        { "label": "", "command": "nautilus" },
+        { "label": "", "command": "xdg-terminal-exec btop" },
+        { "label": "", "command": "swaync-client -C && swaync-client -cp" }
+      ]
+    },
+    "backlight": {
+      "label": "",
+      "device": "intel_backlight",
+      "min": 5
+    },
+    "volume": {
+      "label": "",
+      "expand-button-label": "",
+      "collapse-button-label": "",
+      "show-per-app": true,
+      "show-per-app-icon": true,
+      "show-per-app-label": false
+    },
+    "mpris": {
+      "blacklist": [],
+      "autohide": true,
+      "show-album-art": "always",
+      "loop-carousel": false
+    },
+    "dnd": {
+      "text": "Do Not Disturb"
+    },
+    "notifications": {
+      "vexpand": true
+    }
+  }
+}

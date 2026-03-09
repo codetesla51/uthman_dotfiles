@@ -1,0 +1,6 @@
+# Don't accidentally commit these
+.env
+*.secret
+*.key
+*.pem
+screenshot.png

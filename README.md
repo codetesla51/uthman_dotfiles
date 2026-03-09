@@ -40,17 +40,12 @@ yay -S hyprland waybar ghostty matugen starship zsh lsd zoxide fzf \
        xdg-desktop-portal-hyprland uwsm
 ```
 
-Optional (for specific bindings in `bindings.conf`):
-```bash
-yay -S nautilus signal-desktop obsidian typora 1password lazydocker spotify
-```
-
 ---
 
 ## Install
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/dotfiles.git ~/dotfiles
+git clone https://github.com/codetesla51/uthman_dotfiles.git ~/dotfiles
 cd ~/dotfiles
 chmod +x install.sh
 ./install.sh
@@ -80,7 +75,7 @@ matugen image ~/Pictures/your-wallpaper.jpg
 ```
 
 **Color output locations:**
-- `~/.config/theme/current/` — active colors (symlinked/written by matugen)
+- `~/.config/theme/current/` — active colors (written by matugen)
 - `~/.config/theme/themes/snow_black/` — saved snapshot of the snow_black theme
 - `~/.config/waybar/colors.css` — waybar color variables (auto-updated)
 
@@ -89,7 +84,7 @@ Matugen fills in `{{ colors.primary.default.hex }}` style variables and writes
 the result to each app's config directory.
 
 **Apps themed by matugen:**
-- Waybar, Hyprland, Hyprlock, Ghostty, btop, Cava, Walker, SwayNC, GTK, Firefox, Chromium, Mako
+Waybar, Hyprlock, Ghostty, btop, Cava, Walker, SwayNC, GTK, Firefox, Chromium, Mako
 
 ---
 
@@ -100,21 +95,22 @@ the result to each app's config directory.
 ├── .config/
 │   ├── ghostty/         # Terminal config
 │   ├── waybar/          # Bar + scripts
-│   ├── hypr/            # Hyprland, hyprlock, hypridle, scripts
+│   ├── hypr/
+│   │   └── hyprlock.conf  # Lock screen config
 │   ├── fastfetch/       # Fetch config
 │   ├── cava/            # Audio visualizer
 │   ├── btop/            # System monitor
 │   ├── swaync/          # Notification center
+│   ├── starship.toml
 │   └── matugen/
 │       ├── config.toml  # Template paths and matugen settings
 │       └── templates/   # Per-app color templates
-├── .config/starship.toml
 ├── .zshrc
 ├── Pictures/
-│   └── logo.png         # Fastfetch logo (stowed to ~/Pictures/logo.png)
-├── wallpapers/          # Wallpaper collection (not stowed)
+│   └── logo.png         # Fastfetch logo
+├── wallpapers/          # Wallpaper collection
 ├── theme-fallback/      # Static snow_black colors (used before matugen runs)
-├── screenshot.png       # README header
+├── screenshot.png
 ├── install.sh
 └── README.md
 ```
@@ -123,10 +119,10 @@ the result to each app's config directory.
 
 ## Note on Omarchy
 
-`~/.config/hypr/hyprland.conf` sources default bindings and settings from
-`~/.local/share/omarchy/default/hypr/`. If you are not using Omarchy, comment
-those lines out and add your own defaults. All user overrides live in
-`~/.config/hypr/*.conf` and take precedence.
+This rice is built on top of [Omarchy](https://omarchy.org). Hyprland default
+bindings, envs, and window rules are sourced from Omarchy's system files at
+`~/.local/share/omarchy/default/hypr/`. If you are not using Omarchy, you will
+need to supply your own `hyprland.conf`.
 
 ---
 

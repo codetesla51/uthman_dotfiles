@@ -1,0 +1,46 @@
+force_keyboard_focus = true
+selection_wrap = true
+theme = "walker"
+additional_theme_location = "~/.config/theme/current/"
+hide_action_hints = true
+
+[placeholders]
+default = { input = " Search...", list = "No Results" }
+
+[keybinds]
+quick_activate = []
+
+[columns]
+symbols = 1
+
+[providers]
+max_results = 64  
+default = ["desktopapplications", "websearch"]
+
+[[providers.prefixes]]
+prefix = "/"
+provider = "providerlist"
+
+[[providers.prefixes]]
+prefix = "."
+provider = "files"
+
+[[providers.prefixes]]
+prefix = ":"
+provider = "symbols"
+
+[[providers.prefixes]]
+prefix = "="
+provider = "calc"
+
+[[providers.prefixes]]
+prefix = "@"
+provider = "websearch"
+
+[[providers.prefixes]]
+prefix = "$"
+provider = "clipboard"
+
+[[emergencies]]
+text = "Restart Walker"
+command = "omarchy-restart-walker"

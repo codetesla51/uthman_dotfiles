@@ -24,7 +24,7 @@
 
   // ─── Custom decorators ───
   "custom/arch": {
-    "format": "\uf303 ",
+    "format": "\uf303",
     "tooltip": false,
   },
   "custom/separator": {

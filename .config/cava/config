@@ -1,4 +1,3 @@
-## Configuration file for CAVA.
 
 [general]
 framerate = 60
@@ -14,7 +13,16 @@ source = auto
 channels = stereo
 
 [color]
-theme = 'matugen'
+gradient = 1
+gradient_count = 8
+gradient_color_1 = "#d8d2b3"
+gradient_color_2 = "#d8d2b3"
+gradient_color_3 = "#cbc6b8"
+gradient_color_4 = "#cbc6b8"
+gradient_color_5 = "#d9cce1"
+gradient_color_6 = "#d9cce1"
+gradient_color_7 = "#949185"
+gradient_color_8 = "#49473e"
 
 [smoothing]
 noise_reduction = 60

@@ -15,11 +15,11 @@ output_path = "~/.config/theme/themes/snow_black/colors.conf"
 
 [templates.hyprland-current]
 input_path = "~/.config/matugen/templates/hyprland-colors.conf"
-output_path = "~/.config/theme/current/colors.conf"
+output_path = "~/.config/omarchy/current/theme/colors.conf"
 
 [templates.hyprlock-current]
 input_path = "~/.config/matugen/templates/hyprlock-colors.conf"
-output_path = "~/.config/theme/current/hyprlock.conf"
+output_path = "~/.config/omarchy/current/theme/hyprlock.conf"
 
 [templates.ghostty-theme]
 input_path = "~/.config/matugen/templates/ghostty-theme.conf"
@@ -27,7 +27,8 @@ output_path = "~/.config/theme/themes/snow_black/ghostty.conf"
 
 [templates.ghostty-current]
 input_path = "~/.config/matugen/templates/ghostty-theme.conf"
-output_path = "~/.config/theme/current/ghostty.conf"
+output_path = "~/.config/omarchy/current/theme/ghostty.conf"
+
 
 [templates.mako-theme]
 input_path = "~/.config/matugen/templates/mako.ini"
@@ -43,7 +44,7 @@ output_path = "~/.config/theme/themes/snow_black/gtk.css"
 
 [templates.gtk-current]
 input_path = "~/.config/matugen/templates/gtk.css"
-output_path = "~/.config/theme/current/gtk.css"
+output_path = "~/.config/omarchy/current/theme/gtk.css"
 
 [templates.chromium-theme]
 input_path = "~/.config/matugen/templates/chromium.theme"
@@ -52,6 +53,10 @@ output_path = "~/.config/theme/themes/snow_black/chromium.theme"
 [templates.chromium-current]
 input_path = "~/.config/matugen/templates/chromium.theme"
 output_path = "~/.config/theme/current/chromium.theme"
+
+[templates.chromium-omarchy-current]
+input_path = "~/.config/matugen/templates/chromium.theme"
+output_path = "~/.config/omarchy/current/theme/chromium.theme"
 
 [templates.btop-theme]
 input_path = "~/.config/matugen/templates/btop.theme"
@@ -67,7 +72,7 @@ output_path = "~/.config/theme/themes/snow_black/cava_theme"
 
 [templates.cava-current]
 input_path = "~/.config/matugen/templates/cava_theme"
-output_path = "~/.config/theme/current/cava_theme"
+output_path = "~/.config/cava/config"
 
 [templates.walker-theme]
 input_path = "~/.config/matugen/templates/walker.css"

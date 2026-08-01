@@ -44,7 +44,10 @@ alias myip='curl -s ifconfig.me'
 alias ports='ss -tulnp'
 alias df='df -h'
 alias du='du -sh'
-
+alias cmt="lgs ~/cmt/commit.lgs"
+alias chg="lgs ~/cmt/changelog.lgs"
+alias getTheme="bash ~/.local/bin/getTheme"
+alias wall="bash ~/.config/myTheme/scripts/wall.sh"
 # ── Options ───────────────────────────────────────────────────
 setopt CORRECT
 setopt GLOB_DOTS
@@ -67,3 +70,5 @@ eval "$(zoxide init zsh)"
 # ── Prompt ────────────────────────────────────────────────────
 eval "$(starship init zsh)"
 export LIBVA_DRIVER_NAME=iHD
+export PATH="$HOME/.cargo/bin:$PATH"
+source ~/azure.sh

@@ -14,7 +14,7 @@ quick_activate = []
 symbols = 1
 
 [providers]
-max_results = 64  
+max_results = 64
 default = ["desktopapplications", "websearch"]
 
 [[providers.prefixes]]

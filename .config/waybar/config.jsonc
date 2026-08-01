@@ -33,17 +33,17 @@
   },
 
   // ─── Screen Recording ───
-  // "custom/screenrecord": {
-  //   "format": "{}",
-  //   "return-type": "json",
-  //   "interval": "once",
-  //   "signal": 8,
-  //   "exec": "~/.config/waybar/scripts/screenrecord-status.sh",
-  //   "on-click": "~/.local/bin/omarchy-cmd-screenrecord",
-  //   "on-click-right": "~/.local/bin/omarchy-cmd-screenrecord --with-desktop-audio",
-  //   "on-click-middle": "~/.local/bin/omarchy-cmd-screenrecord --with-webcam",
-  //   "tooltip": true,
-  // },
+  "custom/screenrecord": {
+    "format": "{}",
+    "return-type": "json",
+    "interval": "once",
+    "signal": 8,
+    "exec": "~/.config/waybar/scripts/screenrecord-status.sh",
+    "on-click": "~/.local/bin/omarchy-capture-screenrecording",
+    "on-click-right": "~/.local/bin/omarchy-capture-screenrecording --with-desktop-audio",
+    "on-click-middle": "~/.local/bin/omarchy-capture-screenrecording --with-webcam",
+    "tooltip": true,
+  },
 
   // ─── Clock ───
   "clock": {
@@ -67,6 +67,18 @@
   },
 
   // ─── Tray ───
+  "custom/idle-indicator": {
+    "on-click": "omarchy-toggle-idle",
+    "exec": "$OMARCHY_PATH/default/waybar/indicators/idle.sh",
+    "signal": 9,
+    "return-type": "json"
+  },
+  "custom/notification-silencing-indicator": {
+    "on-click": "omarchy-toggle-notification-silencing",
+    "exec": "$OMARCHY_PATH/default/waybar/indicators/notification-silencing.sh",
+    "signal": 10,
+    "return-type": "json"
+  },
   "tray": {
     "icon-size": 13,
     "spacing": 8,
@@ -86,6 +98,13 @@
   },
 
   // ─── Network ───
+  "custom/weather": {
+    "exec": "$OMARCHY_PATH/default/waybar/weather.sh",
+    "return-type": "json",
+    "interval": 60,
+    "tooltip": false,
+    "on-click": "notify-send -u low \"$(omarchy-weather-status)\""
+  },
   "network": {
     "format-wifi": "󰖩 {essid}",
     "format-ethernet": "󰈀 Ethernet",

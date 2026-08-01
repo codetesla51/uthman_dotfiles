@@ -1,0 +1,125 @@
+"Talk is cheap. Show me the code." — Linus Torvalds
+"Make it work, make it right, make it fast." — Kent Beck
+"Code never lies, comments sometimes do." — Ron Jeffries
+"Simplicity is the soul of efficiency." — Austin Freeman
+"First, solve the problem. Then, write the code." — John Johnson
+"Any fool can write code that a computer can understand. Good programmers write code that humans can understand." — Martin Fowler
+"The best error message is the one that never shows up." — Thomas Fuchs
+"Deleted code is debugged code." — Jeff Sickel
+"Programs must be written for people to read, and only incidentally for machines to execute." — Harold Abelson
+"It's not a bug – it's an undocumented feature." — Anonymous
+"The only way to do great work is to love what you do." — Steve Jobs
+"Life is what happens when you're busy making other plans." — John Lennon
+"In the end, we only regret the chances we didn't take." — Lewis Carroll
+"Be yourself; everyone else is already taken." — Oscar Wilde
+"The purpose of life is not to be happy. It is to be useful, to be honorable, to be compassionate." — Ralph Waldo Emerson
+"Do not dwell in the past, do not dream of the future, concentrate the mind on the present moment." — Buddha
+"The mind is everything. What you think you become." — Buddha
+"What we think, we become." — Buddha
+"You miss 100% of the shots you don't take." — Wayne Gretzky
+"Whether you think you can or you think you can't, you're right." — Henry Ford
+"Everything you've ever wanted is on the other side of fear." — George Addair
+"Dream big and dare to fail." — Norman Vaughan
+"It does not matter how slowly you go as long as you do not stop." — Confucius
+"Act as if what you do makes a difference. It does." — William James
+"Success is not final, failure is not fatal: it is the courage to continue that counts." — Winston Churchill
+"Believe you can and you're halfway there." — Theodore Roosevelt
+"The only impossible journey is the one you never begin." — Tony Robbins
+"Don't watch the clock; do what it does. Keep going." — Sam Levenson
+"We are what we repeatedly do. Excellence, then, is not an act, but a habit." — Aristotle
+"The unexamined life is not worth living." — Socrates
+"He who has a why to live can bear almost any how." — Friedrich Nietzsche
+"To live is the rarest thing in the world. Most people exist, that is all." — Oscar Wilde
+"Know thyself." — Socrates
+"The only true wisdom is in knowing you know nothing." — Socrates
+"Happiness is not something ready made. It comes from your own actions." — Dalai Lama
+"In three words I can sum up everything I've learned about life: it goes on." — Robert Frost
+"Life is really simple, but we insist on making it complicated." — Confucius
+"May you live every day of your life." — Jonathan Swift
+"The biggest adventure you can take is to live the life of your dreams." — Oprah Winfrey
+"Not all those who wander are lost." — J.R.R. Tolkien
+"Do what you can, with what you have, where you are." — Theodore Roosevelt
+"Strive not to be a success, but rather to be of value." — Albert Einstein
+"Two roads diverged in a wood, and I took the one less traveled by, and that has made all the difference." — Robert Frost
+"I have not failed. I've just found 10,000 ways that won't work." — Thomas Edison
+"A person who never made a mistake never tried anything new." — Albert Einstein
+"The best time to plant a tree was 20 years ago. The second best time is now." — Chinese Proverb
+"Your time is limited, don't waste it living someone else's life." — Steve Jobs
+"If you judge a fish by its ability to climb a tree, it will live its whole life believing that it is stupid." — Albert Einstein
+"The question isn't who is going to let me; it's who is going to stop me." — Ayn Rand
+"Simplicity is the ultimate sophistication." — Leonardo da Vinci
+"Premature optimization is the root of all evil." — Donald Knuth
+"There are only two hard things in Computer Science: cache invalidation and naming things." — Phil Karlton
+"Walking on water and developing software from a specification are easy if both are frozen." — Edward V. Berard
+"If debugging is the process of removing bugs, then programming must be the process of putting them in." — Edsger Dijkstra
+"Java is to JavaScript what car is to carpet." — Chris Heilmann
+"Always code as if the guy who ends up maintaining your code will be a violent psychopath who knows where you live." — John Woods
+"The function of good software is to make the complex appear to be simple." — Grady Booch
+"Fix the cause, not the symptom." — Steve Maguire
+"Measuring programming progress by lines of code is like measuring aircraft building progress by weight." — Bill Gates
+"You will never be ready. Start anyway." — Anonymous
+"The world breaks everyone, and afterward, many are stronger at the broken places." — Ernest Hemingway
+"We accept the love we think we deserve." — Stephen Chbosky
+"It is okay to be at a place of struggle. Struggle is just another word for growth." — Anonymous
+"One day you will tell your story of how you overcame what you went through and it will be someone else's survival guide." — Brene Brown
+"Grief is the price we pay for love." — Queen Elizabeth II
+"The most beautiful people are those who have known defeat, known suffering, known struggle, known loss, and have found their way out of the depths." — Elisabeth Kubler-Ross
+"You are enough. You have always been enough." — Anonymous
+"Be gentle with yourself. You are a child of the universe, no less than the trees and the stars." — Max Ehrmann
+"Almost everything will work again if you unplug it for a few minutes, including you." — Anne Lamott
+"Courage doesn't always roar. Sometimes courage is the quiet voice at the end of the day saying I will try again tomorrow." — Mary Anne Radmacher
+"It's a terrible thing, I think, in life to wait until you're ready." — Hugh Laurie
+"The timing is never perfect. Do it anyway." — Anonymous
+"Sometimes the bravest thing you can do is keep going when you want to stop." — Anonymous
+"Not everything that is faced can be changed, but nothing can be changed until it is faced." — James Baldwin
+"Your present circumstances don't determine where you can go; they merely determine where you start." — Nido Qubein
+"Fall seven times, stand up eight." — Japanese Proverb
+"Stars can't shine without darkness." — Anonymous
+"Comparison is the thief of joy." — Theodore Roosevelt
+"You can't go back and change the beginning, but you can start where you are and change the ending." — C.S. Lewis
+"The quieter you become, the more you are able to hear." — Rumi
+"Yesterday I was clever, so I wanted to change the world. Today I am wise, so I am changing myself." — Rumi
+"The wound is the place where the light enters you." — Rumi
+"What you seek is seeking you." — Rumi
+"Live life as if everything is rigged in your favor." — Rumi
+"Do not be satisfied with the stories that come before you. Unfold your own myth." — Rumi
+"Let yourself be silently drawn by the strange pull of what you really love. It will not lead you astray." — Rumi
+"Stop acting so small. You are the universe in ecstatic motion." — Rumi
+"Out beyond ideas of wrongdoing and rightdoing, there is a field. I'll meet you there." — Rumi
+"We are all just walking each other home." — Ram Dass
+"The present moment always will have been." — Anonymous
+"You are not a drop in the ocean. You are the entire ocean in a drop." — Rumi
+"To be nobody but yourself in a world which is doing its best to make you everybody else means to fight the hardest battle which any human being can fight." — E.E. Cummings
+"I took a deep breath and listened to the old brag of my heart: I am, I am, I am." — Sylvia Plath
+"I am not afraid of storms, for I am learning how to sail my ship." — Louisa May Alcott
+"Something will grow from all you are going through. And it will be you." — Anonymous
+"There is always something left to love." — Gabriel Garcia Marquez
+"A dream you dream alone is only a dream. A dream you dream together is reality." — John Lennon
+"The things that make me different are the things that make me." — Winnie the Pooh
+"Promise me you'll always remember: you're braver than you believe, stronger than you seem, and smarter than you think." — A.A. Milne
+"How lucky I am to have something that makes saying goodbye so hard." — A.A. Milne
+"If there ever comes a day when we can't be together, keep me in your heart. I'll stay there forever." — Winnie the Pooh
+"We're all just figuring it out. Some of us are just better at pretending we're not." — Anonymous
+"Do hard things. Hard things build you." — Anonymous
+"Discipline is choosing between what you want now and what you want most." — Augusta F. Kantra
+"Work until your idols become your rivals." — Anonymous
+"Sleep is for people who have nothing to compile." — Anonymous
+"I don't always test my code, but when I do, I do it in production." — Anonymous
+"A good programmer is someone who always looks both ways before crossing a one-way street." — Doug Linder
+"Not how long, but how well you have lived is the main thing." — Seneca
+"We suffer more in imagination than in reality." — Seneca
+"It is not that I'm so smart, it is just that I stay with problems longer." — Albert Einstein
+"Wherever you are, be all there." — Jim Elliot
+"The most wasted of all days is one without laughter." — E.E. Cummings
+"To love and be loved is to feel the sun from both sides." — David Viscott
+"There is no path to happiness: happiness is the path." — Buddha
+"A ship in harbor is safe, but that is not what ships are for." — John A. Shedd
+"The sky is not the limit. Your mind is." — Marilyn Monroe
+"Turn your wounds into wisdom." — Oprah Winfrey
+"You were given this life because you are strong enough to live it." — Anonymous
+"Even the darkest night will end and the sun will rise." — Victor Hugo
+"To be great is to be misunderstood." — Ralph Waldo Emerson
+"She was a girl who knew how to be happy even when she was sad. And that's important." — Marilyn Monroe
+"I exist as I am, that is enough." — Walt Whitman
+"Keep your face always toward the sunshine, and shadows will fall behind you." — Walt Whitman
+"I am large, I contain multitudes." — Walt Whitman

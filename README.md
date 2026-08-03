@@ -94,6 +94,7 @@ Waybar, Hyprlock, Ghostty, btop, Cava, Walker, SwayNC, GTK, Firefox, Chromium, M
 ~/dotfiles/
 ├── .config/
 │   ├── ghostty/         # Terminal config
+│   ├── rofi/            # Launcher themes + picker scripts (dmenu shim)
 │   ├── waybar/          # Bar + scripts
 │   ├── hypr/              # Hyprland config (personal, layered over omarchy)
 │   │   ├── hyprland.conf  # Main config, sources omarchy defaults
@@ -119,6 +120,8 @@ Waybar, Hyprlock, Ghostty, btop, Cava, Walker, SwayNC, GTK, Firefox, Chromium, M
 │   └── matugen/
 │       ├── config.toml  # Template paths and matugen settings
 │       └── templates/   # Per-app color templates
+├── .local/bin/
+│   └── omarchy-launch-walker # Rofi/Walker dmenu shim (PATH via hypr/envs.conf)
 ├── .zshrc
 ├── Pictures/
 │   └── logo.png         # Fastfetch logo

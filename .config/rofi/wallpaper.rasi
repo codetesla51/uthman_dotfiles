@@ -1,0 +1,77 @@
+* {
+    background:     #111111ee;
+    selected:       #ffffff14;
+    accent:         #89b4fa;
+    border-col:     #ffffff14;
+    text:           #e8e8e8;
+    placeholder:    #ffffff33;
+}
+
+window {
+    width:            55%;
+    background-color: @background;
+    border:           1px;
+    border-color:     @border-col;
+    border-radius:    20px;
+    padding:          20px;
+}
+
+mainbox {
+    background-color: transparent;
+    spacing:          16px;
+    children:         [listview];
+}
+inputbar {
+    background-color: @selected;
+    border-radius:    10px;
+    border:           0px;
+    padding:          10px 14px;
+    children:         [entry];
+}
+
+entry {
+    background-color:  transparent;
+    text-color:        @text;
+    font:              "JetBrainsMono Nerd Font 11";
+    placeholder:       "Search...";
+    placeholder-color: @placeholder;
+}
+
+listview {
+    background-color: transparent;
+    border:           0px;
+    spacing:          10px;
+    columns:          5;
+    lines:            2;
+    fixed-height:     true;
+}
+
+element {
+    background-color: transparent;
+    border-radius:    14px;
+    padding:          0px;
+    children:         [element-icon];
+    border:           2px;
+    border-color:     transparent;
+}
+
+element selected {
+    border-color: @accent;
+}
+
+element-icon {
+    background-color: transparent;
+    border-radius:    12px;
+    size:             140px;
+    horizontal-align: 0.5;
+    vertical-align:   0.5;
+}
+
+scrollbar {
+    background-color: transparent;
+    handle-color:     @border-col;
+    handle-width:     3px;
+    border-radius:    4px;
+}
+
+?import "colors.rasi"

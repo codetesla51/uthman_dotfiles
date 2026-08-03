@@ -1,0 +1,74 @@
+#!/bin/bash
+# Personal rofi shim that shadows omarchy-launch-walker on PATH
+# (~/.local/bin precedes ~/.local/share/omarchy/bin).
+# Routes every omarchy-menu dmenu picker through rofi.
+# Walker plugin modes (-m) are delegated to the real walker.
+
+REAL="/home/uthman/.local/share/omarchy/bin/omarchy-launch-walker"
+GRID_RASI="$HOME/.config/rofi/walker.rasi"
+LIST_RASI="$HOME/.config/rofi/list.rasi"
+SHORT_RASI="$HOME/.config/rofi/shortlist.rasi"
+
+SHORT_LIMIT=6
+OMARCHY_PICKER_LIMIT=10
+
+case " $* " in
+  *" -m "*|*" --mode "*) exec "$REAL" "$@" ;;
+esac
+
+if [[ $# -eq 0 ]]; then
+  exec rofi -show drun -theme "$GRID_RASI"
+fi
+
+args=(-dmenu -theme "$LIST_RASI")
+prompt=""
+width=""
+height=""
+inputonly=false
+omarchy_picker=false
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --dmenu) ;;
+    --inputonly) inputonly=true ;;
+    -p) [[ $# -ge 2 ]] && { prompt="$2"; shift; } ;;
+    --width) [[ $# -ge 2 && $2 =~ ^[0-9]+$ ]] && width="$2" ;;
+    --maxheight) [[ $# -ge 2 && $2 =~ ^[0-9]+$ && $2 -gt 0 ]] && height="$2" ;;
+    --height) [[ $# -ge 2 && $2 =~ ^[0-9]+$ && $2 -gt 0 ]] && [[ -z $height ]] && height="$2" ;;
+    --minheight) ;;
+    *) ;;
+  esac
+  shift
+done
+
+[[ $width == "295" && $height == "630" ]] && omarchy_picker=true
+
+count=0
+if [[ ! -t 0 ]]; then
+  count=$(awk 'NF {n++} END {print n+0}' </dev/stdin)
+fi
+
+use_short=false
+if [[ $inputonly == true ]]; then
+  use_short=true
+elif (( count > 0 && count <= SHORT_LIMIT )); then
+  use_short=true
+elif [[ $omarchy_picker == true ]] && (( count <= OMARCHY_PICKER_LIMIT )); then
+  use_short=true
+fi
+
+if [[ $use_short == true ]]; then
+  args=(-dmenu -theme "$SHORT_RASI")
+fi
+
+[[ -n $prompt ]] && args+=(-p "$prompt")
+[[ -n $width  ]] && args+=(-theme-str "window { width: ${width}px; }")
+if [[ $inputonly == true ]]; then
+  args+=(-theme-str "listview { enabled: false; }")
+elif [[ $use_short == true ]]; then
+  args+=(-theme-str "listview { fixed-height: false; }")
+elif [[ -n $height ]]; then
+  args+=(-theme-str "window { height: ${height}px; }")
+fi
+
+exec rofi "${args[@]}"

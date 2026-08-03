@@ -22,7 +22,7 @@ the defaults.
 - **Shell:** Zsh + Starship prompt
 - **Theming:** Matugen (Material You color extraction)
 - **Notifications:** SwayNC
-- **Launcher:** Walker
+- **Launcher:** Walker + Rofi (picker shim for emoji/clipboard/keybindings/omarchy menus)
 - **Visualizer:** Cava
 - **System monitor:** btop
 - **Fetch:** Fastfetch
@@ -35,9 +35,9 @@ Install everything with:
 
 ```bash
 yay -S hyprland waybar ghostty matugen starship zsh lsd zoxide fzf \
-       cava btop wl-screenrec walker swaync stow \
+       cava btop wl-screenrec walker swaync stow rofi \
        ttf-firacode-nerd hyprlock hypridle hyprsunset \
-       xdg-desktop-portal-hyprland uwsm
+       xdg-desktop-portal-hyprland uwsm cliphist wl-clipboard
 ```
 
 ---
@@ -95,8 +95,22 @@ Waybar, Hyprlock, Ghostty, btop, Cava, Walker, SwayNC, GTK, Firefox, Chromium, M
 ├── .config/
 │   ├── ghostty/         # Terminal config
 │   ├── waybar/          # Bar + scripts
-│   ├── hypr/
-│   │   └── hyprlock.conf  # Lock screen config
+│   ├── hypr/              # Hyprland config (personal, layered over omarchy)
+│   │   ├── hyprland.conf  # Main config, sources omarchy defaults
+│   │   ├── bindings.conf  # Personal keybindings (incl. rofi overrides)
+│   │   ├── autostart.conf # Startup processes
+│   │   ├── envs.conf      # Environment variables (PATH)
+│   │   ├── monitors.conf  # Display setup
+│   │   ├── input.conf     # Input devices
+│   │   ├── looknfeel.conf # Look & feel
+│   │   ├── hyprlock.conf  # Lock screen config
+│   │   ├── hypridle.conf  # Idle management
+│   │   ├── hyprsunset.conf# Blue-light filter
+│   │   ├── xdph.conf      # Portal handler
+│   │   ├── battery.sh     # Battery helper
+│   │   ├── capslock.sh    # Capslock helper
+│   │   ├── scripts/       # Helper scripts
+│   │   └── shaders/       # Hyprland shaders
 │   ├── fastfetch/       # Fetch config
 │   ├── cava/            # Audio visualizer
 │   ├── btop/            # System monitor

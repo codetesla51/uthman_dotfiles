@@ -1,0 +1,87 @@
+/**
+ * list.rasi — dense list-style theme for text-only dmenu pickers
+ * (clipboard, emoji, keybindings, omarchy internal menus).
+ * columns: 1, horizontal element orientation, compact spacing.
+ */
+
+* {
+    background:     #111111ee;
+    selected:       #ffffff14;
+    accent:         #89b4fa;
+    border-col:     #ffffff14;
+    text:           #e8e8e8;
+    placeholder:    #ffffff33;
+}
+
+window {
+    width:            520px;
+    background-color: @background;
+    border:            1px;
+    border-color:      @border-col;
+    border-radius:     16px;
+    padding:           12px;
+}
+
+mainbox {
+    background-color: transparent;
+    spacing:           8px;
+    children:          [ inputbar, listview ];
+}
+
+inputbar {
+    background-color: @selected;
+    border-radius:      10px;
+    border:              0px;
+    padding:             6px 12px;
+    spacing:             8px;
+    children:            [ prompt, entry ];
+}
+
+prompt {
+    background-color: transparent;
+    text-color:        @accent;
+    font:               "JetBrainsMono Nerd Font 10";
+}
+
+entry {
+    background-color:  transparent;
+    text-color:         @text;
+    font:               "JetBrainsMono Nerd Font 10";
+    placeholder-color:  @placeholder;
+}
+
+listview {
+    background-color: transparent;
+    border:              0px;
+    spacing:             2px;
+    columns:             1;
+    fixed-height:        false;
+    scrollbar:           false;
+    cycle:               true;
+}
+
+element {
+    background-color: transparent;
+    orientation:         horizontal;
+    border-radius:       8px;
+    border:              1px;
+    border-color:        transparent;
+    padding:             5px 10px;
+    spacing:             8px;
+    children:            [ element-text ];
+}
+
+element selected {
+    border-color:      @accent;
+    background-color:  @selected;
+}
+
+element-text {
+    background-color: transparent;
+    text-color:         @text;
+    font:               "JetBrainsMono Nerd Font 10";
+    horizontal-align:    0.0;
+    vertical-align:      0.5;
+}
+
+?import "colors.rasi"

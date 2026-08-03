@@ -1,0 +1,95 @@
+/**
+ * walker.rasi — app launcher (drun)
+ * grid layout
+ */
+
+* {
+    background:     #111111ee;
+    selected:       #ffffff14;
+    accent:         #89b4fa;
+    border-col:     #ffffff14;
+    text:           #e8e8e8;
+    placeholder:    #ffffff33;
+}
+
+window {
+    width:            640px;
+    background-color: @background;
+    border:            1px;
+    border-color:      @border-col;
+    border-radius:     20px;
+    padding:           18px;
+}
+
+mainbox {
+    background-color: transparent;
+    spacing:           14px;
+    children:          [ inputbar, listview ];
+}
+
+inputbar {
+    background-color: @selected;
+    border-radius:      12px;
+    border:              0px;
+    padding:             11px 16px;
+    spacing:             10px;
+    children:            [ prompt, entry ];
+}
+
+prompt {
+    background-color: transparent;
+    text-color:        @accent;
+    font:               "JetBrainsMono Nerd Font 11";
+}
+
+entry {
+    background-color:  transparent;
+    text-color:         @text;
+    font:               "JetBrainsMono Nerd Font 11";
+    placeholder:        "Search apps...";
+    placeholder-color:  @placeholder;
+}
+
+listview {
+    background-color: transparent;
+    border:              0px;
+    spacing:             10px;
+    columns:             4;
+    lines:               3;
+    fixed-height:        true;
+    scrollbar:           false;
+    cycle:               true;
+}
+
+element {
+    background-color: transparent;
+    orientation:         vertical;
+    border-radius:       14px;
+    border:              1px;
+    border-color:        transparent;
+    padding:             14px 8px;
+    spacing:             8px;
+    children:            [ element-icon, element-text ];
+}
+
+element selected {
+    border-color:      @accent;
+    background-color:  @selected;
+}
+
+element-icon {
+    background-color: transparent;
+    border-radius:      8px;
+    size:                42px;
+    horizontal-align:    0.5;
+}
+
+element-text {
+    background-color: transparent;
+    text-color:         @text;
+    font:               "JetBrainsMono Nerd Font 10";
+    horizontal-align:    0.5;
+    vertical-align:      0.5;
+}
+
+?import "colors.rasi"

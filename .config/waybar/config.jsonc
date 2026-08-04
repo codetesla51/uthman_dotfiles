@@ -40,8 +40,8 @@
   "clock": {
     "interval": 1,
     "format": "{:%H:%M}",
-    "format-alt": "{:%A  ·  %d %B %Y}",
-    "tooltip-format": "<big>{:%B %Y}</big>\n<tt>{calendar}</tt>",
+    "format-alt": "{:%H:%M  ·  %A %d %B %Y}",
+    "tooltip-format": "<big>{:%A, %d %B %Y}</big>\n<tt>{calendar}</tt>",
   },
 
   // ─── Workspaces ───

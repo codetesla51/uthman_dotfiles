@@ -218,6 +218,26 @@ blankwindow,
     padding: 0 4px;
 }
 
+/* Scrollbar */
+scrollbar {
+    background: transparent;
+    border: none;
+    min-width: 8px;
+}
+
+scrollbar slider {
+    background: alpha(@outline, 0.3);
+    border-radius: 4px;
+    min-width: 6px;
+    min-height: 10px;
+    margin: 2px;
+    border: none;
+}
+
+scrollbar slider:hover {
+    background: alpha(@primary, 0.5);
+}
+
 .control-center .control-center-list-placeholder {
     opacity: 0.4;
     font-size: 12px;
@@ -514,6 +534,22 @@ progressbar progress {
 
 .widget-label > label {
     color: alpha(@foreground, 0.45);
+}
+
+/* Greeting header */
+#greeting {
+    padding: 14px 18px 10px;
+    margin: 0 0 4px;
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid alpha(@outline, 0.06);
+}
+
+#greeting > label {
+    font-size: 17px;
+    font-weight: 800;
+    color: @foreground;
+    letter-spacing: 0.4px;
 }
 
 /* Notifications header */

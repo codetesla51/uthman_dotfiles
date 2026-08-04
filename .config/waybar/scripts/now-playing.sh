@@ -20,6 +20,18 @@ len=$(playerctl metadata mpris:length 2>/dev/null)
 title=${title:0:44}
 artist=${artist:0:30}
 
+escape_xml() {
+  local s="$1"
+  s=${s//&/&amp;}
+  s=${s//</&lt;}
+  s=${s//>/&gt;}
+  printf '%s' "$s"
+}
+
+title=$(escape_xml "$title")
+artist=$(escape_xml "$artist")
+album=$(escape_xml "$album")
+
 # progress bar
 bar=""
 if [[ -n "$pos" && -n "$len" && "$len" -gt 0 ]]; then

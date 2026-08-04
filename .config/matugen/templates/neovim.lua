@@ -11,36 +11,118 @@ return {
 
         local hl = vim.api.nvim_set_hl
 
+        -- ── Color math ────────────────────────────────────────────────
+        --  Derive brighter, higher-contrast accents from the matugen
+        --  scheme so the palette stays wallpaper-driven but pops.
+        local function hex2rgb(hex)
+          hex = hex:gsub("^#", "")
+          return tonumber(hex:sub(1, 2), 16), tonumber(hex:sub(3, 4), 16), tonumber(hex:sub(5, 6), 16)
+        end
+
+        local function rgb2hex(r, g, b)
+          local function f(v)
+            return string.format("%02x", math.max(0, math.min(255, math.floor(v + 0.5))))
+          end
+          return "#" .. f(r) .. f(g) .. f(b)
+        end
+
+        local function rgb2hsl(r, g, b)
+          r, g, b = r / 255, g / 255, b / 255
+          local max, min = math.max(r, g, b), math.min(r, g, b)
+          local l = (max + min) / 2
+          local h, s = 0, 0
+          if max ~= min then
+            local d = max - min
+            s = l > 0.5 and d / (2 - max - min) or d / (max + min)
+            if max == r then
+              h = (g - b) / d + (g < b and 6 or 0)
+            elseif max == g then
+              h = (b - r) / d + 2
+            else
+              h = (r - g) / d + 4
+            end
+            h = h / 6
+          end
+          return h, s, l
+        end
+
+        local function hsl2rgb(h, s, l)
+          local function hue(p, q, t)
+            if t < 0 then t = t + 1 end
+            if t > 1 then t = t - 1 end
+            if t < 1 / 6 then return p + (q - p) * 6 * t end
+            if t < 1 / 2 then return q end
+            if t < 2 / 3 then return p + (q - p) * (2 / 3 - t) * 6 end
+            return p
+          end
+          local r, g, b
+          if s == 0 then
+            r, g, b = l, l, l
+          else
+            local q = l < 0.5 and l * (1 + s) or l + s - l * s
+            local p = 2 * l - q
+            r, g, b = hue(p, q, h + 1 / 3), hue(p, q, h), hue(p, q, h - 1 / 3)
+          end
+          return r * 255, g * 255, b * 255
+        end
+
+        -- Shift hue by degrees; adjust saturation/lightness by deltas.
+        local function tweak(hex, dhue, ds, dl)
+          local r, g, b = hex2rgb(hex)
+          local h, s, l = rgb2hsl(r, g, b)
+          h = (h + dhue / 360) % 1
+          s = math.max(0, math.min(1, s + ds))
+          l = math.max(0, math.min(1, l + dl))
+          local rr, gg, bb = hsl2rgb(h, s, l)
+          return rgb2hex(rr, gg, bb)
+        end
+
+        -- ── Matugen scheme (wallpaper-derived) ────────────────────────
+        local base = {
+          bg         = "{{ colors.background.default.hex }}",
+          bg_subtle  = "{{ colors.surface_container_low.default.hex }}",
+          bg_raised  = "{{ colors.surface_container.default.hex }}",
+          bg_select  = "{{ colors.surface_container_high.default.hex }}",
+          fg         = "{{ colors.on_background.default.hex }}",
+          fg_dim     = "{{ colors.on_surface_variant.default.hex }}",
+          fg_muted   = "{{ colors.outline.default.hex }}",
+          primary    = "{{ colors.primary.default.hex }}",
+          primary_c  = "{{ colors.primary_container.default.hex }}",
+          secondary  = "{{ colors.secondary.default.hex }}",
+          secondary_c= "{{ colors.secondary_container.default.hex }}",
+          tertiary   = "{{ colors.tertiary.default.hex }}",
+          tertiary_c = "{{ colors.tertiary_container.default.hex }}",
+          error      = "{{ colors.error.default.hex }}",
+        }
+
         -- ── Palette ───────────────────────────────────────────────────
-        --
         --  Each color owns exactly one syntactic role.
-        --  Nothing shares a color — that's what makes code readable.
-        --
+        --  Accents are boosted variants of the wallpaper scheme.
         local c = {
           -- Backgrounds
-          bg        = "{{ colors.background.default.hex }}",
-          bg_subtle = "{{ colors.surface_container_low.default.hex }}", -- panels, sidebars
-          bg_raised = "{{ colors.surface_container.default.hex }}", -- floats, popups
-          bg_select = "{{ colors.surface_container_high.default.hex }}", -- visual, cursorline
+          bg        = base.bg,
+          bg_subtle = base.bg_subtle, -- panels, sidebars
+          bg_raised = base.bg_raised, -- floats, popups
+          bg_select = base.bg_select, -- visual, cursorline
 
           -- Foregrounds
-          fg        = "{{ colors.on_background.default.hex }}", -- base text
-          fg_dim    = "{{ colors.on_surface_variant.default.hex }}", -- punctuation, operators
-          fg_muted  = "{{ colors.outline.default.hex }}", -- line numbers, whitespace
+          fg        = base.fg,
+          fg_dim    = base.fg_dim, -- punctuation, operators
+          fg_muted  = base.fg_muted, -- line numbers, whitespace
 
           -- Blues & cyans — the accent family
-          cyan      = "{{ colors.primary.default.hex }}", -- functions & methods      (bright, eye-catching)
-          blue      = "{{ colors.primary_container.default.hex }}", -- keywords                 (clear, authoritative)
-          blue_soft = "{{ colors.secondary.default.hex }}", -- types & classes          (distinct but calmer)
-          sky       = "{{ colors.tertiary.default.hex }}", -- strings                  (light, readable)
-          teal      = "{{ colors.secondary_container.default.hex }}", -- numbers & booleans       (saturated teal)
-          steel     = "{{ colors.inverse_primary.default.hex }}", -- builtins, special vars   (deeper blue)
+          cyan      = base.primary, -- functions & methods              (bright, eye-catching)
+          blue      = tweak(base.primary_c, 0, 0.12, 0.06), -- keywords (clear, authoritative)
+          blue_soft = base.secondary, -- types & classes                (distinct but calmer)
+          sky       = base.tertiary, -- strings                         (warm, readable)
+          teal      = tweak(base.primary, -55, 0.10, -0.04), -- numbers (green-teal)
+          steel     = tweak(base.primary, -15, -0.15, -0.10), -- builtins, special vars
 
           -- Supporting accents
-          lavender  = "{{ colors.secondary.default.hex }}", -- attributes, decorators
-          gold      = "{{ colors.tertiary_container.default.hex }}", -- imports, macros          (warm contrast)
-          red       = "{{ colors.error.default.hex }}", -- errors & exceptions
-          orange    = "{{ colors.tertiary.default.hex }}", -- warnings
+          lavender  = tweak(base.primary, 50, -0.05, 0.10), -- attributes, decorators
+          gold      = tweak(base.tertiary_c, 0, 0.05, 0.08), -- imports, macros (warm gold)
+          red       = base.error, -- errors & exceptions
+          orange    = tweak(base.error, 30, 0.10, 0.05), -- warnings     (warm orange)
 
           -- UI chrome
           border    = "{{ colors.surface_container_highest.default.hex }}",

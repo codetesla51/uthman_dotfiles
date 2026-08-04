@@ -66,4 +66,5 @@ swaync-client --reload-css
 pkill -SIGUSR1 mako 2>/dev/null
 omarchy-restart-walker
 omarchy-restart-swayosd
+gen-zed-theme
 echo "Done!"

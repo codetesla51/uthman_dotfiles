@@ -93,3 +93,7 @@ output_path = "~/.config/theme/themes/snow_black/firefox.css"
 [templates.firefox-current]
 input_path = "~/.config/matugen/templates/firefox.css"
 output_path = "~/.config/theme/current/firefox.css"
+
+[templates.rofi]
+input_path = "~/.config/matugen/templates/rofi-colors.rasi"
+output_path = "~/.config/rofi/colors.rasi"

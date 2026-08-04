@@ -1,28 +1,11 @@
-
-[general]
-framerate = 60
-autosens = 1
-bar_width = 2
-bar_spacing = 1
-
-[input]
-method = pipewire
-source = auto
-
-[output]
-channels = stereo
-
 [color]
 gradient = 1
 gradient_count = 8
-gradient_color_1 = "#d8d2b3"
-gradient_color_2 = "#d8d2b3"
-gradient_color_3 = "#cbc6b8"
-gradient_color_4 = "#cbc6b8"
-gradient_color_5 = "#d9cce1"
-gradient_color_6 = "#d9cce1"
-gradient_color_7 = "#949185"
-gradient_color_8 = "#49473e"
-
-[smoothing]
-noise_reduction = 60
+gradient_color_1 = "#9eccec"
+gradient_color_2 = "#9eccec"
+gradient_color_3 = "#b7c9d6"
+gradient_color_4 = "#b7c9d6"
+gradient_color_5 = "#f4bc83"
+gradient_color_6 = "#f4bc83"
+gradient_color_7 = "#8b9197"
+gradient_color_8 = "#41484d"

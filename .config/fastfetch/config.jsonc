@@ -2,90 +2,33 @@
   "$schema": "https://github.com/fastfetch-cli/fastfetch/raw/dev/doc/json_schema.json",
   "logo": {
     "type": "kitty-direct",
-    "source": "/home/uthman/Pictures/IMGBIN_com_-_Download_Transparent_PNG_Images__For_Free-removebg-preview.png",
+    "source": "/home/uthman/Pictures/95771929570969777-removebg-preview.png",
     "width": 24,
     "height": 16,
-    "padding": {
-      "top": 1,
-      "right": 2,
-      "left": 1
-    }
+    "padding": { "top": 1, "right": 2, "left": 1 }
   },
   "display": {
-    "separator": " » "
+    "separator": "  ",
+    "key": { "width": 16 }
   },
   "modules": [
     "break",
-    {
-      "type": "title",
-      "format": "{#cyan}{user-name}{#default}@{#blue}{host-name}{#default}"
-    },
-    {
-      "type": "separator",
-      "string": "──────────────────────────"
-    },
+    { "type": "title", "format": "{#cyan}{user-name}{#default}@{#blue}{host-name}{#default}" },
     "break",
-    {
-      "type": "os",
-      "key": "  󰣇 os      ",
-      "keyColor": "blue",
-      "format": "{pretty-name}"
-    },
-    {
-      "type": "kernel",
-      "key": "  󰻿 kernel  ",
-      "keyColor": "blue",
-      "format": "{version}"
-    },
-    {
-      "type": "uptime",
-      "key": "  󰅐 uptime  ",
-      "keyColor": "blue"
-    },
-    {
-      "type": "packages",
-      "key": "  󰏗 packages",
-      "keyColor": "blue"
-    },
+    { "type": "os", "key": "│ 󰣇 System", "keyColor": "blue", "format": "{name}" },
+    { "type": "kernel", "key": "│ 󰻿 Kernel", "keyColor": "blue", "format": "{release}" },
+    { "type": "uptime", "key": "│ 󰅐 Uptime", "keyColor": "blue", "format": "{days}d {hours}h {minutes}m" },
+    { "type": "packages", "key": "│ 󰏗 Apps", "keyColor": "blue", "format": "{all}" },
+    { "type": "wm", "key": "│ 󰕮 Desktop", "keyColor": "magenta" },
+    { "type": "shell", "key": "│ 󰆍 Shell", "keyColor": "magenta" },
+    { "type": "terminal", "key": "│ 󰆟 Term", "keyColor": "magenta" },
+    { "type": "cpu", "key": "│ 󰻠 CPU", "keyColor": "cyan", "format": "{name}" },
+    { "type": "disk", "key": "│ 󰋊 Disk", "keyColor": "cyan", "format": "{size-used} / {size-total}" },
+    { "type": "disk", "key": "│ 󰃰 OS Age", "keyColor": "cyan", "folders": "/", "format": "{days} days" },
+    { "type": "battery", "key": "│ 󰁹 Battery", "keyColor": "cyan", "format": "{capacity}% {status}" },
+    { "type": "custom", "key": " ", "format": "╰─" },
     "break",
-    {
-      "type": "wm",
-      "key": "  󰕮 wm      ",
-      "keyColor": "magenta"
-    },
-    {
-      "type": "shell",
-      "key": "  󰆍 shell   ",
-      "keyColor": "magenta"
-    },
-    {
-      "type": "terminal",
-      "key": "  󰆍 terminal",
-      "keyColor": "magenta"
-    },
-    "break",
-    {
-      "type": "separator",
-      "string": "──────────────────────────"
-    },
-    {
-      "type": "cpu",
-      "key": "  󰻠 cpu     ",
-      "keyColor": "cyan",
-      "format": "{name}"
-    },
-    {
-      "type": "battery",
-      "key": "  󰁹 battery ",
-      "keyColor": "cyan",
-      "format": "{capacity} {status}"
-    },
-    "break",
-    {
-      "type": "colors",
-      "symbol": "circle",
-      "paddingLeft": 2
-    },
+    { "type": "colors", "symbol": "circle", "paddingLeft": 2 },
     "break"
   ]
 }

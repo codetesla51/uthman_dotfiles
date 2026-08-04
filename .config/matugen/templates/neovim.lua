@@ -18,33 +18,33 @@ return {
         --
         local c = {
           -- Backgrounds
-          bg        = "#000000", -- true black
-          bg_subtle = "#0a0e14", -- panels, sidebars
-          bg_raised = "#0d1117", -- floats, popups
-          bg_select = "#111a24", -- visual, cursorline
+          bg        = "{{ colors.background.default.hex }}",
+          bg_subtle = "{{ colors.surface_container_low.default.hex }}", -- panels, sidebars
+          bg_raised = "{{ colors.surface_container.default.hex }}", -- floats, popups
+          bg_select = "{{ colors.surface_container_high.default.hex }}", -- visual, cursorline
 
           -- Foregrounds
-          fg        = "#cdd9e5", -- base text — slightly cool white
-          fg_dim    = "#768a9e", -- punctuation, operators
-          fg_muted  = "#3a4f63", -- line numbers, whitespace
+          fg        = "{{ colors.on_background.default.hex }}", -- base text
+          fg_dim    = "{{ colors.on_surface_variant.default.hex }}", -- punctuation, operators
+          fg_muted  = "{{ colors.outline.default.hex }}", -- line numbers, whitespace
 
           -- Blues & cyans — the accent family
-          cyan      = "#39d5c7", -- functions & methods      (bright, eye-catching)
-          blue      = "#5ab0f5", -- keywords                 (clear, authoritative)
-          blue_soft = "#88b4d4", -- types & classes          (distinct but calmer)
-          sky       = "#a8d8f0", -- strings                  (light, readable)
-          teal      = "#2eb8a0", -- numbers & booleans       (saturated teal)
-          steel     = "#4a8fa8", -- builtins, special vars   (deeper blue)
+          cyan      = "{{ colors.primary.default.hex }}", -- functions & methods      (bright, eye-catching)
+          blue      = "{{ colors.primary_container.default.hex }}", -- keywords                 (clear, authoritative)
+          blue_soft = "{{ colors.secondary.default.hex }}", -- types & classes          (distinct but calmer)
+          sky       = "{{ colors.tertiary.default.hex }}", -- strings                  (light, readable)
+          teal      = "{{ colors.secondary_container.default.hex }}", -- numbers & booleans       (saturated teal)
+          steel     = "{{ colors.inverse_primary.default.hex }}", -- builtins, special vars   (deeper blue)
 
           -- Supporting accents
-          lavender  = "#9ab8f0", -- attributes, decorators
-          gold      = "#d4b896", -- imports, macros          (warm contrast)
-          red       = "#f87171", -- errors & exceptions
-          orange    = "#f0a070", -- warnings
+          lavender  = "{{ colors.secondary.default.hex }}", -- attributes, decorators
+          gold      = "{{ colors.tertiary_container.default.hex }}", -- imports, macros          (warm contrast)
+          red       = "{{ colors.error.default.hex }}", -- errors & exceptions
+          orange    = "{{ colors.tertiary.default.hex }}", -- warnings
 
           -- UI chrome
-          border    = "#1a2a3a",
-          hint      = "#1e3040",
+          border    = "{{ colors.surface_container_highest.default.hex }}",
+          hint      = "{{ colors.outline_variant.default.hex }}",
         }
 
         -- ── Base ──────────────────────────────────────────────────────
@@ -212,10 +212,10 @@ return {
         hl(0, "GitSignsAdd", { fg = c.teal })
         hl(0, "GitSignsChange", { fg = c.sky })
         hl(0, "GitSignsDelete", { fg = c.red })
-        hl(0, "DiffAdd", { bg = "#091a12" })
-        hl(0, "DiffChange", { bg = "#091424" })
-        hl(0, "DiffDelete", { bg = "#1a0909" })
-        hl(0, "DiffText", { bg = "#0f2040" })
+        hl(0, "DiffAdd", { bg = "{{ colors.surface_container_high.default.hex }}" })
+        hl(0, "DiffChange", { bg = "{{ colors.tertiary_container.default.hex }}" })
+        hl(0, "DiffDelete", { bg = "{{ colors.error_container.default.hex }}" })
+        hl(0, "DiffText", { bg = "{{ colors.primary_container.default.hex }}" })
 
         -- ── LSP semantic tokens ───────────────────────────────────────
         hl(0, "@lsp.type.function", { link = "@function" })

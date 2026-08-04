@@ -97,3 +97,11 @@ output_path = "~/.config/theme/current/firefox.css"
 [templates.rofi]
 input_path = "~/.config/matugen/templates/rofi-colors.rasi"
 output_path = "~/.config/rofi/colors.rasi"
+
+[templates.neovim]
+input_path = "~/.config/matugen/templates/neovim.lua"
+output_path = "~/.config/omarchy/current/theme/neovim.lua"
+
+[templates.swayosd-current]
+input_path = "~/.config/matugen/templates/swayosd.css"
+output_path = "~/.config/omarchy/current/theme/swayosd.css"

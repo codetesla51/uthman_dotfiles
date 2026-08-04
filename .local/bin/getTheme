@@ -1,0 +1,69 @@
+#!/bin/bash
+
+THEME_TYPE="scheme-fidelity"
+CONTRAST="0.1"
+MODE="dark"
+WALLPAPER=""
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -t|--type)
+            val="$2"
+            [[ "$val" == scheme-* ]] && THEME_TYPE="$val" || THEME_TYPE="scheme-$val"
+            shift 2
+            ;;
+        -c|--contrast)
+            CONTRAST="$2"
+            shift 2
+            ;;
+        -m|--mode)
+            MODE="$2"
+            shift 2
+            ;;
+        /*)
+            WALLPAPER="$1"
+            shift
+            ;;
+        *)
+            shift
+            ;;
+    esac
+done
+
+if [[ -z "$WALLPAPER" ]]; then
+    WALLPAPER=$(readlink ~/.config/omarchy/current/background 2>/dev/null | tr -d '[:space:]')
+fi
+
+if [[ -z "$WALLPAPER" ]]; then
+    echo "Error: no wallpaper found"
+    exit 1
+fi
+
+if [[ ! -f "$WALLPAPER" ]]; then
+    echo "Error: wallpaper not found at $WALLPAPER"
+    exit 1
+fi
+
+echo "Generating theme from wallpaper..."
+echo "  Wallpaper: $WALLPAPER"
+echo "  Type: $THEME_TYPE"
+echo "  Contrast: $CONTRAST"
+echo "  Mode: $MODE"
+
+matugen image "$WALLPAPER" --mode "$MODE" --type "$THEME_TYPE" --contrast "$CONTRAST" --source-color-index 0
+
+if [[ $? -ne 0 ]]; then
+    echo "Error: matugen failed"
+    exit 1
+fi
+
+echo "Reloading Waybar..."
+killall waybar 2>/dev/null
+sleep 0.2
+nohup waybar >/dev/null 2>&1 &
+disown
+swaync-client --reload-css
+pkill -SIGUSR1 mako 2>/dev/null
+omarchy-restart-walker
+omarchy-restart-swayosd
+echo "Done!"

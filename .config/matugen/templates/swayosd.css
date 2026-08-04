@@ -1,0 +1,5 @@
+@define-color background-color {{ colors.background.default.hex }};
+@define-color border-color {{ colors.outline.default.hex }};
+@define-color label {{ colors.on_background.default.hex }};
+@define-color image {{ colors.on_background.default.hex }};
+@define-color progress {{ colors.primary.default.hex }};

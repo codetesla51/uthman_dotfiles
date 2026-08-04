@@ -10,16 +10,21 @@
     "custom/arch",
     "hyprland/workspaces",
     "custom/separator",
-    "mpris",
+    "custom/now-playing",
   ],
   "modules-center": ["clock"],
   "modules-right": [
     "custom/screenrecord",
+    "custom/idle-indicator",
+    "custom/notification-silencing-indicator",
+    "custom/update",
     "tray",
     "memory",
+    "custom/temperature",
     "cpu",
     "network",
     "battery",
+    "custom/weather",
   ],
 
   // ─── Custom decorators ───
@@ -74,10 +79,26 @@
     "return-type": "json"
   },
   "custom/notification-silencing-indicator": {
-    "on-click": "omarchy-toggle-notification-silencing",
-    "exec": "$OMARCHY_PATH/default/waybar/indicators/notification-silencing.sh",
+    "on-click": "swaync-client -d",
+    "exec": "~/.config/waybar/scripts/dnd.sh",
     "signal": 10,
     "return-type": "json"
+  },
+  "custom/update": {
+    "format": "{}",
+    "exec": "~/.config/waybar/scripts/update.sh",
+    "return-type": "json",
+    "interval": 3600,
+    "signal": 7,
+    "on-click": "omarchy-update",
+    "tooltip": true,
+  },
+  "custom/temperature": {
+    "exec": "~/.config/waybar/scripts/temperature.sh",
+    "return-type": "json",
+    "interval": 5,
+    "signal": 11,
+    "tooltip": true,
   },
   "tray": {
     "icon-size": 13,
@@ -99,10 +120,10 @@
 
   // ─── Network ───
   "custom/weather": {
-    "exec": "$OMARCHY_PATH/default/waybar/weather.sh",
+    "exec": "~/.config/waybar/scripts/weather.sh",
     "return-type": "json",
     "interval": 60,
-    "tooltip": false,
+    "tooltip": true,
     "on-click": "notify-send -u low \"$(omarchy-weather-status)\""
   },
   "network": {
@@ -128,26 +149,13 @@
   },
 
   // ─── Media ───
-  "mpris": {
-    "format": "{player_icon}  {dynamic}",
-    "format-paused": "{player_icon}  {dynamic}",
-    "dynamic-order": ["title", "artist"],
-    "dynamic-separator": "  ·  ",
-    "dynamic-len": 35,
-    "player-icons": {
-      "default": "󰎆",
-      "spotify": "󰓇",
-      "firefox": "󰈹",
-      "chromium": "󰊯",
-      "vlc": "󰕼",
-      "mpv": "󰐍",
-    },
-    "status-icons": {
-      "playing": "",
-      "paused": "󰏤",
-      "stopped": "󰓛",
-    },
-    "tooltip-format": "{player_icon}  {title}\n  {artist}\n󰀥  {album}",
-    "ignored-players": ["playerctld"],
+  "custom/now-playing": {
+    "exec": "~/.config/waybar/scripts/now-playing.sh",
+    "return-type": "json",
+    "interval": 1,
+    "tooltip": true,
+    "on-click": "playerctl play-pause",
+    "on-click-right": "playerctl next",
+    "on-click-middle": "playerctl previous",
   },
 }

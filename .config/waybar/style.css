@@ -53,6 +53,12 @@ window#waybar {
     color: @foreground;
 }
 
+@keyframes blink {
+    0% { opacity: 1; }
+    50% { opacity: 0.3; }
+    100% { opacity: 1; }
+}
+
 /* ─── Tooltips — floating glass cards ─── */
 tooltip {
     background: alpha(@background, 0.85);
@@ -123,8 +129,8 @@ tooltip label {
     background: transparent;
 }
 
-/* ─── Mpris base ─── */
-#mpris {
+/* ─── Now Playing — glass pill, breathes while playing ─── */
+#custom-now-playing {
     background: alpha(@surface, 0.55);
     border: 1px solid alpha(@outline, 0.12);
     border-radius: 14px;
@@ -136,86 +142,26 @@ tooltip label {
     transition: all 0.3s ease;
 }
 
-#mpris:hover {
+#custom-now-playing:hover {
     background: alpha(@surface, 0.75);
 }
 
-#mpris.paused {
+#custom-now-playing.playing {
+    color: @primary;
+    animation: nowplaying-breathe 2s ease-in-out infinite;
+}
+
+#custom-now-playing.paused {
     color: alpha(@outline, 0.7);
     font-style: italic;
 }
 
-#mpris.stopped {
-    color: alpha(@outline, 0.4);
+@keyframes nowplaying-breathe {
+    0% { border-color: alpha(@primary, 0.2); }
+    50% { border-color: alpha(@primary, 0.55); }
+    100% { border-color: alpha(@primary, 0.2); }
 }
 
-/* ─── Spotify — green tint ─── */
-#mpris.spotify {
-    color: #1db954;
-    border-color: alpha(#1db954, 0.25);
-}
-
-#mpris.spotify:hover {
-    border-color: alpha(#1db954, 0.5);
-    background: alpha(@surface, 0.75);
-}
-
-#mpris.spotify.paused {
-    color: alpha(#1db954, 0.5);
-    border-color: alpha(#1db954, 0.15);
-}
-
-/* ─── Firefox / YouTube — red/orange tint ─── */
-#mpris.firefox {
-    color: #ff6611;
-    border-color: alpha(#ff6611, 0.25);
-}
-
-#mpris.firefox:hover {
-    border-color: alpha(#ff6611, 0.5);
-    background: alpha(@surface, 0.75);
-}
-
-#mpris.firefox.paused {
-    color: alpha(#ff6611, 0.5);
-    border-color: alpha(#ff6611, 0.15);
-}
-
-/* ─── Chromium / YouTube ─── */
-#mpris.chromium {
-    color: #4285f4;
-    border-color: alpha(#4285f4, 0.25);
-}
-
-#mpris.chromium:hover {
-    border-color: alpha(#4285f4, 0.5);
-    background: alpha(@surface, 0.75);
-}
-
-#mpris.chromium.paused {
-    color: alpha(#4285f4, 0.5);
-    border-color: alpha(#4285f4, 0.15);
-}
-
-/* ─── VLC — orange ─── */
-#mpris.vlc {
-    color: #ff7800;
-    border-color: alpha(#ff7800, 0.25);
-}
-
-#mpris.vlc:hover {
-    border-color: alpha(#ff7800, 0.5);
-}
-
-/* ─── MPV / local media — neutral ─── */
-#mpris.mpv {
-    color: @secondary;
-    border-color: alpha(@secondary, 0.25);
-}
-
-#mpris.mpv:hover {
-    border-color: alpha(@secondary, 0.5);
-}
 /* ════════════════════════════
    CENTER — Clock island
    ════════════════════════════ */
@@ -246,9 +192,11 @@ tooltip label {
 /* ─── Shared base for all right modules ─── */
 #custom-screenrecord,
 #memory,
+#custom-temperature,
 #cpu,
 #network,
-#battery {
+#battery,
+#custom-weather {
     background: alpha(@surface, 0.6);
     border: 1px solid alpha(@outline, 0.15);
     border-radius: 14px;
@@ -289,6 +237,27 @@ tooltip label {
     background: alpha(@surface, 0.8);
     border-color: alpha(@tertiary, 0.45);
     color: @foreground;
+}
+
+/* ─── Temperature ─── */
+#custom-temperature {
+    color: @foreground;
+}
+
+#custom-temperature:hover {
+    background: alpha(@surface, 0.8);
+    border-color: alpha(@primary, 0.45);
+}
+
+#custom-temperature.warning {
+    color: @tertiary;
+    border-color: alpha(@tertiary, 0.4);
+}
+
+#custom-temperature.critical {
+    color: @error;
+    border-color: alpha(@error, 0.5);
+    animation: blink 1s ease-in-out infinite;
 }
 
 /* ─── CPU ─── */
@@ -345,18 +314,65 @@ tooltip label {
     border-color: alpha(@error, 0.5);
 }
 
+#custom-idle-indicator,
+#custom-notification-silencing-indicator,
+#custom-update {
+    color: transparent;
+    background: transparent;
+    font-size: 13px;
+    padding: 0;
+    margin: 0;
+}
+
 #custom-idle-indicator.active,
+#custom-notification-silencing-indicator.active,
+#custom-update.pending {
+    color: @foreground;
+    background: alpha(@surface, 0.6);
+    border: 1px solid alpha(@outline, 0.15);
+    border-radius: 14px;
+    padding: 5px 10px;
+    margin: 4px 3px;
+}
+
+#custom-idle-indicator.active {
+    color: @tertiary;
+    border-color: alpha(@tertiary, 0.35);
+}
+
 #custom-notification-silencing-indicator.active {
-  color: #a55555;
+    color: @error;
+    border-color: alpha(@error, 0.4);
+}
+
+#custom-update.pending {
+    color: @error;
+    border-color: alpha(@error, 0.4);
+    animation: blink 1.5s ease-in-out infinite;
 }
 
 #custom-weather {
-  margin-left: 7.5px;
-  margin-right: 7.5px;
+    background: alpha(@surface, 0.6);
+    border: 1px solid alpha(@outline, 0.15);
+    border-radius: 14px;
+    padding: 5px 12px;
+    margin: 4px 3px;
+    font-size: 11px;
+    font-weight: 600;
+    color: @primary;
+    transition: all 0.3s ease;
+}
+
+#custom-weather:hover {
+    background: alpha(@surface, 0.8);
+    border-color: alpha(@primary, 0.45);
+    color: @foreground;
 }
 
 #custom-weather.unavailable {
-  min-width: 0;
-  margin: 0;
-  padding: 0;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    background: transparent;
+    border: none;
 }

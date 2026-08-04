@@ -14,7 +14,6 @@
   ],
   "modules-center": ["clock"],
   "modules-right": [
-    "custom/screenrecord",
     "custom/idle-indicator",
     "custom/notification-silencing-indicator",
     "custom/update",
@@ -35,19 +34,6 @@
   "custom/separator": {
     "format": " ",
     "tooltip": false,
-  },
-
-  // ─── Screen Recording ───
-  "custom/screenrecord": {
-    "format": "{}",
-    "return-type": "json",
-    "interval": "once",
-    "signal": 8,
-    "exec": "~/.config/waybar/scripts/screenrecord-status.sh",
-    "on-click": "~/.local/bin/omarchy-capture-screenrecording",
-    "on-click-right": "~/.local/bin/omarchy-capture-screenrecording --with-desktop-audio",
-    "on-click-middle": "~/.local/bin/omarchy-capture-screenrecording --with-webcam",
-    "tooltip": true,
   },
 
   // ─── Clock ───

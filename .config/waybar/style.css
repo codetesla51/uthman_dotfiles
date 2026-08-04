@@ -190,7 +190,6 @@ tooltip label {
    ═══════════════════════════════════════ */
 
 /* ─── Shared base for all right modules ─── */
-#custom-screenrecord,
 #memory,
 #custom-temperature,
 #cpu,
@@ -206,26 +205,6 @@ tooltip label {
     font-weight: 600;
     letter-spacing: 0.3px;
     transition: all 0.3s ease;
-}
-
-/* ─── Screen Recording ─── */
-#custom-screenrecord {
-    color: @foreground;
-}
-
-#custom-screenrecord:hover {
-    background: alpha(@surface, 0.8);
-    border-color: alpha(@error, 0.45);
-}
-
-#custom-screenrecord.recording {
-    color: @error;
-    border-color: alpha(@error, 0.5);
-    animation: blink 1s ease-in-out infinite;
-}
-
-#custom-screenrecord.idle {
-    color: alpha(@outline, 0.7);
 }
 
 /* ─── Memory ─── */

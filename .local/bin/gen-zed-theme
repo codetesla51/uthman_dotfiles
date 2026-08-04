@@ -93,10 +93,17 @@ def main():
     secondary = b["secondary"]
     error = b["error"]
 
-    keyword = tweak(primary_c, 0, 0.12, 0.06)
-    number = tweak(primary, -55, 0.10, -0.04)
-    steel = tweak(primary, -15, -0.15, -0.10)
-    lavender = tweak(primary, 50, -0.05, 0.10)
+    keyword = tweak(primary, 30, 0.08, 0.04)
+    function = primary
+    type = tweak(primary, -30, 0.08, 0.04)
+    constructor = tweak(primary, 15, 0.10, 0.05)
+    tag = tweak(primary, -10, 0.10, 0.05)
+    attribute = tweak(primary, 45, 0.08, 0.06)
+    label = tweak(primary, 40, 0.05, 0.10)
+    string = tweak(primary, -90, 0.12, 0.05)
+    string_escape = tweak(primary, -170, 0.10, 0.06)
+    number = tweak(primary, -200, 0.10, 0.04)
+    constant = tweak(primary, -50, 0.12, 0.05)
     orange = tweak(error, 30, 0.10, 0.05)
 
     style = {
@@ -153,17 +160,17 @@ def main():
             {"cursor": primary, "selection": primary_c, "background": None}
         ],
         "syntax": {
-            "attribute": c(lavender),
+            "attribute": c(attribute),
             "boolean": c(number),
             "comment": {"color": muted, "font_style": "italic", "font_weight": None},
             "comment.doc": {"color": muted, "font_style": "italic", "font_weight": None},
-            "constant": c(tertiary),
-            "constructor": c(primary_c),
+            "constant": c(constant),
+            "constructor": c(constructor),
             "emphasis": {"color": fg, "font_style": "italic", "font_weight": None},
             "emphasis.strong": {"color": fg, "font_style": None, "font_weight": 700},
-            "function": c(primary),
+            "function": c(function),
             "keyword": c(keyword),
-            "label": c(steel),
+            "label": c(label),
             "link_text": c(primary),
             "link_uri": c(primary),
             "number": c(number),
@@ -173,15 +180,15 @@ def main():
             "punctuation.delimiter": c(dim),
             "punctuation.list_marker": c(dim),
             "punctuation.special": c(dim),
-            "string": c(tertiary),
-            "string.escape": c(steel),
-            "string.regex": c(tertiary),
-            "string.special": c(tertiary),
-            "string.special.symbol": c(tertiary),
-            "tag": c(primary_c),
-            "text.literal": c(tertiary),
+            "string": c(string),
+            "string.escape": c(string_escape),
+            "string.regex": c(string),
+            "string.special": c(string),
+            "string.special.symbol": c(string),
+            "tag": c(tag),
+            "text.literal": c(string),
             "title": c(primary),
-            "type": c(secondary),
+            "type": c(type),
             "variable": c(fg),
             "variable.special": {"color": fg, "font_style": "italic", "font_weight": None},
         },

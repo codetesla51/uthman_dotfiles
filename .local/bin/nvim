@@ -1,0 +1,6 @@
+#!/bin/bash
+# nvim wrapper: give every instance a listen socket so theme switching can
+# live-reload running editors (see getTheme).
+SOCK_DIR="/tmp/nvim-$USER"
+mkdir -p "$SOCK_DIR"
+exec /usr/bin/nvim --listen "$SOCK_DIR/$$.sock" "$@"

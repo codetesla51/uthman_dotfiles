@@ -1,0 +1,69 @@
+{
+  "cli_default_open_behavior": "existing_window",
+  "agent_servers": {
+    "opencode": {
+      "type": "registry"
+    }
+  },
+  "project_panel": {
+    "dock": "left"
+  },
+  "outline_panel": {
+    "dock": "left"
+  },
+  "collaboration_panel": {
+    "dock": "left"
+  },
+  "git_panel": {
+    "dock": "left"
+  },
+  "languages": {
+    "Go": {
+      "show_edit_predictions": true
+    }
+  },
+  "show_edit_predictions": false,
+  "icon_theme": "Colored Zed Icons Theme Dark",
+  "auto_update_extensions": {
+    "catppuccin-blur": false
+  },
+  "edit_predictions": {
+    "mode": "eager",
+    "provider": "copilot",
+  },
+  "agent": {
+    "dock": "right",
+    "default_model": {
+      "provider": "copilot_chat",
+      "model": "claude-opus-4.5",
+      "enable_thinking": false,
+    },
+    "favorite_models": [],
+    "model_parameters": [],
+  },
+  "ui_font_size": 18,
+  "buffer_font_size": 18,
+  "theme": {
+    "mode": "dark",
+    "light": "macOS Classic Light",
+    "dark": "Matugen",
+  },
+  "minimap": {
+    "show": "always",
+  },
+  "lsp": {
+    "gopls": {
+      "initialization_options": {
+        "hints": {
+          "assignVariableTypes": true,
+          "compositeLiteralFields": true,
+          "compositeLiteralTypes": true,
+          "constantValues": true,
+          "functionTypeParameters": true,
+          "parameterNames": true,
+          "rangeVariableTypes": true,
+        },
+      },
+    },
+  },
+}

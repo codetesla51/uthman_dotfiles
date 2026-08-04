@@ -108,4 +108,4 @@ output_path = "~/.config/omarchy/current/theme/swayosd.css"
 
 [templates.zed-palette]
 input_path = "~/.config/matugen/templates/zed-palette.json"
-output_path = "~/.config/zed/themes/matugen-base.json"
+output_path = "~/.config/omarchy/current/theme/matugen-base.json"

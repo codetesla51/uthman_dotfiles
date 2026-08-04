@@ -3,14 +3,15 @@
 
 Keeps the exact same derived accent colors as the nvim theme
 (matugen/templates/neovim.lua) so the two editors stay in sync.
+
+Zed expects a theme FAMILY file: { name, author, themes: [...] }.
 """
 
 import json
-import math
 import os
 import sys
 
-BASE = os.path.expanduser("~/.config/zed/themes/matugen-base.json")
+BASE = os.path.expanduser("~/.config/omarchy/current/theme/matugen-base.json")
 OUT = os.path.expanduser("~/.config/zed/themes/matugen.json")
 
 
@@ -66,93 +67,137 @@ def tweak(hexv, dh, ds, dl):
     return rgb2hex(hsl2rgb(h, s, l))
 
 
+def c(color):
+    return {"color": color, "font_style": None, "font_weight": None}
+
+
 def main():
     if not os.path.exists(BASE):
-        sys.exit("matugen-base.json not found; run getTheme first")
+        sys.exit(f"{BASE} not found; run getTheme first")
 
     with open(BASE) as f:
         b = json.load(f)
 
     bg = b["background"]
     fg = b["on_background"]
+    dim = b["on_surface_variant"]
+    muted = b["outline"]
+    faint = b["outline_variant"]
+    border = b["surface_container_highest"]
+    raised = b["surface_container"]
+    low = b["surface_container_low"]
+    select = b["surface_container_high"]
     primary = b["primary"]
-    keyword = tweak(b["primary_container"], 0, 0.12, 0.06)
+    primary_c = b["primary_container"]
+    tertiary = b["tertiary"]
+    secondary = b["secondary"]
+    error = b["error"]
+
+    keyword = tweak(primary_c, 0, 0.12, 0.06)
     number = tweak(primary, -55, 0.10, -0.04)
     steel = tweak(primary, -15, -0.15, -0.10)
     lavender = tweak(primary, 50, -0.05, 0.10)
-    orange = tweak(b["error"], 30, 0.10, 0.05)
-    dim = b["on_surface_variant"]
-    muted = b["outline"]
-    border = b["surface_container_highest"]
-    raised = b["surface_container"]
-    select = b["surface_container_high"]
+    orange = tweak(error, 30, 0.10, 0.05)
+
+    style = {
+        "background": bg,
+        "border": border,
+        "border.variant": select,
+        "elevated_surface.background": raised,
+        "surface.background": raised,
+        "element.background": raised,
+        "element.hover": select,
+        "element.active": primary_c,
+        "element.selected": select,
+        "text": fg,
+        "text.muted": muted,
+        "text.placeholder": faint,
+        "text.accent": primary,
+        "status_bar.background": bg,
+        "title_bar.background": bg,
+        "title_bar.inactive_background": low,
+        "toolbar.background": bg,
+        "tab_bar.background": bg,
+        "tab.inactive_background": bg,
+        "tab.active_background": raised,
+        "panel.background": bg,
+        "panel.focused_border": primary,
+        "pane.focused_border": primary,
+        "scrollbar.thumb.background": faint,
+        "scrollbar.thumb.hover_background": muted,
+        "scrollbar.thumb.border": border,
+        "scrollbar.track.background": bg,
+        "editor.foreground": fg,
+        "editor.background": bg,
+        "editor.gutter.background": bg,
+        "editor.subheader.background": bg,
+        "editor.active_line.background": low,
+        "editor.highlighted_line.background": raised,
+        "editor.line_number": muted,
+        "editor.active_line_number": primary,
+        "link_text.hover": primary,
+        "conflict": error,
+        "created": number,
+        "deleted": error,
+        "error": error,
+        "hint": number,
+        "ignored": muted,
+        "info": primary,
+        "modified": tertiary,
+        "predictive": faint,
+        "renamed": secondary,
+        "success": number,
+        "unreachable": muted,
+        "warning": orange,
+        "players": [
+            {"cursor": primary, "selection": primary_c, "background": None}
+        ],
+        "syntax": {
+            "attribute": c(lavender),
+            "boolean": c(number),
+            "comment": {"color": muted, "font_style": "italic", "font_weight": None},
+            "comment.doc": {"color": muted, "font_style": "italic", "font_weight": None},
+            "constant": c(tertiary),
+            "constructor": c(primary_c),
+            "emphasis": {"color": fg, "font_style": "italic", "font_weight": None},
+            "emphasis.strong": {"color": fg, "font_style": None, "font_weight": 700},
+            "function": c(primary),
+            "keyword": c(keyword),
+            "label": c(steel),
+            "link_text": c(primary),
+            "link_uri": c(primary),
+            "number": c(number),
+            "property": c(dim),
+            "punctuation": c(dim),
+            "punctuation.bracket": c(dim),
+            "punctuation.delimiter": c(dim),
+            "punctuation.list_marker": c(dim),
+            "punctuation.special": c(dim),
+            "string": c(tertiary),
+            "string.escape": c(steel),
+            "string.regex": c(tertiary),
+            "string.special": c(tertiary),
+            "string.special.symbol": c(tertiary),
+            "tag": c(primary_c),
+            "text.literal": c(tertiary),
+            "title": c(primary),
+            "type": c(secondary),
+            "variable": c(fg),
+            "variable.special": {"color": fg, "font_style": "italic", "font_weight": None},
+        },
+    }
 
     theme = {
         "$schema": "https://zed.dev/schema/themes/v0.1.0.json",
-        "name": "Matugen",
-        "appearance": "dark",
-        "style": {
-            "background": bg,
-            "foreground": fg,
-            "border": border,
-            "syntax": {
-                "comment": {"color": muted, "font_style": "italic"},
-                "constant": b["tertiary"],
-                "function": primary,
-                "keyword": keyword,
-                "number": number,
-                "property": dim,
-                "string": b["tertiary"],
-                "type": b["secondary"],
-                "variable": fg,
-                "variant": lavender,
-                "tag": b["primary_container"],
-                "label": steel,
-                "link_text": primary,
-                "predicate": b["tertiary"],
-                "punctuation": dim,
-                "emphasis": {"color": fg, "font_style": "italic"},
-                "strong": {"color": fg, "font_weight": 700},
-            },
-            "ui": {
-                "background": bg,
-                "foreground": fg,
-                "border": border,
-                "text.muted": muted,
-                "text.faint": b["outline_variant"],
-                "text.accent": primary,
-                "text.positive": number,
-                "text.warning": orange,
-                "text.error": b["error"],
-                "text.info": primary,
-                "panel.background": bg,
-                "panel.border": border,
-                "element.background": raised,
-                "element.hover": select,
-                "element.active": keyword,
-                "element.selected": select,
-                "element.border": b["outline_variant"],
-                "editor.background": bg,
-                "editor.foreground": fg,
-                "editor.border.active": primary,
-                "editor.border.inactive": b["outline_variant"],
-                "editor.highlighted_line_background": raised,
-                "editor.line_number": muted,
-                "editor.active_line_number": primary,
-                "editor.gutter.background": bg,
-                "editor.gutter.border": border,
-                "editor.selection": select,
-                "editor.selection_border": keyword,
-                "status_bar.background": bg,
-                "status_bar.foreground": muted,
-                "tab_bar.background": bg,
-                "tab.active_background": raised,
-                "tab.inactive_background": bg,
-                "title_bar.background": bg,
-                "scrollbar.thumb": b["outline_variant"],
-                "scrollbar.thumb.border": b["outline_variant"],
-            },
-        },
+        "name": "matugen",
+        "author": "matugen",
+        "themes": [
+            {
+                "name": "Matugen",
+                "appearance": "dark",
+                "style": style,
+            }
+        ],
     }
 
     with open(OUT, "w") as f:

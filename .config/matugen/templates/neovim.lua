@@ -87,17 +87,15 @@ return {
           fg_dim     = "{{ colors.on_surface_variant.default.hex }}",
           fg_muted   = "{{ colors.outline.default.hex }}",
           primary    = "{{ colors.primary.default.hex }}",
-          primary_c  = "{{ colors.primary_container.default.hex }}",
           secondary  = "{{ colors.secondary.default.hex }}",
-          secondary_c= "{{ colors.secondary_container.default.hex }}",
           tertiary   = "{{ colors.tertiary.default.hex }}",
-          tertiary_c = "{{ colors.tertiary_container.default.hex }}",
           error      = "{{ colors.error.default.hex }}",
         }
 
         -- ── Palette ───────────────────────────────────────────────────
-        --  Each color owns exactly one syntactic role.
-        --  Accents are boosted variants of the wallpaper scheme.
+        --  Syntax hues are rotated from the primary hue so every role gets
+        --  a distinct color no matter what the wallpaper scheme is. These
+        --  offsets match gen-zed-theme so both editors agree.
         local c = {
           -- Backgrounds
           bg        = base.bg,
@@ -110,19 +108,18 @@ return {
           fg_dim    = base.fg_dim, -- punctuation, operators
           fg_muted  = base.fg_muted, -- line numbers, whitespace
 
-          -- Blues & cyans — the accent family
-          cyan      = base.primary, -- functions & methods              (bright, eye-catching)
-          blue      = tweak(base.primary_c, 0, 0.12, 0.06), -- keywords (clear, authoritative)
-          blue_soft = base.secondary, -- types & classes                (distinct but calmer)
-          sky       = base.tertiary, -- strings                         (warm, readable)
-          teal      = tweak(base.primary, -55, 0.10, -0.04), -- numbers (green-teal)
+          -- Syntax hues
+          cyan      = base.primary, -- functions & methods           (identity hue)
+          violet    = tweak(base.primary, 30, 0.08, 0.04), -- keywords, storage
+          soft_cyan = tweak(base.primary, -30, 0.08, 0.04), -- types & classes
+          green     = tweak(base.primary, -90, 0.12, 0.05), -- strings, text
+          orange    = tweak(base.primary, -200, 0.10, 0.04), -- numbers, booleans
+          teal      = tweak(base.primary, -50, 0.12, 0.05), -- constants, match parens
+          gold      = tweak(base.primary, -170, 0.10, 0.06), -- imports, macros, escapes
           steel     = tweak(base.primary, -15, -0.15, -0.10), -- builtins, special vars
-
-          -- Supporting accents
-          lavender  = tweak(base.primary, 50, -0.05, 0.10), -- attributes, decorators
-          gold      = tweak(base.tertiary_c, 0, 0.05, 0.08), -- imports, macros (warm gold)
+          lavender  = tweak(base.primary, 45, 0.08, 0.06), -- attributes, decorators
           red       = base.error, -- errors & exceptions
-          orange    = tweak(base.error, 30, 0.10, 0.05), -- warnings     (warm orange)
+          warn      = tweak(base.error, 30, 0.10, 0.05), -- warnings
 
           -- UI chrome
           border    = "{{ colors.surface_container_highest.default.hex }}",
@@ -137,21 +134,21 @@ return {
 
         -- ── Syntax ────────────────────────────────────────────────────
         hl(0, "Comment", { fg = c.fg_muted, italic = true })
-        hl(0, "Constant", { fg = c.sky })
-        hl(0, "String", { fg = c.sky })
-        hl(0, "Character", { fg = c.sky })
-        hl(0, "Number", { fg = c.teal })
-        hl(0, "Float", { fg = c.teal })
-        hl(0, "Boolean", { fg = c.teal, bold = true })
+        hl(0, "Constant", { fg = c.teal })
+        hl(0, "String", { fg = c.green })
+        hl(0, "Character", { fg = c.green })
+        hl(0, "Number", { fg = c.orange })
+        hl(0, "Float", { fg = c.orange })
+        hl(0, "Boolean", { fg = c.orange, bold = true })
 
         hl(0, "Identifier", { fg = c.fg })
         hl(0, "Function", { fg = c.cyan, bold = true })
 
-        hl(0, "Statement", { fg = c.blue })
-        hl(0, "Conditional", { fg = c.blue, bold = true })
-        hl(0, "Repeat", { fg = c.blue, bold = true })
-        hl(0, "Label", { fg = c.blue })
-        hl(0, "Keyword", { fg = c.blue, bold = true })
+        hl(0, "Statement", { fg = c.violet })
+        hl(0, "Conditional", { fg = c.violet, bold = true })
+        hl(0, "Repeat", { fg = c.violet, bold = true })
+        hl(0, "Label", { fg = c.violet })
+        hl(0, "Keyword", { fg = c.violet, bold = true })
         hl(0, "Exception", { fg = c.red, bold = true })
         hl(0, "Operator", { fg = c.fg_dim })
 
@@ -160,20 +157,20 @@ return {
         hl(0, "Define", { fg = c.gold })
         hl(0, "Macro", { fg = c.gold })
 
-        hl(0, "Type", { fg = c.blue_soft, bold = true })
-        hl(0, "StorageClass", { fg = c.blue })
-        hl(0, "Structure", { fg = c.blue_soft })
-        hl(0, "Typedef", { fg = c.blue_soft })
+        hl(0, "Type", { fg = c.soft_cyan, bold = true })
+        hl(0, "StorageClass", { fg = c.violet })
+        hl(0, "Structure", { fg = c.soft_cyan })
+        hl(0, "Typedef", { fg = c.soft_cyan })
 
         hl(0, "Special", { fg = c.steel })
         hl(0, "SpecialChar", { fg = c.steel })
-        hl(0, "Tag", { fg = c.blue })
+        hl(0, "Tag", { fg = c.violet })
         hl(0, "Delimiter", { fg = c.fg_dim })
         hl(0, "SpecialComment", { fg = c.steel, italic = true })
 
         hl(0, "Error", { fg = c.red, bold = true })
         hl(0, "Todo", { fg = c.bg, bg = c.cyan, bold = true })
-        hl(0, "Underlined", { fg = c.sky, underline = true })
+        hl(0, "Underlined", { fg = c.green, underline = true })
 
         -- ── Treesitter ────────────────────────────────────────────────
         hl(0, "@variable", { fg = c.fg })
@@ -181,38 +178,38 @@ return {
         hl(0, "@variable.parameter", { fg = c.fg_dim })
         hl(0, "@variable.member", { fg = c.fg })
 
-        hl(0, "@constant", { fg = c.sky })
+        hl(0, "@constant", { fg = c.teal })
         hl(0, "@constant.builtin", { fg = c.teal, bold = true })
         hl(0, "@constant.macro", { fg = c.gold })
 
-        hl(0, "@string", { fg = c.sky })
-        hl(0, "@string.escape", { fg = c.steel })
-        hl(0, "@string.special", { fg = c.steel })
+        hl(0, "@string", { fg = c.green })
+        hl(0, "@string.escape", { fg = c.gold })
+        hl(0, "@string.special", { fg = c.green })
 
-        hl(0, "@number", { fg = c.teal })
-        hl(0, "@boolean", { fg = c.teal, bold = true })
+        hl(0, "@number", { fg = c.orange })
+        hl(0, "@boolean", { fg = c.orange, bold = true })
 
         hl(0, "@function", { fg = c.cyan, bold = true })
         hl(0, "@function.builtin", { fg = c.steel, bold = true })
         hl(0, "@function.method", { fg = c.cyan })
         hl(0, "@function.method.call", { fg = c.cyan })
         hl(0, "@function.macro", { fg = c.gold })
-        hl(0, "@constructor", { fg = c.blue_soft })
+        hl(0, "@constructor", { fg = c.soft_cyan })
 
-        hl(0, "@keyword", { fg = c.blue, bold = true })
+        hl(0, "@keyword", { fg = c.violet, bold = true })
         hl(0, "@keyword.import", { fg = c.gold })
-        hl(0, "@keyword.return", { fg = c.blue, italic = true })
-        hl(0, "@keyword.operator", { fg = c.blue })
-        hl(0, "@keyword.function", { fg = c.blue, bold = true })
+        hl(0, "@keyword.return", { fg = c.violet, italic = true })
+        hl(0, "@keyword.operator", { fg = c.violet })
+        hl(0, "@keyword.function", { fg = c.violet, bold = true })
 
-        hl(0, "@type", { fg = c.blue_soft, bold = true })
-        hl(0, "@type.builtin", { fg = c.blue_soft })
-        hl(0, "@type.qualifier", { fg = c.blue })
+        hl(0, "@type", { fg = c.soft_cyan, bold = true })
+        hl(0, "@type.builtin", { fg = c.soft_cyan })
+        hl(0, "@type.qualifier", { fg = c.violet })
 
         hl(0, "@attribute", { fg = c.lavender })
         hl(0, "@namespace", { fg = c.steel })
         hl(0, "@module", { fg = c.steel })
-        hl(0, "@label", { fg = c.blue })
+        hl(0, "@label", { fg = c.violet })
         hl(0, "@operator", { fg = c.fg_dim })
         hl(0, "@punctuation.bracket", { fg = c.fg_dim })
         hl(0, "@punctuation.delimiter", { fg = c.fg_dim })
@@ -223,7 +220,7 @@ return {
         hl(0, "@markup.heading", { fg = c.cyan, bold = true })
         hl(0, "@markup.strong", { fg = c.fg, bold = true })
         hl(0, "@markup.italic", { fg = c.fg_dim, italic = true })
-        hl(0, "@markup.link", { fg = c.sky, underline = true })
+        hl(0, "@markup.link", { fg = c.green, underline = true })
         hl(0, "@markup.raw", { fg = c.teal })
 
         -- ── UI ────────────────────────────────────────────────────────
@@ -240,8 +237,8 @@ return {
         hl(0, "VisualNOS", { bg = c.bg_select })
 
         hl(0, "Search", { fg = c.bg, bg = c.cyan })
-        hl(0, "IncSearch", { fg = c.bg, bg = c.blue, bold = true })
-        hl(0, "CurSearch", { fg = c.bg, bg = c.blue, bold = true })
+        hl(0, "IncSearch", { fg = c.bg, bg = c.violet, bold = true })
+        hl(0, "CurSearch", { fg = c.bg, bg = c.violet, bold = true })
 
         hl(0, "MatchParen", { fg = c.teal, bold = true, underline = true })
 
@@ -266,33 +263,33 @@ return {
         hl(0, "BufferLineBuffer", { fg = c.fg_muted })
 
         hl(0, "Title", { fg = c.cyan, bold = true })
-        hl(0, "Directory", { fg = c.blue })
+        hl(0, "Directory", { fg = c.violet })
         hl(0, "NonText", { fg = c.hint })
         hl(0, "Whitespace", { fg = c.hint })
         hl(0, "SpecialKey", { fg = c.hint })
         hl(0, "Conceal", { fg = c.fg_muted })
 
         hl(0, "SpellBad", { undercurl = true, sp = c.red })
-        hl(0, "SpellWarn", { undercurl = true, sp = c.orange })
+        hl(0, "SpellWarn", { undercurl = true, sp = c.warn })
 
         -- ── Diagnostics ───────────────────────────────────────────────
         hl(0, "DiagnosticError", { fg = c.red })
-        hl(0, "DiagnosticWarn", { fg = c.orange })
-        hl(0, "DiagnosticInfo", { fg = c.sky })
-        hl(0, "DiagnosticHint", { fg = c.teal })
-        hl(0, "DiagnosticOk", { fg = c.teal })
+        hl(0, "DiagnosticWarn", { fg = c.warn })
+        hl(0, "DiagnosticInfo", { fg = c.cyan })
+        hl(0, "DiagnosticHint", { fg = c.steel })
+        hl(0, "DiagnosticOk", { fg = c.green })
         hl(0, "DiagnosticUnderlineError", { undercurl = true, sp = c.red })
-        hl(0, "DiagnosticUnderlineWarn", { undercurl = true, sp = c.orange })
-        hl(0, "DiagnosticUnderlineInfo", { undercurl = true, sp = c.sky })
-        hl(0, "DiagnosticUnderlineHint", { undercurl = true, sp = c.teal })
+        hl(0, "DiagnosticUnderlineWarn", { undercurl = true, sp = c.warn })
+        hl(0, "DiagnosticUnderlineInfo", { undercurl = true, sp = c.cyan })
+        hl(0, "DiagnosticUnderlineHint", { undercurl = true, sp = c.steel })
         hl(0, "DiagnosticVirtualTextError", { fg = c.red, bg = c.bg_raised })
-        hl(0, "DiagnosticVirtualTextWarn", { fg = c.orange, bg = c.bg_raised })
-        hl(0, "DiagnosticVirtualTextInfo", { fg = c.sky, bg = c.bg_raised })
-        hl(0, "DiagnosticVirtualTextHint", { fg = c.teal, bg = c.bg_raised })
+        hl(0, "DiagnosticVirtualTextWarn", { fg = c.warn, bg = c.bg_raised })
+        hl(0, "DiagnosticVirtualTextInfo", { fg = c.cyan, bg = c.bg_raised })
+        hl(0, "DiagnosticVirtualTextHint", { fg = c.steel, bg = c.bg_raised })
 
         -- ── Git ───────────────────────────────────────────────────────
-        hl(0, "GitSignsAdd", { fg = c.teal })
-        hl(0, "GitSignsChange", { fg = c.sky })
+        hl(0, "GitSignsAdd", { fg = c.green })
+        hl(0, "GitSignsChange", { fg = c.teal })
         hl(0, "GitSignsDelete", { fg = c.red })
         hl(0, "DiffAdd", { bg = "{{ colors.surface_container_high.default.hex }}" })
         hl(0, "DiffChange", { bg = "{{ colors.tertiary_container.default.hex }}" })
@@ -305,13 +302,13 @@ return {
         hl(0, "@lsp.type.keyword", { link = "@keyword" })
         hl(0, "@lsp.type.type", { link = "@type" })
         hl(0, "@lsp.type.class", { link = "@type" })
-        hl(0, "@lsp.type.interface", { fg = c.blue_soft, italic = true })
+        hl(0, "@lsp.type.interface", { fg = c.soft_cyan, italic = true })
         hl(0, "@lsp.type.variable", { link = "@variable" })
         hl(0, "@lsp.type.parameter", { link = "@variable.parameter" })
         hl(0, "@lsp.type.property", { fg = c.fg })
         hl(0, "@lsp.type.namespace", { link = "@namespace" })
-        hl(0, "@lsp.type.enum", { fg = c.blue_soft })
-        hl(0, "@lsp.type.enumMember", { fg = c.sky })
+        hl(0, "@lsp.type.enum", { fg = c.soft_cyan })
+        hl(0, "@lsp.type.enumMember", { fg = c.green })
         hl(0, "@lsp.type.decorator", { fg = c.lavender })
         hl(0, "@lsp.type.macro", { fg = c.gold })
         hl(0, "@lsp.type.comment", { link = "@comment" })
@@ -327,12 +324,12 @@ return {
         hl(0, "TelescopeMatching", { fg = c.cyan, bold = true })
 
         -- ── nvim-tree ─────────────────────────────────────────────────
-        hl(0, "NvimTreeFolderName", { fg = c.blue })
-        hl(0, "NvimTreeFolderIcon", { fg = c.blue })
+        hl(0, "NvimTreeFolderName", { fg = c.violet })
+        hl(0, "NvimTreeFolderIcon", { fg = c.violet })
         hl(0, "NvimTreeOpenedFolderName", { fg = c.cyan, bold = true })
         hl(0, "NvimTreeRootFolder", { fg = c.cyan, bold = true })
-        hl(0, "NvimTreeGitDirty", { fg = c.orange })
-        hl(0, "NvimTreeGitNew", { fg = c.teal })
+        hl(0, "NvimTreeGitDirty", { fg = c.warn })
+        hl(0, "NvimTreeGitNew", { fg = c.green })
 
         -- ── Indent guides ─────────────────────────────────────────────
         hl(0, "IblIndent", { fg = c.hint })
@@ -340,7 +337,7 @@ return {
 
         -- ── Which-key ─────────────────────────────────────────────────
         hl(0, "WhichKey", { fg = c.cyan })
-        hl(0, "WhichKeyGroup", { fg = c.blue })
+        hl(0, "WhichKeyGroup", { fg = c.violet })
         hl(0, "WhichKeyDesc", { fg = c.fg_dim })
       end,
     },

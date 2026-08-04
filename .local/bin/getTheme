@@ -75,6 +75,7 @@ swaync-client --reload-css &
 pkill -SIGUSR1 mako 2>/dev/null &
 omarchy-restart-walker &
 omarchy-restart-swayosd &
+omarchy-restart-terminal &
 gen-zed-theme &
 
 # Live-reload any running nvim instances (via the --listen sockets).

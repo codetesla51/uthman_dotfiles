@@ -1,7 +1,7 @@
 #!/bin/bash
 
-THEME_TYPE="scheme-fidelity"
-CONTRAST="0.1"
+THEME_TYPE="scheme-vibrant"
+CONTRAST="0"
 MODE="dark"
 WALLPAPER=""
 
@@ -76,6 +76,7 @@ pkill -SIGUSR1 mako 2>/dev/null &
 omarchy-restart-walker &
 omarchy-restart-swayosd &
 omarchy-restart-terminal &
+omarchy-theme-set-browser &
 gen-zed-theme &
 
 # Live-reload any running nvim instances (via the --listen sockets).

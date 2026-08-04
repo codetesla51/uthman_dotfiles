@@ -14,11 +14,7 @@ if [[ -n "$selected" ]]; then
         exit 1
     fi
     full_path="${WALL_DIR}/${cleaned}"
-    ln -sf "$full_path" ~/.config/omarchy/current/background
-    pkill -x swaybg 2>/dev/null
-    sleep 0.2
-    nohup swaybg -i "$full_path" -m fill >/dev/null 2>&1 &
-    nohup /home/uthman/.local/bin/getTheme -t fidelity -m dark -c 0.1 "$full_path" >/dev/null 2>&1 &
+    nohup /home/uthman/.local/bin/set-wallpaper "$full_path" >/dev/null 2>&1 &
     gsettings set org.gnome.desktop.interface icon-theme 'Papirus-Dark'
 else
     pairs=()

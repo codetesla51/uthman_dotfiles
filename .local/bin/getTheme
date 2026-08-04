@@ -44,6 +44,8 @@ if [[ ! -f "$WALLPAPER" ]]; then
     exit 1
 fi
 
+notify-send -a getTheme -u low "Theme" "Generating theme from $(basename "$WALLPAPER")…" 2>/dev/null
+
 echo "Generating theme from wallpaper..."
 echo "  Wallpaper: $WALLPAPER"
 echo "  Type: $THEME_TYPE"
@@ -54,17 +56,34 @@ matugen image "$WALLPAPER" --mode "$MODE" --type "$THEME_TYPE" --contrast "$CONT
 
 if [[ $? -ne 0 ]]; then
     echo "Error: matugen failed"
+    notify-send -a getTheme -u critical "Theme" "matugen failed" 2>/dev/null
     exit 1
 fi
 
-echo "Reloading Waybar..."
-killall waybar 2>/dev/null
-sleep 0.2
-nohup waybar >/dev/null 2>&1 &
-disown
-swaync-client --reload-css
-pkill -SIGUSR1 mako 2>/dev/null
-omarchy-restart-walker
-omarchy-restart-swayosd
-gen-zed-theme
+notify-send -a getTheme -u low "Theme" "Applying…" 2>/dev/null
+echo "Applying colors..."
+
+# Fire every reload in parallel so nothing flashes sequentially.
+# Hyprland re-sources colors.conf, so borders/window colors update too.
+hyprctl reload &
+
+if ! omarchy-toggle-enabled waybar-off 2>/dev/null; then
+    omarchy-restart-waybar &
+fi
+
+swaync-client --reload-css &
+pkill -SIGUSR1 mako 2>/dev/null &
+omarchy-restart-walker &
+omarchy-restart-swayosd &
+gen-zed-theme &
+
+# Live-reload any running nvim instances (via the --listen sockets).
+for sock in /tmp/nvim-"$USER"/*.sock; do
+    [[ -S "$sock" ]] || continue
+    nvim --server "$sock" --remote-send ':OmarchyReloadTheme<CR>' 2>/dev/null &
+done
+
+wait
+
+notify-send -a getTheme -u normal "Theme" "Theme applied" 2>/dev/null
 echo "Done!"

@@ -1,0 +1,42 @@
+#!/bin/bash
+# set-wallpaper [image] — crossfade a new wallpaper and regenerate the theme in one go.
+# Falls back to a swaybg relaunch if awww/swww isn't installed.
+
+IMAGE="${1:-$(readlink ~/.config/omarchy/current/background 2>/dev/null | tr -d '[:space:]')}"
+
+if [[ -z "$IMAGE" ]]; then
+    echo "Error: no wallpaper given and no current background" >&2
+    exit 1
+fi
+
+if [[ ! -f "$IMAGE" ]]; then
+    echo "Error: wallpaper not found at $IMAGE" >&2
+    exit 1
+fi
+
+IMAGE="$(realpath "$IMAGE")"
+ln -sfn "$IMAGE" ~/.config/omarchy/current/background
+
+if command -v awww >/dev/null 2>&1; then
+    WALL="awww"
+    DAEMON="awww-daemon"
+elif command -v swww >/dev/null 2>&1; then
+    WALL="swww"
+    DAEMON="swww-daemon"
+fi
+
+if [[ -n "$WALL" ]]; then
+    if ! pgrep -x "$DAEMON" >/dev/null 2>&1; then
+        setsid "$DAEMON" >/dev/null 2>&1 &
+        sleep 0.3
+    fi
+    "$WALL" img "$IMAGE" --transition-type fade --transition-step 90 --transition-fps 60 &
+else
+    pkill -x swaybg 2>/dev/null
+    sleep 0.2
+    nohup swaybg -i "$IMAGE" -m fill >/dev/null 2>&1 &
+    disown
+fi
+
+getTheme "$IMAGE" &
+wait

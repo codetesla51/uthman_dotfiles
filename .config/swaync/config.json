@@ -21,8 +21,8 @@
   "timeout-critical": 0,
   "fit-to-screen": false,
   "relative-timestamps": true,
-  "control-center-width": 400,
-  "control-center-height": 600,
+  "control-center-width": 420,
+  "control-center-height": 640,
   "notification-window-width": 360,
   "keyboard-shortcuts": true,
   "notification-grouping": true,
@@ -34,12 +34,13 @@
   "script-fail-notify": false,
   "widgets": [
     "menubar",
+    "label#greeting",
     "buttons-grid",
+    "dnd",
     "backlight",
     "volume",
     "mpris",
     "label#notifications",
-    "dnd",
     "notifications"
   ],
   "widget-config": {
@@ -61,15 +62,20 @@
         "actions": [{ "label": "Close panel", "command": "swaync-client -t" }]
       }
     },
+    "label#greeting": {
+      "text": "Control Center"
+    },
     "label#notifications": {
       "text": "Notifications"
     },
     "buttons-grid": {
       "actions": [
-        { "label": "", "command": "xdg-terminal-exec impala" },
-        { "label": "", "command": "nautilus" },
-        { "label": "", "command": "xdg-terminal-exec btop" },
-        { "label": "", "command": "swaync-client -C && swaync-client -cp" }
+        { "label": "󰤨", "command": "xdg-terminal-exec impala" },
+        { "label": "󰂯", "command": "omarchy-launch-bluetooth" },
+        { "label": "󰛨", "command": "omarchy-toggle-nightlight" },
+        { "label": "󰹑", "command": "omarchy-capture-screenshot" },
+        { "label": "󰱼", "command": "nautilus" },
+        { "label": "󰅜", "command": "swaync-client -C && swaync-client -cp" }
       ]
     },
     "backlight": {

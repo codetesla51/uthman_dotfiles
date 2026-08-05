@@ -194,8 +194,7 @@ tooltip label {
 #custom-temperature,
 #cpu,
 #network,
-#battery,
-#custom-weather {
+#battery {
     background: alpha(@surface, 0.6);
     border: 1px solid alpha(@outline, 0.15);
     border-radius: 14px;
@@ -330,28 +329,3 @@ tooltip label {
     animation: blink 1.5s ease-in-out infinite;
 }
 
-#custom-weather {
-    background: alpha(@surface, 0.6);
-    border: 1px solid alpha(@outline, 0.15);
-    border-radius: 14px;
-    padding: 5px 12px;
-    margin: 4px 3px;
-    font-size: 11px;
-    font-weight: 600;
-    color: @primary;
-    transition: all 0.3s ease;
-}
-
-#custom-weather:hover {
-    background: alpha(@surface, 0.8);
-    border-color: alpha(@primary, 0.45);
-    color: @foreground;
-}
-
-#custom-weather.unavailable {
-    min-width: 0;
-    margin: 0;
-    padding: 0;
-    background: transparent;
-    border: none;
-}

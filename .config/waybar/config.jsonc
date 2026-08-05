@@ -23,7 +23,6 @@
     "cpu",
     "network",
     "battery",
-    "custom/weather",
   ],
 
   // ─── Custom decorators ───
@@ -105,13 +104,6 @@
   },
 
   // ─── Network ───
-  "custom/weather": {
-    "exec": "~/.config/waybar/scripts/weather.sh",
-    "return-type": "json",
-    "interval": 60,
-    "tooltip": true,
-    "on-click": "notify-send -u low \"$(omarchy-weather-status)\""
-  },
   "network": {
     "format-wifi": "󰖩 {essid}",
     "format-ethernet": "󰈀 Ethernet",

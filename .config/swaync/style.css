@@ -552,6 +552,23 @@ progressbar progress {
     letter-spacing: 0.4px;
 }
 
+/* Weather strip */
+#weather {
+    padding: 10px 18px;
+    margin: 4px 16px 8px;
+    background: alpha(@surface, 0.35);
+    border: 1px solid alpha(@outline, 0.06);
+    border-radius: 16px;
+}
+
+#weather > label {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    text-transform: none;
+    color: @foreground;
+}
+
 /* Notifications header */
 #notifications {
     padding: 10px 16px 6px;

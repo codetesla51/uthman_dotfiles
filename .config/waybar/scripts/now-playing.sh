@@ -17,8 +17,16 @@ album=$(playerctl metadata --format '{{album}}' 2>/dev/null)
 pos=$(playerctl position 2>/dev/null)
 len=$(playerctl metadata mpris:length 2>/dev/null)
 
-title=${title:0:44}
-artist=${artist:0:30}
+truncate() {
+  local s="$1" n="$2"
+  if (( ${#s} > n )); then
+    s="${s:0:n-1}…"
+  fi
+  printf '%s' "$s"
+}
+
+title=$(truncate "$title" 30)
+artist=$(truncate "$artist" 18)
 
 escape_xml() {
   local s="$1"

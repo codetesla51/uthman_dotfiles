@@ -35,6 +35,7 @@
   "widgets": [
     "menubar",
     "label#greeting",
+    "label#weather",
     "buttons-grid",
     "dnd",
     "backlight",
@@ -49,33 +50,74 @@
         "label": "",
         "position": "right",
         "actions": [
-          { "label": "  Lock", "command": "hyprlock" },
-          { "label": "  Logout", "command": "hyprctl dispatch exit" },
-          { "label": "  Suspend", "command": "systemctl suspend" },
-          { "label": "  Reboot", "command": "systemctl reboot" },
-          { "label": "  Shutdown", "command": "systemctl poweroff" }
+          {
+            "label": "  Lock",
+            "command": "hyprlock"
+          },
+          {
+            "label": "  Logout",
+            "command": "hyprctl dispatch exit"
+          },
+          {
+            "label": "  Suspend",
+            "command": "systemctl suspend"
+          },
+          {
+            "label": "  Reboot",
+            "command": "systemctl reboot"
+          },
+          {
+            "label": "  Shutdown",
+            "command": "systemctl poweroff"
+          }
         ]
       },
       "menu#close": {
         "label": "",
         "position": "right",
-        "actions": [{ "label": "Close panel", "command": "swaync-client -t" }]
+        "actions": [
+          {
+            "label": "Close panel",
+            "command": "swaync-client -t"
+          }
+        ]
       }
     },
     "label#greeting": {
       "text": "Control Center"
+    },
+    "label#weather": {
+      "text": "    Lagos  ·  Temp 25°C  ·  Wind ↗15km/h"
     },
     "label#notifications": {
       "text": "Notifications"
     },
     "buttons-grid": {
       "actions": [
-        { "label": "󰤨", "command": "xdg-terminal-exec impala" },
-        { "label": "󰂯", "command": "omarchy-launch-bluetooth" },
-        { "label": "󰛨", "command": "omarchy-toggle-nightlight" },
-        { "label": "󰹑", "command": "omarchy-capture-screenshot" },
-        { "label": "󰱼", "command": "nautilus" },
-        { "label": "󰅜", "command": "swaync-client -C && swaync-client -cp" }
+        {
+          "label": "󰤨",
+          "command": "xdg-terminal-exec impala"
+        },
+        {
+          "label": "󰂯",
+          "command": "omarchy-launch-bluetooth"
+        },
+        {
+          "label": "󰛨",
+          "command": "omarchy-toggle-nightlight"
+        },
+        {
+          "label": "󰹑",
+          "command": "omarchy-capture-screenshot"
+        },
+        {
+          "label": "󰱼",
+          "command": "nautilus"
+        },
+        {
+          "label": "󰅜",
+          "command": "swaync-client -C && swaync-client -cp"
+        }
       ]
     },
     "backlight": {

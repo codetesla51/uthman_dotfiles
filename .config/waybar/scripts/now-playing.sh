@@ -25,8 +25,8 @@ truncate() {
   printf '%s' "$s"
 }
 
-title=$(truncate "$title" 30)
-artist=$(truncate "$artist" 18)
+title=$(truncate "$title" 20)
+artist=$(truncate "$artist" 14)
 
 escape_xml() {
   local s="$1"
@@ -73,7 +73,6 @@ else
 fi
 
 label="$icon  $title"
-[[ -n "$artist" ]] && label="$label  ·  $artist"
 [[ -n "$eq" ]] && label="$label  $eq"
 [[ -n "$bar" ]] && label="$label  $bar"
 

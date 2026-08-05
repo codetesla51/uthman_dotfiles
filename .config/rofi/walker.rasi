@@ -3,6 +3,10 @@
  * grid layout
  */
 
+configuration {
+    icon-theme: "Papirus-Dark";
+}
+
 * {
     background:     #111111ee;
     selected:       #ffffff14;

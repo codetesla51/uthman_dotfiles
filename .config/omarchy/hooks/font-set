@@ -1,0 +1,68 @@
+#!/bin/bash
+
+# Hook called by omarchy after every `omarchy font set <name>`.
+# Pushes the chosen font into Firefox (sans-serif, serif, monospace) so the
+# browser matches the rest of the rice. Applies on next Firefox restart
+# (Firefox reads user.js at startup).
+
+FONT="$1"
+PROFILE_INI="$HOME/.config/mozilla/firefox/profiles.ini"
+PROFILE_DIR=""
+
+if [[ -f $PROFILE_INI ]]; then
+  PROFILE_DIR=$(awk -F= '/^\[Install/{ins=1} ins && /^Default=/{print $2; exit}' "$PROFILE_INI")
+fi
+
+if [[ -z $PROFILE_DIR ]]; then
+  PROFILE_DIR=$(ls -d "$HOME"/.config/mozilla/firefox/*.default* 2>/dev/null | head -1)
+  [[ -n $PROFILE_DIR ]] && PROFILE_DIR=$(basename "$PROFILE_DIR")
+fi
+
+[[ -z $PROFILE_DIR ]] && exit 0
+
+USER_JS="$HOME/.config/mozilla/firefox/$PROFILE_DIR/user.js"
+mkdir -p "$(dirname "$USER_JS")"
+touch "$USER_JS"
+
+python3 - "$USER_JS" "$FONT" << 'PYEOF'
+import sys, re
+
+user_js, font = sys.argv[1], sys.argv[2]
+
+prefs = {
+    "font.default.x-western": "sans-serif",
+    "font.name.sans-serif.x-western": font,
+    "font.name.serif.x-western": font,
+    "font.name.monospace.x-western": font,
+    "toolkit.legacyUserProfileCustomizations.stylesheets": True,
+}
+
+lines = []
+seen = set()
+try:
+    lines = open(user_js).read().splitlines()
+except FileNotFoundError:
+    lines = []
+
+out = []
+for line in lines:
+    stripped = line.strip()
+    m = re.match(r'user_pref\("([^"]+)"', stripped)
+    if m and m.group(1) in prefs:
+        key = m.group(1)
+        val = prefs[key]
+        val_str = f'"{val}"' if isinstance(val, str) else ("true" if val else "false")
+        out.append(f'user_pref("{key}", {val_str});')
+        seen.add(key)
+    else:
+        out.append(line)
+
+for key, val in prefs.items():
+    if key not in seen:
+        val_str = f'"{val}"' if isinstance(val, str) else ("true" if val else "false")
+        out.append(f'user_pref("{key}", {val_str});')
+
+open(user_js, "w").write("\n".join(out) + "\n")
+PYEOF
+
+notify-send -u low "Firefox font set to $FONT - restart Firefox to apply" 2>/dev/null || true

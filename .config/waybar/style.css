@@ -10,7 +10,7 @@
     border: none;
     margin: 0;
     padding: 0;
-    font-family: "FiraCode Nerd Font";
+    font-family: 'InconsolataGo Nerd Font';
     font-size: 12px;
     font-weight: 500;
     min-height: 0;
@@ -39,7 +39,7 @@
     padding: 5px 14px;
     margin: 4px 3px;
     color: @primary;
-    font-family: "FiraCode Nerd Font Propo";
+    font-family: 'InconsolataGo Nerd Font';
     font-size: 16px;
     transition: all 0.3s ease;
 }

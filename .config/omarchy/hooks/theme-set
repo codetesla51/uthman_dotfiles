@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# theme-set hook: re-apply dark icon theme + nerd font after any omarchy theme change.
+# omarchy stock themes default to "Yaru-black" icons, which is NOT installed on this
+# system, so GTK3 apps (swaync, satty, etc.) would fall back to the light "Papirus"
+# theme and look wrong. Papirus-Dark matches the dark rice.
+# Hook receives the theme name as $1 (unused here).
+gsettings set org.gnome.desktop.interface icon-theme 'Papirus-Dark' 2>/dev/null || true
+gsettings set org.gnome.desktop.interface font-name 'FiraCode Nerd Font Mono 11' 2>/dev/null || true
+exit 0

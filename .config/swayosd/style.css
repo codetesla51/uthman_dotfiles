@@ -9,7 +9,7 @@ window {
 }
 
 label {
-  font-family: 'InconsolataGo Nerd Font';
+  font-family: 'FiraCode Nerd Font';
   font-size: 11pt;
 
   color: @label;

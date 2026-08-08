@@ -109,3 +109,7 @@ output_path = "~/.config/omarchy/current/theme/swayosd.css"
 [templates.zed-palette]
 input_path = "~/.config/matugen/templates/zed-palette.json"
 output_path = "~/.config/omarchy/current/theme/matugen-base.json"
+
+[templates.obsidian-current]
+input_path = "~/.config/matugen/templates/obsidian.css"
+output_path = "~/Documents/Obsidian Vault/.obsidian/snippets/matugen.css"

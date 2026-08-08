@@ -66,3 +66,10 @@ open(user_js, "w").write("\n".join(out) + "\n")
 PYEOF
 
 notify-send -u low "Firefox font set to $FONT - restart Firefox to apply" 2>/dev/null || true
+
+# Also push the font into the browser chrome CSS so the UI + new-tab follow
+CHROME_DIR="$HOME/.config/mozilla/firefox/$PROFILE_DIR/chrome"
+for css in "$CHROME_DIR/userChrome.css" "$CHROME_DIR/userContent.css"; do
+  [[ -f $css ]] || continue
+  sed -i -E 's/(font-family: ")[^"]*(" !important;)/\1'"$FONT"'\2/' "$css"
+done

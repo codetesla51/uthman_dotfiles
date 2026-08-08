@@ -24,7 +24,7 @@
     { "type": "terminal", "key": "│ 󰆟 Term", "keyColor": "#a1ced6" },
     { "type": "cpu", "key": "│ 󰻠 CPU", "keyColor": "#94cfe9", "format": "{name}" },
     { "type": "gpu", "key": "│ 󰢮 GPU", "keyColor": "#94cfe9" },
-    { "type": "memory", "key": "│ 󰍛 Memory", "keyColor": "#94cfe9", "format": "{used} / {total} ({used-percent}%)" },
+    { "type": "memory", "key": "│ 󰍛 Memory", "keyColor": "#94cfe9", "format": "{used} / {total} ({percentage}%)" },
     { "type": "disk", "key": "│ 󰋊 Disk", "keyColor": "#94cfe9", "format": "{size-used} / {size-total}" },
     { "type": "battery", "key": "│ 󰁹 Battery", "keyColor": "#94cfe9", "format": "{capacity}% {status}" },
     { "type": "custom", "key": " ", "format": "╰─" },

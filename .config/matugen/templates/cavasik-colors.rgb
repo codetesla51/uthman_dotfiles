@@ -1,8 +1,12 @@
 # Cavasik (io.github.TheWisker.Cavasik) — matugen generated colors
-# One RGB color per line: R,G,B
-# Gradient: primary → secondary → tertiary → outline → surface_variant
-{{ colors.primary.default.red }},{{ colors.primary.default.green }},{{ colors.primary.default.blue }}
-{{ colors.secondary.default.red }},{{ colors.secondary.default.green }},{{ colors.secondary.default.blue }}
-{{ colors.tertiary.default.red }},{{ colors.tertiary.default.green }},{{ colors.tertiary.default.blue }}
-{{ colors.outline.default.red }},{{ colors.outline.default.green }},{{ colors.outline.default.blue }}
+# One RGB color per line: R,G,B — 10-stop gradient, dark base → bright peaks
+{{ colors.surface_container_low.default.red }},{{ colors.surface_container_low.default.green }},{{ colors.surface_container_low.default.blue }}
+{{ colors.surface_container_high.default.red }},{{ colors.surface_container_high.default.green }},{{ colors.surface_container_high.default.blue }}
 {{ colors.surface_variant.default.red }},{{ colors.surface_variant.default.green }},{{ colors.surface_variant.default.blue }}
+{{ colors.secondary_container.default.red }},{{ colors.secondary_container.default.green }},{{ colors.secondary_container.default.blue }}
+{{ colors.outline.default.red }},{{ colors.outline.default.green }},{{ colors.outline.default.blue }}
+{{ colors.primary_container.default.red }},{{ colors.primary_container.default.green }},{{ colors.primary_container.default.blue }}
+{{ colors.tertiary_container.default.red }},{{ colors.tertiary_container.default.green }},{{ colors.tertiary_container.default.blue }}
+{{ colors.secondary.default.red }},{{ colors.secondary.default.green }},{{ colors.secondary.default.blue }}
+{{ colors.primary.default.red }},{{ colors.primary.default.green }},{{ colors.primary.default.blue }}
+{{ colors.tertiary.default.red }},{{ colors.tertiary.default.green }},{{ colors.tertiary.default.blue }}

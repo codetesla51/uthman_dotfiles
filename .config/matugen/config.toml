@@ -38,6 +38,14 @@ output_path = "~/.config/theme/themes/snow_black/pear-desktop.css"
 input_path = "~/.config/matugen/templates/pear-desktop.css"
 output_path = "~/.config/theme/current/pear-desktop.css"
 
+[templates.cavasik-theme]
+input_path = "~/.config/matugen/templates/cavasik-colors.rgb"
+output_path = "~/.config/theme/themes/snow_black/cavasik-colors.rgb"
+
+[templates.cavasik-current]
+input_path = "~/.config/matugen/templates/cavasik-colors.rgb"
+output_path = "~/.config/cavasik/colors.rgb"
+
 [templates.mako-theme]
 input_path = "~/.config/matugen/templates/mako.ini"
 output_path = "~/.config/theme/themes/snow_black/mako.ini"

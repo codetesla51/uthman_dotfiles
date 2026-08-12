@@ -1,0 +1,8 @@
+# Cavasik (io.github.TheWisker.Cavasik) — matugen generated colors
+# One RGB color per line: R,G,B
+# Gradient: primary → secondary → tertiary → outline → surface_variant
+{{ colors.primary.default.red }},{{ colors.primary.default.green }},{{ colors.primary.default.blue }}
+{{ colors.secondary.default.red }},{{ colors.secondary.default.green }},{{ colors.secondary.default.blue }}
+{{ colors.tertiary.default.red }},{{ colors.tertiary.default.green }},{{ colors.tertiary.default.blue }}
+{{ colors.outline.default.red }},{{ colors.outline.default.green }},{{ colors.outline.default.blue }}
+{{ colors.surface_variant.default.red }},{{ colors.surface_variant.default.green }},{{ colors.surface_variant.default.blue }}

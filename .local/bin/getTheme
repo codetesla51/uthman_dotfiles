@@ -79,6 +79,11 @@ omarchy-restart-terminal &
 omarchy-theme-set-browser &
 gen-zed-theme &
 
+# Live-update Cavasik colors (matugen already regenerated ~/.config/cavasik/colors.rgb)
+dbus-send --session --type=method_call --dest="io.github.TheWisker.Cavasik" \
+    "/io/github/TheWisker/Cavasik" "io.github.TheWisker.Cavasik.set_fg_colors" \
+    string:"${HOME}/.config/cavasik/colors.rgb" 2>/dev/null &
+
 # Live-reload any running nvim instances (via the --listen sockets).
 for sock in /tmp/nvim-"$USER"/*.sock; do
     [[ -S "$sock" ]] || continue

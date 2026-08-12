@@ -30,6 +30,14 @@ input_path = "~/.config/matugen/templates/ghostty-theme.conf"
 output_path = "~/.config/omarchy/current/theme/ghostty.conf"
 
 
+[templates.pear-desktop-theme]
+input_path = "~/.config/matugen/templates/pear-desktop.css"
+output_path = "~/.config/theme/themes/snow_black/pear-desktop.css"
+
+[templates.pear-desktop-current]
+input_path = "~/.config/matugen/templates/pear-desktop.css"
+output_path = "~/.config/theme/current/pear-desktop.css"
+
 [templates.mako-theme]
 input_path = "~/.config/matugen/templates/mako.ini"
 output_path = "~/.config/theme/themes/snow_black/mako.ini"

@@ -21,6 +21,8 @@ alias ll='lsd -l'
 alias la='lsd -la'
 alias lt='lsd --tree'
 alias l='lsd -lA'
+# surf: crashes on native Wayland without X11 GDK backend
+alias surf='GDK_BACKEND=x11 surf'
 
 # dev
 alias g='git'

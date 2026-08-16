@@ -34,8 +34,8 @@
   "script-fail-notify": false,
   "widgets": [
     "menubar",
-    "label#greeting",
     "label#weather",
+    "label#greeting",
     "buttons-grid",
     "dnd",
     "backlight",
@@ -87,7 +87,7 @@
       "text": "Control Center"
     },
     "label#weather": {
-      "text": "    Lagos  ·  Temp 25°C  ·  Wind ↗14km/h"
+      "text": " Lagos · Temp 26°C · Wind ↗28km/h"
     },
     "label#notifications": {
       "text": "Notifications"

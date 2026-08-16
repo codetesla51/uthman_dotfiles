@@ -2,8 +2,8 @@
   "$schema": "https://github.com/fastfetch-cli/fastfetch/raw/dev/doc/json_schema.json",
   "logo": {
     "type": "kitty-direct",
-    "source": "/home/uthman/fastfetchImages/95771929570969777-removebg-preview.png",
-    "width": 24,
+    "source": "/home/uthman/fastfetchImages/ae96ecceaca83a3482d16ba0ecc89e58.png",
+    "width": 25,
     "height": 16,
     "padding": { "top": 1, "right": 2, "left": 1 }
   },

@@ -8,8 +8,14 @@ if [[ -z "$weather" || "$weather" == "Weather unavailable" ]]; then
 fi
 
 python3 - "$config" "$weather" <<'EOF'
-import json, sys
+import json, re, sys
+
 path, text = sys.argv[1], sys.argv[2]
+
+# Normalise the omarchy script's 4-wide gap after the icon to one clean gap,
+# unicode-safe (icon is a multi-byte nerd font glyph). Keeps "  ·  " separators.
+text = re.sub(r'  +', ' ', text)
+
 cfg = json.load(open(path))
 cfg["widget-config"]["label#weather"]["text"] = text
 with open(path, "w") as f:

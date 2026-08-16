@@ -536,9 +536,26 @@ progressbar progress {
     color: alpha(@foreground, 0.45);
 }
 
+/* Weather strip — top hero of the control center */
+#weather {
+    padding: 14px 18px;
+    margin: 4px 12px 2px;
+    background: alpha(@surface, 0.45);
+    border: 1px solid alpha(@primary, 0.12);
+    border-radius: 14px;
+}
+
+#weather > label {
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    text-transform: none;
+    color: @foreground;
+}
+
 /* Greeting header */
 #greeting {
-    padding: 14px 18px 10px;
+    padding: 10px 18px 10px;
     margin: 0 0 4px;
     background: transparent;
     border: none;
@@ -546,27 +563,11 @@ progressbar progress {
 }
 
 #greeting > label {
-    font-size: 17px;
-    font-weight: 800;
-    color: @foreground;
-    letter-spacing: 0.4px;
-}
-
-/* Weather strip */
-#weather {
-    padding: 10px 18px;
-    margin: 4px 16px 8px;
-    background: alpha(@surface, 0.35);
-    border: 1px solid alpha(@outline, 0.06);
-    border-radius: 16px;
-}
-
-#weather > label {
     font-size: 13px;
-    font-weight: 600;
-    letter-spacing: 0.3px;
-    text-transform: none;
-    color: @foreground;
+    font-weight: 700;
+    color: alpha(@foreground, 0.55);
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
 }
 
 /* Notifications header */

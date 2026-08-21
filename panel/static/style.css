@@ -528,3 +528,46 @@ canvas{max-width:100%!important}
 .font-meta b{font-weight:500;font-size:13px}
 .spin{animation:spin 1s linear infinite;display:inline-block}
 @keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── v9: font studio ── */
+.spec-hero{padding:0;overflow:hidden}
+.spec-controls{
+  display:flex;gap:14px;align-items:center;flex-wrap:wrap;
+  padding:12px 18px;border-bottom:1px solid rgba(255,255,255,.06);
+}
+.spec-ctl{display:flex;align-items:center;gap:8px}
+.spec-canvas{
+  min-height:170px;padding:28px 24px;font-size:42px;font-weight:400;
+  line-height:1.25;color:var(--text);outline:none;white-space:pre-wrap;
+  word-break:break-word;background:
+    radial-gradient(circle at 1px 1px, rgba(255,255,255,.04) 1px, transparent 0) 0 0/22px 22px,
+    #0b0b0d;
+  transition:background .2s;
+}
+.spec-canvas.light{color:#111;background:radial-gradient(circle at 1px 1px, rgba(0,0,0,.07) 1px, transparent 0) 0 0/22px 22px, #f4f4f5}
+.spec-canvas:focus{box-shadow:inset 0 -2px 0 var(--blue-hi)}
+
+.apply-row{
+  display:flex;align-items:center;gap:12px;padding:11px 4px;
+  border-bottom:1px solid rgba(255,255,255,.05);
+}
+.apply-row:last-of-type{border-bottom:none}
+.apply-row>i.ph{font-size:20px;color:var(--text-2);flex-shrink:0}
+.apply-info{flex:1;display:flex;flex-direction:column;min-width:0}
+.apply-info b{font-weight:500;font-size:13px}
+.apply-select{max-width:220px}
+
+.font-grid{
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));
+  gap:10px;
+}
+.font-card{
+  cursor:pointer;border-radius:10px;padding:14px 12px 10px;background:#0d0d10;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.06);
+  display:flex;flex-direction:column;gap:6px;position:relative;min-width:0;
+  transition:box-shadow .15s, transform .15s;
+}
+.font-card:hover{box-shadow:inset 0 0 0 1px var(--blue-hi);transform:translateY(-1px)}
+.fc-sample{font-size:26px;line-height:1.2;opacity:.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fc-name{color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fc-apply{position:absolute;top:6px;right:6px;background:var(--surface)}

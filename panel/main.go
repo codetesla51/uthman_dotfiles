@@ -59,6 +59,7 @@ func main() {
 	mux.HandleFunc("/api/keybinds", handleKeybinds)
 	mux.HandleFunc("/api/autostart", handleAutostart)
 	mux.HandleFunc("/api/fonts", handleFonts)
+	mux.HandleFunc("/api/fonts/file", handleFontFile)
 	mux.HandleFunc("/api/disks", handleDisks)
 	mux.HandleFunc("/api/services", handleServices)
 	mux.HandleFunc("/api/theme", handleTheme)
@@ -2288,6 +2289,32 @@ func currentWaybarFont() string {
 		return m[1]
 	}
 	return ""
+}
+
+// handleFontFile resolves a font family via fontconfig and serves the file
+// so the browser can render real type specimens.
+func handleFontFile(w http.ResponseWriter, r *http.Request) {
+	if !requireMethod(w, r, http.MethodGet) {
+		return
+	}
+	family := sanitizeField(r.URL.Query().Get("family"))
+	if family == "" || strings.ContainsAny(family, "/\\") {
+		jsonErr(w, "invalid family", 400)
+		return
+	}
+	out, err := exec.Command("fc-match", "-f", "%{file}", family+":charset=41").Output()
+	if err != nil || len(out) == 0 {
+		jsonErr(w, "font not found", 404)
+		return
+	}
+	path := strings.TrimSpace(string(out))
+	// only serve real font files from sane locations
+	if !strings.HasSuffix(strings.ToLower(path), ".ttf") && !strings.HasSuffix(strings.ToLower(path), ".otf") {
+		jsonErr(w, "not a font file", 400)
+		return
+	}
+	w.Header().Set("Cache-Control", "max-age=86400")
+	http.ServeFile(w, r, path)
 }
 
 func handleFonts(w http.ResponseWriter, r *http.Request) {

@@ -88,6 +88,30 @@ Waybar, Hyprlock, Ghostty, btop, Cava, Walker, SwayNC, GTK, Firefox, Chromium, M
 
 ---
 
+## Control Panel
+
+A web UI for managing this rice — built in Go (single binary, no Node), frontend
+embedded in the binary. Runs as a systemd user service on **http://localhost:8765**.
+
+```bash
+cd ~/dotfiles/panel
+go build -o panel main.go
+systemctl --user enable --now omarchy-panel.service
+```
+
+**What it controls:**
+- **Dashboard** — live CPU/RAM/battery/network charts, disk usage, quick controls (volume, brightness, DND)
+- **Theme** — switch wallpapers (regenerates all matugen colors live), tweak matugen scheme type & contrast, Ghostty font/opacity/cursor, Hyprland effects (blur, shadows, animations, gaps)
+- **Logs** — live `journalctl` streaming with source/priority filters and grep
+- **Binds** — add/remove Hyprland keybinds (`bindings.conf`, auto-reloads Hyprland) and manage autostart apps
+- **Devices** — monitors (mode/scale editor), audio, brightness, network info, waybar position, night light (hyprsunset), notifications (SwayNC + mako)
+- **Power** — TLP profiles, battery health with charge/discharge estimates, lock/logout/suspend/reboot/shutdown, input devices (layout, repeat rate, natural scroll)
+- **Processes** — sortable process list with RSS/memory, kill (SIGTERM/SIGKILL)
+
+> The panel writes to `~/dotfiles` first (stow-aware: symlinks are respected), so every change is versioned in git.
+
+---
+
 ## Structure
 
 ```
@@ -122,6 +146,10 @@ Waybar, Hyprlock, Ghostty, btop, Cava, Walker, SwayNC, GTK, Firefox, Chromium, M
 │       └── templates/   # Per-app color templates
 ├── .local/bin/
 │   └── omarchy-launch-walker # Rofi/Walker dmenu shim (PATH via hypr/envs.conf)
+├── panel/                # Web control panel (Go + embedded static UI)
+│   ├── main.go           # API server (~30 endpoints)
+│   ├── static/           # Embedded frontend (HTML/CSS/JS)
+│   └── panel             # Built binary (gitignored)
 ├── .zshrc
 ├── Pictures/
 │   └── logo.png         # Fastfetch logo

@@ -1,7 +1,7 @@
 #!/bin/bash
 
-THEME_TYPE="scheme-vibrant"
-CONTRAST="0"
+THEME_TYPE="scheme-fidelity"
+CONTRAST="0.3"
 MODE="dark"
 WALLPAPER=""
 
@@ -9,15 +9,15 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         -t|--type)
             val="$2"
-            [[ "$val" == scheme-* ]] && THEME_TYPE="$val" || THEME_TYPE="scheme-$val"
+            [[ "$val" == scheme-* ]] && THEME_TYPE="scheme-fidelity" || THEME_TYPE="scheme-fidelity"
             shift 2
             ;;
         -c|--contrast)
-            CONTRAST="$2"
+            CONTRAST="0.3"
             shift 2
             ;;
         -m|--mode)
-            MODE="$2"
+            MODE="dark"
             shift 2
             ;;
         /*)

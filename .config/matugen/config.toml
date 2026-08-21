@@ -1,5 +1,5 @@
 [config]
-contrast = 0.5
+contrast = 0.3
 variation = "standard"
 
 [config.reload_apps]

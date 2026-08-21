@@ -102,19 +102,19 @@ function initCharts() {
   const cpuDs = chCpu.data.datasets[0];
   cpuDs.backgroundColor = c => grad(c.chart.ctx, '#3b82f6');
   cpuDs.borderColor = '#3b82f6';
-  cpuDs.shadowColor = 'rgba(59,130,246,.5)'; cpuDs.shadowBlur = 8;
+  cpuDs.shadowColor = 'rgba(59,130,246,.85)'; cpuDs.shadowBlur = 16;
 
   chMem = mkSpark('c-mem', '#45a557');
   const memDs = chMem.data.datasets[0];
   memDs.backgroundColor = c => grad(c.chart.ctx, '#45a557');
   memDs.borderColor = '#45a557';
-  memDs.shadowColor = 'rgba(69,165,87,.5)'; memDs.shadowBlur = 8;
+  memDs.shadowColor = 'rgba(69,165,87,.85)'; memDs.shadowBlur = 16;
 
   chNet = mkSpark('c-net', '#ff990a');
   const netDs = chNet.data.datasets[0];
   netDs.backgroundColor = c => grad(c.chart.ctx, '#ff990a');
   netDs.borderColor = '#ff990a';
-  netDs.shadowColor = 'rgba(255,153,10,.5)'; netDs.shadowBlur = 8;
+  netDs.shadowColor = 'rgba(255,153,10,.85)'; netDs.shadowBlur = 16;
 
   chPerf = new Chart($('#c-perf'), {
     type: 'line',
@@ -123,9 +123,9 @@ function initCharts() {
       datasets: [
         { data: [], label: 'cpu', borderColor: '#3b82f6', borderWidth: 2, tension: .4, fill: true,
           backgroundColor: c => { const g = c.chart.ctx.createLinearGradient(0, 0, 0, 170); g.addColorStop(0, 'rgba(59,130,246,.28)'); g.addColorStop(1, 'rgba(59,130,246,0)'); return g; },
-          shadowColor: 'rgba(59,130,246,.4)', shadowBlur: 6 },
-        { data: [], label: 'mem', borderColor: '#45a557', borderWidth: 1.6, tension: .4 },
-        { data: [], label: 'net×10', borderColor: '#ff990a', borderWidth: 1.4, borderDash: [4, 3], tension: .4 }
+          shadowColor: 'rgba(59,130,246,.7)', shadowBlur: 12 },
+        { data: [], label: 'mem', borderColor: '#45a557', borderWidth: 1.6, tension: .4, shadowColor: 'rgba(69,165,87,.6)', shadowBlur: 8 },
+        { data: [], label: 'net×10', borderColor: '#ff990a', borderWidth: 1.4, borderDash: [4, 3], tension: .4, shadowColor: 'rgba(255,153,10,.55)', shadowBlur: 8 }
       ]
     },
     options: {
@@ -1141,7 +1141,9 @@ function tickClock() {
 function setRing(id, valId, pct, overrideText) {
   const ring = $('#' + id);
   if (!ring) return;
-  ring.style.background = `conic-gradient(var(--accent-ring, #3b82f6) ${Math.min(100, pct)}%, rgba(255,255,255,.07) 0)`;
+  const accent = getComputedStyle(ring).getPropertyValue('--accent-ring').trim() || '#3b82f6';
+  ring.style.background = `conic-gradient(${accent} ${Math.min(100, pct)}%, rgba(255,255,255,.07) 0)`;
+  ring.style.boxShadow = `0 0 ${6 + Math.min(100, pct) * 0.14}px -4px ${accent}`;
   $('#' + valId).innerHTML = (overrideText ?? Math.round(pct)) + '<small>%</small>';
 }
 async function loadRecentLogs() {

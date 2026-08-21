@@ -1841,10 +1841,20 @@ func detectPowerMode(governor, epp string) string {
 	if governor == "performance" || epp == "performance" {
 		return "performance"
 	}
-	if epp == "power" || epp == "balance_performance" && governor == "powersave" {
+	if epp == "power" || (epp == "balance_power" && governor == "powersave") {
 		return "power-saver"
 	}
 	return "balanced"
+}
+
+func powerModeStateFile() string { return home + "/.cache/omarchy-panel-power-mode" }
+
+func readPowerModeState() string {
+	s := strings.TrimSpace(firstLine(powerModeStateFile()))
+	if s == "performance" || s == "balanced" || s == "power-saver" {
+		return s
+	}
+	return ""
 }
 
 func handlePowerProfile(w http.ResponseWriter, r *http.Request) {
@@ -1855,7 +1865,13 @@ func handlePowerProfile(w http.ResponseWriter, r *http.Request) {
 			EPP:      firstLine("/sys/devices/system/cpu/cpu0/cpufreq/energy_performance_preference"),
 			Platform: firstLine("/sys/firmware/acpi/platform_profile"),
 		}
-		p.Mode = detectPowerMode(p.Governor, p.EPP)
+		// Trust the last mode the panel set (TLP's EPP values don't map 1:1
+		// back to modes on this hardware); fall back to heuristics.
+		if m := readPowerModeState(); m != "" {
+			p.Mode = m
+		} else {
+			p.Mode = detectPowerMode(p.Governor, p.EPP)
+		}
 		jsonOK(w, p)
 
 	case http.MethodPost:
@@ -1897,6 +1913,8 @@ func handlePowerProfile(w http.ResponseWriter, r *http.Request) {
 			Platform: firstLine("/sys/firmware/acpi/platform_profile"),
 		}
 		p.Mode = req.Mode
+		_ = os.MkdirAll(home+"/.cache", 0755)
+		_ = os.WriteFile(powerModeStateFile(), []byte(req.Mode), 0644)
 		jsonOK(w, p)
 	default:
 		requireMethod(w, r, http.MethodGet, http.MethodPost)

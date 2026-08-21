@@ -194,7 +194,12 @@ async function pollStats() {
         ? (s.charging ? ` · full in ${fmtLeft(s.minutesLeft)}` : ` · ${fmtLeft(s.minutesLeft)} left`)
         : '';
       if (pwLine) pwLine.textContent = (s.charging ? 'Charging' : statusWord(s)) + ` · ${s.powerW.toFixed(1)}W${est}`;
-      $('#v-temp').textContent = `temp ${s.temp.toFixed(0)}°C`;
+      const vb = $('#v-bat');
+      if (vb) {
+        vb.textContent = s.battery + '%';
+        vb.style.color = s.battery < 20 && !s.charging ? '#e5484d' : '';
+      }
+      $('#v-temp').textContent = `${s.charging ? 'Charging' : statusWord(s)} · ${s.powerW.toFixed(1)}W${est} · ${s.temp.toFixed(0)}°C`;
       const pb = $('#pw-bat'), pbr = $('#pw-bar'), ps = $('#pw-status');
       if (pb) pb.textContent = s.battery + '%';
       if (pbr) pbr.style.width = s.battery + '%';
@@ -204,6 +209,8 @@ async function pollStats() {
     } else {
       if (barBat) barBat.style.width = '100%';
       if (pwLine) pwLine.textContent = 'On AC power';
+      const vb = $('#v-bat');
+      if (vb) vb.textContent = 'AC';
       $('#v-temp').textContent = `temp ${s.temp.toFixed(0)}°C`;
       const pb = $('#pw-bat'), pbr = $('#pw-bar'), ps = $('#pw-status');
       if (pb) pb.textContent = 'AC';

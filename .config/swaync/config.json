@@ -30,7 +30,7 @@
   "transition-time": 200,
   "hide-on-clear": false,
   "hide-on-action": true,
-  "text-empty": "\udb80\udf76   All clear",
+  "text-empty": "All clear",
   "script-fail-notify": false,
   "widgets": [
     "inhibitors",
@@ -39,7 +39,7 @@
   ],
   "widget-config": {
     "dnd": {
-      "text": "\udb80\udc9b   Do Not Disturb"
+      "text": "Do Not Disturb"
     },
     "notifications": {
       "vexpand": true

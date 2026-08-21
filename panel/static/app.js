@@ -35,6 +35,7 @@ function setTab(name) {
   if (name === 'hyprland') { loadHyprland(); loadEffects(); loadInput(); }
   if (name === 'binds') { loadKeybinds(); loadAutostart(); }
   if (name === 'fonts') { loadFonts(); }
+  if (name === 'appearance') { loadAppearance(); }
   if (name === 'devices') { loadMonitors(); loadAudio(); loadBrightness(); loadMako(); loadWaybar(); loadNightlight(); loadNetwork(); loadDND(); loadBluetooth(); }
   if (name === 'system') loadSystemInfo();
   window.scrollTo({ top: 0 });
@@ -171,6 +172,7 @@ async function pollStats() {
     $('#v-tx').textContent = fmtKiB(s.netTx);
     $('#v-net').textContent = fmtKiB(s.netRx + s.netTx);
     $('#v-load').textContent = s.load1.toFixed(2);
+    lastUptime = s.uptime; lastLoad = s.load1.toFixed(2);
     $('#side-uptime').textContent = fmtUptime(s.uptime);
     // status strip
     $('#t-cpu').textContent = s.cpu.toFixed(0) + '%';
@@ -214,6 +216,12 @@ async function pollStats() {
       chPerf.data.datasets[2].data = [...netData];
       chPerf.update('none');
     }
+    setRing('ring-cpu', 'rv-cpu', s.cpu);
+    setRing('ring-mem', 'rv-mem', s.memPct);
+    const batPct = s.battery >= 0 ? s.battery : 100;
+    setRing('ring-bat', 'rv-bat', batPct, s.battery >= 0 ? '' : 'AC');
+    $('#rv-bat').style.color = s.charging ? '#6cda75' : batPct < 20 ? '#ff7b72' : '';
+    $('#rv-cpu').style.color = s.cpu > 85 ? '#ff7b72' : '';
   } catch (e) { /* server restarting */ }
 }
 
@@ -411,21 +419,27 @@ function renderFontCatalog() {
   });
 }
 
-let allFamsLoaded = false;
+const FONT_PAGE_SIZE = 40;
+let fontPage = 1, fontTotalPages = 1;
+function fontPageMove(d) {
+  fontPage = Math.min(Math.max(1, fontPage + d), fontTotalPages);
+  renderInstalledFonts();
+}
 async function renderInstalledFonts() {
   const q = ($('#font-search')?.value || '').toLowerCase();
   let fams = fontData.installed.filter(f => !q || f.toLowerCase().includes(q));
+  fontTotalPages = Math.max(1, Math.ceil(fams.length / FONT_PAGE_SIZE));
+  if (fontPage > fontTotalPages) fontPage = fontTotalPages;
   $('#font-count').textContent = fams.length + ' families';
-  // dedupe style variants: prefer base names ("X" over "X Black")
-  fams = fams.slice(0, 120);
-  $('#installed-fonts').innerHTML = fams.map(f => `
-    <div class="font-card" data-fam="${f.replace(/"/g, '&quot;')}" title="Click: specimen · double-click: set as terminal font">
+  $('#font-page').textContent = fontPage + '/' + fontTotalPages;
+  const page = fams.slice((fontPage - 1) * FONT_PAGE_SIZE, fontPage * FONT_PAGE_SIZE);
+  $('#installed-fonts').innerHTML = page.map(f => `
+    <div class="font-card" data-fam="${f.replace(/"/g, '&quot;')}" title="Click: specimen · hover: quick-set terminal">
       <div class="fc-sample pv" style="font-family:'${f}'">Aa Bb</div>
       <div class="fc-name mono tiny">${f}</div>
       <button class="kill-btn fc-apply" title="Set terminal font" onclick="event.stopPropagation();quickTerminal('${f.replace(/'/g, "\\'")}')" style="display:none"><i class="ph ph-terminal-window"></i></button>
     </div>`).join('') || '<div class="caption">no matches</div>';
-  // progressively swap in real glyphs
-  for (const f of fams.slice(0, 60)) {
+  for (const f of page.slice(0, 24)) {
     if (await ensureFace(f)) {
       const card = $(`#installed-fonts .font-card[data-fam="${CSS.escape(f)}"] .fc-sample`);
       if (card) card.style.opacity = 1;
@@ -1116,6 +1130,135 @@ function tickClock() {
   $('#clock').textContent = now.toTimeString().slice(0, 8);
 }
 
+/* ── Dashboard: rings, feed, facts ── */
+function setRing(id, valId, pct, overrideText) {
+  const ring = $('#' + id);
+  if (!ring) return;
+  ring.style.background = `conic-gradient(var(--accent-ring, #3b82f6) ${Math.min(100, pct)}%, rgba(255,255,255,.07) 0)`;
+  $('#' + valId).innerHTML = (overrideText ?? Math.round(pct)) + '<small>%</small>';
+}
+async function loadRecentLogs() {
+  try {
+    const lines = await api('/api/logs/recent?n=10');
+    const el = $('#log-feed');
+    if (!el) return;
+    el.innerHTML = lines.map(l => {
+      let cls = '';
+      const low = l.toLowerCase();
+      if (/\b(err(or)?|fail(ed|ure)?|critical|segfault|denied)\b/.test(low)) cls = 'err';
+      else if (/\bwarn(ing)?\b/.test(low)) cls = 'warn';
+      return `<div class="log-line ${cls}">${l.replace(/</g, '&lt;')}</div>`;
+    }).join('');
+    el.scrollTop = el.scrollHeight;
+  } catch (e) {}
+}
+let sysInfoCache = null;
+async function loadSystemFacts() {
+  try {
+    sysInfoCache = await api('/api/system/info');
+    renderFacts();
+  } catch (e) {}
+}
+function renderFacts() {
+  if (!sysInfoCache) return;
+  const rows = [
+    ['host', sysInfoCache.hostname], ['user', sysInfoCache.user],
+    ['kernel', sysInfoCache.kernel], ['de', sysInfoCache.de],
+    ['shell', sysInfoCache.shell], ['wallpaper', sysInfoCache.wallpaper],
+  ];
+  const html = rows.map(([k, v]) => `<div class="fact-row"><span class="dim">${k}</span><b title="${v}">${String(v).length > 26 ? String(v).slice(0, 26) + '…' : v}</b></div>`).join('');
+  const f1 = $('#sys-facts'), f2 = $('#dash-session');
+  if (f1) f1.innerHTML = html;
+  if (f2) f2.innerHTML = html + `<div class="fact-row"><span class="dim">uptime</span><b>${fmtUptime(lastUptime)}</b></div><div class="fact-row"><span class="dim">load</span><b>${lastLoad}</b></div>`;
+}
+let lastUptime = 0, lastLoad = 0;
+
+/* ── Appearance color tweak ── */
+async function loadAppearance() {
+  try {
+    const d = await api('/api/appearance');
+    const t = d.tweak || {};
+    $('#r-hue').value = t.hue || 0; $('#o-hue').textContent = (t.hue || 0) + '°';
+    $('#r-sat').value = Math.round((t.sat ?? 1) * 100); $('#o-sat').textContent = Math.round((t.sat ?? 1) * 100) + '%';
+    $('#r-bright').value = Math.round((t.bright ?? 1) * 100); $('#o-bri2').textContent = Math.round((t.bright ?? 1) * 100) + '%';
+    updateTwState(t);
+    // preview swatches from palette primary/tertiary
+    const pal = d.palette || {};
+    const before = pickPal(pal), after = shiftClient(before, +($('#r-hue').value), (+$('#r-sat').value) / 100, (+$('#r-bright').value) / 100);
+    $('#tw-before').innerHTML = before.map(c => `<i style="background:${c}"></i>`).join('');
+    $('#tw-after').innerHTML = after.map(c => `<i style="background:${c}"></i>`).join('');
+  } catch (e) {}
+}
+function pickPal(pal) {
+  const out = [];
+  for (const k of ['primary', 'secondary', 'tertiary', 'error']) {
+    const c = pal[k]?.default?.hex || pal[k]?.hex;
+    if (c) out.push('#' + String(c).replace('#', ''));
+  }
+  return out.length ? out : ['#3b82f6', '#8b5cf6', '#ec4899', '#ef4444'];
+}
+function updateTwState(t) {
+  const neutral = !t.hue && (t.sat ?? 1) === 1 && (t.bright ?? 1) === 1;
+  $('#tw-state').textContent = neutral ? 'neutral' : `hue ${t.hue}° · sat ${Math.round(t.sat * 100)}% · bri ${Math.round(t.bright * 100)}%`;
+  ['#o-hue'].forEach(s => {});
+}
+['r-hue', 'r-sat', 'r-bright'].forEach(id => $('#' + id)?.addEventListener('input', () => {
+  $('#o-hue').textContent = $('#r-hue').value + '°';
+  $('#o-sat').textContent = $('#r-sat').value + '%';
+  $('#o-bri2').textContent = $('#r-bright').value + '%';
+}));
+async function applyTweak(btn) {
+  btn.disabled = true;
+  try {
+    const res = await api('/api/appearance', post({
+      hue: +$('#r-hue').value,
+      sat: +$('#r-sat').value / 100,
+      bright: +$('#r-bright').value / 100
+    }));
+    updateTwState(res.tweak);
+    toast('Theme shifted · apps reloaded'); 
+    loadTheme(); loadAppearance();
+  } catch (e) { toast(e.message, 'err'); }
+  btn.disabled = false;
+}
+async function resetTweak(btn) {
+  btn.disabled = true;
+  try {
+    const res = await api('/api/appearance', post({ reset: true }));
+    updateTwState(res.tweak);
+    toast('Back to wallpaper colors');
+    $('#r-hue').value = 0; $('#o-hue').textContent = '0°';
+    $('#r-sat').value = 100; $('#o-sat').textContent = '100%';
+    $('#r-bright').value = 100; $('#o-bri2').textContent = '100%';
+    loadTheme();
+  } catch (e) { toast(e.message, 'err'); }
+  btn.disabled = false;
+}
+
+// tiny client-side hsl shift for the before/after preview only
+function shiftClient(hexes, dh, sm, bm) {
+  const out = [];
+  for (let hex of hexes) {
+    let r = parseInt(hex.slice(1, 3), 16) / 255, g = parseInt(hex.slice(3, 5), 16) / 255, b = parseInt(hex.slice(5, 7), 16) / 255;
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+    let h = 0, s = 0, l = (mx + mn) / 2;
+    if (mx !== mn) {
+      const d = mx - mn;
+      s = l > .5 ? d / (2 - mx - mn) : d / (mx + mn);
+      if (mx === r) { h = (g - b) / d; if (g < b) h += 6; }
+      else if (mx === g) h = (b - r) / d + 2;
+      else h = (r - g) / d + 4;
+      h *= 60;
+    }
+    h = ((h + dh) % 360 + 360) % 360; s = Math.min(1, s * sm); l = Math.max(0, Math.min(1, l * bm));
+    const q = l < .5 ? l * (1 + s) : l + s - l * s, p = 2 * l - q;
+    const hue2 = t => { if (t < 0) t++; if (t > 1) t--; return t < 1/6 ? p+(q-p)*6*t : t < .5 ? q : t < 2/3 ? p+(q-p)*(2/3-t)*6 : p; };
+    const c = v => Math.round(hue2(v) * 255).toString(16).padStart(2, '0');
+    out.push('#' + c(1/3) + c(0) + c(-1/3));
+  }
+  return out;
+}
+
 /* ── Boot ── */
 initCharts();
 tickClock(); setInterval(tickClock, 1000);
@@ -1125,4 +1268,7 @@ setInterval(loadPowerProfile, 10000);
 loadDisks(); loadProcesses(); loadServices(); loadSystemInfo();
 loadAudio(); loadBrightness(); loadNetwork(); loadPowerProfile();
 connectLogs();
+loadRecentLogs(); setInterval(loadRecentLogs, 5000);
+loadSystemFacts();
+loadAppearance();
 window.addEventListener('resize', updateTermFont);

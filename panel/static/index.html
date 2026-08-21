@@ -28,6 +28,7 @@
       <button class="nav-item" data-tab="hyprland">Hyprland</button>
       <button class="nav-item" data-tab="logs">Logs</button>
       <button class="nav-item" data-tab="binds">Binds</button>
+      <button class="nav-item" data-tab="fonts">Fonts</button>
       <button class="nav-item" data-tab="devices">Devices</button>
       <button class="nav-item" data-tab="system">System</button>
     </nav>
@@ -64,6 +65,7 @@
       <li data-tab="hyprland" tabindex="0"><i class="ph ph-browser"></i><span>Hyprland</span><em>look&amp;feel</em></li>
       <li data-tab="logs" tabindex="0"><i class="ph ph-scroll"></i><span>Logs</span><em>journalctl</em></li>
       <li data-tab="binds" tabindex="0"><i class="ph ph-keyboard"></i><span>Binds</span><em>keys</em></li>
+      <li data-tab="fonts" tabindex="0"><i class="ph ph-text-aa"></i><span>Fonts</span><em>type</em></li>
       <li data-tab="devices" tabindex="0"><i class="ph ph-speaker-high"></i><span>Devices</span><em>hw</em></li>
       <li data-tab="system" tabindex="0"><i class="ph ph-gear-six"></i><span>System</span><em>power</em></li>
     </ul>
@@ -599,6 +601,44 @@
           <button class="btn ghost" onclick="addAutostart(this)"><i class="ph ph-plus"></i> Add</button>
         </div>
         <div class="caption">Applies on next Hyprland session.</div>
+      </div>
+    </section>
+
+    <!-- ══════════ FONTS ══════════ -->
+    <section id="tab-fonts" class="tab">
+      <div class="page-head">
+        <div><h1>Fonts</h1><p class="sub">download &amp; apply system-wide · ghostty · waybar · hyprlock · gtk</p></div>
+      </div>
+      <div class="grid2">
+        <div class="card">
+          <div class="card-head"><span><i class="ph ph-download-simple"></i> Font catalog</span><span class="mono tiny dim">~/.local/share/fonts</span></div>
+          <div class="font-catalog" id="font-catalog"></div>
+          <div class="log-controls" style="margin-top:14px;margin-bottom:0">
+            <input id="font-url" class="input sm-input mono grow" placeholder="https://… custom .ttf/.otf/.zip url" style="flex:1;width:100%">
+            <button class="btn ghost" onclick="installFontUrl(this)"><i class="ph ph-globe"></i> Install URL</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-head"><span><i class="ph ph-sliders-horizontal"></i> Apply font</span></div>
+          <label class="field"><span class="label tiny dim">FAMILY</span>
+            <select id="apply-family" class="input sm-input mono" style="width:100%"></select></label>
+          <div class="mod-checks mono tiny" style="margin:12px 0">
+            <label><input type="checkbox" id="t-terminal" checked> Terminal (ghostty)</label>
+            <label><input type="checkbox" id="t-bar" checked> Waybar</label>
+            <label><input type="checkbox" id="t-lock"> Lock screen (hyprlock)</label>
+            <label><input type="checkbox" id="t-gtk"> GTK apps</label>
+          </div>
+          <button class="btn primary" onclick="applyFont(this)"><i class="ph ph-paint-brush"></i> Apply everywhere</button>
+          <div class="caption" style="margin-top:12px">Currently: terminal <b id="cur-term">—</b> · bar <b id="cur-bar">—</b> · lock <b id="cur-lock">—</b> · gtk <b id="cur-gtk">—</b></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head"><span><i class="ph ph-text-aa"></i> Installed fonts</span>
+          <input id="font-search" class="input sm-input mono" placeholder="search…" oninput="renderInstalledFonts()" aria-label="Search fonts">
+        </div>
+        <div class="proc-scroll" style="max-height:300px">
+          <div class="mod-grid" id="installed-fonts"></div>
+        </div>
       </div>
     </section>
 

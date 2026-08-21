@@ -34,6 +34,7 @@ function setTab(name) {
   if (name === 'terminal') loadGhostty();
   if (name === 'hyprland') { loadHyprland(); loadEffects(); loadInput(); }
   if (name === 'binds') { loadKeybinds(); loadAutostart(); }
+  if (name === 'fonts') { loadFonts(); }
   if (name === 'devices') { loadMonitors(); loadAudio(); loadBrightness(); loadMako(); loadWaybar(); loadNightlight(); loadNetwork(); loadDND(); loadBluetooth(); }
   if (name === 'system') loadSystemInfo();
   window.scrollTo({ top: 0 });
@@ -345,6 +346,78 @@ async function delAutostart(id, btn) {
     toast('Removed');
     loadAutostart();
   } catch (e) { toast(e.message, 'err'); btn.disabled = false; }
+}
+
+/* ── Fonts ── */
+let fontData = null;
+async function loadFonts() {
+  try {
+    fontData = await api('/api/fonts');
+    renderFontCatalog();
+    renderInstalledFonts();
+    renderApplySelect();
+    $('#cur-term').textContent = fontData.current.terminal || '—';
+    $('#cur-bar').textContent = fontData.current.bar || '—';
+    $('#cur-lock').textContent = fontData.current.lockscreen || '—';
+    $('#cur-gtk').textContent = fontData.current.gtk || '—';
+  } catch (e) {}
+}
+function renderFontCatalog() {
+  $('#font-catalog').innerHTML = fontData.catalog.map(f => `
+    <div class="font-entry ${f.installed ? 'has' : ''}">
+      <div class="font-preview" style="font-family:'${f.family}'">Aa</div>
+      <div class="font-meta"><b>${f.name}</b><span class="dim tiny mono">${f.kind}</span></div>
+      ${f.installed
+        ? '<span class="mono tiny dim"><i class="ph ph-check-circle"></i> installed</span>'
+        : `<button class="btn ghost sm" onclick='installCatalogFont(${JSON.stringify(f.url)}, this)'><i class="ph ph-download-simple"></i></button>`}
+    </div>`).join('');
+}
+function renderInstalledFonts() {
+  const q = ($('#font-search')?.value || '').toLowerCase();
+  const fams = fontData.installed.filter(f => !q || f.toLowerCase().includes(q)).slice(0, 300);
+  $('#installed-fonts').innerHTML = fams.map(f => `
+    <button class="mod-chip mono tiny" onclick="$('#apply-family').value='${f.replace(/'/g, "\\'")}'">${f}</button>`).join('') || '<div class="caption">no matches</div>';
+}
+function renderApplySelect() {
+  const cur = fontData.current.terminal;
+  const opts = [...new Set([cur, ...fontData.installed])].filter(Boolean);
+  $('#apply-family').innerHTML = opts.map(f => `<option ${f === cur ? 'selected' : ''}>${f}</option>`).join('');
+}
+async function installCatalogFont(url, btn) {
+  btn.disabled = true; btn.innerHTML = '<i class="ph ph-circle-notch spin"></i>';
+  try {
+    await api('/api/fonts', post({ action: 'install', url }));
+    toast('Font installed');
+    loadFonts();
+  } catch (e) { toast(e.message, 'err'); btn.disabled = false; btn.innerHTML = '<i class="ph ph-download-simple"></i>'; }
+}
+async function installFontUrl(btn) {
+  const url = $('#font-url').value.trim();
+  if (!url) return;
+  btn.disabled = true;
+  try {
+    await api('/api/fonts', post({ action: 'install', url }));
+    toast('Font installed · run Apply to use it');
+    $('#font-url').value = '';
+    loadFonts();
+  } catch (e) { toast(e.message, 'err'); }
+  btn.disabled = false;
+}
+async function applyFont(btn) {
+  const targets = [];
+  if ($('#t-terminal').checked) targets.push('terminal');
+  if ($('#t-bar').checked) targets.push('bar');
+  if ($('#t-lock').checked) targets.push('lockscreen');
+  if ($('#t-gtk').checked) targets.push('gtk');
+  if (!targets.length) return toast('Pick at least one target', 'err');
+  btn.disabled = true;
+  try {
+    const res = await api('/api/fonts', post({ action: 'apply', family: $('#apply-family').value, targets }));
+    const failed = Object.entries(res.results).filter(([, v]) => v !== 'ok');
+    failed.length ? toast('Applied with errors: ' + failed.map(([k, v]) => `${k}: ${v}`).join(', '), 'err') : toast('Font applied: ' + targets.join(', '));
+    loadFonts();
+  } catch (e) { toast(e.message, 'err'); }
+  btn.disabled = false;
 }
 
 /* ── Logs ── */

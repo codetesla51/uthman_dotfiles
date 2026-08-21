@@ -1,18 +1,15 @@
 @import "colors.css";
 
 /* ════════════════════════════════════════════════
-   SWAYNC — notification only, glass & glow
+   SWAYNC — notification only · GTK3-safe
    ════════════════════════════════════════════════ */
 
 * {
   font-family: "FiraCode Nerd Font", monospace;
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 500;
-  box-shadow: none;
-  text-shadow: none;
-  -gtk-icon-shadow: none;
-  transition: 180ms cubic-bezier(0.25, 0.8, 0.4, 1);
   outline: none;
+  transition: 160ms ease;
 }
 
 /* ── windows ─────────────────────────────────── */
@@ -24,25 +21,183 @@ blankwindow,
   background: transparent;
 }
 
+/* ── floating toasts ─────────────────────────── */
+
+.floating-notifications .notification-row .notification-background {
+  padding: 4px 8px;
+  background: transparent;
+}
+
+.floating-notifications .notification-row .notification-background .notification {
+  background: alpha(@surface, 0.95);
+  border: 1px solid alpha(@outline, 0.2);
+  border-radius: 15px;
+  padding: 0;
+}
+
+.floating-notifications .notification-row .notification-background .notification:hover {
+  border-color: alpha(@primary, 0.5);
+}
+
+.floating-notifications .notification-row .notification-background .notification.critical {
+  border-color: alpha(@error, 0.7);
+}
+
+/* ── shared notification internals ───────────── */
+
+.notification-default-action,
+.notification-action {
+  background: transparent;
+  border: none;
+  color: @foreground;
+  padding: 0;
+  margin: 0;
+}
+
+.notification-default-action {
+  border-radius: 14px;
+}
+
+.notification-default-action:hover {
+  background: transparent;
+}
+
+.notification-action {
+  border-top: 1px solid alpha(@outline, 0.16);
+  color: @on_surface_variant;
+  font-size: 11.5px;
+  padding: 7px;
+}
+
+.notification-action:first-child {
+  border-right: 1px solid alpha(@outline, 0.16);
+}
+
+.notification-action:hover {
+  background: alpha(@primary, 0.18);
+  color: @primary;
+}
+
+.notification-content {
+  background: transparent;
+  padding: 10px 12px;
+  margin: 0;
+  border-radius: 14px;
+}
+
+/* app icons — small, fixed */
+.notification-content image {
+  min-width: 22px;
+  min-height: 22px;
+  margin-right: 9px;
+}
+
+.notification-content .app-name {
+  color: @primary;
+  font-size: 9px;
+  font-weight: 800;
+  opacity: 0.85;
+  margin-bottom: 1px;
+}
+
+.notification-content .summary {
+  color: @foreground;
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+
+.notification-content .time {
+  color: alpha(@on_surface_variant, 0.7);
+  font-size: 9.5px;
+  margin-left: 6px;
+}
+
+.notification-content .body {
+  color: @on_surface_variant;
+  font-size: 11.5px;
+  font-weight: 400;
+}
+
+.notification-content .body-image {
+  margin-top: 8px;
+}
+
+.notification-content .body-image image {
+  border-radius: 9px;
+}
+
+/* inline reply */
+.notification-content .inline-reply {
+  margin-top: 7px;
+}
+
+.notification-content .inline-reply entry {
+  background: alpha(@outline, 0.12);
+  border: 1px solid alpha(@outline, 0.18);
+  border-radius: 8px;
+  color: @foreground;
+  padding: 4px 9px;
+  font-size: 11.5px;
+}
+
+.notification-content .inline-reply entry:focus {
+  border-color: alpha(@primary, 0.55);
+}
+
+.notification-content .inline-reply button {
+  background: alpha(@primary, 0.18);
+  color: @primary;
+  border-radius: 8px;
+  margin-left: 6px;
+  padding: 4px 10px;
+}
+
+.notification-content .inline-reply button:hover {
+  background: alpha(@primary, 0.32);
+}
+
+/* ── close button ────────────────────────────── */
+
+.close-button {
+  background: alpha(@outline, 0.3);
+  color: @on_surface_variant;
+  border-radius: 999px;
+  margin: 6px;
+  padding: 0 3px;
+  font-size: 10px;
+  opacity: 0;
+  min-width: 20px;
+  min-height: 20px;
+}
+
+.notification-row:hover .close-button { opacity: 1; }
+
+.close-button:hover {
+  background: @error;
+  color: white;
+}
+
+/* ── control center ──────────────────────────── */
+
 .control-center {
   background: alpha(@surface, 0.94);
   border: 1px solid alpha(@outline, 0.22);
-  border-radius: 18px;
+  border-radius: 16px;
   padding: 10px;
 }
 
-/* top row: dnd switch card */
 .widget-dnd {
   background: alpha(@surface_variant, 0.35);
   border: 1px solid alpha(@outline, 0.14);
-  border-radius: 12px;
-  padding: 9px 12px;
-  margin-bottom: 8px;
+  border-radius: 11px;
+  padding: 8px 12px;
+  margin-bottom: 7px;
 }
 
 .widget-dnd > label {
   color: @foreground;
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -51,8 +206,8 @@ blankwindow,
   background: alpha(@outline, 0.25);
   border: none;
   padding: 2px;
-  min-height: 22px;
-  min-width: 46px;
+  min-height: 20px;
+  min-width: 42px;
 }
 
 .widget-dnd > switch:checked {
@@ -62,20 +217,17 @@ blankwindow,
 .widget-dnd > switch slider {
   background: @foreground;
   border-radius: 999px;
-  min-height: 18px;
-  min-width: 18px;
+  min-height: 16px;
+  min-width: 16px;
   margin: 1px;
 }
 
 .widget-dnd > switch:checked slider {
   background: white;
-  margin-left: 22px;
+  margin-left: 20px;
 }
 
-/* notification list */
-.widget-notifications {
-  margin-top: 2px;
-}
+/* ── notification list in panel ──────────────── */
 
 .widget .notification-background {
   padding: 0;
@@ -83,9 +235,9 @@ blankwindow,
 }
 
 .widget .notification-background .notification {
-  background: alpha(@surface_variant, 0.30);
-  border: 1px solid transparent;
-  border-radius: 13px;
+  background: alpha(@surface_variant, 0.32);
+  border: 1px solid alpha(@outline, 0.12);
+  border-radius: 12px;
   margin-bottom: 5px;
   padding: 0;
 }
@@ -100,8 +252,7 @@ blankwindow,
   background: alpha(@error, 0.07);
 }
 
-/* thin styled scrollbar for the list */
-scrolledwindow scrollbar,
+/* slim scrollbar */
 scrollbar {
   background: transparent;
   border: none;
@@ -119,34 +270,6 @@ scrollbar slider:hover {
   background: alpha(@outline, 0.6);
 }
 
-/* close button in list — small circle, appears on hover */
-.close-button {
-  background: alpha(@outline, 0.3);
-  color: @on_surface_variant;
-  border-radius: 999px;
-  margin: 6px;
-  padding: 0 3px;
-  font-size: 10px;
-  opacity: 0;
-  min-width: 22px;
-  min-height: 22px;
-}
-
-.notification-row:hover .close-button { opacity: 1; }
-
-.close-button:hover {
-  background: @error;
-  color: white;
-}
-
-/* empty state */
-.blank-window,
-.placeholder {
-  color: alpha(@on_surface_variant, 0.65);
-  font-size: 12px;
-  font-weight: 400;
-}
-
 /* group badges */
 .group-collapse-button,
 .group-expand-button {
@@ -154,7 +277,7 @@ scrollbar slider:hover {
   color: @primary;
   border-radius: 999px;
   padding: 2px 10px;
-  font-size: 11px;
+  font-size: 10.5px;
   margin: 2px 4px;
 }
 
@@ -163,20 +286,9 @@ scrollbar slider:hover {
   background: alpha(@primary, 0.28);
 }
 
-/* ── misc ────────────────────────────────────── */
-
-progressbar trough {
-  background: alpha(@outline, 0.2);
-  border-radius: 999px;
-}
-
-progressbar progress {
-  background: @primary;
-  border-radius: 999px;
-}
-
-tooltip {
-  background: alpha(@surface, 0.96);
-  border: 1px solid alpha(@outline, 0.2);
-  border-radius: 10px;
+/* empty state */
+.blank-window,
+.placeholder {
+  color: alpha(@on_surface_variant, 0.65);
+  font-size: 11.5px;
 }

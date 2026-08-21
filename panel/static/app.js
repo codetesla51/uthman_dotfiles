@@ -182,26 +182,33 @@ async function pollStats() {
     $('#t-temp').textContent = s.temp.toFixed(0) + '°C';
     $('#t-up').textContent = fmtUptime(s.uptime);
     let batTxt = 'AC';
+    const barBat = $('#bar-bat'), pwLine = $('#pw-line');
     if (s.battery >= 0) {
       batTxt = s.battery + '%' + (s.charging ? ' ⚡' : '');
-      $('#v-bat').textContent = s.battery + '%';
-      $('#bar-bat').style.width = s.battery + '%';
-      $('#bar-bat').style.background = s.battery < 20 && !s.charging ? '#e5484d' : s.charging ? '#45a557' : '#0072f5';
+      if (barBat) {
+        barBat.style.width = s.battery + '%';
+        barBat.style.background = s.battery < 20 && !s.charging ? '#e5484d' : s.charging ? '#45a557' : '#0072f5';
+      }
       $('#d-bat').className = 'dot ' + (s.battery < 20 && !s.charging ? 'dot-off' : 'dot-ok');
       const est = s.minutesLeft >= 0
-        ? (s.charging ? ` · ${fmtLeft(s.minutesLeft)} to full` : ` · ${fmtLeft(s.minutesLeft)} left`)
+        ? (s.charging ? ` · full in ${fmtLeft(s.minutesLeft)}` : ` · ${fmtLeft(s.minutesLeft)} left`)
         : '';
-      $('#v-temp').textContent = `temp ${s.temp.toFixed(0)}°C · ${s.powerW.toFixed(1)}W${est}`;
-      $('#pw-bat').textContent = s.battery + '%';
-      $('#pw-bar').style.width = s.battery + '%';
-      $('#pw-status').textContent = (s.charging ? 'Charging' : statusWord(s)) +
+      if (pwLine) pwLine.textContent = (s.charging ? 'Charging' : statusWord(s)) + ` · ${s.powerW.toFixed(1)}W${est}`;
+      $('#v-temp').textContent = `temp ${s.temp.toFixed(0)}°C`;
+      const pb = $('#pw-bat'), pbr = $('#pw-bar'), ps = $('#pw-status');
+      if (pb) pb.textContent = s.battery + '%';
+      if (pbr) pbr.style.width = s.battery + '%';
+      if (ps) ps.textContent = (s.charging ? 'Charging' : statusWord(s)) +
         ` · ${s.powerW.toFixed(1)}W` +
         (s.minutesLeft >= 0 ? (s.charging ? ` · full in ${fmtLeft(s.minutesLeft)}` : ` · ${fmtLeft(s.minutesLeft)} remaining`) : '');
     } else {
-      $('#v-bat').textContent = 'AC';
-      $('#bar-bat').style.width = '100%';
-      $('#pw-bat').textContent = 'AC';
-      $('#pw-status').textContent = 'On AC power';
+      if (barBat) barBat.style.width = '100%';
+      if (pwLine) pwLine.textContent = 'On AC power';
+      $('#v-temp').textContent = `temp ${s.temp.toFixed(0)}°C`;
+      const pb = $('#pw-bat'), pbr = $('#pw-bar'), ps = $('#pw-status');
+      if (pb) pb.textContent = 'AC';
+      if (pbr) pbr.style.width = '100%';
+      if (ps) ps.textContent = 'On AC power';
     }
     $('#t-bat').textContent = batTxt;
     cpuData.push(s.cpu); memData.push(s.memPct); netData.push(Math.min(100, (s.netRx + s.netTx) / 30));

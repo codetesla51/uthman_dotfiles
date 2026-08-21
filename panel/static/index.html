@@ -97,21 +97,32 @@
       <div class="grid4">
         <div class="card metric">
           <div class="card-head"><span><i class="ph ph-cpu"></i> CPU</span><b class="mono stat-val" id="v-cpu">0%</b></div>
-          <div class="spark"><canvas id="c-cpu" height="56"></canvas></div>
+          <div class="gauge-row">
+            <div class="ring" id="ring-cpu"><div class="ring-inner mono" id="rv-cpu">0<small>%</small></div></div>
+            <div class="spark grow"><canvas id="c-cpu" height="64"></canvas></div>
+          </div>
         </div>
         <div class="card metric">
           <div class="card-head"><span><i class="ph ph-memory"></i> Memory</span><b class="mono stat-val" id="v-mem">0%</b></div>
-          <div class="spark"><canvas id="c-mem" height="56"></canvas></div>
+          <div class="gauge-row">
+            <div class="ring green" id="ring-mem"><div class="ring-inner mono" id="rv-mem">0<small>%</small></div></div>
+            <div class="spark grow"><canvas id="c-mem" height="64"></canvas></div>
+          </div>
         </div>
         <div class="card metric">
           <div class="card-head"><span><i class="ph ph-battery-charging"></i> Battery</span><span class="dot dot-ok" id="d-bat"></span></div>
-          <div class="big-num" id="v-bat">—</div>
-          <div class="track"><div id="bar-bat"></div></div>
-          <div class="caption" id="v-temp">temp —</div>
+          <div class="gauge-row">
+            <div class="ring" id="ring-bat"><div class="ring-inner mono" id="rv-bat">—<small></small></div></div>
+            <div class="bat-info tiny">
+              <div class="mono" id="pw-line">—</div>
+              <div class="caption" id="v-temp">temp —</div>
+              <div class="track"><div id="bar-bat"></div></div>
+            </div>
+          </div>
         </div>
         <div class="card metric">
           <div class="card-head"><span><i class="ph ph-arrows-down-up"></i> Network</span><b class="mono stat-val" id="v-net">—</b></div>
-          <div class="spark"><canvas id="c-net" height="56"></canvas></div>
+          <div class="spark tall"><canvas id="c-net" height="64"></canvas></div>
           <div class="net-rows mono tiny">
             <div><i class="ph ph-arrow-down"></i> rx <b id="v-rx">0 KiB/s</b></div>
             <div><i class="ph ph-arrow-up"></i> tx <b id="v-tx">0 KiB/s</b></div>
@@ -120,16 +131,44 @@
         </div>
       </div>
 
-      <div class="grid2">
+      <div class="grid-main-side">
         <div class="card">
           <div class="card-head"><span><i class="ph ph-chart-line"></i> Performance</span><span class="legend mono tiny"><i class="lg lg-blue"></i>cpu <i class="lg lg-green"></i>mem <i class="lg lg-orange"></i>net×10</span></div>
-          <div class="chart-box"><canvas id="c-perf" height="170"></canvas></div>
+          <div class="chart-box tall-box"><canvas id="c-perf" height="210"></canvas></div>
+        </div>
+        <div class="side-stack">
+          <div class="card">
+            <div class="card-head"><span><i class="ph ph-info"></i> System</span></div>
+            <div class="facts mono tiny" id="sys-facts"></div>
+          </div>
+          <div class="card">
+            <div class="card-head"><span><i class="ph ph-hard-drives"></i> Disks</span><span class="mono tiny dim">df -h</span></div>
+            <div class="disk-wrap">
+              <div class="donut"><canvas id="c-disk" height="120" width="120"></canvas><div class="donut-center mono" id="donut-txt">—</div></div>
+              <div class="disk-list mono tiny" id="disk-list"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid2">
+        <div class="card">
+          <div class="card-head"><span><i class="ph ph-broadcast"></i> Live feed</span><span class="mono tiny dim" id="feed-state">journalctl · 5s</span></div>
+          <div class="log-feed mono tiny" id="log-feed" role="log" aria-live="off"></div>
         </div>
         <div class="card">
-          <div class="card-head"><span><i class="ph ph-hard-drives"></i> Disks</span><span class="mono tiny dim">df -h</span></div>
-          <div class="disk-wrap">
-            <div class="donut"><canvas id="c-disk" height="150" width="150"></canvas><div class="donut-center mono" id="donut-txt">—</div></div>
-            <div class="disk-list mono tiny" id="disk-list"></div>
+          <div class="card-head"><span><i class="ph ph-list-numbers"></i> Top processes</span>
+            <select id="proc-sort" class="input sm-input mono" aria-label="Sort processes">
+              <option value="cpu">sort: cpu</option>
+              <option value="mem">sort: mem%</option>
+              <option value="rss">sort: rss</option>
+            </select>
+          </div>
+          <div class="proc-scroll">
+            <table class="proc-table mono tiny" id="proc-table">
+              <thead><tr><th>PID</th><th>Name</th><th>CPU%</th><th>MEM%</th><th>RSS</th><th>S</th><th></th></tr></thead>
+              <tbody></tbody>
+            </table>
           </div>
         </div>
       </div>
@@ -157,26 +196,15 @@
 
       <div class="grid2">
         <div class="card">
-          <div class="card-head"><span><i class="ph ph-list-numbers"></i> Top processes</span>
-            <select id="proc-sort" class="input sm-input mono" aria-label="Sort processes">
-              <option value="cpu">sort: cpu</option>
-              <option value="mem">sort: mem%</option>
-              <option value="rss">sort: rss</option>
-            </select>
-          </div>
-          <div class="proc-scroll">
-            <table class="proc-table mono tiny" id="proc-table">
-              <thead><tr><th>PID</th><th>Name</th><th>CPU%</th><th>MEM%</th><th>RSS</th><th>S</th><th></th></tr></thead>
-              <tbody></tbody>
-            </table>
-          </div>
-        </div>
-        <div class="card">
-          <div class="card-head"><span><i class="ph ph-wifi-high"></i> Network</span><button class="btn ghost sm" onclick="loadNetwork()"><i class="ph ph-arrows-clockwise"></i></button></div>
+          <div class="card-head"><span><i class="ph ph-wifi-high"></i> Network details</span><button class="btn ghost sm" onclick="loadNetwork()"><i class="ph ph-arrows-clockwise"></i></button></div>
           <div id="net-summary" class="mono tiny"></div>
         </div>
+        <div class="card">
+          <div class="card-head"><span><i class="ph ph-package"></i> Session</span><span class="mono tiny dim">context</span></div>
+          <div class="facts mono tiny" id="dash-session"></div>
+        </div>
       </div>
-    </section>
+    </section></section>
 
     <!-- ══════════ POWER ══════════ -->
     <section id="tab-power" class="tab">
@@ -304,6 +332,24 @@
           <div class="palette" id="palette"></div>
           <div class="caption" id="pal-note">Reads ~/.config/omarchy/current/theme/matugen-base.json</div>
         </div>
+      </div>
+      <div class="card">
+        <div class="card-head"><span><i class="ph ph-magic-wand"></i> Color tweak</span><span class="mono tiny dim" id="tw-state">neutral</span></div>
+        <div class="tweak-grid">
+          <label class="field"><span class="label">Hue rotate <output class="mono chip" id="o-hue">0&deg;</output></span>
+            <input type="range" id="r-hue" min="-180" max="180" step="5" value="0" aria-label="Hue rotation"></label>
+          <label class="field"><span class="label">Saturation <output class="mono chip" id="o-sat">100%</output></span>
+            <input type="range" id="r-sat" min="20" max="180" step="5" value="100" aria-label="Saturation"></label>
+          <label class="field"><span class="label">Brightness <output class="mono chip" id="o-bri2">100%</output></span>
+            <input type="range" id="r-bright" min="60" max="140" step="5" value="100" aria-label="Brightness"></label>
+        </div>
+        <div class="tweak-preview mono tiny">before <span id="tw-before"></span> &rarr; after <span id="tw-after"></span></div>
+        <div class="actions">
+          <button class="btn primary" onclick="applyTweak(this)"><i class="ph ph-magic-wand"></i> Apply tweak</button>
+          <button class="btn ghost" onclick="resetTweak(this)"><i class="ph ph-arrow-counter-clockwise"></i> Reset to wallpaper</button>
+          <span class="status" id="st-tweak" role="status"></span>
+        </div>
+        <div class="caption">Shifts every generated theme file (waybar, rofi, gtk, ghostty, zed, btop, cava, hyprlock&hellip;). Changing wallpaper regenerates from scratch &mdash; apply again after.</div>
       </div>
       <div class="card">
         <div class="card-head"><span><i class="ph ph-image"></i> Wallpapers</span><span class="mono tiny dim" id="wp-count">snow_black/backgrounds</span></div>
@@ -666,7 +712,12 @@
         <div class="card-head"><span><i class="ph ph-text-aa"></i> Installed fonts</span>
           <div style="display:flex;gap:8px;align-items:center">
             <span class="mono tiny dim" id="font-count"></span>
-            <input id="font-search" class="input sm-input mono" placeholder="search…" oninput="renderInstalledFonts()" aria-label="Search fonts">
+            <input id="font-search" class="input sm-input mono" placeholder="search…" oninput="fontPage=1;renderInstalledFonts()" aria-label="Search fonts">
+          </div>
+          <div class="pager">
+            <button class="btn ghost sm pager-btn" onclick="fontPageMove(-1)" aria-label="Previous page"><i class="ph ph-caret-left"></i></button>
+            <span class="mono tiny dim" id="font-page">1/1</span>
+            <button class="btn ghost sm pager-btn" onclick="fontPageMove(1)" aria-label="Next page"><i class="ph ph-caret-right"></i></button>
           </div>
         </div>
         <div class="font-grid" id="installed-fonts"></div>

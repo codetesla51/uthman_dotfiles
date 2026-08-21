@@ -9,6 +9,7 @@ import (
 	"io"
 	"io/fs"
 	"log"
+	"math"
 	"net/http"
 	"os"
 	"os/exec"
@@ -60,6 +61,8 @@ func main() {
 	mux.HandleFunc("/api/autostart", handleAutostart)
 	mux.HandleFunc("/api/fonts", handleFonts)
 	mux.HandleFunc("/api/fonts/file", handleFontFile)
+	mux.HandleFunc("/api/logs/recent", handleLogsRecent)
+	mux.HandleFunc("/api/appearance", handleAppearance)
 	mux.HandleFunc("/api/disks", handleDisks)
 	mux.HandleFunc("/api/services", handleServices)
 	mux.HandleFunc("/api/theme", handleTheme)
@@ -2561,4 +2564,233 @@ func firstLineRun(name string, args ...string) string {
 		return ""
 	}
 	return strings.TrimSpace(string(out))
+}
+
+// ── Recent logs (dashboard live feed) ──
+
+func handleLogsRecent(w http.ResponseWriter, r *http.Request) {
+	if !requireMethod(w, r, http.MethodGet) {
+		return
+	}
+	n := 12
+	if v, err := strconv.Atoi(r.URL.Query().Get("n")); err == nil && v > 0 && v <= 100 {
+		n = v
+	}
+	out, err := exec.Command("journalctl", "-n", strconv.Itoa(n), "--no-pager", "-o", "short").Output()
+	if err != nil {
+		jsonOK(w, []string{})
+		return
+	}
+	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+	jsonOK(w, lines)
+}
+
+// ── Appearance: hue / saturation / brightness tweak over generated theme ──
+
+type Tweak struct {
+	Hue    float64 `json:"hue"`    // -180..180 degrees
+	Sat    float64 `json:"sat"`    // 0..2 multiplier
+	Bright float64 `json:"bright"` // 0.5..1.5 multiplier
+}
+
+func tweakStatePath() string { return home + "/.config/omarchy/current/theme/tweak.json" }
+
+func readTweak() Tweak {
+	var t Tweak
+	if b, err := os.ReadFile(tweakStatePath()); err == nil {
+		_ = json.Unmarshal(b, &t)
+	}
+	if t.Sat == 0 {
+		t.Sat = 1
+	}
+	if t.Bright == 0 {
+		t.Bright = 1
+	}
+	return t
+}
+
+func clamp(v, lo, hi float64) float64 {
+	if v < lo {
+		return lo
+	}
+	if v > hi {
+		return hi
+	}
+	return v
+}
+
+func handleAppearance(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		t := readTweak()
+		pal := map[string]interface{}{}
+		if b, err := os.ReadFile(expand(themeJSON)); err == nil {
+			_ = json.Unmarshal(shiftHexInJSON(b, t), &pal)
+		}
+		jsonOK(w, map[string]interface{}{"tweak": t, "palette": pal})
+	case http.MethodPost:
+		var req struct {
+			Hue    float64 `json:"hue"`
+			Sat    float64 `json:"sat"`
+			Bright float64 `json:"bright"`
+			Reset  bool    `json:"reset"`
+		}
+		if !decodeBody(w, r, &req) {
+			return
+		}
+		req.Hue = clamp(req.Hue, -180, 180)
+		req.Sat = clamp(req.Sat, 0, 2)
+		req.Bright = clamp(req.Bright, 0.5, 1.5)
+		t := Tweak{Hue: req.Hue, Sat: req.Sat, Bright: req.Bright}
+
+		// 1. regenerate pristine outputs from current wallpaper
+		wall := ""
+		if link, err := os.Readlink(expand(wallpaperLink)); err == nil {
+			wall = link
+		}
+		if wall != "" {
+			exec.Command(expand(getThemeBin), wall).Run()
+		}
+		// 2. apply shift to all generated theme files + a few outside it
+		if !req.Reset && (t.Hue != 0 || t.Sat != 1 || t.Bright != 1) {
+			shiftThemeDir(t)
+		}
+		// 3. persist state
+		if req.Reset || (t.Hue == 0 && t.Sat == 1 && t.Bright == 1) {
+			os.Remove(tweakStatePath())
+			t = Tweak{Hue: 0, Sat: 1, Bright: 1}
+		} else if b, err := json.Marshal(t); err == nil {
+			os.WriteFile(tweakStatePath(), b, 0644)
+		}
+		// 4. reload visual apps
+		go exec.Command("bash", "-c", "omarchy-restart-waybar >/dev/null 2>&1; pkill -SIGUSR2 -x ghostty || true; pgrep -x swaync >/dev/null && swaync-client --reload-css >/dev/null 2>&1; true").Run()
+		jsonOK(w, map[string]interface{}{"status": "applied", "tweak": t})
+	default:
+		requireMethod(w, r, http.MethodGet, http.MethodPost)
+	}
+}
+
+func themeExtraFiles() []string {
+	return []string{
+		home + "/.config/waybar/colors.css",
+		home + "/.config/swaync/colors.css",
+		// swaync colors.css is a symlink into dotfiles — resolve and shift the target too
+		expand("~/.config/swaync/colors.css"),
+		home + "/.config/rofi/colors.rasi",
+		home + "/.config/zed/themes/matugen.json",
+		home + "/dotfiles/.config/rofi/colors.rasi",
+		home + "/dotfiles/.config/waybar/colors.css",
+	}
+}
+
+func shiftThemeDir(t Tweak) {
+	entries, err := os.ReadDir(expand("~/.config/omarchy/current/theme"))
+	if err == nil {
+		for _, e := range entries {
+			if e.IsDir() {
+				continue
+			}
+			name := e.Name()
+			ext := strings.ToLower(filepath.Ext(name))
+			if ext != ".css" && ext != ".conf" && ext != ".json" && ext != ".toml" && ext != ".lua" &&
+				ext != ".rasi" && ext != ".ini" && ext != ".theme" && name != "cava_theme" {
+				continue
+			}
+			p := filepath.Join(expand("~/.config/omarchy/current/theme"), name)
+			shiftHexInFile(p, t)
+		}
+	}
+	for _, p := range themeExtraFiles() {
+		shiftHexInFile(p, t)
+	}
+}
+
+var hexRe = regexp.MustCompile(`#[0-9a-fA-F]{6}\b`)
+
+func shiftHexInFile(path string, t Tweak) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return
+	}
+	out := hexRe.ReplaceAllStringFunc(string(data), func(h string) string { return shiftHex(h, t) })
+	os.WriteFile(path, []byte(out), 0644)
+}
+
+// shiftHexInJSON shifts colors inside raw JSON bytes and returns shifted bytes.
+func shiftHexInJSON(data []byte, t Tweak) []byte {
+	return []byte(hexRe.ReplaceAllStringFunc(string(data), func(h string) string { return shiftHex(h, t) }))
+}
+
+func shiftHex(hex string, t Tweak) string {
+	r, _ := strconv.ParseUint(hex[1:3], 16, 8)
+	g, _ := strconv.ParseUint(hex[3:5], 16, 8)
+	b, _ := strconv.ParseUint(hex[5:7], 16, 8)
+	h, s, l := rgbToHsl(float64(r)/255, float64(g)/255, float64(b)/255)
+	h = math.Mod(h+t.Hue+360, 360)
+	s = clamp(s*t.Sat, 0, 1)
+	l = clamp(l*t.Bright, 0, 1)
+	r2, g2, b2 := hslToRgb(h, s, l)
+	to := func(v float64) string {
+		c := int(math.Round(v * 255))
+		return fmt.Sprintf("%02x", c)
+	}
+	return "#" + to(r2) + to(g2) + to(b2)
+}
+
+func rgbToHsl(r, g, b float64) (h, s, l float64) {
+	mx, mn := math.Max(r, math.Max(g, b)), math.Min(r, math.Min(g, b))
+	l = (mx + mn) / 2
+	if mx == mn {
+		return 0, 0, l
+	}
+	d := mx - mn
+	if l > 0.5 {
+		s = d / (2 - mx - mn)
+	} else {
+		s = d / (mx + mn)
+	}
+	switch mx {
+	case r:
+		h = (g - b) / d
+		if g < b {
+			h += 6
+		}
+	case g:
+		h = (b-r)/d + 2
+	default:
+		h = (r-g)/d + 4
+	}
+	return h * 60, s, l
+}
+
+func hslToRgb(h, s, l float64) (r, g, b float64) {
+	if s == 0 {
+		return l, l, l
+	}
+	var q float64
+	if l < 0.5 {
+		q = l * (1 + s)
+	} else {
+		q = l + s - l*s
+	}
+	p := 2*l - q
+	hue := func(t float64) float64 {
+		if t < 0 {
+			t++
+		}
+		if t > 1 {
+			t--
+		}
+		switch {
+		case t < 1.0/6:
+			return p + (q-p)*6*t
+		case t < 0.5:
+			return q
+		case t < 2.0/3:
+			return p + (q-p)*(2.0/3-t)*6
+		default:
+			return p
+		}
+	}
+	return hue(h/360 + 1.0/3), hue(h / 360), hue(h/360 - 1.0/3)
 }

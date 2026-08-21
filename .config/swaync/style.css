@@ -34,7 +34,11 @@ blankwindow,
 /* ── floating toasts ─────────────────────────── */
 
 .floating-notifications .notification-row .notification-background {
-  padding: 5px 10px;
+  padding: 4px 8px;
+  background: transparent;
+}
+
+.notification-row {
   background: transparent;
 }
 
@@ -42,7 +46,7 @@ blankwindow,
   background: alpha(@surface, 0.94);
   border: 1px solid alpha(@outline, 0.18);
   border-radius: 16px;
-  padding: 2px;
+  padding: 0;
   box-shadow: 0 6px 24px -8px alpha(black, 0.55);
 }
 
@@ -63,67 +67,107 @@ blankwindow,
   background: transparent;
   border: none;
   color: @foreground;
-  padding: 10px;
 }
 
 .notification-default-action {
-  border-radius: 14px;
+  border-radius: 15px;
+  padding: 0;
   margin: 0;
 }
 
 .notification-default-action:hover {
-  background: alpha(@surface_variant, 0.35);
-}
-
-.notification-action {
-  border-radius: 0 0 14px 14px;
-  border-top: 1px solid alpha(@outline, 0.14);
-  color: @on_surface_variant;
-  font-size: 12px;
-}
-
-.notification-action:first-child { border-right: 1px solid alpha(@outline, 0.14); }
-
-.notification-action:hover {
-  background: alpha(@primary, 0.16);
-  color: @primary;
+  background: transparent;
 }
 
 .notification-content {
   background: transparent;
-  padding: 8px 10px;
-  border-radius: 14px;
+  padding: 12px 14px;
+  border-radius: 15px;
+  margin: 0;
+}
+
+/* app icon — fixed column so text aligns across notifications */
+.notification-content > image {
+  min-width: 34px;
+  min-height: 34px;
+  margin-right: 11px;
+  border-radius: 9px;
+  -gtk-icon-transform: scale(0.72);
+}
+
+.notification-content > box {
+  margin: 0;
 }
 
 .notification-content .app-name {
   color: @primary;
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  opacity: 0.9;
+  opacity: 0.85;
+  margin-bottom: 1px;
 }
 
 .notification-content .summary {
   color: @foreground;
   font-size: 13.5px;
   font-weight: 700;
+  letter-spacing: 0.01em;
+  margin-bottom: 2px;
+}
+
+.notification-content .time {
+  color: alpha(@on_surface_variant, 0.7);
+  font-size: 10px;
+  font-weight: 400;
+  margin-left: 6px;
 }
 
 .notification-content .body {
-  color: @on_surface_variant;
-  font-size: 12.5px;
+  color: alpha(@on_surface_variant, 0.95);
+  font-size: 12px;
   font-weight: 400;
-}
-
-.notification-content image {
-  border-radius: 10px;
-  margin-right: 6px;
+  letter-spacing: 0.01em;
 }
 
 .notification-content .body-image {
+  margin-top: 9px;
+  border-radius: 10px;
+}
+
+.notification-content .body-image image {
+  border-radius: 10px;
+}
+
+/* inline reply */
+.notification-content .inline-reply {
   margin-top: 8px;
-  border-radius: 12px;
+}
+
+.notification-content .inline-reply entry {
+  background: alpha(@outline, 0.12);
+  border: 1px solid alpha(@outline, 0.18);
+  border-radius: 9px;
+  color: @foreground;
+  padding: 5px 10px;
+  font-size: 12px;
+}
+
+.notification-content .inline-reply entry:focus {
+  border-color: alpha(@primary, 0.55);
+}
+
+.notification-content .inline-reply button {
+  background: alpha(@primary, 0.18);
+  color: @primary;
+  border-radius: 9px;
+  margin-left: 6px;
+  padding: 4px 10px;
+}
+
+.notification-content .inline-reply button:hover {
+  background: alpha(@primary, 0.32);
 }
 
 /* ── close button ────────────────────────────── */

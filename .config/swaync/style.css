@@ -25,208 +25,38 @@ blankwindow,
 }
 
 .control-center {
-  background: alpha(@surface, 0.92);
+  background: alpha(@surface, 0.94);
   border: 1px solid alpha(@outline, 0.22);
   border-radius: 18px;
-  padding: 12px;
+  padding: 10px;
 }
 
-/* ── floating toasts ─────────────────────────── */
-
-.floating-notifications .notification-row .notification-background {
-  padding: 4px 8px;
-  background: transparent;
-}
-
-.notification-row {
-  background: transparent;
-}
-
-.floating-notifications .notification-row .notification-background .notification {
-  background: alpha(@surface, 0.94);
-  border: 1px solid alpha(@outline, 0.18);
-  border-radius: 16px;
-  padding: 0;
-  box-shadow: 0 6px 24px -8px alpha(black, 0.55);
-}
-
-.floating-notifications .notification-row .notification-background .notification:hover {
-  border-color: alpha(@primary, 0.45);
-  background: alpha(@surface_variant, 0.60);
-}
-
-.floating-notifications .notification-row .notification-background .notification.critical {
-  border: 1px solid alpha(@error, 0.65);
-  box-shadow: 0 6px 26px -8px alpha(@error, 0.35);
-}
-
-/* ── notification content ────────────────────── */
-
-.notification-default-action,
-.notification-action {
-  background: transparent;
-  border: none;
-  color: @foreground;
-}
-
-.notification-default-action {
-  border-radius: 15px;
-  padding: 0;
-  margin: 0;
-}
-
-.notification-default-action:hover {
-  background: transparent;
-}
-
-.notification-content {
-  background: transparent;
-  padding: 12px 14px;
-  border-radius: 15px;
-  margin: 0;
-}
-
-/* app icon — fixed column so text aligns across notifications */
-.notification-content > image {
-  min-width: 34px;
-  min-height: 34px;
-  margin-right: 11px;
-  border-radius: 9px;
-  -gtk-icon-transform: scale(0.72);
-}
-
-.notification-content > box {
-  margin: 0;
-}
-
-.notification-content .app-name {
-  color: @primary;
-  font-size: 9.5px;
-  font-weight: 800;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  opacity: 0.85;
-  margin-bottom: 1px;
-}
-
-.notification-content .summary {
-  color: @foreground;
-  font-size: 13.5px;
-  font-weight: 700;
-  letter-spacing: 0.01em;
-  margin-bottom: 2px;
-}
-
-.notification-content .time {
-  color: alpha(@on_surface_variant, 0.7);
-  font-size: 10px;
-  font-weight: 400;
-  margin-left: 6px;
-}
-
-.notification-content .body {
-  color: alpha(@on_surface_variant, 0.95);
-  font-size: 12px;
-  font-weight: 400;
-  letter-spacing: 0.01em;
-}
-
-.notification-content .body-image {
-  margin-top: 9px;
-  border-radius: 10px;
-}
-
-.notification-content .body-image image {
-  border-radius: 10px;
-}
-
-/* inline reply */
-.notification-content .inline-reply {
-  margin-top: 8px;
-}
-
-.notification-content .inline-reply entry {
-  background: alpha(@outline, 0.12);
-  border: 1px solid alpha(@outline, 0.18);
-  border-radius: 9px;
-  color: @foreground;
-  padding: 5px 10px;
-  font-size: 12px;
-}
-
-.notification-content .inline-reply entry:focus {
-  border-color: alpha(@primary, 0.55);
-}
-
-.notification-content .inline-reply button {
-  background: alpha(@primary, 0.18);
-  color: @primary;
-  border-radius: 9px;
-  margin-left: 6px;
-  padding: 4px 10px;
-}
-
-.notification-content .inline-reply button:hover {
-  background: alpha(@primary, 0.32);
-}
-
-/* ── close button ────────────────────────────── */
-
-.close-button {
-  background: alpha(@outline, 0.25);
-  color: @on_surface_variant;
-  border-radius: 999px;
-  margin: 8px;
-  padding: 0 2px;
-  font-size: 11px;
-  opacity: 0;
-}
-
-.notification-row:hover .close-button { opacity: 1; }
-.close-button:hover {
-  background: alpha(@error, 0.85);
-  color: white;
-}
-
-/* ── control center widgets ──────────────────── */
-
-.widget-title {
-  color: @foreground;
-  font-size: 15px;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  padding: 6px 8px 2px;
-}
-
-.widget-title > button {
-  background: transparent;
-  border: 1px solid alpha(@outline, 0.2);
-  border-radius: 10px;
-  color: @on_surface_variant;
-  font-size: 11px;
-  padding: 5px 12px;
-}
-
-.widget-title > button:hover {
-  background: alpha(@error, 0.16);
-  border-color: alpha(@error, 0.5);
-  color: @error;
-}
-
+/* top row: dnd switch card */
 .widget-dnd {
-  padding: 6px 8px;
+  background: alpha(@surface_variant, 0.35);
+  border: 1px solid alpha(@outline, 0.14);
+  border-radius: 12px;
+  padding: 9px 12px;
+  margin-bottom: 8px;
+}
+
+.widget-dnd > label {
+  color: @foreground;
+  font-size: 12.5px;
+  font-weight: 700;
 }
 
 .widget-dnd > switch {
   border-radius: 999px;
   background: alpha(@outline, 0.25);
-  border: 1px solid alpha(@outline, 0.2);
+  border: none;
   padding: 2px;
+  min-height: 22px;
+  min-width: 46px;
 }
 
 .widget-dnd > switch:checked {
-  background: alpha(@error, 0.45);
-  border-color: alpha(@error, 0.6);
+  background: @error;
 }
 
 .widget-dnd > switch slider {
@@ -234,45 +64,90 @@ blankwindow,
   border-radius: 999px;
   min-height: 18px;
   min-width: 18px;
-  margin: 2px;
+  margin: 1px;
 }
 
 .widget-dnd > switch:checked slider {
-  background: @error;
-  margin-left: 20px;
+  background: white;
+  margin-left: 22px;
 }
 
-/* ── notification list in panel ──────────────── */
-
+/* notification list */
 .widget-notifications {
-  margin-top: 4px;
+  margin-top: 2px;
+}
+
+.widget .notification-background {
+  padding: 0;
+  background: transparent;
 }
 
 .widget .notification-background .notification {
-  background: alpha(@surface_variant, 0.42);
-  border: 1px solid alpha(@outline, 0.14);
-  border-radius: 14px;
-  margin-bottom: 6px;
+  background: alpha(@surface_variant, 0.30);
+  border: 1px solid transparent;
+  border-radius: 13px;
+  margin-bottom: 5px;
+  padding: 0;
 }
 
 .widget .notification-background .notification:hover {
+  background: alpha(@surface_variant, 0.55);
   border-color: alpha(@primary, 0.35);
-  background: alpha(@surface_variant, 0.7);
 }
 
 .widget .notification-background .notification.critical {
-  border-color: alpha(@error, 0.55);
+  border-color: alpha(@error, 0.5);
+  background: alpha(@error, 0.07);
 }
 
-.blank-window,
-.vbox .placeholder {
+/* thin styled scrollbar for the list */
+scrolledwindow scrollbar,
+scrollbar {
+  background: transparent;
+  border: none;
+}
+
+scrollbar slider {
+  background: alpha(@outline, 0.35);
+  border-radius: 999px;
+  min-width: 5px;
+  min-height: 30px;
+  margin: 2px;
+}
+
+scrollbar slider:hover {
+  background: alpha(@outline, 0.6);
+}
+
+/* close button in list — small circle, appears on hover */
+.close-button {
+  background: alpha(@outline, 0.3);
   color: @on_surface_variant;
-  font-size: 12.5px;
-  opacity: 0.7;
+  border-radius: 999px;
+  margin: 6px;
+  padding: 0 3px;
+  font-size: 10px;
+  opacity: 0;
+  min-width: 22px;
+  min-height: 22px;
 }
 
-/* ── group expanders ─────────────────────────── */
+.notification-row:hover .close-button { opacity: 1; }
 
+.close-button:hover {
+  background: @error;
+  color: white;
+}
+
+/* empty state */
+.blank-window,
+.placeholder {
+  color: alpha(@on_surface_variant, 0.65);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+/* group badges */
 .group-collapse-button,
 .group-expand-button {
   background: alpha(@primary, 0.14);
@@ -280,6 +155,7 @@ blankwindow,
   border-radius: 999px;
   padding: 2px 10px;
   font-size: 11px;
+  margin: 2px 4px;
 }
 
 .group-collapse-button:hover,

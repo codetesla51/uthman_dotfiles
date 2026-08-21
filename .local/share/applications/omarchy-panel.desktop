@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Control Panel
+Comment=Omarchy system control panel
+Exec=chromium --app=http://localhost:8765 --user-data-dir=%h/.config/omarchy-panel-chrome --window-size=1280,860
+Icon=omarchy-panel
+Terminal=false
+Categories=System;Utility;
+StartupWMClass=chrome-localhost__-Default
+X-KDE-StartupNotify=false

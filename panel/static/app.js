@@ -348,48 +348,145 @@ async function delAutostart(id, btn) {
   } catch (e) { toast(e.message, 'err'); btn.disabled = false; }
 }
 
-/* ── Fonts ── */
+/* ── Font Studio ── */
 let fontData = null;
+const loadedFaces = new Set();
+
+// load a font family into the document so specimens render for real
+async function ensureFace(family) {
+  if (loadedFaces.has(family)) return true;
+  try {
+    const face = new FontFace(family, `url(/api/fonts/file?family=${encodeURIComponent(family)})`, {
+      weight: '100 900', display: 'swap'
+    });
+    await face.load();
+    document.fonts.add(face);
+    loadedFaces.add(family);
+    return true;
+  } catch (e) { return false; }
+}
+
 async function loadFonts() {
   try {
     fontData = await api('/api/fonts');
     renderFontCatalog();
     renderInstalledFonts();
-    renderApplySelect();
+    fillApplySelects();
     $('#cur-term').textContent = fontData.current.terminal || '—';
     $('#cur-bar').textContent = fontData.current.bar || '—';
     $('#cur-lock').textContent = fontData.current.lockscreen || '—';
     $('#cur-gtk').textContent = fontData.current.gtk || '—';
+    // hero select: current terminal font first
+    const fams = [...new Set([fontData.current.terminal, ...fontData.installed])].filter(Boolean);
+    $('#spec-font').innerHTML = fams.map(f => `<option ${f === fontData.current.terminal ? 'selected' : ''}>${f}</option>`).join('');
+    setSpecimenFont($('#spec-font').value);
   } catch (e) {}
 }
+
+function fillApplySelects() {
+  const opts = f => ['<option value="">— keep —</option>', ...[...new Set([f, ...fontData.installed])].filter(Boolean).map(x => `<option>${x}</option>`)].join('');
+  for (const id of ['sel-term', 'sel-bar', 'sel-lockscreen', 'sel-gtk']) {
+    const el = $('#' + id);
+    const cur = el.dataset.cur;
+    el.innerHTML = opts(cur);
+    el.value = cur || '';
+  }
+}
+
 function renderFontCatalog() {
-  $('#font-catalog').innerHTML = fontData.catalog.map(f => `
+  $('#font-catalog').innerHTML = fontData.catalog.map((f, idx) => `
     <div class="font-entry ${f.installed ? 'has' : ''}">
-      <div class="font-preview" style="font-family:'${f.family}'">Aa</div>
+      <div class="font-preview" data-fam="${f.family}">${f.installed ? '<span class="pv" style="font-family:\'' + f.family + '\'">Aa</span>' : 'Aa'}</div>
       <div class="font-meta"><b>${f.name}</b><span class="dim tiny mono">${f.kind}</span></div>
       ${f.installed
-        ? '<span class="mono tiny dim"><i class="ph ph-check-circle"></i> installed</span>'
-        : `<button class="btn ghost sm" onclick='installCatalogFont(${JSON.stringify(f.url)}, this)'><i class="ph ph-download-simple"></i></button>`}
+        ? '<button class="btn ghost sm" title="Try in specimen" onclick=\'setSpecimenFont("' + f.family + '")\'><i class="ph ph-cursor-click"></i></button>'
+        : `<button class="btn ghost sm" onclick='installCatalogFont(${JSON.stringify(f.url)}, this, ${idx})'><i class="ph ph-download-simple"></i></button>`}
     </div>`).join('');
+  // load real previews for installed catalog entries
+  fontData.catalog.filter(f => f.installed).forEach(async f => {
+    if (await ensureFace(f.family)) {
+      const el = $(`#font-catalog .font-preview[data-fam="${CSS.escape(f.family)}"] .pv`);
+      if (el) el.style.fontFamily = `'${f.family}'`;
+    }
+  });
 }
-function renderInstalledFonts() {
+
+let allFamsLoaded = false;
+async function renderInstalledFonts() {
   const q = ($('#font-search')?.value || '').toLowerCase();
-  const fams = fontData.installed.filter(f => !q || f.toLowerCase().includes(q)).slice(0, 300);
+  let fams = fontData.installed.filter(f => !q || f.toLowerCase().includes(q));
+  $('#font-count').textContent = fams.length + ' families';
+  // dedupe style variants: prefer base names ("X" over "X Black")
+  fams = fams.slice(0, 120);
   $('#installed-fonts').innerHTML = fams.map(f => `
-    <button class="mod-chip mono tiny" onclick="$('#apply-family').value='${f.replace(/'/g, "\\'")}'">${f}</button>`).join('') || '<div class="caption">no matches</div>';
+    <div class="font-card" data-fam="${f.replace(/"/g, '&quot;')}" title="Click: specimen · double-click: set as terminal font">
+      <div class="fc-sample pv" style="font-family:'${f}'">Aa Bb</div>
+      <div class="fc-name mono tiny">${f}</div>
+      <button class="kill-btn fc-apply" title="Set terminal font" onclick="event.stopPropagation();quickTerminal('${f.replace(/'/g, "\\'")}')" style="display:none"><i class="ph ph-terminal-window"></i></button>
+    </div>`).join('') || '<div class="caption">no matches</div>';
+  // progressively swap in real glyphs
+  for (const f of fams.slice(0, 60)) {
+    if (await ensureFace(f)) {
+      const card = $(`#installed-fonts .font-card[data-fam="${CSS.escape(f)}"] .fc-sample`);
+      if (card) card.style.opacity = 1;
+    }
+  }
+  $$('#installed-fonts .font-card').forEach(card => {
+    card.addEventListener('click', () => { setSpecimenFont(card.dataset.fam); window.scrollTo({ top: 0, behavior: 'smooth' }); });
+    card.addEventListener('mouseenter', () => card.querySelector('.fc-apply').style.display = '');
+    card.addEventListener('mouseleave', () => card.querySelector('.fc-apply').style.display = 'none');
+  });
 }
-function renderApplySelect() {
-  const cur = fontData.current.terminal;
-  const opts = [...new Set([cur, ...fontData.installed])].filter(Boolean);
-  $('#apply-family').innerHTML = opts.map(f => `<option ${f === cur ? 'selected' : ''}>${f}</option>`).join('');
+
+async function setSpecimenFont(family) {
+  $('#spec-font').value = family;
+  const ok = await ensureFace(family);
+  $('#spec-canvas').style.fontFamily = `'${family}', monospace`;
+  $('#spec-canvas').style.opacity = ok ? 1 : .55;
+  $('#spec-font').title = ok ? family : family + ' (preview unavailable)';
 }
-async function installCatalogFont(url, btn) {
+
+$('#spec-font')?.addEventListener('change', e => setSpecimenFont(e.target.value));
+$('#spec-size')?.addEventListener('input', e => $('#spec-canvas').style.fontSize = e.target.value + 'px');
+$('#spec-weight')?.addEventListener('input', e => $('#spec-canvas').style.fontWeight = e.target.value);
+$('#spec-theme')?.addEventListener('click', e => {
+  const c = $('#spec-canvas');
+  c.classList.toggle('light');
+  e.currentTarget.innerHTML = c.classList.contains('light') ? '<i class="ph ph-moon"></i>' : '<i class="ph ph-sun"></i>';
+});
+
+async function applyOne(target) {
+  const selId = { terminal: 'sel-term', bar: 'sel-bar', lockscreen: 'sel-lockscreen', gtk: 'sel-gtk' }[target];
+  const family = $('#' + selId).value;
+  if (!family) return toast('Pick a family first', 'err');
+  try {
+    const res = await api('/api/fonts', post({ action: 'apply', family, targets: [target] }));
+    const v = res.results[target];
+    if (v !== 'ok') throw new Error(`${target}: ${v}`);
+    toast(`${target}: ${family}`);
+    if ($('#sync-spec').checked) setSpecimenFont(family);
+    // refresh current labels without full reload
+    const d = await api('/api/fonts');
+    Object.assign(fontData, d);
+    $('#cur-' + ({ lockscreen: 'lock' }[target] || target)).textContent =
+      d.current[{ terminal: 'terminal', bar: 'bar', lockscreen: 'lockscreen', gtk: 'gtk' }[target]] || '—';
+  } catch (e) { toast(e.message, 'err'); }
+}
+async function quickTerminal(family) {
+  try {
+    await api('/api/fonts', post({ action: 'apply', family, targets: ['terminal'] }));
+    toast(`terminal → ${family}`);
+  } catch (e) { toast(e.message, 'err'); }
+}
+async function installCatalogFont(url, btn, idx) {
   btn.disabled = true; btn.innerHTML = '<i class="ph ph-circle-notch spin"></i>';
   try {
     await api('/api/fonts', post({ action: 'install', url }));
-    toast('Font installed');
-    loadFonts();
-  } catch (e) { toast(e.message, 'err'); btn.disabled = false; btn.innerHTML = '<i class="ph ph-download-simple"></i>'; }
+    toast('Font installed'); loadFonts();
+  } catch (e) {
+    toast(e.message, 'err');
+    btn.disabled = false; btn.innerHTML = '<i class="ph ph-download-simple"></i>';
+  }
 }
 async function installFontUrl(btn) {
   const url = $('#font-url').value.trim();
@@ -397,25 +494,7 @@ async function installFontUrl(btn) {
   btn.disabled = true;
   try {
     await api('/api/fonts', post({ action: 'install', url }));
-    toast('Font installed · run Apply to use it');
-    $('#font-url').value = '';
-    loadFonts();
-  } catch (e) { toast(e.message, 'err'); }
-  btn.disabled = false;
-}
-async function applyFont(btn) {
-  const targets = [];
-  if ($('#t-terminal').checked) targets.push('terminal');
-  if ($('#t-bar').checked) targets.push('bar');
-  if ($('#t-lock').checked) targets.push('lockscreen');
-  if ($('#t-gtk').checked) targets.push('gtk');
-  if (!targets.length) return toast('Pick at least one target', 'err');
-  btn.disabled = true;
-  try {
-    const res = await api('/api/fonts', post({ action: 'apply', family: $('#apply-family').value, targets }));
-    const failed = Object.entries(res.results).filter(([, v]) => v !== 'ok');
-    failed.length ? toast('Applied with errors: ' + failed.map(([k, v]) => `${k}: ${v}`).join(', '), 'err') : toast('Font applied: ' + targets.join(', '));
-    loadFonts();
+    toast('Font installed'); $('#font-url').value = ''; loadFonts();
   } catch (e) { toast(e.message, 'err'); }
   btn.disabled = false;
 }

@@ -1,10 +1,12 @@
 package main
 
 import (
+	"archive/zip"
 	"bufio"
 	"embed"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/fs"
 	"log"
 	"net/http"
@@ -12,6 +14,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -27,6 +30,7 @@ var home, _ = os.UserHomeDir()
 // ── Config paths (dotfiles is source of truth, stow-managed) ──
 const (
 	hypridleConf  = "~/dotfiles/.config/hypr/hypridle.conf"
+	hyprlockConf  = "~/dotfiles/.config/hypr/hyprlock.conf"
 	looknfeelConf = "~/dotfiles/.config/hypr/looknfeel.conf"
 	ghosttyConf   = "~/dotfiles/.config/ghostty/config"
 	getThemeBin   = "~/dotfiles/.local/bin/getTheme"
@@ -54,6 +58,7 @@ func main() {
 	mux.HandleFunc("/api/logs/stream", handleLogStream)
 	mux.HandleFunc("/api/keybinds", handleKeybinds)
 	mux.HandleFunc("/api/autostart", handleAutostart)
+	mux.HandleFunc("/api/fonts", handleFonts)
 	mux.HandleFunc("/api/disks", handleDisks)
 	mux.HandleFunc("/api/services", handleServices)
 	mux.HandleFunc("/api/theme", handleTheme)
@@ -2227,4 +2232,306 @@ func handleReload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	jsonOK(w, map[string]string{"status": "ok", "target": target})
+}
+
+// ── Fonts: download + apply system-wide ──
+
+type FontEntry struct {
+	Name      string `json:"name"`
+	Family    string `json:"family"` // family name after install
+	URL       string `json:"url"`
+	Kind      string `json:"kind"` // mono | sans
+	Installed bool   `json:"installed"`
+}
+
+var fontCatalog = []FontEntry{
+	{Name: "JetBrains Mono NF", Family: "JetBrainsMono Nerd Font", URL: "https://github.com/ryanoasis/nerd-fonts/releases/latest/download/JetBrainsMono.zip", Kind: "mono"},
+	{Name: "Fira Code NF", Family: "FiraCode Nerd Font", URL: "https://github.com/ryanoasis/nerd-fonts/releases/latest/download/FiraCode.zip", Kind: "mono"},
+	{Name: "Caskaydia Cove NF", Family: "CaskaydiaCove Nerd Font", URL: "https://github.com/ryanoasis/nerd-fonts/releases/latest/download/CascadiaCode.zip", Kind: "mono"},
+	{Name: "Hack NF", Family: "Hack Nerd Font", URL: "https://github.com/ryanoasis/nerd-fonts/releases/latest/download/Hack.zip", Kind: "mono"},
+	{Name: "Iosevka NF", Family: "Iosevka Nerd Font", URL: "https://github.com/ryanoasis/nerd-fonts/releases/latest/download/Iosevka.zip", Kind: "mono"},
+	{Name: "Victor Mono NF", Family: "VictorMono Nerd Font", URL: "https://github.com/ryanoasis/nerd-fonts/releases/latest/download/VictorMono.zip", Kind: "mono"},
+	{Name: "Mononoki NF", Family: "Mononoki Nerd Font", URL: "https://github.com/ryanoasis/nerd-fonts/releases/latest/download/Mononoki.zip", Kind: "mono"},
+	{Name: "Inter", Family: "Inter", URL: "https://github.com/google/fonts/raw/main/ofl/inter/Inter%5Bopsz%2Cwght%5D.ttf", Kind: "sans"},
+	{Name: "Space Grotesk", Family: "Space Grotesk", URL: "https://github.com/google/fonts/raw/main/ofl/spacegrotesk/SpaceGrotesk%5Bwght%5D.ttf", Kind: "sans"},
+	{Name: "Outfit", Family: "Outfit", URL: "https://github.com/google/fonts/raw/main/ofl/outfit/Outfit%5Bwght%5D.ttf", Kind: "sans"},
+	{Name: "Sora", Family: "Sora", URL: "https://github.com/google/fonts/raw/main/ofl/sora/Sora%5Bwght%5D.ttf", Kind: "sans"},
+}
+
+func installedFontFamilies() []string {
+	out, err := exec.Command("fc-list", ":", "family").Output()
+	if err != nil {
+		return []string{}
+	}
+	seen := map[string]bool{}
+	families := []string{}
+	for _, line := range strings.Split(string(out), "\n") {
+		for _, f := range strings.Split(strings.TrimSpace(line), ",") {
+			f = strings.TrimSpace(f)
+			if f != "" && !seen[f] {
+				seen[f] = true
+				families = append(families, f)
+			}
+		}
+	}
+	sort.Slice(families, func(i, j int) bool { return families[i] < families[j] })
+	return families
+}
+
+func currentWaybarFont() string {
+	data, err := os.ReadFile(home + "/dotfiles/.config/waybar/style.css")
+	if err != nil {
+		return ""
+	}
+	m := regexp.MustCompile(`font-family:\s*'([^']+)';`).FindStringSubmatch(string(data))
+	if m != nil {
+		return m[1]
+	}
+	return ""
+}
+
+func handleFonts(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		installed := installedFontFamilies()
+		set := map[string]bool{}
+		for _, f := range installed {
+			set[f] = true
+		}
+		catalog := make([]FontEntry, len(fontCatalog))
+		copy(catalog, fontCatalog)
+		for i := range catalog {
+			catalog[i].Installed = set[catalog[i].Family]
+		}
+		gtk := strings.TrimSpace(firstLineRun("gsettings", "get", "org.gnome.desktop.interface", "font-name"))
+		gtk = strings.Trim(strings.TrimSuffix(gtk, ","), "'")
+		jsonOK(w, map[string]interface{}{
+			"installed": installed,
+			"catalog":   catalog,
+			"current": map[string]string{
+				"terminal":   regexFirst(readFileStr(ghosttyConf), `(?m)^\s*font-family\s*=\s*"?(.*?)"?\s*$`),
+				"bar":        currentWaybarFont(),
+				"lockscreen": regexFirst(readFileStr(hyprlockConf), `(?m)^\s*font_family\s*=\s*(.+?)\s*$`),
+				"gtk":        gtk,
+			},
+		})
+	case http.MethodPost:
+		var req struct {
+			Action  string   `json:"action"`  // install | apply
+			URL     string   `json:"url"`     // custom font url (install)
+			Family  string   `json:"family"`  // apply
+			Targets []string `json:"targets"` // terminal bar lockscreen gtk
+		}
+		if !decodeBody(w, r, &req) {
+			return
+		}
+		switch req.Action {
+		case "install":
+			url := req.URL
+			if url == "" {
+				jsonErr(w, "url required", 400)
+				return
+			}
+			if !strings.HasPrefix(url, "https://") {
+				jsonErr(w, "only https urls allowed", 400)
+				return
+			}
+			low := strings.ToLower(url)
+			if !strings.HasSuffix(low, ".zip") && !strings.HasSuffix(low, ".ttf") && !strings.HasSuffix(low, ".otf") {
+				jsonErr(w, "url must point to .zip, .ttf or .otf", 400)
+				return
+			}
+			if err := downloadFont(url); err != nil {
+				jsonErr(w, err.Error(), 500)
+				return
+			}
+			exec.Command("fc-cache", "-f").Run()
+			jsonOK(w, map[string]string{"status": "installed"})
+		case "apply":
+			req.Family = sanitizeField(req.Family)
+			if req.Family == "" || strings.ContainsAny(req.Family, "\"'") {
+				jsonErr(w, "valid family required", 400)
+				return
+			}
+			found := false
+			for _, f := range installedFontFamilies() {
+				if f == req.Family {
+					found = true
+					break
+				}
+			}
+			if !found {
+				jsonErr(w, "font not installed: "+req.Family, 404)
+				return
+			}
+			results := map[string]string{}
+			for _, t := range req.Targets {
+				switch t {
+				case "terminal":
+					if err := replaceLines(ghosttyConf, regexp.MustCompile(`(?m)^\s*font-family\s*=.*$`), "font-family = \""+req.Family+"\""); err != nil {
+						results[t] = err.Error()
+						continue
+					}
+					go exec.Command("bash", "-c", "pkill -SIGUSR2 -x ghostty || true").Run()
+					results[t] = "ok"
+				case "bar":
+					path := home + "/dotfiles/.config/waybar/style.css"
+					data, err := os.ReadFile(path)
+					if err != nil {
+						results[t] = err.Error()
+						continue
+					}
+					old := currentWaybarFont()
+					re := regexp.MustCompile(`(font-family:\s*')` + regexp.QuoteMeta(old) + `(';)`)
+					out := re.ReplaceAllString(string(data), "${1}"+req.Family+"${2}")
+					if err := os.WriteFile(path, []byte(out), 0644); err != nil {
+						results[t] = err.Error()
+						continue
+					}
+					go exec.Command("bash", "-c", "omarchy-restart-waybar >/dev/null 2>&1").Run()
+					results[t] = "ok"
+				case "lockscreen":
+					if err := replaceLines(hyprlockConf, regexp.MustCompile(`(?m)^\s*font_family\s*=.*$`), "font_family = "+req.Family); err != nil {
+						results[t] = err.Error()
+						continue
+					}
+					results[t] = "ok"
+				case "gtk":
+					if out, err := exec.Command("gsettings", "set", "org.gnome.desktop.interface", "font-name", req.Family+" 11").CombinedOutput(); err != nil {
+						results[t] = strings.TrimSpace(string(out))
+						continue
+					}
+					results[t] = "ok"
+				default:
+					results[t] = "unknown target"
+				}
+			}
+			jsonOK(w, map[string]interface{}{"status": "applied", "results": results})
+		default:
+			jsonErr(w, "action must be install or apply", 400)
+		}
+	default:
+		jsonErr(w, "method not allowed", 405)
+	}
+}
+
+func readFileStr(path string) string {
+	b, err := os.ReadFile(expand(path))
+	if err != nil {
+		return ""
+	}
+	return string(b)
+}
+
+func regexFirst(s, pattern string) string {
+	m := regexp.MustCompile(pattern).FindStringSubmatch(s)
+	if len(m) > 1 {
+		return m[1]
+	}
+	return ""
+}
+
+// replaceLines replaces every line matching re with replacement in path (~/-aware).
+func replaceLines(path string, re *regexp.Regexp, replacement string) error {
+	p := expand(path)
+	data, err := os.ReadFile(p)
+	if err != nil {
+		return err
+	}
+	out := re.ReplaceAllStringFunc(string(data), func(string) string { return replacement })
+	return os.WriteFile(p, []byte(out), 0644)
+}
+
+const maxFontDownload = 300 << 20 // 300 MB
+
+func downloadFont(url string) error {
+	client := &http.Client{Timeout: 10 * time.Minute}
+	resp, err := client.Get(url)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return fmt.Errorf("download failed: HTTP %d", resp.StatusCode)
+	}
+	if resp.ContentLength > maxFontDownload {
+		return fmt.Errorf("file too large")
+	}
+	tmp, err := os.CreateTemp("", "panelfont-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmp.Name())
+	n, err := io.Copy(tmp, io.LimitReader(resp.Body, maxFontDownload+1))
+	tmp.Close()
+	if err != nil {
+		return err
+	}
+	if n >= maxFontDownload {
+		return fmt.Errorf("file too large")
+	}
+
+	fontsDir := home + "/.local/share/fonts"
+	base := strings.TrimSuffix(filepath.Base(url), filepath.Ext(url))
+	safe := sanitizeField(base)
+	if safe == "" {
+		safe = "custom"
+	}
+	destDir := filepath.Join(fontsDir, safe)
+	os.MkdirAll(destDir, 0755)
+
+	if strings.HasSuffix(low(url), ".zip") {
+		zr, err := zip.OpenReader(tmp.Name())
+		if err != nil {
+			return err
+		}
+		defer zr.Close()
+		count := 0
+		for _, f := range zr.File {
+			ext := strings.ToLower(filepath.Ext(f.Name))
+			if ext != ".ttf" && ext != ".otf" {
+				continue
+			}
+			src, err := f.Open()
+			if err != nil {
+				continue
+			}
+			dstPath := filepath.Join(destDir, filepath.Base(f.Name))
+			dst, err := os.Create(dstPath)
+			if err != nil {
+				src.Close()
+				continue
+			}
+			io.Copy(dst, src)
+			dst.Close()
+			src.Close()
+			count++
+		}
+		if count == 0 {
+			return fmt.Errorf("no ttf/otf files found in zip")
+		}
+	} else {
+		src, err := os.Open(tmp.Name())
+		if err != nil {
+			return err
+		}
+		defer src.Close()
+		dst, err := os.Create(filepath.Join(destDir, filepath.Base(url)))
+		if err != nil {
+			return err
+		}
+		defer dst.Close()
+		io.Copy(dst, src)
+	}
+	return nil
+}
+
+func low(s string) string { return strings.ToLower(s) }
+
+func firstLineRun(name string, args ...string) string {
+	out, err := exec.Command(name, args...).Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
 }

@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """Generate the Zed "Matugen" theme from the matugen base palette.
 
-Keeps the exact same derived accent colors as the nvim theme
-(matugen/templates/neovim.lua) so the two editors stay in sync.
-
-Zed expects a theme FAMILY file: { name, author, themes: [...] }.
+Keeps derived accent colors in sync with nvim (matugen/templates/neovim.lua)
+but fixes diagnostics to be semantic + eye-friendly:
+  red = error, yellow/amber = warning, green = success/created
+Colors stay wallpaper-driven (saturation/lightness from primary/error)
+but hues are locked so warnings are always yellow and success always green,
+with desaturation and slightly lower lightness to avoid eye strain on dark bg.
 """
 
 import json
@@ -67,6 +69,15 @@ def tweak(hexv, dh, ds, dl):
     return rgb2hex(hsl2rgb(h, s, l))
 
 
+def hue_from(hexv, target_hue_deg, ds=-0.10, dl=-0.06):
+    """Keep wallpaper's saturation/lightness but lock hue for semantic colors.
+    Desaturate + slightly darken for dark-bg eye comfort (not neon)."""
+    h, s, l = rgb2hsl(hex2rgb(hexv))
+    s = max(0.0, min(1.0, s + ds))
+    l = max(0.0, min(1.0, l + dl))
+    return rgb2hex(hsl2rgb(target_hue_deg / 360, s, l))
+
+
 def c(color):
     return {"color": color, "font_style": None, "font_weight": None}
 
@@ -93,18 +104,47 @@ def main():
     secondary = b["secondary"]
     error = b["error"]
 
-    keyword = tweak(primary, 30, 0.08, 0.04)
+    # ── Semantic colors: wallpaper-aware, hue-locked, eye-friendly ──
+    # Error: matugen error is already red-family, just soften a bit (less pink-wash, less glare)
+    error_red = tweak(error, -2, -0.07, -0.05)
+    # Warning: fixed amber/yellow hue (44°) but saturation/lightness from wallpaper primary
+    warning_yellow = hue_from(primary, 44, ds=-0.09, dl=-0.07)
+    # Success/green: fixed green hue (142°) – same logic, stays green on any wallpaper
+    success_green = hue_from(primary, 142, ds=-0.10, dl=-0.07)
+    # Variants for terminal bright (slightly lighter) and muted hint
+    error_bright = tweak(error_red, 0, 0.04, 0.06)
+    warning_bright = tweak(warning_yellow, 0, 0.05, 0.06)
+    success_bright = tweak(success_green, 0, 0.04, 0.06)
+    # Hint: desaturated green/gray – noticeable but not demanding attention
+    hint_green = tweak(success_green, 0, -0.12, 0.02)
+    # Keep info as primary (blue/periwinkle), muted stays outline
+    info_blue = primary
+
+    # ── Syntax: same hue offsets as nvim so editors match, but slightly less lightness for comfort ──
+    keyword = tweak(primary, 30, 0.10, 0.02)
     function = primary
-    type = tweak(primary, -30, 0.08, 0.04)
-    constructor = tweak(primary, 15, 0.10, 0.05)
-    tag = tweak(primary, -10, 0.10, 0.05)
-    attribute = tweak(primary, 45, 0.08, 0.06)
-    label = tweak(primary, 40, 0.05, 0.10)
-    string = tweak(primary, -90, 0.12, 0.05)
-    string_escape = tweak(primary, -170, 0.10, 0.06)
-    number = tweak(primary, -200, 0.10, 0.04)
-    constant = tweak(primary, -50, 0.12, 0.05)
-    orange = tweak(error, 30, 0.10, 0.05)
+    typ = tweak(primary, -30, 0.10, 0.02)
+    constructor = tweak(primary, 15, 0.10, 0.03)
+    tag = tweak(primary, -10, 0.08, 0.03)
+    attribute = tweak(primary, 45, 0.08, 0.04)
+    label = tweak(primary, 40, 0.05, 0.06)
+    string = tweak(primary, -90, 0.14, -0.02)
+    string_escape = tweak(primary, -170, 0.10, 0.04)
+    number = tweak(primary, -200, 0.12, 0.02)
+    constant = tweak(primary, -50, 0.12, 0.03)
+
+    # Terminal palette – coherent with editor, not neon
+    terminal_black = bg
+    terminal_white = fg
+    terminal_red = error_red
+    terminal_green = success_green
+    terminal_yellow = warning_yellow
+    terminal_blue = primary
+    terminal_magenta = tertiary
+    terminal_cyan = tweak(primary, -30, 0.08, 0.02)  # = typ
+    # Bright = slightly lighter
+    bright_black = muted
+    bright_white = fg
 
     style = {
         "background": bg,
@@ -134,6 +174,50 @@ def main():
         "scrollbar.thumb.hover_background": muted,
         "scrollbar.thumb.border": border,
         "scrollbar.track.background": bg,
+        # ── Diagnostics & git – fixed semantics ──
+        "error": error_red,
+        "error.background": low,
+        "error.border": error_red,
+        "warning": warning_yellow,
+        "warning.background": low,
+        "warning.border": warning_yellow,
+        "hint": hint_green,
+        "hint.background": low,
+        "hint.border": hint_green,
+        "info": info_blue,
+        "info.background": low,
+        "info.border": info_blue,
+        "success": success_green,
+        "success.background": low,
+        "success.border": success_green,
+        "created": success_green,
+        "created.background": low,
+        "created.border": success_green,
+        "modified": warning_yellow,
+        "modified.background": low,
+        "modified.border": warning_yellow,
+        "deleted": error_red,
+        "deleted.background": low,
+        "deleted.border": error_red,
+        "renamed": info_blue,
+        "renamed.background": low,
+        "renamed.border": info_blue,
+        "conflict": warning_yellow,
+        "conflict.background": low,
+        "conflict.border": warning_yellow,
+        "ignored": muted,
+        "ignored.background": bg,
+        "ignored.border": faint,
+        "hidden": muted,
+        "hidden.background": bg,
+        "hidden.border": faint,
+        "unreachable": muted,
+        "unreachable.background": bg,
+        "unreachable.border": faint,
+        "predictive": faint,
+        "predictive.background": low,
+        "predictive.border": faint,
+        # ── Editor ──
         "editor.foreground": fg,
         "editor.background": bg,
         "editor.gutter.background": bg,
@@ -142,20 +226,33 @@ def main():
         "editor.highlighted_line.background": raised,
         "editor.line_number": muted,
         "editor.active_line_number": primary,
+        "editor.wrap_guide": faint,
+        "editor.active_wrap_guide": muted,
+        "editor.document_highlight.read_background": select,
+        "editor.document_highlight.write_background": primary_c,
         "link_text.hover": primary,
-        "conflict": error,
-        "created": number,
-        "deleted": error,
-        "error": error,
-        "hint": number,
-        "ignored": muted,
-        "info": primary,
-        "modified": tertiary,
-        "predictive": faint,
-        "renamed": secondary,
-        "success": number,
-        "unreachable": muted,
-        "warning": orange,
+        "search.match_background": select,
+        # ── Terminal ──
+        "terminal.background": bg,
+        "terminal.foreground": fg,
+        "terminal.bright_foreground": fg,
+        "terminal.dim_foreground": muted,
+        "terminal.ansi.black": terminal_black,
+        "terminal.ansi.bright_black": bright_black,
+        "terminal.ansi.red": terminal_red,
+        "terminal.ansi.bright_red": error_bright,
+        "terminal.ansi.green": terminal_green,
+        "terminal.ansi.bright_green": success_bright,
+        "terminal.ansi.yellow": terminal_yellow,
+        "terminal.ansi.bright_yellow": warning_bright,
+        "terminal.ansi.blue": terminal_blue,
+        "terminal.ansi.bright_blue": tweak(terminal_blue, 0, 0.04, 0.06),
+        "terminal.ansi.magenta": terminal_magenta,
+        "terminal.ansi.bright_magenta": tweak(terminal_magenta, 0, 0.04, 0.06),
+        "terminal.ansi.cyan": terminal_cyan,
+        "terminal.ansi.bright_cyan": tweak(terminal_cyan, 0, 0.04, 0.06),
+        "terminal.ansi.white": terminal_white,
+        "terminal.ansi.bright_white": bright_white,
         "players": [
             {"cursor": primary, "selection": primary_c, "background": None}
         ],
@@ -188,7 +285,7 @@ def main():
             "tag": c(tag),
             "text.literal": c(string),
             "title": c(primary),
-            "type": c(type),
+            "type": c(typ),
             "variable": c(fg),
             "variable.special": {"color": fg, "font_style": "italic", "font_weight": None},
         },
@@ -210,6 +307,7 @@ def main():
     with open(OUT, "w") as f:
         json.dump(theme, f, indent=2)
     print(f"Wrote {OUT}")
+    print(f"  error={error_red} warning={warning_yellow} success={success_green}")
 
 
 if __name__ == "__main__":

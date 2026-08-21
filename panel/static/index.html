@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>uthmansArch — control plane</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&family=Iceberg&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/@phosphor-icons/web"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-inner">
+    <a class="logo" href="/">
+      <svg class="arch-logo" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12.011 2c-.695 1.897-1.116 3.135-1.889 4.98.475.535 1.032 1.158 1.955 1.854-1.003-.438-1.688-.879-2.199-1.336-1.086 2.268-2.79 5.498-6.25 11.5 2.716-1.568 4.822-2.536 6.782-2.846a7.87 7.87 0 0 1-.137-1.469l.002-.11c.184-2.957 1.32-3.598 2.536-5.168 1.216 1.57 2.352 2.211 2.536 5.168l.002.11c0 .505-.049.999-.137 1.469 1.96.31 4.066 1.278 6.782 2.846-3.46-6.002-5.164-9.232-6.25-11.5-.511.457-1.196.898-2.199 1.336.923-.696 1.48-1.319 1.955-1.854C13.127 5.135 12.706 3.897 12.011 2Z"/></svg>
+      <span>uthmansArch</span><span class="dim">/control-plane</span>
+    </a>
+    <nav class="top-nav" aria-label="Primary">
+      <button class="nav-item active" data-tab="dashboard">Dashboard</button>
+      <button class="nav-item" data-tab="power">Power</button>
+      <button class="nav-item" data-tab="idle">Idle</button>
+      <button class="nav-item" data-tab="appearance">Appearance</button>
+      <button class="nav-item" data-tab="terminal">Terminal</button>
+      <button class="nav-item" data-tab="hyprland">Hyprland</button>
+      <button class="nav-item" data-tab="logs">Logs</button>
+      <button class="nav-item" data-tab="binds">Binds</button>
+      <button class="nav-item" data-tab="devices">Devices</button>
+      <button class="nav-item" data-tab="system">System</button>
+    </nav>
+    <div class="header-actions">
+      <span class="pill mono" id="clock">—</span>
+    </div>
+    <button class="menu-btn" aria-label="Open menu"><i class="ph ph-list"></i></button>
+  </div>
+</header>
+
+<!-- control-plane status strip -->
+<div class="status-strip mono tiny" role="status">
+  <span><b>cpu</b> <i id="t-cpu">—</i></span>
+  <span><b>mem</b> <i id="t-mem">—</i></span>
+  <span><b>net</b> <i id="t-net">—</i></span>
+  <span><b>load</b> <i id="t-load">—</i></span>
+  <span><b>bat</b> <i id="t-bat">—</i></span>
+  <span><b>temp</b> <i id="t-temp">—</i></span>
+  <span class="strip-right"><b>profile</b> <i id="t-profile">—</i></span>
+  <span><b>ip</b> <i id="t-ip">—</i></span>
+  <span><b>up</b> <i id="t-up">—</i></span>
+</div>
+
+<div class="shell">
+
+  <!-- Sidebar -->
+  <aside class="sidebar" aria-label="Sections">
+    <ul class="nav">
+      <li class="active" data-tab="dashboard" tabindex="0"><i class="ph ph-squares-four"></i><span>Dashboard</span><em>live</em></li>
+      <li data-tab="power" tabindex="0"><i class="ph ph-lightning"></i><span>Power</span><em>tlp</em></li>
+      <li data-tab="idle" tabindex="0"><i class="ph ph-moon-stars"></i><span>Idle &amp; Lock</span><em>hypridle</em></li>
+      <li data-tab="appearance" tabindex="0"><i class="ph ph-palette"></i><span>Appearance</span><em>matugen</em></li>
+      <li data-tab="terminal" tabindex="0"><i class="ph ph-terminal-window"></i><span>Terminal</span><em>ghostty</em></li>
+      <li data-tab="hyprland" tabindex="0"><i class="ph ph-browser"></i><span>Hyprland</span><em>look&amp;feel</em></li>
+      <li data-tab="logs" tabindex="0"><i class="ph ph-scroll"></i><span>Logs</span><em>journalctl</em></li>
+      <li data-tab="binds" tabindex="0"><i class="ph ph-keyboard"></i><span>Binds</span><em>keys</em></li>
+      <li data-tab="devices" tabindex="0"><i class="ph ph-speaker-high"></i><span>Devices</span><em>hw</em></li>
+      <li data-tab="system" tabindex="0"><i class="ph ph-gear-six"></i><span>System</span><em>power</em></li>
+    </ul>
+    <div class="side-card">
+      <div class="eyebrow">Session</div>
+      <div class="kv"><span>wallpaper</span><b class="mono tiny" id="side-wall">—</b></div>
+      <div class="kv"><span>kernel</span><b class="mono tiny" id="side-kernel">—</b></div>
+      <div class="kv"><span>uptime</span><b class="mono tiny" id="side-uptime">—</b></div>
+      <div class="kv"><span>ip</span><b class="mono tiny" id="side-ip">—</b></div>
+      <div class="kv"><span>shell</span><b class="mono tiny" id="side-shell">—</b></div>
+    </div>
+  </aside>
+
+  <main class="main">
+
+    <!-- ══════════ DASHBOARD ══════════ -->
+    <section id="tab-dashboard" class="tab active">
+      <div class="page-head">
+        <div>
+          <h1>Dashboard</h1>
+          <p class="sub">Live system telemetry · refreshes every 2s</p>
+        </div>
+        <div class="head-actions">
+          <button class="btn ghost" onclick="reloadTarget('matugen', this)"><i class="ph ph-sparkle"></i> Regenerate theme</button>
+          <button class="btn primary" onclick="reloadTarget('hyprland', this)"><i class="ph ph-arrows-counter-clockwise"></i> Reload Hyprland</button>
+        </div>
+      </div>
+
+      <div class="grid4">
+        <div class="card metric">
+          <div class="card-head"><span><i class="ph ph-cpu"></i> CPU</span><b class="mono stat-val" id="v-cpu">0%</b></div>
+          <div class="spark"><canvas id="c-cpu" height="56"></canvas></div>
+        </div>
+        <div class="card metric">
+          <div class="card-head"><span><i class="ph ph-memory"></i> Memory</span><b class="mono stat-val" id="v-mem">0%</b></div>
+          <div class="spark"><canvas id="c-mem" height="56"></canvas></div>
+        </div>
+        <div class="card metric">
+          <div class="card-head"><span><i class="ph ph-battery-charging"></i> Battery</span><span class="dot dot-ok" id="d-bat"></span></div>
+          <div class="big-num" id="v-bat">—</div>
+          <div class="track"><div id="bar-bat"></div></div>
+          <div class="caption" id="v-temp">temp —</div>
+        </div>
+        <div class="card metric">
+          <div class="card-head"><span><i class="ph ph-arrows-down-up"></i> Network</span><b class="mono stat-val" id="v-net">—</b></div>
+          <div class="spark"><canvas id="c-net" height="56"></canvas></div>
+          <div class="net-rows mono tiny">
+            <div><i class="ph ph-arrow-down"></i> rx <b id="v-rx">0 KiB/s</b></div>
+            <div><i class="ph ph-arrow-up"></i> tx <b id="v-tx">0 KiB/s</b></div>
+            <div><i class="ph ph-gauge"></i> load <b id="v-load">—</b></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid2">
+        <div class="card">
+          <div class="card-head"><span><i class="ph ph-chart-line"></i> Performance</span><span class="legend mono tiny"><i class="lg lg-blue"></i>cpu <i class="lg lg-green"></i>mem <i class="lg lg-orange"></i>net×10</span></div>
+          <div class="chart-box"><canvas id="c-perf" height="170"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><span><i class="ph ph-hard-drives"></i> Disks</span><span class="mono tiny dim">df -h</span></div>
+          <div class="disk-wrap">
+            <div class="donut"><canvas id="c-disk" height="150" width="150"></canvas><div class="donut-center mono" id="donut-txt">—</div></div>
+            <div class="disk-list mono tiny" id="disk-list"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid2">
+        <div class="card">
+          <div class="card-head"><span><i class="ph ph-sliders-horizontal"></i> Quick controls</span></div>
+          <div class="qc-row">
+            <button class="icon-btn" id="btn-mute" aria-label="Toggle mute"><i class="ph ph-speaker-high"></i></button>
+            <input type="range" id="r-vol" min="0" max="100" step="1" aria-label="Volume">
+            <output class="mono chip" id="o-vol">—</output>
+          </div>
+          <div class="qc-row">
+            <span class="icon-btn static"><i class="ph ph-sun"></i></span>
+            <input type="range" id="r-bri" min="1" max="100" step="1" aria-label="Brightness">
+            <output class="mono chip" id="o-bri">—</output>
+          </div>
+          <div class="caption">Applies instantly via wpctl / brightnessctl</div>
+        </div>
+        <div class="card">
+          <div class="card-head"><span><i class="ph ph-pulse"></i> Services</span><button class="btn ghost sm" onclick="loadServices()"><i class="ph ph-arrows-clockwise"></i></button></div>
+          <div class="svc-grid" id="svc-grid"></div>
+        </div>
+      </div>
+
+      <div class="grid2">
+        <div class="card">
+          <div class="card-head"><span><i class="ph ph-list-numbers"></i> Top processes</span>
+            <select id="proc-sort" class="input sm-input mono" aria-label="Sort processes">
+              <option value="cpu">sort: cpu</option>
+              <option value="mem">sort: mem%</option>
+              <option value="rss">sort: rss</option>
+            </select>
+          </div>
+          <div class="proc-scroll">
+            <table class="proc-table mono tiny" id="proc-table">
+              <thead><tr><th>PID</th><th>Name</th><th>CPU%</th><th>MEM%</th><th>RSS</th><th>S</th><th></th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-head"><span><i class="ph ph-wifi-high"></i> Network</span><button class="btn ghost sm" onclick="loadNetwork()"><i class="ph ph-arrows-clockwise"></i></button></div>
+          <div id="net-summary" class="mono tiny"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════ POWER ══════════ -->
+    <section id="tab-power" class="tab">
+      <div class="page-head">
+        <div><h1>Power</h1><p class="sub">TLP profiles · switching prompts for admin auth (polkit)</p></div>
+      </div>
+      <div class="grid3">
+        <button class="card profile-card" data-mode="performance" onclick="setPowerProfile('performance')">
+          <i class="ph ph-gauge"></i>
+          <b>Performance</b>
+          <span class="tiny dim">max throughput · EPP performance</span>
+          <span class="badge mono tiny">off</span>
+        </button>
+        <button class="card profile-card" data-mode="balanced" onclick="setPowerProfile('balanced')">
+          <i class="ph ph-scales"></i>
+          <b>Balanced</b>
+          <span class="tiny dim">default · EPP balance_power</span>
+          <span class="badge mono tiny">off</span>
+        </button>
+        <button class="card profile-card" data-mode="power-saver" onclick="setPowerProfile('power-saver')">
+          <i class="ph ph-leaf"></i>
+          <b>Power saver</b>
+          <span class="tiny dim">max battery · EPP power</span>
+          <span class="badge mono tiny">off</span>
+        </button>
+      </div>
+      <div class="grid2">
+        <div class="card">
+          <h3>CPU frequency policy</h3>
+          <div class="kv-list mono tiny" id="power-detail"></div>
+          <div class="caption">Read from cpufreq sysfs · mode changes apply via <span class="mono">pkexec tlp &lt;mode&gt;</span></div>
+        </div>
+        <div class="card">
+          <h3>Battery</h3>
+          <div class="big-num" id="pw-bat">—</div>
+          <div class="track"><div id="pw-bar"></div></div>
+          <div class="caption" id="pw-status">—</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════ IDLE & LOCK ══════════ -->
+    <section id="tab-idle" class="tab">
+      <div class="page-head">
+        <div><h1>Idle &amp; Lock</h1><p class="sub">hypridle timeouts · hyprlock uses Iceberg for the clock</p></div>
+      </div>
+      <div class="grid2">
+        <div class="card">
+          <h3>Timeouts</h3>
+          <label class="field">
+            <span class="label">Screensaver <output class="mono chip" id="o-screensaver">120s</output></span>
+            <input type="range" id="r-screensaver" min="30" max="900" step="10" aria-label="Screensaver timeout seconds">
+            <span class="caption">Launches omarchy screensaver before locking</span>
+          </label>
+          <label class="field">
+            <span class="label">Lock <output class="mono chip" id="o-lock">300s</output></span>
+            <input type="range" id="r-lock" min="60" max="1800" step="10" aria-label="Lock timeout seconds">
+            <span class="caption">Runs hyprlock</span>
+          </label>
+          <label class="field">
+            <span class="label">Display off <output class="mono chip" id="o-dpms">360s</output></span>
+            <input type="range" id="r-dpms" min="120" max="2400" step="10" aria-label="Display off timeout seconds">
+            <span class="caption">DPMS off + brightness down</span>
+          </label>
+          <div class="actions">
+            <button class="btn primary" onclick="saveHypridle(this)"><i class="ph ph-floppy-disk-back"></i> Save &amp; restart hypridle</button>
+            <span class="status" id="st-idle" role="status"></span>
+          </div>
+        </div>
+        <div class="card preview-card">
+          <div class="card-head"><span><i class="ph ph-eye"></i> Preview</span><span class="mono tiny dim">hyprlock · live clock</span></div>
+          <div class="lock-preview" aria-hidden="true">
+            <div class="lock-clock" id="pv-clock">00:00</div>
+            <div class="lock-date" id="pv-date">—</div>
+            <div class="lock-user mono tiny"><i class="ph ph-lock-key"></i> uthman@uthmansArch</div>
+          </div>
+          <div class="timeline mono tiny">
+            <span style="--w:33%">screensaver</span><span style="--w:33%">lock</span><span style="--w:34%">dpms off</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════ APPEARANCE ══════════ -->
+    <section id="tab-appearance" class="tab">
+      <div class="page-head">
+        <div><h1>Appearance</h1><p class="sub">Material You colors generated from your wallpaper by matugen</p></div>
+      </div>
+      <div class="grid2">
+        <div class="card">
+          <h3>Matugen engine</h3>
+          <label class="field">
+            <span class="label">Scheme type</span>
+            <select id="s-type" class="input" aria-label="Scheme type">
+              <option value="scheme-content">content — soft &amp; balanced</option>
+              <option value="scheme-vibrant">vibrant</option>
+              <option value="scheme-expressive">expressive</option>
+              <option value="scheme-tonal-spot">tonal-spot</option>
+              <option value="scheme-fidelity">fidelity</option>
+              <option value="scheme-fruit-salad">fruit-salad</option>
+              <option value="scheme-rainbow">rainbow</option>
+              <option value="scheme-monochrome">monochrome</option>
+              <option value="scheme-neutral">neutral</option>
+            </select>
+          </label>
+          <label class="field">
+            <span class="label">Contrast <output class="mono chip" id="o-contrast">0.3</output></span>
+            <input type="range" id="r-contrast" min="-1" max="1" step="0.05" aria-label="Contrast">
+          </label>
+          <div class="field">
+            <span class="label">Mode</span>
+            <div class="segmented" role="radiogroup" aria-label="Mode">
+              <button data-mode="dark" class="active" role="radio" aria-checked="true">Dark</button>
+              <button data-mode="light" role="radio" aria-checked="false">Light</button>
+            </div>
+          </div>
+          <div class="actions">
+            <button class="btn primary" onclick="saveMatugen(this)"><i class="ph ph-sparkle"></i> Apply &amp; regenerate</button>
+            <span class="status" id="st-mat" role="status"></span>
+          </div>
+          <div class="caption">Regenerates ~28 outputs: waybar, ghostty, zed, nvim, gtk, hyprlock…</div>
+        </div>
+        <div class="card">
+          <div class="card-head"><span><i class="ph ph-swatchbook"></i> Generated palette</span><button class="btn ghost sm" onclick="loadTheme()"><i class="ph ph-arrows-clockwise"></i></button></div>
+          <div class="palette" id="palette"></div>
+          <div class="caption" id="pal-note">Reads ~/.config/omarchy/current/theme/matugen-base.json</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head"><span><i class="ph ph-image"></i> Wallpapers</span><span class="mono tiny dim" id="wp-count">snow_black/backgrounds</span></div>
+        <div class="wp-grid" id="wp-grid"></div>
+      </div>
+    </section>
+
+    <!-- ══════════ TERMINAL ══════════ -->
+    <section id="tab-terminal" class="tab">
+      <div class="page-head">
+        <div><h1>Terminal</h1><p class="sub">Ghostty config · changes hot-reload via SIGUSR2</p></div>
+      </div>
+      <div class="grid2">
+        <div class="card">
+          <h3>Font &amp; window</h3>
+          <label class="field">
+            <span class="label">Font family</span>
+            <input id="s-family" class="input mono" list="font-list" placeholder="FiraCode Nerd Font" aria-label="Font family">
+            <datalist id="font-list">
+              <option>FiraCode Nerd Font</option><option>JetBrainsMono Nerd Font</option>
+              <option>Iosevka Nerd Font</option><option>CaskaydiaCove Nerd Font</option>
+              <option>Monaspace Krypton</option><option>Geist Mono</option>
+            </datalist>
+          </label>
+          <label class="field">
+            <span class="label">Font size <output class="mono chip" id="o-size">13</output></span>
+            <input type="range" id="r-size" min="7" max="24" step="1" aria-label="Font size">
+          </label>
+          <label class="field">
+            <span class="label">Opacity <output class="mono chip" id="o-opacity">0.80</output></span>
+            <input type="range" id="r-opacity" min="0.3" max="1" step="0.05" aria-label="Background opacity">
+          </label>
+          <label class="field">
+            <span class="label">Padding <output class="mono chip" id="o-padding">12px</output></span>
+            <input type="range" id="r-padding" min="0" max="32" step="1" aria-label="Window padding">
+          </label>
+          <div class="form-grid two">
+            <label class="field">
+              <span class="label">Cursor style</span>
+              <select id="s-cursor" class="input" aria-label="Cursor style">
+                <option value="block">block</option>
+                <option value="bar">bar</option>
+                <option value="underline">underline</option>
+              </select>
+            </label>
+            <label class="field">
+              <span class="label">Background blur <output class="mono chip" id="o-blur">0</output></span>
+              <input type="range" id="r-blur" min="0" max="40" step="1" aria-label="Background blur">
+            </label>
+          </div>
+          <div class="actions">
+            <button class="btn primary" onclick="saveGhostty(this)"><i class="ph ph-floppy-disk-back"></i> Save &amp; reload ghostty</button>
+            <span class="status" id="st-ghostty" role="status"></span>
+          </div>
+        </div>
+        <div class="card preview-card">
+          <div class="card-head"><span><i class="ph ph-terminal-window"></i> Live preview</span><span class="mono tiny dim">theme-aware</span></div>
+          <div class="term-preview" id="term-preview" aria-hidden="true">
+            <div class="term-bar"><span class="tb-dot r"></span><span class="tb-dot y"></span><span class="tb-dot g"></span><span class="tb-title mono tiny">uthman@uthmansArch ~ ghostty</span></div>
+            <div class="term-body mono" id="term-body">
+<span><span class="t-primary">➜</span> <span class="t-cyan">~</span> neofetch</span>
+<span><span class="t-dim">uthman@uthmansArch · kernel 7.1.8 · 8GB</span></span>
+<span> </span>
+<span><span class="t-primary">➜</span> <span class="t-cyan">~</span> git status</span>
+<span><span class="t-green">✓</span> on branch <span class="t-yellow">main</span></span>
+<span><span class="t-red">✗</span> 2 files changed</span>
+<span> </span>
+<span><span class="t-primary">➜</span> <span class="t-cyan">~</span> <span class="cursor">▊</span></span>
+            </div>
+          </div>
+          <div class="caption">Preview scales to fit — actual terminal renders at full size.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════ HYPRLAND ══════════ -->
+    <section id="tab-hyprland" class="tab">
+      <div class="page-head">
+        <div><h1>Hyprland</h1><p class="sub">Look &amp; feel + input · applies via hyprctl reload</p></div>
+      </div>
+      <div class="grid2">
+        <div class="card">
+          <h3>Gaps &amp; borders</h3>
+          <label class="field">
+            <span class="label">Gaps in <output class="mono chip" id="o-gapsin">4</output></span>
+            <input type="range" id="r-gapsin" min="0" max="40" step="1" aria-label="Gaps in">
+          </label>
+          <label class="field">
+            <span class="label">Gaps out <output class="mono chip" id="o-gapsout">10</output></span>
+            <input type="range" id="r-gapsout" min="0" max="60" step="1" aria-label="Gaps out">
+          </label>
+          <label class="field">
+            <span class="label">Border size <output class="mono chip" id="o-border">1</output></span>
+            <input type="range" id="r-border" min="0" max="10" step="1" aria-label="Border size">
+          </label>
+          <label class="field">
+            <span class="label">Rounding <output class="mono chip" id="o-rounding">12</output></span>
+            <input type="range" id="r-rounding" min="0" max="32" step="1" aria-label="Corner rounding">
+          </label>
+          <div class="actions">
+            <button class="btn primary" onclick="saveHyprland(this)"><i class="ph ph-floppy-disk-back"></i> Save &amp; reload</button>
+            <span class="status" id="st-hyprland" role="status"></span>
+          </div>
+        </div>
+        <div class="card preview-card">
+          <div class="card-head"><span><i class="ph ph-browser"></i> Layout preview</span><span class="mono tiny dim">live</span></div>
+          <div class="hl-preview" id="hl-preview" aria-hidden="true">
+            <div class="hl-bar"><span></span><span class="mono tiny">workspace 1</span><span></span></div>
+            <div class="hl-desktop">
+              <div class="hl-win a"><span class="mono tiny">ghostty</span></div>
+              <div class="hl-col">
+                <div class="hl-win b"><span class="mono tiny">zed</span></div>
+                <div class="hl-win c"><span class="mono tiny">firefox</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head"><span><i class="ph ph-sparkle"></i> Effects</span><span class="mono tiny dim">blur · shadow · opacity · animations</span></div>
+        <div class="form-grid three">
+          <div class="fx-toggles">
+            <label class="toggle-row"><span>Blur</span><span class="toggle"><input type="checkbox" id="t-blur" aria-label="Enable blur"><i></i></span></label>
+            <label class="toggle-row"><span>Shadow</span><span class="toggle"><input type="checkbox" id="t-shadow" aria-label="Enable shadow"><i></i></span></label>
+            <label class="toggle-row"><span>Animations</span><span class="toggle"><input type="checkbox" id="t-anims" aria-label="Enable animations"><i></i></span></label>
+          </div>
+          <div>
+            <label class="field">
+              <span class="label">Blur size <output class="mono chip" id="o-blursize">7</output></span>
+              <input type="range" id="r-blursize" min="1" max="20" step="1" aria-label="Blur size">
+            </label>
+            <label class="field">
+              <span class="label">Blur passes <output class="mono chip" id="o-blurpasses">3</output></span>
+              <input type="range" id="r-blurpasses" min="1" max="8" step="1" aria-label="Blur passes">
+            </label>
+          </div>
+          <div>
+            <label class="field">
+              <span class="label">Active opacity <output class="mono chip" id="o-activeop">0.95</output></span>
+              <input type="range" id="r-activeop" min="0.5" max="1" step="0.01" aria-label="Active window opacity">
+            </label>
+            <label class="field">
+              <span class="label">Inactive opacity <output class="mono chip" id="o-inactiveop">0.86</output></span>
+              <input type="range" id="r-inactiveop" min="0.4" max="1" step="0.01" aria-label="Inactive window opacity">
+            </label>
+            <label class="field">
+              <span class="label">Dim strength <output class="mono chip" id="o-dim">0.08</output></span>
+              <input type="range" id="r-dim" min="0" max="0.9" step="0.01" aria-label="Dim strength">
+            </label>
+          </div>
+        </div>
+        <div class="actions">
+          <button class="btn primary" onclick="saveEffects(this)"><i class="ph ph-floppy-disk-back"></i> Save effects &amp; reload</button>
+          <span class="status" id="st-effects" role="status"></span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head"><span><i class="ph ph-keyboard"></i> Input devices</span><span class="mono tiny dim">input.conf</span></div>
+        <div class="form-grid three">
+          <div>
+            <label class="field">
+              <span class="label">Keyboard layout</span>
+              <input id="s-kblayout" class="input mono" placeholder="us" aria-label="Keyboard layout">
+              <span class="caption">e.g. us, de, us,dk (comma list)</span>
+            </label>
+            <label class="toggle-row"><span>Numlock on start</span><span class="toggle"><input type="checkbox" id="t-numlock" aria-label="Numlock by default"><i></i></span></label>
+          </div>
+          <div>
+            <label class="field">
+              <span class="label">Repeat rate <output class="mono chip" id="o-rrate">40</output></span>
+              <input type="range" id="r-rrate" min="10" max="120" step="1" aria-label="Repeat rate">
+            </label>
+            <label class="field">
+              <span class="label">Repeat delay <output class="mono chip" id="o-rdelay">600ms</output></span>
+              <input type="range" id="r-rdelay" min="150" max="1500" step="25" aria-label="Repeat delay">
+            </label>
+          </div>
+          <div>
+            <label class="toggle-row"><span>Touchpad natural scroll</span><span class="toggle"><input type="checkbox" id="t-natscroll" aria-label="Natural scroll"><i></i></span></label>
+            <label class="field">
+              <span class="label">Scroll factor <output class="mono chip" id="o-sfactor">1.00</output></span>
+              <input type="range" id="r-sfactor" min="0.1" max="5" step="0.05" aria-label="Scroll factor">
+            </label>
+          </div>
+        </div>
+        <div class="actions">
+          <button class="btn primary" onclick="saveInput(this)"><i class="ph ph-floppy-disk-back"></i> Save input &amp; reload</button>
+          <span class="status" id="st-input" role="status"></span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════ LOGS ══════════ -->
+    <section id="tab-logs" class="tab">
+      <div class="page-head">
+        <div><h1>Logs</h1><p class="sub">journalctl live stream · filter &amp; search</p></div>
+      </div>
+      <div class="card">
+        <div class="log-controls">
+          <label class="field slim">
+            <span class="label tiny dim">SOURCE</span>
+            <select id="log-source" class="input sm-input mono" aria-label="Log source">
+              <option value="system">system journal</option>
+              <option value="user">user journal</option>
+              <option value="kernel">kernel (dmesg)</option>
+              <option value="errors">errors only (-p err)</option>
+              <option value="unit:tlp.service">tlp.service</option>
+              <option value="unit:NetworkManager.service">NetworkManager</option>
+              <option value="unit:swaync.service">swaync</option>
+              <option value="unit:waybar.service">waybar</option>
+              <option value="unit:hypridle.service">hypridle</option>
+            </select>
+          </label>
+          <label class="field slim">
+            <span class="label tiny dim">PRIORITY</span>
+            <select id="log-prio" class="input sm-input mono" aria-label="Priority">
+              <option value="">all</option>
+              <option value="err">err and worse</option>
+              <option value="warning">warning+</option>
+              <option value="notice">notice+</option>
+              <option value="info">info+</option>
+              <option value="debug">debug+</option>
+            </select>
+          </label>
+          <label class="field slim grow">
+            <span class="label tiny dim">GREP</span>
+            <input id="log-grep" class="input sm-input mono" placeholder="filter lines…" aria-label="Filter log lines">
+          </label>
+          <button class="btn ghost" id="btn-logpause"><i class="ph ph-pause"></i> Pause</button>
+          <button class="btn ghost" id="btn-logclear"><i class="ph ph-eraser"></i> Clear</button>
+          <span class="mono tiny dim" id="log-count">0 lines</span>
+        </div>
+        <div class="log-viewer mono tiny" id="log-viewer" role="log" aria-live="off"></div>
+        <div class="caption">Streaming via journalctl -f · red = error, yellow = warning, blue = your hostname lines with info</div>
+      </div>
+    </section>
+
+    <!-- ══════════ BINDS ══════════ -->
+    <section id="tab-binds" class="tab">
+      <div class="page-head">
+        <div><h1>Keybinds</h1><p class="sub">~/.config/hypr/bindings.conf · auto-reloads Hyprland</p></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><span><i class="ph ph-plus-circle"></i> Add keybind</span></div>
+        <div class="log-controls">
+          <div class="field slim">
+            <span class="label tiny dim">MODIFIERS</span>
+            <div class="mod-checks mono tiny">
+              <label><input type="checkbox" id="kb-super" checked> SUPER</label>
+              <label><input type="checkbox" id="kb-shift"> SHIFT</label>
+              <label><input type="checkbox" id="kb-ctrl"> CTRL</label>
+              <label><input type="checkbox" id="kb-alt"> ALT</label>
+            </div>
+          </div>
+          <label class="field slim"><span class="label tiny dim">KEY</span>
+            <input id="kb-key" class="input sm-input mono" placeholder="e.g. T, F1, SLASH" style="width:110px"></label>
+          <label class="field slim grow"><span class="label tiny dim">DESCRIPTION</span>
+            <input id="kb-desc" class="input sm-input mono" placeholder="Launcher etc." style="width:100%"></label>
+          <label class="field slim"><span class="label tiny dim">DISPATCHER</span>
+            <select id="kb-disp" class="input sm-input mono">
+              <option value="exec">exec</option>
+              <option value="execr">execr</option>
+              <option value="killactive">killactive</option>
+              <option value="togglefloating">togglefloating</option>
+              <option value="fullscreen">fullscreen</option>
+              <option value="workspace">workspace</option>
+              <option value="movetoworkspace">movetoworkspace</option>
+              <option value="togglespecialworkspace">togglespecialworkspace</option>
+              <option value="resizeactive">resizeactive</option>
+              <option value="moveactive">moveactive</option>
+              <option value="pin">pin</option>
+              <option value="cyclenext">cyclenext</option>
+              <option value="movefocus">movefocus</option>
+            </select></label>
+          <label class="field slim grow"><span class="label tiny dim">ARGUMENT</span>
+            <input id="kb-arg" class="input sm-input mono" placeholder="command / workspace / direction" style="width:100%"></label>
+          <button class="btn primary" onclick="addKeybind(this)"><i class="ph ph-plus"></i> Add</button>
+        </div>
+        <div class="caption">Writes a <code>bindd</code> line to bindings.conf and runs hyprctl reload. Existing omarchy defaults live elsewhere — only your personal binds show here.</div>
+      </div>
+      <div class="card">
+        <div class="card-head"><span><i class="ph ph-keyboard"></i> Your binds</span><span class="mono tiny dim" id="kb-count"></span></div>
+        <div class="proc-scroll" style="max-height:420px">
+          <table class="proc-table mono tiny" id="kb-table">
+            <thead><tr><th>Mods</th><th>Key</th><th>Description</th><th>Action</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head"><span><i class="ph ph-rocket-launch"></i> Autostart apps</span><span class="mono tiny dim">autostart.conf</span></div>
+        <div id="as-list"></div>
+        <div class="log-controls" style="margin-top:12px;margin-bottom:0">
+          <input id="as-cmd" class="input sm-input mono grow" placeholder="exec-once command…" style="flex:1;width:100%">
+          <button class="btn ghost" onclick="addAutostart(this)"><i class="ph ph-plus"></i> Add</button>
+        </div>
+        <div class="caption">Applies on next Hyprland session.</div>
+      </div>
+    </section>
+
+    <!-- ══════════ DEVICES ══════════ -->
+    <section id="tab-devices" class="tab">
+      <div class="page-head">
+        <div><h1>Devices</h1><p class="sub">Displays · audio · brightness · notifications</p></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><span><i class="ph ph-monitor"></i> Monitors</span><button class="btn ghost sm" onclick="loadMonitors()"><i class="ph ph-arrows-clockwise"></i></button></div>
+        <div id="monitor-list" class="mon-list"></div>
+      </div>
+      <div class="grid2">
+        <div class="card">
+          <div class="card-head"><span><i class="ph ph-speaker-high"></i> Audio</span><button class="icon-btn" id="btn-mute2" aria-label="Toggle mute"><i class="ph ph-speaker-high"></i></button></div>
+          <label class="field">
+            <span class="label">Output volume <output class="mono chip" id="o-vol2">—</output></span>
+            <input type="range" id="r-vol2" min="0" max="100" step="1" aria-label="Output volume">
+          </label>
+          <div class="divider"></div>
+          <div class="card-head"><span><i class="ph ph-sun-dim"></i> Brightness</span></div>
+          <label class="field">
+            <span class="label">Screen <output class="mono chip" id="o-bri2">—</output></span>
+            <input type="range" id="r-bri2" min="1" max="100" step="1" aria-label="Screen brightness">
+          </label>
+        </div>
+        <div class="card">
+          <div class="card-head"><span><i class="ph ph-bell"></i> Notifications</span><span class="mono tiny dim">mako config</span></div>
+          <div class="form-grid two">
+            <label class="field">
+              <span class="label">Default timeout <output class="mono chip" id="o-ntimeout">5000ms</output></span>
+              <input type="range" id="r-ntimeout" min="0" max="30000" step="500" aria-label="Notification timeout">
+              <span class="caption">0 = never expire</span>
+            </label>
+            <label class="field">
+              <span class="label">Max visible <output class="mono chip" id="o-nmax">3</output></span>
+              <input type="range" id="r-nmax" min="1" max="20" step="1" aria-label="Max visible notifications">
+            </label>
+            <label class="field">
+              <span class="label">Width <output class="mono chip" id="o-nwidth">400px</output></span>
+              <input type="range" id="r-nwidth" min="150" max="800" step="10" aria-label="Notification width">
+            </label>
+            <label class="field">
+              <span class="label">Height <output class="mono chip" id="o-nheight">140px</output></span>
+              <input type="range" id="r-nheight" min="50" max="400" step="5" aria-label="Notification height">
+            </label>
+            <label class="field">
+              <span class="label">Corner radius <output class="mono chip" id="o-nradius">12</output></span>
+              <input type="range" id="r-nradius" min="0" max="40" step="1" aria-label="Corner radius">
+            </label>
+          </div>
+          <div class="actions">
+            <button class="btn primary" onclick="saveMako(this)"><i class="ph ph-floppy-disk-back"></i> Save notifications</button>
+            <span class="status" id="st-mako" role="status"></span>
+          </div>
+          <div class="divider"></div>
+          <div class="toggle-row big">
+            <span>Do not disturb <span class="mono tiny dim">(swaync)</span></span>
+            <span class="toggle"><input type="checkbox" id="t-dnd" aria-label="Do not disturb"><i></i></span>
+          </div>
+        </div>
+      </div>
+      <div class="grid2">
+        <div class="card">
+          <div class="card-head"><span><i class="ph ph-rows"></i> Waybar</span><span class="mono tiny dim">config.jsonc · auto-restarts</span></div>
+          <div class="form-grid two">
+            <label class="field">
+              <span class="label">Position</span>
+              <select id="s-wbpos" class="input" aria-label="Waybar position">
+                <option value="top">top</option>
+                <option value="bottom">bottom</option>
+                <option value="left">left</option>
+                <option value="right">right</option>
+              </select>
+            </label>
+            <label class="field">
+              <span class="label">Height <output class="mono chip" id="o-wbheight">34</output></span>
+              <input type="range" id="r-wbheight" min="16" max="80" step="1" aria-label="Waybar height">
+            </label>
+          </div>
+          <div class="actions">
+            <button class="btn primary" onclick="saveWaybar(this)"><i class="ph ph-floppy-disk-back"></i> Save &amp; restart waybar</button>
+            <span class="status" id="st-waybar" role="status"></span>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-head"><span><i class="ph ph-sun-horizon"></i> Night light</span><span class="mono tiny dim">hyprsunset</span></div>
+          <div class="toggle-row big">
+            <span>Night light</span>
+            <span class="toggle"><input type="checkbox" id="t-nightlight" aria-label="Night light"><i></i></span>
+          </div>
+          <label class="field">
+            <span class="label">Temperature <output class="mono chip" id="o-nltemp">3500K</output></span>
+            <input type="range" id="r-nltemp" min="1000" max="10000" step="100" aria-label="Color temperature">
+            <span class="caption">Lower = warmer. Applies instantly.</span>
+          </label>
+        </div>
+      </div>
+      <div class="grid2">
+        <div class="card">
+          <div class="card-head"><span><i class="ph ph-wifi-high"></i> Network</span><button class="btn ghost sm" onclick="loadNetwork()"><i class="ph ph-arrows-clockwise"></i></button></div>
+          <div id="net-detail" class="mono tiny"></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><span><i class="ph ph-bluetooth"></i> Bluetooth</span><button class="btn ghost sm" onclick="loadBluetooth()"><i class="ph ph-arrows-clockwise"></i></button></div>
+          <div id="bt-list" class="mono tiny"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════ SYSTEM ══════════ -->
+    <section id="tab-system" class="tab">
+      <div class="page-head">
+        <div><h1>System</h1><p class="sub">Host info · services · session control</p></div>
+      </div>
+      <div class="grid2">
+        <div class="card">
+          <h3>Host</h3>
+          <div class="kv-list" id="host-info"></div>
+        </div>
+        <div class="card">
+          <h3>Quick actions</h3>
+          <div class="action-grid cols2">
+            <button class="btn ghost" onclick="reloadTarget('hyprland',this)"><i class="ph ph-arrows-counter-clockwise"></i> Hyprland</button>
+            <button class="btn ghost" onclick="reloadTarget('waybar',this)"><i class="ph ph-rows"></i> Waybar</button>
+            <button class="btn ghost" onclick="reloadTarget('hypridle',this)"><i class="ph ph-moon-stars"></i> Hypridle</button>
+            <button class="btn ghost" onclick="reloadTarget('swaync',this)"><i class="ph ph-bell"></i> SwayNC</button>
+            <button class="btn ghost" onclick="reloadTarget('mako',this)"><i class="ph ph-bell-ringing"></i> Mako</button>
+            <button class="btn ghost" onclick="reloadTarget('matugen',this)"><i class="ph ph-sparkle"></i> Theme</button>
+          </div>
+          <div class="divider"></div>
+          <h3>Session</h3>
+          <div class="action-grid cols2">
+            <button class="btn ghost" onclick="powerAction('lock')"><i class="ph ph-lock-key"></i> Lock</button>
+            <button class="btn ghost" onclick="powerAction('suspend')"><i class="ph ph-moon"></i> Suspend</button>
+            <button class="btn ghost" onclick="powerAction('logout')"><i class="ph ph-sign-out"></i> Logout</button>
+            <button class="btn danger" onclick="powerAction('reboot')"><i class="ph ph-arrow-clockwise"></i> Reboot</button>
+            <button class="btn danger" onclick="powerAction('shutdown')"><i class="ph ph-power"></i> Shutdown</button>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head"><span><i class="ph ph-note"></i> Dotfiles</span><span class="mono tiny dim">~/dotfiles · stow-managed</span></div>
+        <div class="file-map mono tiny">
+          <span><i class="ph ph-file"></i> hypr/hypridle.conf</span>
+          <span><i class="ph ph-file"></i> hypr/looknfeel.conf</span>
+          <span><i class="ph ph-file"></i> hypr/input.conf</span>
+          <span><i class="ph ph-file"></i> hypr/monitors.conf</span>
+          <span><i class="ph ph-file"></i> ghostty/config</span>
+          <span><i class="ph ph-file"></i> mako/config</span>
+          <span><i class="ph ph-file"></i> waybar/config.jsonc</span>
+          <span><i class="ph ph-file"></i> local/bin/getTheme</span>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<div class="toasts" id="toasts" aria-live="polite"></div>
+<script src="app.js"></script>
+</body>
+</html>

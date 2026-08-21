@@ -2,7 +2,7 @@ config-file = ?"~/.config/omarchy/current/theme/ghostty.conf"
 # ── Font ──────────────────────────────────────────────────────
 font-family = "FiraCode Nerd Font"
 font-style = Medium
-font-size = 14
+font-size = 13
 font-feature = liga
 # ── Window ────────────────────────────────────────────────────
 window-theme = ghostty
@@ -24,7 +24,7 @@ cursor-style-blink = true
 # ── Shell integration ─────────────────────────────────────────
 shell-integration-features = no-cursor,ssh-env
 # ── Opacity & focus ───────────────────────────────────────────
-background-opacity = 0.8
+background-opacity = 0.40
 unfocused-split-opacity = 0.4
 # ── Mouse ─────────────────────────────────────────────────────
 mouse-scroll-multiplier = 0.95

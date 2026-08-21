@@ -12,8 +12,6 @@ return {
         local hl = vim.api.nvim_set_hl
 
         -- ── Color math ────────────────────────────────────────────────
-        --  Derive brighter, higher-contrast accents from the matugen
-        --  scheme so the palette stays wallpaper-driven but pops.
         local function hex2rgb(hex)
           hex = hex:gsub("^#", "")
           return tonumber(hex:sub(1, 2), 16), tonumber(hex:sub(3, 4), 16), tonumber(hex:sub(5, 6), 16)
@@ -77,6 +75,18 @@ return {
           return rgb2hex(rr, gg, bb)
         end
 
+        -- Hue-locked helper: keep wallpaper saturation/lightness but force hue for semantics.
+        -- Ensures warnings are always yellow and success always green, on any wallpaper.
+        -- Desaturate + slightly darken so colors are soft on dark bg (not neon/eye-hurting).
+        local function hue_from(hex, target_hue, ds, dl)
+          local r, g, b = hex2rgb(hex)
+          local h, s, l = rgb2hsl(r, g, b)
+          s = math.max(0, math.min(1, s + (ds or -0.10)))
+          l = math.max(0, math.min(1, l + (dl or -0.06)))
+          local rr, gg, bb = hsl2rgb(target_hue / 360, s, l)
+          return rgb2hex(rr, gg, bb)
+        end
+
         -- ── Matugen scheme (wallpaper-derived) ────────────────────────
         local base = {
           bg         = "{{ colors.background.default.hex }}",
@@ -93,34 +103,40 @@ return {
         }
 
         -- ── Palette ───────────────────────────────────────────────────
-        --  Syntax hues are rotated from the primary hue so every role gets
-        --  a distinct color no matter what the wallpaper scheme is. These
-        --  offsets match gen-zed-theme so both editors agree.
+        --  Syntax hues are rotated from primary but with lower lightness
+        --  for eye comfort (was +0.04-0.06, now +0.02-0.03). Semantic
+        --  colors are hue-locked: red stays red, yellow stays yellow,
+        --  green stays green — on any wallpaper — but s/l still from
+        --  wallpaper so they harmonize and aren't harsh. Matches Zed.
         local c = {
           -- Backgrounds
           bg        = base.bg,
-          bg_subtle = base.bg_subtle, -- panels, sidebars
-          bg_raised = base.bg_raised, -- floats, popups
-          bg_select = base.bg_select, -- visual, cursorline
+          bg_subtle = base.bg_subtle,
+          bg_raised = base.bg_raised,
+          bg_select = base.bg_select,
 
           -- Foregrounds
           fg        = base.fg,
-          fg_dim    = base.fg_dim, -- punctuation, operators
-          fg_muted  = base.fg_muted, -- line numbers, whitespace
+          fg_dim    = base.fg_dim,
+          fg_muted  = base.fg_muted,
 
-          -- Syntax hues
-          cyan      = base.primary, -- functions & methods           (identity hue)
-          violet    = tweak(base.primary, 30, 0.08, 0.04), -- keywords, storage
-          soft_cyan = tweak(base.primary, -30, 0.08, 0.04), -- types & classes
-          green     = tweak(base.primary, -90, 0.12, 0.05), -- strings, text
-          orange    = tweak(base.primary, -200, 0.10, 0.04), -- numbers, booleans
-          teal      = tweak(base.primary, -50, 0.12, 0.05), -- constants, match parens
-          gold      = tweak(base.primary, -170, 0.10, 0.06), -- imports, macros, escapes
-          steel     = tweak(base.primary, -15, -0.15, -0.10), -- builtins, special vars
-          lavender  = tweak(base.primary, 45, 0.08, 0.06), -- attributes, decorators
-          red       = base.error, -- errors & exceptions
-          warn      = tweak(base.error, 30, 0.10, 0.05), -- warnings
-
+          -- Syntax hues (eye-friendly lightness)
+          cyan      = base.primary, -- functions & methods
+          violet    = tweak(base.primary, 30, 0.10, 0.02), -- keywords
+          soft_cyan = tweak(base.primary, -30, 0.10, 0.02), -- types & classes
+          green     = tweak(base.primary, -90, 0.14, -0.02), -- strings
+          orange    = tweak(base.primary, -200, 0.12, 0.02), -- numbers
+          teal      = tweak(base.primary, -50, 0.12, 0.03), -- constants
+          gold      = tweak(base.primary, -170, 0.10, 0.04), -- imports
+          steel     = tweak(base.primary, -15, -0.15, -0.10), -- builtins
+          lavender  = tweak(base.primary, 45, 0.08, 0.04), -- attributes
+          -- Semantic – hue-locked, wallpaper-aware, soft on dark bg
+          red       = tweak(base.error, -2, -0.07, -0.05), -- error red (softened matugen error)
+          warn      = hue_from(base.primary, 44, -0.09, -0.07), -- warning amber/yellow (always yellow)
+          yellow    = hue_from(base.primary, 44, -0.09, -0.07), -- alias
+          success   = hue_from(base.primary, 142, -0.10, -0.07), -- success green (always green)
+          hint_green = tweak(hue_from(base.primary, 142, -0.10, -0.07), 0, -0.12, 0.02), -- muted hint green
+          -- keep compatibility: warn alias == yellow
           -- UI chrome
           border    = "{{ colors.surface_container_highest.default.hex }}",
           hint      = "{{ colors.outline_variant.default.hex }}",
@@ -273,22 +289,30 @@ return {
         hl(0, "SpellWarn", { undercurl = true, sp = c.warn })
 
         -- ── Diagnostics ───────────────────────────────────────────────
+        -- Semantic: red=error, yellow=warning, green=success, blue=info, muted green=hint
         hl(0, "DiagnosticError", { fg = c.red })
         hl(0, "DiagnosticWarn", { fg = c.warn })
         hl(0, "DiagnosticInfo", { fg = c.cyan })
-        hl(0, "DiagnosticHint", { fg = c.steel })
-        hl(0, "DiagnosticOk", { fg = c.green })
+        hl(0, "DiagnosticHint", { fg = c.hint_green })
+        hl(0, "DiagnosticOk", { fg = c.success })
         hl(0, "DiagnosticUnderlineError", { undercurl = true, sp = c.red })
         hl(0, "DiagnosticUnderlineWarn", { undercurl = true, sp = c.warn })
         hl(0, "DiagnosticUnderlineInfo", { undercurl = true, sp = c.cyan })
-        hl(0, "DiagnosticUnderlineHint", { undercurl = true, sp = c.steel })
+        hl(0, "DiagnosticUnderlineHint", { undercurl = true, sp = c.hint_green })
+        hl(0, "DiagnosticUnderlineOk", { undercurl = true, sp = c.success })
         hl(0, "DiagnosticVirtualTextError", { fg = c.red, bg = c.bg_raised })
         hl(0, "DiagnosticVirtualTextWarn", { fg = c.warn, bg = c.bg_raised })
         hl(0, "DiagnosticVirtualTextInfo", { fg = c.cyan, bg = c.bg_raised })
-        hl(0, "DiagnosticVirtualTextHint", { fg = c.steel, bg = c.bg_raised })
+        hl(0, "DiagnosticVirtualTextHint", { fg = c.hint_green, bg = c.bg_raised })
+        hl(0, "DiagnosticVirtualTextOk", { fg = c.success, bg = c.bg_raised })
+        hl(0, "DiagnosticSignError", { fg = c.red })
+        hl(0, "DiagnosticSignWarn", { fg = c.warn })
+        hl(0, "DiagnosticSignInfo", { fg = c.cyan })
+        hl(0, "DiagnosticSignHint", { fg = c.hint_green })
+        hl(0, "DiagnosticSignOk", { fg = c.success })
 
         -- ── Git ───────────────────────────────────────────────────────
-        hl(0, "GitSignsAdd", { fg = c.green })
+        hl(0, "GitSignsAdd", { fg = c.success })
         hl(0, "GitSignsChange", { fg = c.teal })
         hl(0, "GitSignsDelete", { fg = c.red })
         hl(0, "DiffAdd", { bg = "{{ colors.surface_container_high.default.hex }}" })
@@ -329,7 +353,7 @@ return {
         hl(0, "NvimTreeOpenedFolderName", { fg = c.cyan, bold = true })
         hl(0, "NvimTreeRootFolder", { fg = c.cyan, bold = true })
         hl(0, "NvimTreeGitDirty", { fg = c.warn })
-        hl(0, "NvimTreeGitNew", { fg = c.green })
+        hl(0, "NvimTreeGitNew", { fg = c.success })
 
         -- ── Indent guides ─────────────────────────────────────────────
         hl(0, "IblIndent", { fg = c.hint })

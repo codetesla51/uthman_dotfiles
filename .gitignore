@@ -4,3 +4,5 @@
 *.key
 *.pem
 # screenshot.png is now tracked intentionally
+# control panel build artifact
+panel/panel

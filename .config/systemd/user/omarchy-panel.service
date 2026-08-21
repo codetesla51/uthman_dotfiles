@@ -1,0 +1,12 @@
+[Unit]
+Description=Omarchy Control Panel
+After=graphical-session.target
+
+[Service]
+ExecStart=%h/dotfiles/panel/panel
+WorkingDirectory=%h/dotfiles/panel
+Restart=on-failure
+Environment=PORT=8765
+
+[Install]
+WantedBy=default.target

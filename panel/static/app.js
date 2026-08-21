@@ -3,6 +3,10 @@ const $ = s => document.querySelector(s);
 const $$ = s => document.querySelectorAll(s);
 
 /* ── Toasts ── */
+function esc(s) {
+  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 function toast(msg, type = 'ok') {
   const el = document.createElement('div');
   el.className = 'toast ' + type;
@@ -1317,3 +1321,222 @@ loadRecentLogs(); setInterval(loadRecentLogs, 5000);
 loadSystemFacts();
 loadAppearance();
 window.addEventListener('resize', updateTermFont);
+
+// ════════════════════════════════════════════════
+// WiFi Manager (iwctl)
+// ════════════════════════════════════════════════
+
+let wifiTargetSSID = null;
+
+async function loadWifi() {
+  const el = $('#wifi-status'), nets = $('#wifi-nets');
+  if (!el) return;
+  try {
+    const s = await (await fetch('/api/wifi')).json();
+    const conn = s.connected
+      ? `<span style="color:var(--ok,#45a557)">● ${esc(s.connected)}</span>${s.ip ? ' · ' + esc(s.ip) : ''}`
+      : `<span class="dim">○ not connected</span>`;
+    el.innerHTML = `State: ${esc(s.state)} · ${conn}`;
+    if (!nets) return;
+    nets.innerHTML = '';
+    (s.networks || []).forEach(n => {
+      const row = document.createElement('div');
+      row.className = 'row gap8';
+      row.style.cssText = 'padding:5px 8px;border-radius:8px;cursor:pointer;align-items:center';
+      row.onmouseenter = () => row.style.background = 'rgba(128,128,128,.12)';
+      row.onmouseleave = () => row.style.background = '';
+      const bars = n.signal === '****' ? 'ph-wifi-high' : n.signal === '***' ? 'ph-wifi-medium' : 'ph-wifi-low';
+      const lock = n.security !== 'open' ? '<i class="ph ph-lock-simple" style="opacity:.6;font-size:11px"></i> ' : '';
+      const isConn = n.ssid === s.connected;
+      row.innerHTML = `<i class="ph ${bars}" style="font-size:15px"></i>
+        <span style="flex:1">${lock}${esc(n.ssid)}${isConn ? ' <span class="chip tiny">connected</span>' : ''}</span>
+        <span class="mono tiny dim">${esc(n.security)}</span>`;
+      row.onclick = () => {
+        if (isConn) return;
+        wifiTargetSSID = n.ssid;
+        $('#wifi-ssid-label').value = n.ssid + (n.security === 'open' ? '  (open network)' : '');
+        $('#wifi-pass').value = '';
+        $('#wifi-connect-row').style.display = 'flex';
+        if (n.security !== 'open') $('#wifi-pass').focus();
+      };
+      nets.appendChild(row);
+    });
+    if (!(s.networks || []).length) nets.innerHTML = '<span class="dim tiny">No networks — hit Scan</span>';
+  } catch { el.textContent = 'iwctl unavailable'; }
+}
+
+async function wifiScan(btn) {
+  if (btn) btn.innerHTML = '<i class="ph ph-circle-notch ph-spin"></i>';
+  try { await fetch('/api/wifi/scan', { method: 'POST' }); } catch {}
+  await loadWifi();
+  if (btn) btn.innerHTML = '<i class="ph ph-arrows-clockwise"></i> Scan';
+}
+
+function wifiCancelConnect() {
+  wifiTargetSSID = null;
+  const row = $('#wifi-connect-row'); if (row) row.style.display = 'none';
+}
+
+async function wifiConnect() {
+  if (!wifiTargetSSID) return;
+  const pass = $('#wifi-pass').value;
+  try {
+    const res = await fetch('/api/wifi/connect', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ssid: wifiTargetSSID, password: pass })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data.ok !== false) toast('Connected to ' + wifiTargetSSID);
+    else toast('Failed: ' + (data.error || res.statusText), true);
+  } catch (e) { toast('Failed: ' + e.message, true); }
+  wifiCancelConnect();
+  setTimeout(loadWifi, 1500);
+}
+
+// ════════════════════════════════════════════════
+// System Updates
+// ════════════════════════════════════════════════
+
+let updatePoller = null;
+
+async function loadUpdates() {
+  const el = $('#updates-summary'); if (!el) return;
+  try {
+    const u = await (await fetch('/api/updates')).json();
+    if (u.running) {
+      el.innerHTML = '<span class="chip">⏳ update in progress…</span>';
+      $('#btn-update-run').style.display = 'none';
+      startUpdateLogPolling();
+      return;
+    }
+    stopUpdateLogPolling();
+    if (!u.count) {
+      el.innerHTML = '<span style="color:var(--ok,#45a557)">✓ System is up to date</span>';
+      $('#btn-update-run').style.display = 'none';
+      return;
+    }
+    const top = u.packages.slice(0, 8).map(p => esc(p)).join('<br>');
+    el.innerHTML = `<b>${u.count} updates available</b><br><span class="tiny dim mono">${top}${u.count > 8 ? '<br>…' : ''}</span>`;
+    $('#btn-update-run').style.display = 'inline-block';
+  } catch { el.textContent = 'pacman unavailable'; }
+}
+
+function startUpdateLogPolling() {
+  if (updatePoller) return;
+  const pre = $('#update-log'); if (pre) pre.style.display = 'block';
+  updatePoller = setInterval(async () => {
+    try {
+      const d = await (await fetch('/api/updates/log')).json();
+      if (pre) { pre.textContent = d.log || ''; pre.scrollTop = pre.scrollHeight; }
+      if (!d.running) { stopUpdateLogPolling(); loadUpdates(); }
+    } catch {}
+  }, 2000);
+}
+
+function stopUpdateLogPolling() {
+  if (updatePoller) { clearInterval(updatePoller); updatePoller = null; }
+}
+
+async function runUpdate(btn) {
+  if (!confirm('Run full system upgrade (pacman -Syu)? This can take a while.')) return;
+  btn.disabled = true;
+  try {
+    const res = await fetch('/api/updates/run', { method: 'POST' });
+    if (!res.ok) { toast((await res.text()) || 'failed to start', true); btn.disabled = false; return; }
+    toast('System upgrade started');
+    $('#update-log').style.display = 'block';
+    startUpdateLogPolling();
+  } catch (e) { toast('Error: ' + e.message, true); }
+  btn.disabled = false;
+}
+
+// ════════════════════════════════════════════════
+// Snapper Snapshots
+// ════════════════════════════════════════════════
+
+async function loadSnapshots() {
+  const el = $('#snap-list'); if (!el) return;
+  try {
+    const d = await (await fetch('/api/snapshots')).json();
+    if (d.error && !(d.snapshots || []).length) {
+      el.innerHTML = `<span class="dim">snapper: ${esc(d.error)}</span>`;
+      return;
+    }
+    const snaps = (d.snapshots || []).filter(s => s.type === 'single' || s.type === 'pre' || s.type === 'post').slice(-30).reverse();
+    el.innerHTML = '';
+    snaps.forEach(s => {
+      const row = document.createElement('div');
+      row.className = 'row gap8';
+      row.style.cssText = 'padding:4px 6px;border-bottom:1px solid rgba(128,128,128,.1);align-items:center';
+      row.innerHTML = `<span class="chip tiny">#${s.num}</span>
+        <span class="tiny dim" style="width:110px">${esc(s.date)}</span>
+        <span class="tiny" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(s.description)}</span>
+        <button class="btn ghost sm" title="Rollback to #${s.num}" onclick="rollbackSnapshot(${s.num})"><i class="ph ph-arrow-u-up-left"></i></button>`;
+      el.appendChild(row);
+    });
+    if (!snaps.length) el.innerHTML = '<span class="dim">No snapshots yet</span>';
+  } catch { el.textContent = 'snapper unavailable'; }
+}
+
+async function createSnapshot() {
+  const inp = $('#snap-desc');
+  const desc = inp ? inp.value.trim() : '';
+  try {
+    const res = await fetch('/api/snapshots/create', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ description: desc })
+    });
+    if (!res.ok) throw new Error(await res.text());
+    toast('Snapshot created');
+    if (inp) inp.value = '';
+    loadSnapshots();
+  } catch (e) { toast('Create failed: ' + e.message.slice(0, 120), true); }
+}
+
+async function rollbackSnapshot(num) {
+  if (!confirm(`Rollback system to snapshot #${num}?\n\nFiles changed since then will be REVERTED. A new snapshot of the current state is taken first.`)) return;
+  try {
+    const res = await fetch('/api/snapshots/rollback', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ num })
+    });
+    if (!res.ok) throw new Error(await res.text());
+    toast('Rollback to #' + num + ' done');
+  } catch (e) { toast('Rollback failed: ' + e.message.slice(0, 120), true); }
+}
+
+// ════════════════════════════════════════════════
+// Dotfiles Git
+// ════════════════════════════════════════════════
+
+async function loadGit() {
+  const el = $('#git-status'); if (!el) return;
+  try {
+    const g = await (await fetch('/api/git')).json();
+    let badge = '';
+    if (g.dirty) badge += ` <span class="chip tiny">${g.dirty} uncommitted</span>`;
+    if (g.ahead) badge += ` <span class="chip tiny">↑${g.ahead}</span>`;
+    if (g.behind) badge += ` <span class="chip tiny">↓${g.behind}</span>`;
+    if (!g.dirty && !g.ahead && !g.behind) badge = ' <span style="color:var(--ok,#45a557)">✓ clean & synced</span>';
+    const recent = (g.recent || '').split('\n').map(l => esc(l)).join('<br>');
+    el.innerHTML = `<b>${esc(g.branch)}</b>${badge}<br><span class="tiny dim mono">${recent}</span>`;
+  } catch { el.textContent = 'git unavailable'; }
+}
+
+async function gitAction(action, btn) {
+  if (btn) btn.disabled = true;
+  try {
+    const res = await fetch('/api/git/' + action, { method: 'POST' });
+    const d = await res.json();
+    const pre = $('#git-output');
+    if (pre) { pre.style.display = 'block'; pre.textContent = (d.output || '(no output)').trim(); }
+    toast(action + (d.ok ? ' ok' : ' had issues'));
+    loadGit();
+  } catch (e) { toast('Error: ' + e.message, true); }
+  if (btn) btn.disabled = false;
+}
+
+loadWifi(); setInterval(loadWifi, 30000);
+loadUpdates();
+loadSnapshots();
+loadGit();

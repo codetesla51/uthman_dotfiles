@@ -802,6 +802,17 @@
           <div id="bt-list" class="mono tiny"></div>
         </div>
       </div>
+      <div class="card">
+        <div class="card-head"><span><i class="ph ph-wifi-tower-high"></i> WiFi Manager</span><button class="btn ghost sm" onclick="wifiScan(this)"><i class="ph ph-arrows-clockwise"></i> Scan</button></div>
+        <div id="wifi-status" class="mono tiny">Loading…</div>
+        <div id="wifi-connect-row" style="display:none;margin-top:10px" class="row gap8">
+          <input type="text" id="wifi-ssid-label" disabled class="mono tiny" style="flex:1">
+          <input type="password" id="wifi-pass" placeholder="password (empty = open)" autocomplete="off" style="flex:1.4">
+          <button class="btn sm" onclick="wifiConnect()">Connect</button>
+          <button class="btn ghost sm" onclick="wifiCancelConnect()">Cancel</button>
+        </div>
+        <div id="wifi-nets" style="margin-top:8px"></div>
+      </div>
     </section>
 
     <!-- ══════════ SYSTEM ══════════ -->
@@ -846,6 +857,31 @@
           <span><i class="ph ph-file"></i> mako/config</span>
           <span><i class="ph ph-file"></i> waybar/config.jsonc</span>
           <span><i class="ph ph-file"></i> local/bin/getTheme</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head"><span><i class="ph ph-git-branch"></i> Dotfiles Git</span><button class="btn ghost sm" onclick="loadGit()"><i class="ph ph-arrows-clockwise"></i></button></div>
+        <div id="git-status" class="mono tiny">Loading…</div>
+        <div class="row gap8" style="margin-top:10px">
+          <button class="btn sm" onclick="gitAction('pull',this)"><i class="ph ph-download-simple"></i> Pull</button>
+          <button class="btn sm" onclick="gitAction('push',this)"><i class="ph ph-upload-simple"></i> Push</button>
+        </div>
+        <pre id="git-output" class="mono tiny log-box" style="display:none;margin-top:8px;max-height:180px;overflow:auto"></pre>
+      </div>
+      <div class="grid2">
+        <div class="card">
+          <div class="card-head"><span><i class="ph ph-package"></i> System Updates</span><button class="btn ghost sm" onclick="loadUpdates()"><i class="ph ph-arrows-clockwise"></i></button></div>
+          <div id="updates-summary">Loading…</div>
+          <button id="btn-update-run" class="btn danger sm" style="margin-top:10px;display:none" onclick="runUpdate(this)"><i class="ph ph-arrow-circle-up"></i> Update now (pacman -Syu)</button>
+          <pre id="update-log" class="mono tiny log-box" style="display:none;margin-top:8px;max-height:220px;overflow:auto"></pre>
+        </div>
+        <div class="card">
+          <div class="card-head"><span><i class="ph ph-camera"></i> Snapper Snapshots</span><button class="btn ghost sm" onclick="loadSnapshots()"><i class="ph ph-arrows-clockwise"></i></button></div>
+          <div class="row gap8" style="margin-bottom:8px">
+            <input type="text" id="snap-desc" placeholder="description…" style="flex:1">
+            <button class="btn sm" onclick="createSnapshot()"><i class="ph ph-plus"></i> Create</button>
+          </div>
+          <div id="snap-list" class="mono tiny">Loading…</div>
         </div>
       </div>
     </section>

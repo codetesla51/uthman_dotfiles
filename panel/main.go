@@ -3,6 +3,7 @@ package main
 import (
 	"archive/zip"
 	"bufio"
+	"context"
 	"embed"
 	"encoding/json"
 	"fmt"
@@ -87,6 +88,19 @@ func main() {
 	mux.HandleFunc("/api/mako", handleMako)
 	mux.HandleFunc("/api/waybar", handleWaybar)
 	mux.HandleFunc("/api/nightlight", handleNightlight)
+	mux.HandleFunc("/api/wifi", handleWifiStatus)
+	mux.HandleFunc("/api/wifi/scan", handleWifiScan)
+	mux.HandleFunc("/api/wifi/connect", handleWifiConnect)
+	mux.HandleFunc("/api/wifi/disconnect", handleWifiDisconnect)
+	mux.HandleFunc("/api/updates", handleUpdates)
+	mux.HandleFunc("/api/updates/run", handleUpdatesRun)
+	mux.HandleFunc("/api/updates/log", handleUpdatesLog)
+	mux.HandleFunc("/api/snapshots", handleSnapshots)
+	mux.HandleFunc("/api/snapshots/create", handleSnapshotCreate)
+	mux.HandleFunc("/api/snapshots/rollback", handleSnapshotRollback)
+	mux.HandleFunc("/api/git", handleGitStatus)
+	mux.HandleFunc("/api/git/pull", handleGitPull)
+	mux.HandleFunc("/api/git/push", handleGitPush)
 	mux.HandleFunc("/wallpaper/", handleWallpaperImage)
 
 	staticContent, _ := fs.Sub(staticFS, "static")
@@ -104,6 +118,336 @@ func main() {
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	log.Fatal(server.ListenAndServe())
+}
+
+// ── WiFi (iwctl) ────────────────────────────────────────────────────────────
+
+type WifiNet struct {
+	SSID     string `json:"ssid"`
+	Security string `json:"security"`
+	Signal   string `json:"signal"`
+	Known    bool   `json:"known"`
+}
+
+type WifiStatus struct {
+	State    string     `json:"state"`
+	Connected string    `json:"connected"`
+	IP       string     `json:"ip"`
+	Networks []WifiNet  `json:"networks"`
+}
+
+var ansiRe = regexp.MustCompile("\x1b\\[[0-9;]*[a-zA-Z]")
+
+func iwctl(args ...string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "iwctl", args...).CombinedOutput()
+	return ansiRe.ReplaceAllLiteralString(string(out), ""), err
+}
+
+func parseWifiNetworks(out string) []WifiNet {
+	nets := []WifiNet{}
+	re := regexp.MustCompile(`^>?\s*(.+?)\s{2,}(open|psk|8021x|wep|hidden)\s+(\S+)\s*$`)
+	for _, line := range strings.Split(out, "\n") {
+		line = strings.TrimSpace(line)
+		if m := re.FindStringSubmatch(line); m != nil {
+			nets = append(nets, WifiNet{SSID: strings.TrimSpace(m[1]), Security: m[2], Signal: m[3]})
+		}
+	}
+	return nets
+}
+
+func handleWifiStatus(w http.ResponseWriter, r *http.Request) {
+	st := WifiStatus{State: "unknown", Networks: []WifiNet{}}
+	if out, err := iwctl("station", "wlan0", "show"); err == nil {
+		for _, line := range strings.Split(out, "\n") {
+			line = strings.TrimSpace(line)
+			if v, ok := strings.CutPrefix(line, "State"); ok {
+				st.State = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(v), ""))
+			} else if v, ok := strings.CutPrefix(line, "Connected network"); ok {
+				st.Connected = strings.TrimSpace(v)
+			} else if v, ok := strings.CutPrefix(line, "IPv4 address"); ok {
+				st.IP = strings.TrimSpace(v)
+			}
+		}
+	}
+	if out, err := iwctl("station", "wlan0", "get-networks"); err == nil {
+		st.Networks = parseWifiNetworks(out)
+	}
+	jsonOK(w, st)
+}
+
+func handleWifiScan(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST only", http.StatusMethodNotAllowed)
+		return
+	}
+	_, _ = iwctl("station", "wlan0", "scan", "on")
+	time.Sleep(2500) // let iwd collect results
+	jsonOK(w, map[string]bool{"ok": true})
+}
+
+func handleWifiConnect(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST only", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		SSID     string `json:"ssid"`
+		Password string `json:"password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	req.SSID = sanitizeField(req.SSID)
+	req.Password = sanitizeField(req.Password)
+	if req.SSID == "" || hasUnsafeChars(req.SSID) || hasUnsafeChars(req.Password) {
+		http.Error(w, "invalid ssid or password", http.StatusBadRequest)
+		return
+	}
+	var out string
+	var err error
+	if req.Password == "" {
+		out, err = iwctl("station", "wlan0", "connect", req.SSID)
+	} else {
+		tmp, terr := os.CreateTemp("", "iwpass-*")
+		if terr != nil {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		tmp.WriteString(req.Password)
+		tmp.Close()
+		defer os.Remove(tmp.Name())
+		out, err = iwctl("--passfile", tmp.Name(), "station", "wlan0", "connect", req.SSID)
+	}
+	if err != nil {
+		msg := strings.TrimSpace(out)
+		if msg == "" {
+			msg = "connection failed"
+		}
+		jsonOK(w, map[string]string{"ok": "false", "error": msg})
+		return
+	}
+	jsonOK(w, map[string]bool{"ok": true})
+}
+
+func handleWifiDisconnect(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST only", http.StatusMethodNotAllowed)
+		return
+	}
+	_, _ = iwctl("station", "wlan0", "disconnect")
+	jsonOK(w, map[string]bool{"ok": true})
+}
+
+// ── System updates (pacman) ─────────────────────────────────────────────
+
+var updateMu sync.Mutex
+var updateRunning bool
+const updateLogPath = "/tmp/omarchy-panel-update.log"
+
+func listUpdates() []string {
+	out, err := exec.Command("pacman", "-Qu").Output()
+	if err != nil {
+		return []string{}
+	}
+	pkgs := []string{}
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if line != "" {
+			pkgs = append(pkgs, line)
+		}
+	}
+	return pkgs
+}
+
+func handleUpdates(w http.ResponseWriter, r *http.Request) {
+	updateMu.Lock()
+	running := updateRunning
+	updateMu.Unlock()
+	jsonOK(w, map[string]interface{}{"count": len(listUpdates()), "packages": listUpdates(), "running": running})
+}
+
+func handleUpdatesRun(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST only", http.StatusMethodNotAllowed)
+		return
+	}
+	updateMu.Lock()
+	if updateRunning {
+		updateMu.Unlock()
+		http.Error(w, "update already running", http.StatusConflict)
+		return
+	}
+	updateRunning = true
+	updateMu.Unlock()
+
+	logFile, _ := os.Create(updateLogPath)
+	go func() {
+		defer logFile.Close()
+		cmd := exec.Command("sudo", "-n", "/usr/bin/pacman", "-Syu", "--noconfirm")
+		cmd.Stdout = logFile
+		cmd.Stderr = logFile
+		_ = cmd.Run()
+		logFile.WriteString("\n[UPDATE FINISHED]\n")
+		updateMu.Lock()
+		updateRunning = false
+		updateMu.Unlock()
+	}()
+	jsonOK(w, map[string]bool{"started": true})
+}
+
+func handleUpdatesLog(w http.ResponseWriter, r *http.Request) {
+	updateMu.Lock()
+	running := updateRunning
+	updateMu.Unlock()
+	data, _ := os.ReadFile(updateLogPath)
+	logTxt := string(data)
+	if len(logTxt) > 12000 {
+		logTxt = logTxt[len(logTxt)-12000:]
+	}
+	jsonOK(w, map[string]interface{}{"running": running, "log": logTxt})
+}
+
+// ── Snapper snapshots ─────────────────────────────────────────────────
+
+type Snapshot struct {
+	Num         int    `json:"num"`
+	Type        string `json:"type"`
+	Date        string `json:"date"`
+	Description string `json:"description"`
+}
+
+func snapper(args ...string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	full := append([]string{"-n", "/usr/bin/snapper", "-c", "root"}, args...)
+	out, err := exec.CommandContext(ctx, "sudo", full...).CombinedOutput()
+	return string(out), err
+}
+
+func handleSnapshots(w http.ResponseWriter, r *http.Request) {
+	out, err := snapper("list")
+	if err != nil {
+		jsonOK(w, map[string]interface{}{"error": strings.TrimSpace(out), "snapshots": []Snapshot{}})
+		return
+	}
+	snaps := []Snapshot{}
+	for _, line := range strings.Split(out, "\n") {
+		f := strings.Fields(line)
+		// # Type Pre# Date User Cleanup Description Userdata
+		if len(f) >= 7 && f[0] != "#" {
+			num, nerr := strconv.Atoi(f[0])
+			if nerr != nil {
+				continue
+			}
+			desc := f[6]
+			if len(f) > 7 {
+				desc = strings.Join(f[6:len(f)-1], " ")
+			}
+			snaps = append(snaps, Snapshot{Num: num, Type: f[1], Date: f[3] + " " + f[4], Description: desc})
+		}
+	}
+	jsonOK(w, map[string]interface{}{"snapshots": snaps})
+}
+
+func handleSnapshotCreate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST only", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		Description string `json:"description"`
+	}
+	json.NewDecoder(r.Body).Decode(&req)
+	req.Description = sanitizeField(req.Description)
+	if hasUnsafeChars(req.Description) {
+		http.Error(w, "invalid description", http.StatusBadRequest)
+		return
+	}
+	if req.Description == "" {
+		req.Description = "manual snapshot"
+	}
+	out, err := snapper("create", "--description", req.Description)
+	if err != nil {
+		http.Error(w, strings.TrimSpace(out), http.StatusInternalServerError)
+		return
+	}
+	jsonOK(w, map[string]bool{"ok": true})
+}
+
+func handleSnapshotRollback(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST only", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		Num int `json:"num"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Num <= 0 {
+		http.Error(w, "invalid snapshot number", http.StatusBadRequest)
+		return
+	}
+	out, err := snapper("rollback", strconv.Itoa(req.Num))
+	if err != nil {
+		http.Error(w, strings.TrimSpace(out), http.StatusInternalServerError)
+		return
+	}
+	jsonOK(w, map[string]bool{"ok": true})
+}
+
+// ── Dotfiles git ──────────────────────────────────────────────────────
+
+func gitDotfiles(args ...string) (string, error) {
+	cmd := exec.Command("git", args...)
+	cmd.Dir = "/home/uthman/dotfiles"
+	out, err := cmd.CombinedOutput()
+	return string(out), err
+}
+
+func handleGitStatus(w http.ResponseWriter, r *http.Request) {
+	branch, _ := gitDotfiles("rev-parse", "--abbrev-ref", "HEAD")
+	porcelain, _ := gitDotfiles("status", "--porcelain")
+	dirty := 0
+	for _, l := range strings.Split(strings.TrimSpace(porcelain), "\n") {
+		if l != "" {
+			dirty++
+		}
+	}
+	aheadBehind, _ := gitDotfiles("rev-list", "--left-right", "--count", "origin/master...HEAD")
+	ahead, behind := 0, 0
+	fmt.Sscanf(strings.TrimSpace(aheadBehind), "%d %d", &behind, &ahead)
+	recent, _ := gitDotfiles("log", "--oneline", "-5")
+	jsonOK(w, map[string]interface{}{
+		"branch": strings.TrimSpace(branch), "dirty": dirty,
+		"ahead": ahead, "behind": behind,
+		"recent": strings.TrimSpace(recent),
+	})
+}
+
+func runGitAction(w http.ResponseWriter, args ...string) {
+	out, err := gitDotfiles(args...)
+	if err != nil {
+		jsonOK(w, map[string]interface{}{"ok": false, "output": out})
+		return
+	}
+	jsonOK(w, map[string]interface{}{"ok": true, "output": out})
+}
+
+func handleGitPull(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST only", http.StatusMethodNotAllowed)
+		return
+	}
+	runGitAction(w, "pull", "--ff-only")
+}
+
+func handleGitPush(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST only", http.StatusMethodNotAllowed)
+		return
+	}
+	runGitAction(w, "push")
 }
 
 // ── Helpers ──

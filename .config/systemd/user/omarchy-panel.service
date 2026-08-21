@@ -7,7 +7,7 @@ ExecStart=/home/uthman/omarchy-control-panel/panel
 WorkingDirectory=/home/uthman/omarchy-control-panel
 Restart=on-failure
 Environment=PORT=8765
-Environment=PATH=/home/uthman/.local/bin:/usr/local/bin:/usr/bin:/bin
+Environment=PATH=/home/uthman/.local/bin:/home/uthman/.local/share/omarchy/bin:/usr/local/bin:/usr/bin:/bin
 Environment=WAYLAND_DISPLAY=wayland-1
 
 [Install]

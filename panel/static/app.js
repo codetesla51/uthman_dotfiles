@@ -40,8 +40,8 @@ function setTab(name) {
   if (name === 'binds') { loadKeybinds(); loadAutostart(); }
   if (name === 'fonts') { loadFonts(); }
   if (name === 'appearance') { loadAppearance(); }
-  if (name === 'devices') { loadMonitors(); loadAudio(); loadBrightness(); loadMako(); loadWaybar(); loadNightlight(); loadNetwork(); loadDND(); loadBluetooth(); }
-  if (name === 'system') loadSystemInfo();
+  if (name === 'devices') { loadMonitors(); loadAudio(); loadBrightness(); loadMako(); loadWaybar(); loadNightlight(); loadNetwork(); loadDND(); loadBluetooth(); loadWifi(); }
+  if (name === 'system') { loadSystemInfo(); loadUpdates(); loadSnapshots(); loadGit(); }
   window.scrollTo({ top: 0 });
 }
 $$('.nav li, .top-nav .nav-item').forEach(li => {
@@ -1367,6 +1367,8 @@ async function loadWifi() {
 
 async function wifiScan(btn) {
   if (btn) btn.innerHTML = '<i class="ph ph-circle-notch ph-spin"></i>';
+  const nets = $('#wifi-nets');
+  if (nets) nets.innerHTML = '<span class="dim tiny"><i class="ph ph-circle-notch ph-spin"></i> Scanning…</span>';
   try { await fetch('/api/wifi/scan', { method: 'POST' }); } catch {}
   await loadWifi();
   if (btn) btn.innerHTML = '<i class="ph ph-arrows-clockwise"></i> Scan';
@@ -1536,7 +1538,4 @@ async function gitAction(action, btn) {
   if (btn) btn.disabled = false;
 }
 
-loadWifi(); setInterval(loadWifi, 30000);
-loadUpdates();
-loadSnapshots();
-loadGit();
+setInterval(() => { if ($('#tab-devices')?.classList.contains('active')) loadWifi(); }, 30000);

@@ -139,7 +139,7 @@ type WifiStatus struct {
 var ansiRe = regexp.MustCompile("\x1b\\[[0-9;]*[a-zA-Z]")
 
 func iwctl(args ...string) (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	out, err := exec.CommandContext(ctx, "iwctl", args...).CombinedOutput()
 	return ansiRe.ReplaceAllLiteralString(string(out), ""), err
@@ -183,7 +183,7 @@ func handleWifiScan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_, _ = iwctl("station", "wlan0", "scan", "on")
-	time.Sleep(2500) // let iwd collect results
+	time.Sleep(1500) // let iwd collect results
 	jsonOK(w, map[string]bool{"ok": true})
 }
 
@@ -247,17 +247,28 @@ var updateMu sync.Mutex
 var updateRunning bool
 const updateLogPath = "/tmp/omarchy-panel-update.log"
 
+// cached update list — pacman -Qu reads the whole local db (~700ms)
+var updCacheMu sync.Mutex
+var updCacheList []string
+var updCacheAt time.Time
+
 func listUpdates() []string {
-	out, err := exec.Command("pacman", "-Qu").Output()
-	if err != nil {
-		return []string{}
+	updCacheMu.Lock()
+	defer updCacheMu.Unlock()
+	if updCacheList != nil && time.Since(updCacheAt) < 90*time.Second {
+		return updCacheList
 	}
+	out, err := exec.Command("pacman", "-Qu").Output()
 	pkgs := []string{}
-	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
-		if line != "" {
-			pkgs = append(pkgs, line)
+	if err == nil {
+		for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+			if line != "" {
+				pkgs = append(pkgs, line)
+			}
 		}
 	}
+	updCacheList = pkgs
+	updCacheAt = time.Now()
 	return pkgs
 }
 

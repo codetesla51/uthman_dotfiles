@@ -633,3 +633,11 @@ canvas{max-width:100%!important}
 /* ambient glows */
 .ring{transition:background .5s ease, box-shadow .5s ease}
 .card.metric .spark canvas{filter:drop-shadow(0 4px 10px rgba(59,130,246,.08))}
+
+/* live tweak preview chip */
+#tw-live{
+  display:inline-flex;align-items:center;gap:6px;margin-left:10px;
+  color:#e3b341;font-size:10px;letter-spacing:.06em;text-transform:uppercase;
+  animation:pulse-soft 1.6s ease-in-out infinite;
+}
+@keyframes pulse-soft{0%,100%{opacity:.65}50%{opacity:1}}

@@ -1217,6 +1217,7 @@ func handleMatugen(w http.ResponseWriter, r *http.Request) {
 		}
 		go func() {
 			_ = exec.Command("bash", "-c", expand("~/.local/bin/getTheme")+" >/tmp/getTheme.log 2>&1").Run()
+			reapplyTweakNow()
 		}()
 		jsonOK(w, map[string]string{"status": "regenerating"})
 	default:
@@ -1294,6 +1295,7 @@ func handleWallpaperSet(w http.ResponseWriter, r *http.Request) {
 	}
 	go func() {
 		_ = exec.Command("bash", "-c", fmt.Sprintf("%s %q >/tmp/set-wallpaper.log 2>&1", expand("~/.local/bin/set-wallpaper"), found)).Run()
+		reapplyTweakNow()
 	}()
 	jsonOK(w, map[string]string{"status": "changing", "path": found})
 }
@@ -2235,6 +2237,9 @@ func handleReload(w http.ResponseWriter, r *http.Request) {
 		jsonErr(w, err.Error(), 500)
 		return
 	}
+	if target == "matugen" {
+		reapplyTweakNow()
+	}
 	jsonOK(w, map[string]string{"status": "ok", "target": target})
 }
 
@@ -2703,6 +2708,17 @@ func shiftThemeDir(t Tweak) {
 	for _, p := range themeExtraFiles() {
 		shiftHexInFile(p, t)
 	}
+}
+
+// reapplyTweakNow re-applies the stored color tweak immediately after a
+// getTheme run has finished, so the tweak survives wallpaper/matugen changes.
+func reapplyTweakNow() {
+	t := readTweak()
+	if t.Hue == 0 && t.Sat == 1 && t.Bright == 1 {
+		return
+	}
+	shiftThemeDir(t)
+	exec.Command("bash", "-c", "omarchy-restart-waybar >/dev/null 2>&1; pkill -SIGUSR2 -x ghostty || true; true").Run()
 }
 
 var hexRe = regexp.MustCompile(`#[0-9a-fA-F]{6}\b`)

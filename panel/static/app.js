@@ -1187,6 +1187,9 @@ async function loadAppearance() {
   try {
     const d = await api('/api/appearance');
     const t = d.tweak || {};
+    window._palRaw = d.palette || {};
+    window._savedTweak = { hue: t.hue || 0, sat: t.sat ?? 1, bright: t.bright ?? 1 };
+    document.body.style.filter = ''; $('#tw-live')?.remove();
     $('#r-hue').value = t.hue || 0; $('#o-hue').textContent = (t.hue || 0) + '°';
     $('#r-sat').value = Math.round((t.sat ?? 1) * 100); $('#o-sat').textContent = Math.round((t.sat ?? 1) * 100) + '%';
     $('#r-bright').value = Math.round((t.bright ?? 1) * 100); $('#o-bri2').textContent = Math.round((t.bright ?? 1) * 100) + '%';
@@ -1211,11 +1214,36 @@ function updateTwState(t) {
   $('#tw-state').textContent = neutral ? 'neutral' : `hue ${t.hue}° · sat ${Math.round(t.sat * 100)}% · bri ${Math.round(t.bright * 100)}%`;
   ['#o-hue'].forEach(s => {});
 }
-['r-hue', 'r-sat', 'r-bright'].forEach(id => $('#' + id)?.addEventListener('input', () => {
-  $('#o-hue').textContent = $('#r-hue').value + '°';
-  $('#o-sat').textContent = $('#r-sat').value + '%';
-  $('#o-bri2').textContent = $('#r-bright').value + '%';
-}));
+function savedTweak() { return window._savedTweak || { hue: 0, sat: 1, bright: 1 }; }
+function tweakIsDirty() {
+  const s = savedTweak();
+  return +$('#r-hue').value !== s.hue || +$('#r-sat').value / 100 !== s.sat || +$('#r-bright').value / 100 !== s.bright;
+}
+// live whole-site preview: CSS filter approximates the shift instantly
+function updateTweakPreview() {
+  const hue = +$('#r-hue').value, sat = +$('#r-sat').value / 100, bri = +$('#r-bright').value / 100;
+  $('#o-hue').textContent = hue + '°';
+  $('#o-sat').textContent = Math.round(sat * 100) + '%';
+  $('#o-bri2').textContent = Math.round(bri * 100) + '%';
+  // after-swatch preview
+  const before = pickPal(window._palRaw || {});
+  const after = shiftClient(before, hue, sat, bri);
+  $('#tw-after').innerHTML = after.map(c => `<i style="background:${c}"></i>`).join('');
+  // whole-page approximation preview
+  if (tweakIsDirty()) {
+    document.body.style.filter = `hue-rotate(${hue}deg) saturate(${sat}) brightness(${bri})`;
+    $('#tw-live')?.remove();
+    const chip = document.createElement('div');
+    chip.id = 'tw-live';
+    chip.className = 'mono tiny';
+    chip.textContent = '● LIVE PREVIEW — hit Apply to make it real';
+    $('.actions .status')?.after?.(chip);
+  } else {
+    document.body.style.filter = '';
+    $('#tw-live')?.remove();
+  }
+}
+['r-hue', 'r-sat', 'r-bright'].forEach(id => $('#' + id)?.addEventListener('input', updateTweakPreview));
 async function applyTweak(btn) {
   btn.disabled = true;
   try {
@@ -1224,6 +1252,7 @@ async function applyTweak(btn) {
       sat: +$('#r-sat').value / 100,
       bright: +$('#r-bright').value / 100
     }));
+    document.body.style.filter = ''; $('#tw-live')?.remove();
     updateTwState(res.tweak);
     toast('Theme shifted · apps reloaded'); 
     loadTheme(); loadAppearance();

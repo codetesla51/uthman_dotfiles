@@ -511,7 +511,7 @@ PanelWindow {
                     property bool isConnecting: root.connectingSsid === modelData.name.trim()
 
                     width: netList.width - 8
-                    height: askPw ? 106 : 44
+                    height: askPw ? 120 : 44
                     radius: 10
                     color: hovered ? colors.alpha(colors.surfaceVariant, 0.3) : "transparent"
                     border.width: modelData.connected ? 1 : 0
@@ -590,33 +590,39 @@ PanelWindow {
                             TextField {
                                 id: pwField
                                 Layout.fillWidth: true
+                                implicitHeight: 36
+                                leftPadding: 12
+                                rightPadding: 12
+                                topPadding: 8
+                                bottomPadding: 8
                                 echoMode: TextInput.Password
                                 font.family: "FiraCode Nerd Font"
-                                font.pixelSize: 11
+                                font.pixelSize: 12
                                 color: colors.foreground
-                                placeholderText: "network password"
-                                placeholderTextColor: colors.alpha(colors.outline, 0.5)
+                                placeholderText: "Enter WiFi password…"
+                                placeholderTextColor: colors.alpha(colors.outline,0.6)
                                 background: Rectangle {
-                                    radius: 8
-                                    color: colors.alpha(colors.surface, 0.7)
+                                    radius: 10
+                                    color: colors.alpha(colors.surface, 0.85)
                                     border.width: 1
-                                    border.color: colors.alpha(colors.primary, 0.3)
+                                    border.color: pwField.activeFocus ? colors.alpha(colors.primary,0.5) : colors.alpha(colors.primary,0.3)
+                                    Behavior on border.color { ColorAnimation { duration: 150 } }
                                 }
                                 onAccepted: joinTap.tap()
                             }
 
                             Rectangle {
-                                width: 60; height: 28; radius: 8
-                                color: pwField.text.length >= 8 ? colors.alpha(colors.primary, 0.25)
-                                                                : colors.alpha(colors.surfaceVariant, 0.3)
-
+                                width: 64; height: 36; radius: 10
+                                color: pwField.text.length >= 8 ? colors.primary : colors.alpha(colors.surfaceVariant,0.35)
+                                border.width: 1
+                                border.color: pwField.text.length >= 8 ? colors.primary : colors.alpha(colors.outline,0.15)
                                 Text {
                                     anchors.centerIn: parent
                                     text: "Join"
-                                    color: pwField.text.length >= 8 ? colors.primary : colors.alpha(colors.outline, 0.5)
+                                    color: pwField.text.length >= 8 ? colors.background : colors.alpha(colors.outline,0.6)
                                     font.family: "FiraCode Nerd Font"
-                                    font.pixelSize: 10
-                                    font.weight: Font.DemiBold
+                                    font.pixelSize: 11
+                                    font.weight: Font.Bold
                                 }
 
                                 TapHandler {
@@ -645,12 +651,15 @@ PanelWindow {
                         id: rowArea
                         anchors.fill: parent
                         hoverEnabled: true
+                        enabled: !askPw
+                        propagateComposedEvents: true
                         onClicked: {
                             if (modelData.connected) return
                             if (!modelData.security || modelData.security === WifiSecurityType.None || modelData.known) {
                                 root.connectTo(modelData)
                             } else {
                                 askPw = !askPw
+                                if (askPw) Qt.callLater(function(){ pwField.forceActiveFocus() })
                             }
                         }
                     }

@@ -9,6 +9,7 @@ Item {
     property var colors
     property bool altFormat: false
     property bool hovered: clockMouse.containsMouse
+    signal pinRequested()
 
     SystemClock {
         id: clock
@@ -49,7 +50,11 @@ Item {
             id: clockMouse
             anchors.fill: parent
             hoverEnabled: true
-            onClicked: root.altFormat = !root.altFormat
+            acceptedButtons: Qt.LeftButton | Qt.RightButton
+            onClicked: function(mouse){
+                if (mouse.button === Qt.RightButton) root.altFormat = !root.altFormat
+                else root.pinRequested()
+            }
         }
     }
 }

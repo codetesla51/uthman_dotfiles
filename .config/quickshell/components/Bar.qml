@@ -27,6 +27,10 @@ PanelWindow {
     WifiPanel { id: wifiPanel; colors: palette }
     SystemMonitor { id: sysMon; colors: palette }
     BatteryPanel { id: batPanel; colors: palette }
+    ClipboardPanel { id: clipPanel; colors: palette }
+    ThemePanel { id: themePanel; colors: palette }
+    FastFetchWindow { id: fastFetch; colors: palette }
+    KeybindsPanel { id: keybindsPanel; colors: palette }
 
     CalendarPanel {
         id: calendarPanel

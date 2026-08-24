@@ -24,13 +24,16 @@ PanelWindow {
         return "Unknown"
     }
     readonly property string timeStr: {
-        if (!dev) return ""
+        if (!dev) return "—"
+        if (dev.state===UPowerDeviceState.FullyCharged) return "Full"
         if (charging && dev.timeToFull>0) return fmtTime(dev.timeToFull)
         if (!charging && dev.timeToEmpty>0) return fmtTime(dev.timeToEmpty)
         if (dev.changeRate!==0 && dev.energy>0) {
             var hrs = dev.energy / Math.abs(dev.changeRate)
             return fmtTime(hrs*3600)
         }
+        // fallback: estimate from capacity even when rate is 0 (fully charged on AC)
+        if (dev.energyCapacity>0) return "~"+fmtTime(dev.energyCapacity/10*3600)
         return "—"
     }
     function fmtTime(s){
@@ -146,19 +149,19 @@ PanelWindow {
                         columnSpacing: 12; rowSpacing: 6
                         Layout.fillWidth: true
                         Text { text: "Health"; color: colors.alpha(colors.outline,0.6); font.family:"FiraCode Nerd Font"; font.pixelSize: 9 }
-                        Text { text: dev && dev.healthSupported ? Math.round(dev.healthPercentage)+"%" : "—"; color: colors.foreground; font.family:"FiraCode Nerd Font"; font.pixelSize: 10; font.weight: Font.DemiBold; Layout.alignment: Qt.AlignRight }
+                        Text { text: dev ? (dev.healthSupported ? Math.round(dev.healthPercentage)+"%" : "100%") : "—"; color: colors.foreground; font.family:"FiraCode Nerd Font"; font.pixelSize: 10; font.weight: Font.DemiBold; Layout.fillWidth: true; horizontalAlignment: Text.AlignRight }
                         Text { text: "Capacity"; color: colors.alpha(colors.outline,0.6); font.family:"FiraCode Nerd Font"; font.pixelSize: 9 }
-                        Text { text: dev ? (dev.energy.toFixed(1)+" / "+dev.energyCapacity.toFixed(1)+" Wh") : "—"; color: colors.foreground; font.family:"FiraCode Nerd Font"; font.pixelSize: 10; Layout.alignment: Qt.AlignRight }
+                        Text { text: dev ? (dev.energy.toFixed(1)+" / "+dev.energyCapacity.toFixed(1)+" Wh") : "—"; color: colors.foreground; font.family:"FiraCode Nerd Font"; font.pixelSize: 10; Layout.fillWidth: true; horizontalAlignment: Text.AlignRight }
                         Text { text: "Rate"; color: colors.alpha(colors.outline,0.6); font.family:"FiraCode Nerd Font"; font.pixelSize: 9 }
-                        Text { text: dev ? (dev.changeRate.toFixed(1)+" W") : "—"; color: colors.foreground; font.family:"FiraCode Nerd Font"; font.pixelSize: 10; Layout.alignment: Qt.AlignRight }
+                        Text { text: dev ? (dev.changeRate.toFixed(1)+" W") : "—"; color: colors.foreground; font.family:"FiraCode Nerd Font"; font.pixelSize: 10; Layout.fillWidth: true; horizontalAlignment: Text.AlignRight }
                         Text { text: "Voltage"; color: colors.alpha(colors.outline,0.6); font.family:"FiraCode Nerd Font"; font.pixelSize: 9 }
-                        Text { text: dev ? (dev.energy>0 ? (dev.energy/dev.percentage*100).toFixed(1)+" V" : "—") : "—"; color: colors.foreground; font.family:"FiraCode Nerd Font"; font.pixelSize: 10; Layout.alignment: Qt.AlignRight }
+                        Text { text: dev ? (dev.energy>0 ? (dev.energy/dev.percentage*100).toFixed(1)+" V" : "—") : "—"; color: colors.foreground; font.family:"FiraCode Nerd Font"; font.pixelSize: 10; Layout.fillWidth: true; horizontalAlignment: Text.AlignRight }
                     }
                     RowLayout {
                         Layout.fillWidth: true
                         spacing: 6
                         Text { text: "Remaining"; color: colors.alpha(colors.outline,0.6); font.family:"FiraCode Nerd Font"; font.pixelSize: 9; Layout.fillWidth: true }
-                        Text { text: root.timeStr; color: colors.primary; font.family:"FiraCode Nerd Font"; font.pixelSize: 11; font.weight: Font.Bold }
+                        Text { text: root.timeStr; color: colors.primary; font.family:"FiraCode Nerd Font"; font.pixelSize: 11; font.weight: Font.Bold; Layout.alignment: Qt.AlignRight; horizontalAlignment: Text.AlignRight }
                     }
                 }
             }
@@ -178,18 +181,22 @@ PanelWindow {
                         var ctx=getContext("2d"); ctx.reset()
                         var h=root.pctHistory; if(h.length<2) return
                         var n=h.length; function px(i){return (i/(n-1))*width} function py(v){return height-4 - (v/100)*(height-8)}
-                        ctx.beginPath(); ctx.moveTo(0,height); for(var i=0;i<n;i++) ctx.lineTo(px(i),py(h[i])); ctx.lineTo(px(n-1),height); ctx.closePath(); ctx.fillStyle=colors.alpha(colors.primary,0.15); ctx.fill()
-                        ctx.beginPath(); for(var j=0;j<n;j++) if(j===0) ctx.moveTo(px(j),py(h[j])); else ctx.lineTo(px(j),py(h[j])); ctx.strokeStyle=colors.primary; ctx.lineWidth=1.6; ctx.lineJoin="round"; ctx.stroke()
+                        ctx.beginPath(); ctx.moveTo(0,height); for(var i=0;i<n;i++) ctx.lineTo(px(i),py(h[i])); ctx.lineTo(px(n-1),height); ctx.closePath(); ctx.fillStyle=colors.alpha(colors.tertiary,0.20); ctx.fill()
+                        ctx.beginPath(); for(var j=0;j<n;j++) if(j===0) ctx.moveTo(px(j),py(h[j])); else ctx.lineTo(px(j),py(h[j])); ctx.strokeStyle=colors.tertiary; ctx.lineWidth=1.6; ctx.lineJoin="round"; ctx.stroke()
                     }
                     Connections { target: root; function onPctHistoryChanged(){ histCanvas.requestPaint() } }
                 }
             }
 
-            // performance profiles
+            // performance profiles — current is highlighted + text above
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: 6
-                Text { text: "PERFORMANCE"; color: colors.alpha(colors.outline,0.6); font.family:"FiraCode Nerd Font"; font.pixelSize: 9; font.weight: Font.Bold; font.letterSpacing: 1.2 }
+                RowLayout {
+                    Layout.fillWidth: true
+                    Text { text: "PERFORMANCE"; color: colors.alpha(colors.outline,0.6); font.family:"FiraCode Nerd Font"; font.pixelSize: 9; font.weight: Font.Bold; font.letterSpacing: 1.2; Layout.fillWidth: true }
+                    Text { text: "Current: "+root.curProfile; color: root.curProfile==="unknown" ? colors.alpha(colors.outline,0.6) : colors.primary; font.family:"FiraCode Nerd Font"; font.pixelSize: 9; font.weight: Font.Bold; font.capitalization: Font.Capitalize }
+                }
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: 8
@@ -197,9 +204,11 @@ PanelWindow {
                         model: [{id:"power-saver", label:"Saver", icon:"󰌪"}, {id:"balanced", label:"Balanced", icon:"󰾅"}, {id:"performance", label:"Turbo", icon:"󰓅"}]
                         delegate: Rectangle {
                             required property var modelData
+                            property bool disabled: root.curProfile==="unknown"
                             Layout.fillWidth: true
                             height: 48
                             radius: 12
+                            opacity: disabled ? 0.45 : 1
                             color: root.curProfile===modelData.id ? colors.alpha(colors.primary,0.18) : colors.alpha(colors.surface,0.6)
                             border.width:1; border.color: root.curProfile===modelData.id ? colors.alpha(colors.primary,0.4) : colors.alpha(colors.outline,0.12)
                             ColumnLayout {
@@ -208,7 +217,7 @@ PanelWindow {
                                 Text { text: modelData.icon; color: root.curProfile===modelData.id ? colors.primary : colors.alpha(colors.outline,0.7); font.family:"FiraCode Nerd Font"; font.pixelSize: 14; Layout.alignment: Qt.AlignHCenter }
                                 Text { text: modelData.label; color: root.curProfile===modelData.id ? colors.primary : colors.foreground; font.family:"FiraCode Nerd Font"; font.pixelSize: 9; font.weight: Font.DemiBold; Layout.alignment: Qt.AlignHCenter }
                             }
-                            MouseArea { anchors.fill: parent; onClicked: root.setProfile(modelData.id) }
+                            MouseArea { anchors.fill: parent; enabled: !disabled; onClicked: root.setProfile(modelData.id) }
                         }
                     }
                 }

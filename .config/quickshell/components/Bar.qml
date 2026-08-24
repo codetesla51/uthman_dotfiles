@@ -32,10 +32,10 @@ PanelWindow {
         onCloseRequested: { bar.calendarPinned = false; calendarPanel.open = false }
     }
 
-    // hover bridge + pin — click clock to pin, hover to peek, 700ms gap tolerance
+    // calendar is now a centered window — click/Super+C to pin, hover to keep open (no auto-peek from clock)
     property bool calendarPinned: false
-    property bool calWantsOpen: clockItem.hovered || calendarPanel.hovered || calendarPinned
-    Timer { id: calCloseTimer; interval: 700; onTriggered: if (!bar.calWantsOpen) calendarPanel.open = false }
+    property bool calWantsOpen: calendarPanel.hovered || calendarPinned
+    Timer { id: calCloseTimer; interval: 400; onTriggered: if (!bar.calWantsOpen) calendarPanel.open = false }
     onCalWantsOpenChanged: {
         if (calWantsOpen) { calCloseTimer.stop(); calendarPanel.open = true }
         else calCloseTimer.restart()

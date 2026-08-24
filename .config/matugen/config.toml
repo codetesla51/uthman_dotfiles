@@ -1,5 +1,5 @@
 [config]
-contrast = 0.3
+contrast = 0.2
 variation = "standard"
 
 [config.reload_apps]
@@ -7,7 +7,7 @@ waybar = true
 
 [templates.waybar]
 input_path = "~/.config/matugen/templates/waybar-colors.css"
-output_path = "~/.config/waybar/colors.css"
+output_path = "~/.config/quickshell/colors.css"
 
 [templates.hyprland-theme]
 input_path = "~/.config/matugen/templates/hyprland-colors.conf"

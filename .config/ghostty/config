@@ -1,6 +1,6 @@
 config-file = ?"~/.config/omarchy/current/theme/ghostty.conf"
 # ── Font ──────────────────────────────────────────────────────
-font-family = "FiraCode Nerd Font"
+font-family = "JetBrainsMono NF"
 font-style = Medium
 font-size = 13
 font-feature = liga

@@ -25,7 +25,7 @@ PanelWindow {
     property bool allowHover: false
     Component.onCompleted: loadStores()
     onOpenChanged: {
-        if (open) { search.text = ""; selected = -1; allowHover = false; hoverTimer.restart(); Qt.callLater(function(){ search.forceActiveFocus() }) }
+        if (open) { search.text = ""; selected = -1; allowHover = false; Qt.callLater(function(){ search.forceActiveFocus() }) }
     }
     // no timer — hover enables on first mouse move only, so open doesn't auto-highlight
 
@@ -169,8 +169,8 @@ PanelWindow {
                         background: null
                         selectByMouse: true
                         Keys.onPressed: function(event) {
-                            if (event.key === Qt.Key_Down) { root.selected = Math.min(root.selected+1, root.filtered.length-1); event.accepted = true }
-                            else if (event.key === Qt.Key_Up) { root.selected = Math.max(root.selected-1, 0); event.accepted = true }
+                            if (event.key === Qt.Key_Down) { root.selected = Math.min(root.selected+1, root.filtered.length-1); resultList.positionViewAtIndex(root.selected, ListView.Contain); event.accepted = true }
+                            else if (event.key === Qt.Key_Up) { root.selected = Math.max(root.selected-1, 0); resultList.positionViewAtIndex(root.selected, ListView.Contain); event.accepted = true }
                             else if (event.key === Qt.Key_Escape) { root.open = false; event.accepted = true }
                             else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
                                 var e = root.filtered[root.selected]
@@ -192,6 +192,17 @@ PanelWindow {
                 }
             }
 
+            Text {
+                visible: search.text.trim() === "" && Object.keys(usageMap).length > 0
+                text: "RECENT"
+                color: colors.alpha(colors.outline, 0.55)
+                font.family: "FiraCode Nerd Font"
+                font.pixelSize: 8
+                font.letterSpacing: 1.5
+                font.weight: Font.Bold
+                Layout.leftMargin: 4
+            }
+
             // results
             ListView {
                 id: resultList
@@ -206,20 +217,24 @@ PanelWindow {
                 interactive: true
                 boundsBehavior: Flickable.StopAtBounds
                 ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
-                delegate: Rectangle {
+                delegate: Item {
                     required property var modelData
                     required property int index
                     width: resultList.width
                     height: 52
-                    radius: 10
-                    scale: (index === root.selected || ma.containsMouse) ? 1.02 : 1
-                    color: index === root.selected ? colors.alpha(colors.primary, 0.18) : ma.containsMouse ? colors.alpha(colors.surfaceVariant, 0.25) : "transparent"
-                    border.width: index === root.selected ? 1 : 0
-                    border.color: colors.alpha(colors.primary, 0.4)
-                    Behavior on scale { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
-                    Behavior on color { ColorAnimation { duration: 120 } }
+                    Rectangle {
+                        anchors.fill: parent
+                        anchors.leftMargin: 2
+                        anchors.rightMargin: 2
+                        radius: 10
+                        scale: (index === root.selected || ma.containsMouse) ? 1.02 : 1
+                        color: index === root.selected ? colors.alpha(colors.primary, 0.18) : ma.containsMouse ? colors.alpha(colors.surfaceVariant, 0.25) : "transparent"
+                        border.width: index === root.selected ? 1 : 0
+                        border.color: colors.alpha(colors.primary, 0.4)
+                        Behavior on scale { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
+                        Behavior on color { ColorAnimation { duration: 120 } }
 
-                    RowLayout {
+                        RowLayout {
                         anchors.fill: parent
                         anchors.leftMargin: 10
                         anchors.rightMargin: 10
@@ -287,12 +302,13 @@ PanelWindow {
                     }
 
                     MouseArea {
-                        id: ma
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        onEntered: if (root.allowHover) root.selected = index
-                        onPositionChanged: if (!root.allowHover) root.allowHover = true
-                        onClicked: root.launch(modelData)
+                            id: ma
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onEntered: if (root.allowHover) root.selected = index
+                            onPositionChanged: if (!root.allowHover) root.allowHover = true
+                            onClicked: root.launch(modelData)
+                        }
                     }
                 }
             }

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 THEME_TYPE="scheme-fidelity"
-CONTRAST="0.3"
+CONTRAST="0.2"
 MODE="dark"
 WALLPAPER=""
 
@@ -13,7 +13,7 @@ while [[ $# -gt 0 ]]; do
             shift 2
             ;;
         -c|--contrast)
-            CONTRAST="0.3"
+            CONTRAST="0.2"
             shift 2
             ;;
         -m|--mode)

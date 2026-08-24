@@ -1,5 +1,0 @@
-name = "wallpaper"
-src = "~/.config/walker/scripts/wallpaper.lgs"
-cmd = "lgs"
-switcher_only = false
-show_icon_when_single = true

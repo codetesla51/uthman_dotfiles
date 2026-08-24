@@ -6,3 +6,6 @@
 # screenshot.png is now tracked intentionally
 # control panel build artifact
 panel/panel
+# quickshell session log — never commit
+.config/quickshell/memory.md
+.config/quickshell/*Qt6QMLForBeginners*

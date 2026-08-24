@@ -11,10 +11,10 @@ FloatingWindow {
     property bool open: false
 
     title: "System"
-    implicitWidth: 560
-    implicitHeight: 340
-    minimumSize: Qt.size(520, 300)
-    maximumSize: Qt.size(600, 360)
+    implicitWidth: 480
+    implicitHeight: 300
+    minimumSize: Qt.size(440, 280)
+    maximumSize: Qt.size(520, 340)
     color: "transparent"
     visible: root.open
 

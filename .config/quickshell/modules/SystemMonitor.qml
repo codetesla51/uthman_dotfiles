@@ -3,6 +3,7 @@ import Quickshell.Io
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
+import QtQuick.Effects
 
 // System Monitor — POWER USER edition. Large, visible, kill anything.
 // Opens via CPU/RAM pill click or `quickshell -p ~/.config/quickshell ipc call sysmon toggle`
@@ -35,9 +36,10 @@ FloatingWindow {
         return list
     }
     title: "System Monitor"
-    implicitWidth: 920
-    implicitHeight: 640
-    minimumSize: Qt.size(700, 500)
+    implicitWidth: 860
+    implicitHeight: 580
+    minimumSize: Qt.size(700, 480)
+    maximumSize: Qt.size(1000, 700)
     color: "transparent"
     visible: root.open
 
@@ -50,9 +52,9 @@ FloatingWindow {
         id: card
         anchors.fill: parent
         radius: 20
-        color: colors.alpha(colors.background, 0.98)
+        color: colors.alpha(colors.background, 0.65)
         border.width: 1
-        border.color: colors.alpha(colors.outline, 0.3)
+        border.color: colors.alpha(colors.primary, 0.12)
         focus: root.open
         Keys.onEscapePressed: root.open = false
 

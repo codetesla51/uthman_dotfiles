@@ -9,6 +9,7 @@ Item {
 
     property var colors
     property bool hovered: batMouse.containsMouse
+    signal openRequested()
 
     readonly property var dev: UPower.displayDevice
     readonly property int capacity: dev ? Math.round(dev.percentage * 100) : 0
@@ -60,6 +61,7 @@ Item {
             id: batMouse
             anchors.fill: parent
             hoverEnabled: true
+            onClicked: root.openRequested()
         }
     }
 }

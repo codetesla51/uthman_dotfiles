@@ -1,4 +1,5 @@
 import Quickshell
+import Quickshell.Io
 import QtQuick
 import QtQuick.Layouts
 import "../modules"
@@ -25,6 +26,7 @@ PanelWindow {
 
     WifiPanel { id: wifiPanel; colors: palette }
     SystemMonitor { id: sysMon; colors: palette }
+    BatteryPanel { id: batPanel; colors: palette }
 
     CalendarPanel {
         id: calendarPanel
@@ -32,14 +34,10 @@ PanelWindow {
         onCloseRequested: { bar.calendarPinned = false; calendarPanel.open = false }
     }
 
-    // calendar is now a centered window — click/Super+C to pin, hover to keep open (no auto-peek from clock)
+    // calendar — manual only, you control open/close (click clock or Super+C, Esc/backdrop to close)
     property bool calendarPinned: false
-    property bool calWantsOpen: calendarPanel.hovered || calendarPinned
-    Timer { id: calCloseTimer; interval: 400; onTriggered: if (!bar.calWantsOpen) calendarPanel.open = false }
-    onCalWantsOpenChanged: {
-        if (calWantsOpen) { calCloseTimer.stop(); calendarPanel.open = true }
-        else calCloseTimer.restart()
-    }
+    onCalendarPinnedChanged: calendarPanel.open = calendarPinned
+    IpcHandler { target: "calendar"; function toggle(): void { bar.calendarPinned = !bar.calendarPinned } }
 
     Item {
         id: content
@@ -105,7 +103,7 @@ PanelWindow {
                 colors: bar.colors
                 onOpenRequested: wifiPanel.open = !wifiPanel.open
             }
-            Battery { colors: bar.colors }
+            Battery { colors: bar.colors; onOpenRequested: batPanel.open = !batPanel.open }
         }
     }
 }

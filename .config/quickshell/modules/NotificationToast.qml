@@ -2,6 +2,7 @@ import Quickshell
 import Quickshell.Services.Notifications
 import QtQuick
 import QtQuick.Layouts
+import QtQuick.Controls
 
 // One notification toast. Self-managing lifetime:
 // created via createObject(), plays entrance, auto-expires (unless Critical),
@@ -19,6 +20,7 @@ Rectangle {
     readonly property bool alive: notification !== null
     readonly property bool critical: alive && notification.urgency === NotificationUrgency.Critical
     property string state_: "open"
+    property bool editing: false
 
     width: 380
     height: content.height + 24
@@ -40,6 +42,8 @@ Rectangle {
     }
 
     Component.onCompleted: {
+        // don't auto-expire if user can interact (inline reply / edit)
+        if (alive && notification.inlineReplySupported) { expiryTimer.interval=0; }
         if (alive && !critical && notification.expireTimeout > 0)
             expiryTimer.interval = notification.expireTimeout
         else if (!critical)
@@ -152,11 +156,11 @@ Rectangle {
             }
         }
 
-        // ── row 3: actions ──
+        // ── row 3: actions + inline reply + edit/save ──
         Row {
             Layout.fillWidth: true
             spacing: 6
-            visible: root.alive && notification.actions.length > 0
+            visible: root.alive && (notification.actions.length > 0 || notification.inlineReplySupported)
 
             Repeater {
                 model: root.alive ? root.notification.actions : []
@@ -187,6 +191,78 @@ Rectangle {
                             modelData.invoke()
                             root.dismiss()
                         }
+                    }
+                }
+            }
+            // Edit toggle
+            Rectangle {
+                width: 36; height: 22; radius: 11
+                color: editMa.containsMouse ? colors.alpha(colors.primary,0.18) : colors.alpha(colors.surfaceVariant,0.35)
+                border.width:1; border.color: colors.alpha(colors.outline,0.2)
+                Text { anchors.centerIn: parent; text: root.editing ? "✓" : "✎"; color: colors.foreground; font.family:"FiraCode Nerd Font"; font.pixelSize: 10 }
+                MouseArea { id: editMa; anchors.fill: parent; hoverEnabled:true; onClicked: root.editing = !root.editing }
+            }
+            // Save to file
+            Rectangle {
+                width: 38; height: 22; radius: 11
+                color: saveMa.containsMouse ? colors.alpha(colors.primary,0.18) : colors.alpha(colors.surfaceVariant,0.35)
+                border.width:1; border.color: colors.alpha(colors.outline,0.2)
+                Text { anchors.centerIn: parent; text: "Save"; color: colors.foreground; font.family:"FiraCode Nerd Font"; font.pixelSize: 9 }
+                MouseArea {
+                    id: saveMa; anchors.fill: parent; hoverEnabled:true
+                    onClicked: {
+                        var txt = (root.alive ? (notification.summary + "\n" + notification.body.replace(/<[^>]*>/g,"")) : "")
+                        Quickshell.execDetached(["sh","-c","mkdir -p ~/.cache/quickshell && echo '"+txt.replace("'","'\\''")+"' >> ~/.cache/quickshell/notifications.txt && notify-send -u low 'Saved'"])
+                    }
+                }
+            }
+        }
+        // inline reply / edit field
+        RowLayout {
+            visible: root.alive && (root.editing || notification.inlineReplySupported)
+            Layout.fillWidth: true
+            spacing: 6
+            TextField {
+                id: replyField
+                Layout.fillWidth: true
+                placeholderText: notification.inlineReplySupported ? (notification.inlineReplyPlaceholder || "Reply…") : "Edit body…"
+                placeholderTextColor: colors.alpha(colors.outline,0.5)
+                color: colors.foreground
+                font.family: "FiraCode Nerd Font"
+                font.pixelSize: 10
+                text: root.editing ? notification.body.replace(/<[^>]*>/g,"") : ""
+                background: Rectangle { radius: 8; color: colors.alpha(colors.surface,0.7); border.width:1; border.color: colors.alpha(colors.primary,0.3) }
+                onAccepted: {
+                    if (notification.inlineReplySupported) {
+                        // try inline reply via the first action that looks like reply, or via notification object if available
+                        var done=false
+                        for(var i=0;i<notification.actions.length;i++){
+                            try { notification.actions[i].invoke(text); done=true; break; } catch(e){}
+                        }
+                        if(!done) try { notification.inlineReply(text) } catch(e2){}
+                    } else if (root.editing) {
+                        // just save edited body to file
+                        Quickshell.execDetached(["sh","-c","mkdir -p ~/.cache/quickshell && echo 'EDITED: "+text.replace("'","'\\''")+"' >> ~/.cache/quickshell/notifications.txt"])
+                    }
+                    root.dismiss()
+                }
+            }
+            Rectangle {
+                width: 44; height: 22; radius: 11
+                color: colors.alpha(colors.primary,0.9)
+                Text { anchors.centerIn: parent; text: "Send"; color: colors.background; font.family:"FiraCode Nerd Font"; font.pixelSize: 9; font.weight: Font.Bold }
+                MouseArea {
+                    anchors.fill: parent
+                    onClicked: {
+                        var t=replyField.text
+                        if (notification.inlineReplySupported) {
+                            var done2=false
+                            for(var j=0;j<notification.actions.length;j++){ try { notification.actions[j].invoke(t); done2=true; break; } catch(e){} }
+                            if(!done2) try { notification.inlineReply(t) } catch(e3){}
+                        } else {
+                            Quickshell.execDetached(["sh","-c","mkdir -p ~/.cache/quickshell && echo 'EDITED: "+t.replace("'","'\\''")+"' >> ~/.cache/quickshell/notifications.txt"])
+                        }
+                        root.dismiss()
                     }
                 }
             }

@@ -24,6 +24,7 @@ PanelWindow {
     NotificationCenter { id: ntfy; colors: palette }
 
     WifiPanel { id: wifiPanel; colors: palette }
+    SystemMonitor { id: sysMon; colors: palette }
 
     CalendarPanel {
         id: calendarPanel
@@ -97,9 +98,9 @@ PanelWindow {
                 clickCommand: "omarchy-update"
             }
             Tray { colors: bar.colors }
-            Memory { colors: bar.colors }
+            Memory { colors: bar.colors; onOpenRequested: sysMon.open = true }
             Temp { colors: bar.colors }
-            Cpu { colors: bar.colors }
+            Cpu { colors: bar.colors; onOpenRequested: sysMon.open = true }
             Network {
                 colors: bar.colors
                 onOpenRequested: wifiPanel.open = !wifiPanel.open

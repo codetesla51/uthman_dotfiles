@@ -7,6 +7,7 @@ Item {
 
     property var colors
     property bool hovered: cpuMouse.containsMouse
+    signal openRequested()
 
     property int prevTotal: 0
     property int prevIdle: 0
@@ -77,6 +78,7 @@ Item {
             id: cpuMouse
             anchors.fill: parent
             hoverEnabled: true
+            onClicked: root.openRequested()
         }
     }
 }

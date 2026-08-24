@@ -7,6 +7,7 @@ Item {
 
     property var colors
     property bool hovered: memMouse.containsMouse
+    signal openRequested()
 
     property real totalGB: 0
     property real usedGB: 0
@@ -69,6 +70,7 @@ Item {
             id: memMouse
             anchors.fill: parent
             hoverEnabled: true
+            onClicked: root.openRequested()
         }
     }
 }

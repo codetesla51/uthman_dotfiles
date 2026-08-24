@@ -252,8 +252,10 @@ PanelWindow {
                                 anchors.fill: parent
                                 anchors.margins: 5
                                 source: {
-                                    if (!modelData.icon) return Quickshell.iconPath("application-x-executable")
+                                    if (!modelData.icon) return Quickshell.iconPath("folder")
                                     var ic = modelData.icon
+                                    if (ic === "org.gnome.Nautilus") ic = "system-file-manager"
+                                    if (ic === "org.gnome.DiskUtility") ic = "drive-harddisk"
                                     if (ic.startsWith("/") || ic.startsWith("file://")) return ic.startsWith("file://") ? ic : "file://" + ic
                                     return Quickshell.iconPath(ic)
                                 }
@@ -261,8 +263,9 @@ PanelWindow {
                                 asynchronous: true
                                 visible: status === Image.Ready
                                 onStatusChanged: {
-                                    if (status === Image.Error && source !== Quickshell.iconPath("application-x-executable")) {
-                                        source = Quickshell.iconPath("application-x-executable")
+                                    if (status === Image.Error) {
+                                        var fb = Quickshell.iconPath("folder")
+                                        if (source !== fb) source = fb
                                     }
                                 }
                             }

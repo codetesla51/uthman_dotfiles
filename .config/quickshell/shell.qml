@@ -6,6 +6,7 @@ ShellRoot {
     Bar {}
 
     PowerMenu { colors: barPalette }
+    AppLauncher { colors: barPalette }
 
     Colors { id: barPalette }
 }

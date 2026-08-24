@@ -18,7 +18,7 @@ PanelWindow {
     property int timerTotal: 0
     property int pomodoroWork: 25*60
     property int pomodoroBreak: 5*60
-    property bool pomodoroMode: false
+    property bool pomodoroMode: true
     property bool pomodoroIsBreak: false
     property int pomodoroCycles: 0
     property bool timerRunning: false
@@ -53,7 +53,7 @@ PanelWindow {
         var d=db(); d.transaction(function(tx){ tx.executeSql('DELETE FROM reminders WHERE id=?',[id]) })
         loadReminders()
     }
-    Component.onCompleted: loadReminders()
+    Component.onCompleted: { loadReminders(); root.timerSeconds=root.pomodoroWork; root.timerTotal=root.pomodoroWork }
 
     Timer {
         id: tick
@@ -89,7 +89,7 @@ PanelWindow {
         MouseArea { anchors.fill: parent; onClicked: root.closeRequested() }
     }
 
-    IpcHandler { target: "calendar"; function toggle(): void { root.open = !root.open } }
+
 
     Rectangle {
         id: card
@@ -242,11 +242,11 @@ PanelWindow {
                 Rectangle { Layout.fillWidth: true; height: 1; color: colors.alpha(colors.outline,0.15) }
             }
 
-            // RIGHT — reminders + pacman timer
+            // RIGHT — reminders + pacman timer — airy, not jammed
             ColumnLayout {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                spacing: 10
+                spacing: 14
 
                 // reminders for selected date
                 RowLayout {
@@ -268,6 +268,125 @@ PanelWindow {
                     font.pixelSize: 9
                 }
             }
+
+            // ── PACMAN TIMER ──
+            Rectangle {
+                Layout.fillWidth: true
+                height: 168
+                radius: 16
+                color: colors.alpha(colors.surface, 0.55)
+                border.width: 1; border.color: colors.alpha(colors.primary,0.25)
+
+                // subtle dot grid background
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.margins: 16
+                    spacing: 16
+
+                    // pacman canvas — circular track with eating dots
+                    Item {
+                        width: 64; height: 64
+                        Canvas {
+                            id: pacCanvas
+                            anchors.fill: parent
+                            property real progress: root.timerTotal>0 ? 1 - root.timerSeconds/root.timerTotal : 0
+                            onProgressChanged: requestPaint()
+                            Connections { target: root; function onTimerSecondsChanged() { pacCanvas.requestPaint() } }
+                            Connections { target: root; function onPacmanMouthChanged() { pacCanvas.requestPaint() } }
+                            onPaint: {
+                                var ctx=getContext("2d"); ctx.reset()
+                                var cx=width/2, cy=height/2, r=26
+                                // track
+                                ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.strokeStyle=colors.alpha(colors.outline,0.15); ctx.lineWidth=3; ctx.stroke()
+                                // progress dots — 24 dots around circle, eaten as pacman moves
+                                var dots=24; var prog=pacCanvas.progress
+                                for(var i=0;i<dots;i++){
+                                    var a=(i/dots)*Math.PI*2 - Math.PI/2
+                                    var eaten = (i/dots) < prog
+                                    if(eaten) continue
+                                    var x=cx+Math.cos(a)*r, y=cy+Math.sin(a)*r
+                                    ctx.beginPath(); ctx.arc(x,y,2.2,0,Math.PI*2)
+                                    ctx.fillStyle=root.pomodoroMode ? colors.tertiary : colors.primary
+                                    ctx.fill()
+                                }
+                                // pacman
+                                var pa = prog*Math.PI*2 - Math.PI/2
+                                var dir = pa + Math.PI/2
+                                var px=cx+Math.cos(pa)*r, py=cy+Math.sin(pa)*r
+                                var mouth=root.pacmanMouth
+                                ctx.beginPath()
+                                ctx.moveTo(px,py)
+                                ctx.arc(px,py,7, dir+mouth*Math.PI, dir+(2-mouth)*Math.PI)
+                                ctx.closePath()
+                                ctx.fillStyle=root.pomodoroMode ? colors.tertiary : colors.primary
+                                ctx.fill()
+                                // eye
+                                var ex=px+Math.cos(pa)*2, ey=py+Math.sin(pa)*2
+                                ctx.beginPath(); ctx.arc(ex,ey,1.2,0,Math.PI*2); ctx.fillStyle=colors.background; ctx.fill()
+                            }
+                        }
+                    }
+
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 6
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 6
+                            Text {
+                                text: root.pomodoroMode ? (root.pomodoroIsBreak ? "BREAK" : "FOCUS") + " · " + (root.pomodoroCycles+1) : "TIMER"
+                                color: root.pomodoroMode ? colors.primary : colors.alpha(colors.outline,0.7)
+                                font.family: "FiraCode Nerd Font"
+                                font.pixelSize: 9
+                                font.weight: Font.Bold
+                                font.letterSpacing: 1.4
+                                Layout.fillWidth: true
+                            }
+                            Item { Layout.fillWidth: true }
+                            Text {
+                                text: root.timerTotal>0 ? Math.round((1-root.timerSeconds/root.timerTotal)*100)+"%" : "0%"
+                                color: colors.alpha(colors.foreground,0.7)
+                                font.family: "FiraCode Nerd Font"
+                                font.pixelSize: 10
+                                font.weight: Font.Bold
+                            }
+                            Rectangle {
+                                width: 6; height: 6; radius: 3
+                                color: root.timerRunning ? colors.primary : colors.alpha(colors.outline,0.2)
+                                SequentialAnimation on opacity { running: root.timerRunning; loops: Animation.Infinite; NumberAnimation { from:1; to:0.3; duration:600 } NumberAnimation { from:0.3; to:1; duration:600 } }
+                            }
+                        }
+                        Text {
+                            text: fmtTime(root.timerSeconds)
+                            color: colors.foreground
+                            font.family: "FiraCode Nerd Font"
+                            font.pixelSize: 28
+                            font.weight: Font.ExtraBold
+                            font.letterSpacing: 1
+                            Layout.fillWidth: true
+                            elide: Text.ElideRight
+                            horizontalAlignment: Text.AlignLeft
+                        }
+
+                        RowLayout {
+                            spacing: 6
+                            Rectangle {
+                                width: 68; height: 28; radius: 8
+                                color: root.timerRunning ? colors.alpha(colors.error,0.9) : colors.primary
+                                Text { anchors.centerIn: parent; text: root.timerRunning?"PAUSE":"START"; color: root.timerRunning?colors.background:colors.background; font.family:"FiraCode Nerd Font"; font.pixelSize:10; font.weight:Font.ExtraBold }
+                                MouseArea { anchors.fill: parent; onClicked: root.timerRunning=!root.timerRunning }
+                            }
+                            Rectangle {
+                                width: 48; height: 28; radius: 8
+                                color: colors.alpha(colors.surface,0.5)
+                                Text { anchors.centerIn: parent; text: "RESET"; color: colors.foreground; font.family:"FiraCode Nerd Font"; font.pixelSize:9; font.weight:Font.Bold }
+                                MouseArea { anchors.fill: parent; onClicked: { root.timerRunning=false; root.timerSeconds=root.timerTotal>0?root.timerTotal: (root.pomodoroMode?root.pomodoroWork:0) } }
+                            }
+                        }
+                    }
+                }
+            }
+
 
             ColumnLayout {
                 Layout.fillWidth: true
@@ -339,146 +458,19 @@ PanelWindow {
                     onAccepted: { root.addReminder(fmtDate(root.selectedDate), text); text="" }
                 }
                 Rectangle {
-                    width: 56; height: 28; radius: 8
+                    width: 60; height: 32; radius: 10
                     color: remInput.text.trim().length>0 ? colors.alpha(colors.primary,0.2) : colors.alpha(colors.surfaceVariant,0.3)
                     Text { anchors.centerIn: parent; text: "Add"; color: remInput.text.trim().length>0?colors.primary:colors.alpha(colors.outline,0.5); font.family:"FiraCode Nerd Font"; font.pixelSize:10; font.weight: Font.DemiBold }
                     MouseArea { anchors.fill: parent; onClicked: { root.addReminder(fmtDate(root.selectedDate), remInput.text); remInput.text="" } }
                 }
             }
 
-            Rectangle { Layout.fillWidth: true; height: 1; color: colors.alpha(colors.outline,0.15) }
+            Item { height: 4 } // breathing room
 
-            // ── PACMAN TIMER ──
-            Rectangle {
-                Layout.fillWidth: true
-                height: 132
-                radius: 14
-                color: colors.alpha(colors.surface, 0.55)
-                border.width: 1; border.color: colors.alpha(colors.primary,0.25)
+            Rectangle { Layout.fillWidth: true; height: 1; color: colors.alpha(colors.outline,0.12) }
 
-                // subtle dot grid background
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.margins: 12
-                    spacing: 12
+            Item { height: 4 } // breathing room
 
-                    // pacman canvas — circular track with eating dots
-                    Item {
-                        width: 64; height: 64
-                        Canvas {
-                            id: pacCanvas
-                            anchors.fill: parent
-                            property real progress: root.timerTotal>0 ? 1 - root.timerSeconds/root.timerTotal : 0
-                            onProgressChanged: requestPaint()
-                            Connections { target: root; function onTimerSecondsChanged() { pacCanvas.requestPaint() } }
-                            Connections { target: root; function onPacmanMouthChanged() { pacCanvas.requestPaint() } }
-                            onPaint: {
-                                var ctx=getContext("2d"); ctx.reset()
-                                var cx=width/2, cy=height/2, r=26
-                                // track
-                                ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.strokeStyle=colors.alpha(colors.outline,0.15); ctx.lineWidth=3; ctx.stroke()
-                                // progress dots — 24 dots around circle, eaten as pacman moves
-                                var dots=24; var prog=pacCanvas.progress
-                                for(var i=0;i<dots;i++){
-                                    var a=(i/dots)*Math.PI*2 - Math.PI/2
-                                    var eaten = (i/dots) < prog
-                                    if(eaten) continue
-                                    var x=cx+Math.cos(a)*r, y=cy+Math.sin(a)*r
-                                    ctx.beginPath(); ctx.arc(x,y,2.2,0,Math.PI*2)
-                                    ctx.fillStyle=root.pomodoroMode ? colors.tertiary : colors.primary
-                                    ctx.fill()
-                                }
-                                // pacman
-                                var pa = prog*Math.PI*2 - Math.PI/2
-                                var dir = pa + Math.PI/2
-                                var px=cx+Math.cos(pa)*r, py=cy+Math.sin(pa)*r
-                                var mouth=root.pacmanMouth
-                                ctx.beginPath()
-                                ctx.moveTo(px,py)
-                                ctx.arc(px,py,7, dir+mouth*Math.PI, dir+(2-mouth)*Math.PI)
-                                ctx.closePath()
-                                ctx.fillStyle=root.pomodoroMode ? colors.tertiary : colors.primary
-                                ctx.fill()
-                                // eye
-                                var ex=px+Math.cos(pa)*2, ey=py+Math.sin(pa)*2
-                                ctx.beginPath(); ctx.arc(ex,ey,1.2,0,Math.PI*2); ctx.fillStyle=colors.background; ctx.fill()
-                            }
-                        }
-                    }
-
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: 6
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: 6
-                            Text {
-                                text: root.pomodoroMode ? (root.pomodoroIsBreak ? "BREAK" : "FOCUS") + " · " + (root.pomodoroCycles+1) : "TIMER"
-                                color: root.pomodoroMode ? colors.primary : colors.alpha(colors.outline,0.7)
-                                font.family: "FiraCode Nerd Font"
-                                font.pixelSize: 9
-                                font.weight: Font.Bold
-                                font.letterSpacing: 1.4
-                                Layout.fillWidth: true
-                            }
-                            Rectangle {
-                                width: 6; height: 6; radius: 3
-                                color: root.timerRunning ? colors.primary : colors.alpha(colors.outline,0.2)
-                                SequentialAnimation on opacity { running: root.timerRunning; loops: Animation.Infinite; NumberAnimation { from:1; to:0.3; duration:600 } NumberAnimation { from:0.3; to:1; duration:600 } }
-                            }
-                        }
-                        Text {
-                            text: fmtTime(root.timerSeconds)
-                            color: colors.foreground
-                            font.family: "FiraCode Nerd Font"
-                            font.pixelSize: 28
-                            font.weight: Font.ExtraBold
-                            font.letterSpacing: 1
-                        }
-                        RowLayout {
-                            spacing: 6
-                            Rectangle {
-                                width: 68; height: 28; radius: 8
-                                color: root.timerRunning ? colors.alpha(colors.error,0.9) : colors.primary
-                                Text { anchors.centerIn: parent; text: root.timerRunning?"PAUSE":"START"; color: root.timerRunning?colors.background:colors.background; font.family:"FiraCode Nerd Font"; font.pixelSize:10; font.weight:Font.ExtraBold }
-                                MouseArea { anchors.fill: parent; onClicked: root.timerRunning=!root.timerRunning }
-                            }
-                            Rectangle {
-                                width: 48; height: 28; radius: 8
-                                color: colors.alpha(colors.surface,0.5)
-                                Text { anchors.centerIn: parent; text: "RESET"; color: colors.foreground; font.family:"FiraCode Nerd Font"; font.pixelSize:9; font.weight:Font.Bold }
-                                MouseArea { anchors.fill: parent; onClicked: { root.timerRunning=false; root.timerSeconds=root.timerTotal>0?root.timerTotal: (root.pomodoroMode?root.pomodoroWork:0) } }
-                            }
-                            Item { Layout.fillWidth: true }
-                            Text {
-                                text: root.timerTotal>0 ? Math.round((1-root.timerSeconds/root.timerTotal)*100)+"%" : "0%"
-                                color: colors.alpha(colors.outline,0.6)
-                                font.family: "FiraCode Nerd Font"
-                                font.pixelSize: 10
-                            }
-                        }
-                        RowLayout {
-                            spacing: 5
-                            Repeater {
-                                model: [5*60,10*60,25*60]
-                                delegate: Rectangle {
-                                    required property var modelData
-                                    width: 42; height: 22; radius: 8
-                                    color: root.timerTotal===modelData && !root.pomodoroMode ? colors.primary : colors.alpha(colors.surface,0.6)
-                                    Text { anchors.centerIn: parent; text: (modelData/60)+"m"; color: root.timerTotal===modelData && !root.pomodoroMode ? colors.background : colors.foreground; font.family:"FiraCode Nerd Font"; font.pixelSize:9; font.weight:Font.DemiBold }
-                                    MouseArea { anchors.fill: parent; onClicked: { root.pomodoroMode=false; root.timerSeconds=modelData; root.timerTotal=modelData } }
-                                }
-                            }
-                            Rectangle {
-                                Layout.fillWidth: true; height: 22; radius: 8
-                                color: root.pomodoroMode ? colors.primary : colors.alpha(colors.surface,0.6)
-                                Text { anchors.centerIn: parent; text: "POMO 25/5"; color: root.pomodoroMode ? colors.background : colors.foreground; font.family:"FiraCode Nerd Font"; font.pixelSize:8; font.weight:Font.Bold }
-                                MouseArea { anchors.fill: parent; onClicked: { root.pomodoroMode=!root.pomodoroMode; if(root.pomodoroMode){ root.timerSeconds=root.pomodoroWork; root.timerTotal=root.pomodoroWork; root.pomodoroIsBreak=false } } }
-                            }
-                        }
-                    }
-                }
-            }
             }
         }
     }

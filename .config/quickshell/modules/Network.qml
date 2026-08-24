@@ -8,6 +8,7 @@ Item {
 
     property var colors
     property bool hovered: netMouse.containsMouse
+    signal openRequested()
 
     readonly property var devices: Networking.devices.values
     readonly property var wifiDev: devices.find(d => d.type === DeviceType.Wifi) ?? null
@@ -56,7 +57,7 @@ Item {
             id: netMouse
             anchors.fill: parent
             hoverEnabled: true
-            onClicked: Quickshell.execDetached(["sh", "-c", "omarchy-launch-wifi"])
+            onClicked: root.openRequested()
         }
     }
 }

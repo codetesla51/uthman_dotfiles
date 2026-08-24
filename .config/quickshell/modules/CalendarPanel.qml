@@ -135,7 +135,7 @@ PanelWindow {
                     Layout.fillWidth: true
                     horizontalAlignment: Text.AlignHCenter
                     text: Qt.formatDate(root.currentMonth, "MMMM yyyy")
-                    color: colors.foreground
+                    color: colors.secondary
                     font.family: "FiraCode Nerd Font"
                     font.pixelSize: 13
                     font.weight: Font.ExtraBold
@@ -166,7 +166,7 @@ PanelWindow {
                         Layout.fillWidth: true
                         horizontalAlignment: Text.AlignHCenter
                         text: modelData
-                        color: colors.alpha(colors.outline,0.7)
+                        color: colors.tertiary
                         font.family: "FiraCode Nerd Font"
                         font.pixelSize: 9
                         font.weight: Font.Bold
@@ -241,7 +241,7 @@ PanelWindow {
                 spacing: 6
                 Text {
                     text: "Reminders — " + Qt.formatDate(root.selectedDate, "dd MMM")
-                    color: colors.foreground
+                    color: colors.secondary
                     font.family: "FiraCode Nerd Font"
                     font.pixelSize: 10
                     font.weight: Font.DemiBold
@@ -250,7 +250,7 @@ PanelWindow {
                 Text {
                     visible: root.reminders.filter(function(r){return r.date===fmtDate(root.selectedDate)}).length>0
                     text: root.reminders.filter(function(r){return r.date===fmtDate(root.selectedDate)}).length + ""
-                    color: colors.primary
+                    color: colors.tertiary
                     font.family: "FiraCode Nerd Font"
                     font.pixelSize: 9
                 }

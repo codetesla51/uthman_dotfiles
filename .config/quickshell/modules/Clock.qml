@@ -23,17 +23,10 @@ Item {
     implicitWidth: label.implicitWidth + 40
     implicitHeight: 30
 
+    // flat inside the trapezium — hover lives in the letter-spacing only
     Rectangle {
         anchors.fill: parent
-        radius: 16
-        color: root.hovered ? colors.alpha(colors.surface, 0.85)
-                            : colors.alpha(colors.surface, 0.7)
-        border.width: 1
-        border.color: root.hovered ? colors.alpha(colors.primary, 0.4)
-                                   : colors.alpha(colors.outline, 0.15)
-
-        Behavior on color { ColorAnimation { duration: 300 } }
-        Behavior on border.color { ColorAnimation { duration: 300 } }
+        color: "transparent"
 
         Text {
             id: label

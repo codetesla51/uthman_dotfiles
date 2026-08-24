@@ -185,6 +185,7 @@ poll.interval = 200; poll.repeat = true
 * **8–12px micro-type** — section labels are `9px @ outline 0.6 letterSpacing 1.5 Bold`, row bodies `11px Medium`, never larger.
 * **8–12px vertical rhythm** — nothing ever touches an edge; even the backdrop has 8px right/top margins under the bar.
 * When the user says "go all in" they mean: richer motion, more polish, more detail density — not "keep it minimal."
+* **Center trapezium (current design)** — Bar window is `y=0, h=54` (`margins.top: 0`); QML can't paint above its own window, so flush-to-screen-top shapes need the window itself at y=0. Pill line stays at internal y 6..46 via row margins 6/8. The island is a `Shape` polygon (`\_____/`, 18px slant inset) with a hairline stroke ShapePath on the 3 lower edges only — never stroke the top edge. Island contents are FLAT (Clock/BellButton/NowPlaying have transparent bg, no inner pills), separated by 1×14 `outline@0.28` dividers. Spotify is filtered out of Tray via `hiddenApps` — NowPlaying covers media.
 
 ---
 

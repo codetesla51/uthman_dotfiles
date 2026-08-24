@@ -12,22 +12,16 @@ Item {
     signal toggleRequested()
 
     readonly property bool hovered: bellMouse.containsMouse
+    scale: hovered ? 1.12 : 1
+    Behavior on scale { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
 
     implicitWidth: label.implicitWidth + (historyCount > 0 ? 26 : 24)
     implicitHeight: 30
 
+    // flat inside the trapezium — state lives in icon color only
     Rectangle {
         anchors.fill: parent
-        radius: 14
-        color: root.panelOpen || root.hovered ? colors.alpha(colors.surface, 0.8)
-                                              : colors.alpha(colors.surface, 0.6)
-        border.width: 1
-        border.color: root.panelOpen ? colors.alpha(colors.primary, 0.45)
-                    : root.hovered ? colors.alpha(colors.primary, 0.45)
-                    : colors.alpha(colors.outline, 0.15)
-
-        Behavior on color { ColorAnimation { duration: 300 } }
-        Behavior on border.color { ColorAnimation { duration: 300 } }
+        color: "transparent"
 
         Text {
             id: label

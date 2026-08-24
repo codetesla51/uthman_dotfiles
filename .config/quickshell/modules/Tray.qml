@@ -10,7 +10,14 @@ Item {
 
     property var colors
 
-    readonly property var items: SystemTray.items.values
+    // hide icons for apps already represented elsewhere (Spotify → NowPlaying pill)
+    readonly property var hiddenApps: ["spotify"]
+    readonly property var items: SystemTray.items.values.filter(function(it) {
+        var s = ((it.id || "") + " " + (it.title || "")).toLowerCase()
+        for (var i = 0; i < hiddenApps.length; i++)
+            if (s.indexOf(hiddenApps[i]) !== -1) return false
+        return true
+    })
 
     implicitWidth: items.length > 0 ? frame.implicitWidth : 0
     implicitHeight: 30

@@ -94,8 +94,8 @@ PanelWindow {
     Rectangle {
         id: card
         anchors.centerIn: parent
-        width: 520
-        height: Math.min(640, col.implicitHeight + 28)
+        width: 720
+        height: Math.min(600, col.implicitHeight + 28)
         radius: 20
         color: colors.alpha(colors.background, 0.96)
         border.width: 1
@@ -116,44 +116,50 @@ PanelWindow {
             propagateComposedEvents: true
         }
 
-        ColumnLayout {
+        RowLayout {
             id: col
             anchors { left: parent.left; right: parent.right; top: parent.top; margins: 18 }
-            spacing: 10
+            spacing: 16
 
-            // header: month / nav
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: 8
-                Rectangle {
-                    width: 26; height: 26; radius: 13
-                    color: prevMa.containsMouse ? colors.alpha(colors.primary,0.15) : "transparent"
-                    Text { anchors.centerIn: parent; text: "‹"; color: colors.primary; font.pixelSize: 14; font.weight: Font.Bold }
-                    MouseArea { id: prevMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.currentMonth = new Date(root.currentMonth.getFullYear(), root.currentMonth.getMonth()-1, 1) }
-                }
-                Text {
+            // LEFT — calendar
+            ColumnLayout {
+                Layout.preferredWidth: 340
+                Layout.fillHeight: true
+                spacing: 10
+
+                // header: month / nav
+                RowLayout {
                     Layout.fillWidth: true
-                    horizontalAlignment: Text.AlignHCenter
-                    text: Qt.formatDate(root.currentMonth, "MMMM yyyy")
-                    color: colors.secondary
-                    font.family: "FiraCode Nerd Font"
-                    font.pixelSize: 13
-                    font.weight: Font.ExtraBold
+                    spacing: 8
+                    Rectangle {
+                        width: 28; height: 28; radius: 14
+                        color: prevMa.containsMouse ? colors.alpha(colors.primary,0.15) : "transparent"
+                        Text { anchors.centerIn: parent; text: "‹"; color: colors.primary; font.pixelSize: 16; font.weight: Font.Bold }
+                        MouseArea { id: prevMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.currentMonth = new Date(root.currentMonth.getFullYear(), root.currentMonth.getMonth()-1, 1) }
+                    }
+                    Text {
+                        Layout.fillWidth: true
+                        horizontalAlignment: Text.AlignHCenter
+                        text: Qt.formatDate(root.currentMonth, "MMMM yyyy")
+                        color: colors.secondary
+                        font.family: "FiraCode Nerd Font"
+                        font.pixelSize: 15
+                        font.weight: Font.ExtraBold
+                    }
+                    Rectangle {
+                        width: 28; height: 28; radius: 14
+                        color: nextMa.containsMouse ? colors.alpha(colors.primary,0.15) : "transparent"
+                        Text { anchors.centerIn: parent; text: "›"; color: colors.primary; font.pixelSize: 16; font.weight: Font.Bold }
+                        MouseArea { id: nextMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.currentMonth = new Date(root.currentMonth.getFullYear(), root.currentMonth.getMonth()+1, 1) }
+                    }
+                    Rectangle {
+                        width: 56; height: 26; radius: 13
+                        color: todayMa.containsMouse ? colors.alpha(colors.primary,0.15) : colors.alpha(colors.surface,0.5)
+                        border.width:1; border.color: colors.alpha(colors.primary,0.3)
+                        Text { anchors.centerIn: parent; text: "Today"; color: colors.primary; font.family:"FiraCode Nerd Font"; font.pixelSize: 9; font.weight: Font.DemiBold }
+                        MouseArea { id: todayMa; anchors.fill: parent; hoverEnabled:true; onClicked: { root.currentMonth=new Date(new Date().getFullYear(), new Date().getMonth(),1); root.selectedDate=new Date() } }
+                    }
                 }
-                Rectangle {
-                    width: 26; height: 26; radius: 13
-                    color: nextMa.containsMouse ? colors.alpha(colors.primary,0.15) : "transparent"
-                    Text { anchors.centerIn: parent; text: "›"; color: colors.primary; font.pixelSize: 14; font.weight: Font.Bold }
-                    MouseArea { id: nextMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.currentMonth = new Date(root.currentMonth.getFullYear(), root.currentMonth.getMonth()+1, 1) }
-                }
-                Rectangle {
-                    width: 52; height: 24; radius: 12
-                    color: todayMa.containsMouse ? colors.alpha(colors.primary,0.15) : colors.alpha(colors.surface,0.5)
-                    border.width:1; border.color: colors.alpha(colors.primary,0.3)
-                    Text { anchors.centerIn: parent; text: "Today"; color: colors.primary; font.family:"FiraCode Nerd Font"; font.pixelSize: 9; font.weight: Font.DemiBold }
-                    MouseArea { id: todayMa; anchors.fill: parent; hoverEnabled:true; onClicked: { root.currentMonth=new Date(new Date().getFullYear(), new Date().getMonth(),1); root.selectedDate=new Date() } }
-                }
-            }
 
             // weekdays
             RowLayout {
@@ -233,10 +239,17 @@ PanelWindow {
                 }
             }
 
-            Rectangle { Layout.fillWidth: true; height: 1; color: colors.alpha(colors.outline,0.15) }
+                Rectangle { Layout.fillWidth: true; height: 1; color: colors.alpha(colors.outline,0.15) }
+            }
 
-            // reminders for selected date
-            RowLayout {
+            // RIGHT — reminders + pacman timer
+            ColumnLayout {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                spacing: 10
+
+                // reminders for selected date
+                RowLayout {
                 Layout.fillWidth: true
                 spacing: 6
                 Text {
@@ -372,7 +385,7 @@ PanelWindow {
                                     if(eaten) continue
                                     var x=cx+Math.cos(a)*r, y=cy+Math.sin(a)*r
                                     ctx.beginPath(); ctx.arc(x,y,2.2,0,Math.PI*2)
-                                    ctx.fillStyle=colors.primary
+                                    ctx.fillStyle=root.pomodoroMode ? colors.tertiary : colors.primary
                                     ctx.fill()
                                 }
                                 // pacman
@@ -384,7 +397,7 @@ PanelWindow {
                                 ctx.moveTo(px,py)
                                 ctx.arc(px,py,7, dir+mouth*Math.PI, dir+(2-mouth)*Math.PI)
                                 ctx.closePath()
-                                ctx.fillStyle=colors.primary
+                                ctx.fillStyle=root.pomodoroMode ? colors.tertiary : colors.primary
                                 ctx.fill()
                                 // eye
                                 var ex=px+Math.cos(pa)*2, ey=py+Math.sin(pa)*2
@@ -465,6 +478,7 @@ PanelWindow {
                         }
                     }
                 }
+            }
             }
         }
     }

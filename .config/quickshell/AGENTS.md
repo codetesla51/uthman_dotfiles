@@ -197,3 +197,46 @@ poll.interval = 200; poll.repeat = true
 5. Never add inline `width: 2` twice on the same delegate (duplicate-property error at `[267:37]` style).
 6. Verify via `pkill -x quickshell; setsid quickshell -p ~/.config/quickshell > /tmp/qs-bar.log 2>&1 &` → wait 4s → `grep -E 'ERROR|WARN' /tmp/qs-bar.log` must be empty (ignore accumulated session lines — hard-restart before judging).
 7. `quickshell -p ~/.config/quickshell ipc show` must list the new target.
+
+---
+
+## 11. Scroll Done Right (ListView vs ScrollView)
+
+**The failure:** Launcher showed 50 results but wheel did nothing. Two causes stacked:
+1. `ListView { interactive: false }` — kills wheel/drag. The earlier drawer had the same.
+2. `ScrollView { contentHeight: resultCol.implicitHeight }` with a manual `contentHeight` inside a `ColumnLayout` wrapper — the wrapper's `Layout.preferredHeight: min(7*56, count*56)` gave the view a fixed 392px viewport, but `contentHeight` was set to the column's `implicitHeight` (2800px) *after* the column had already been squeezed to 392px by the layout. Result: column never grew, nothing to scroll. Plus `ScrollBar.vertical.policy: ...` is invalid syntax — Controls2 wants `ScrollBar.vertical: ScrollBar { policy: ... }`.
+
+**The working pattern — use ListView directly for lists:**
+
+```qml
+ListView {
+  id: resultList
+  Layout.fillWidth: true
+  Layout.preferredHeight: Math.min(7*56, count*56) // 7 visible, rest scrolls
+  clip: true
+  model: filtered               // filtered is a var array, cap at 50: scored.slice(0,50)
+  currentIndex: selected
+  spacing: 4
+  interactive: true             // NEVER false if you want wheel
+  boundsBehavior: Flickable.StopAtBounds
+  ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+  delegate: Rectangle { width: resultList.width; height: 52; ... }
+}
+```
+
+* Verify before claiming fixed: add a temporary `IpcHandler` that logs `contentHeight`, `height`, `count`, `interactive`, then programmatically sets `contentY = 80` and checks it stuck. Example log that proves it:
+  `filtered: 50 contentHeight: 2796 height: 392 count: 50 interactive: true → scroll test before: 0 after: 80 success: true`
+
+**When to use ScrollView:** only for freeform content (like the notification drawer's `ColumnLayout + Repeater` where delegates aren't uniform). Then the recipe is:
+```qml
+ScrollView {
+  Layout.fillWidth: true; Layout.preferredHeight: 392
+  clip: true
+  ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+  contentWidth: availableWidth
+  contentHeight: col.implicitHeight
+  ColumnLayout { id: col; width: parent.width; Repeater { ... } }
+}
+```
+Never nest a `ListView` inside a `ScrollView`, and never put `anchors.*` inside a `Layout` child — use `Layout.alignment`.
+

@@ -23,6 +23,23 @@ PanelWindow {
 
     NotificationCenter { id: ntfy; colors: palette }
 
+    WifiPanel { id: wifiPanel; colors: palette }
+
+    CalendarPanel {
+        id: calendarPanel
+        colors: palette
+        onCloseRequested: { bar.calendarPinned = false; calendarPanel.open = false }
+    }
+
+    // hover bridge + pin — click clock to pin, hover to peek, 700ms gap tolerance
+    property bool calendarPinned: false
+    property bool calWantsOpen: clockItem.hovered || calendarPanel.hovered || calendarPinned
+    Timer { id: calCloseTimer; interval: 700; onTriggered: if (!bar.calWantsOpen) calendarPanel.open = false }
+    onCalWantsOpenChanged: {
+        if (calWantsOpen) { calCloseTimer.stop(); calendarPanel.open = true }
+        else calCloseTimer.restart()
+    }
+
     Item {
         id: content
         anchors.fill: parent
@@ -39,7 +56,11 @@ PanelWindow {
             id: centerRow
             anchors.centerIn: parent
             spacing: 10
-            Clock { colors: bar.colors }
+            Clock {
+                id: clockItem
+                colors: bar.colors
+                onPinRequested: bar.calendarPinned = !bar.calendarPinned
+            }
             BellButton {
                 colors: bar.colors
                 historyCount: ntfy.historyCount
@@ -79,7 +100,10 @@ PanelWindow {
             Memory { colors: bar.colors }
             Temp { colors: bar.colors }
             Cpu { colors: bar.colors }
-            Network { colors: bar.colors }
+            Network {
+                colors: bar.colors
+                onOpenRequested: wifiPanel.open = !wifiPanel.open
+            }
             Battery { colors: bar.colors }
         }
     }

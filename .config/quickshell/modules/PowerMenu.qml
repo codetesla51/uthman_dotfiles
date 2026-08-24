@@ -40,8 +40,8 @@ PanelWindow {
     Rectangle {
         id: card
         anchors.centerIn: parent
-        width: 340
-        height: cardColumn.implicitHeight + 40
+        width: 520
+        height: 200
         radius: 18
         color: colors.alpha(colors.background, 0.96)
         border.width: 1
@@ -69,72 +69,73 @@ PanelWindow {
                 Layout.bottomMargin: 6
             }
 
-            Repeater {
-                model: [
-                    { label: "Lock",        icon: "",  cmd: "pidof hyprlock || hyprlock" },
-                    { label: "Logout",      icon: "",  cmd: "hyprctl dispatch exit" },
-                    { label: "Suspend",     icon: "",  cmd: "systemctl suspend" },
-                    { label: "Reboot",      icon: "",  cmd: "systemctl reboot" },
-                    { label: "Shutdown",    icon: "",  cmd: "systemctl poweroff" }
-                ]
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 10
+                Layout.topMargin: 8
 
-                delegate: Rectangle {
-                    required property var modelData
-                    property bool hovered: itemArea.containsMouse
+                Repeater {
+                    model: [
+                        { label: "Lock",        icon: "",  cmd: "pidof hyprlock || hyprlock" },
+                        { label: "Logout",      icon: "",  cmd: "hyprctl dispatch exit" },
+                        { label: "Suspend",     icon: "",  cmd: "systemctl suspend" },
+                        { label: "Reboot",      icon: "",  cmd: "systemctl reboot" },
+                        { label: "Shutdown",    icon: "",  cmd: "systemctl poweroff" }
+                    ]
 
-                    Layout.fillWidth: true
-                    height: 44
-                    radius: 12
-                    color: hovered ? colors.alpha(colors.primary, 0.14)
-                                   : colors.alpha(colors.surface, 0.5)
-                    border.width: 1
-                    border.color: hovered ? colors.alpha(colors.primary, 0.4)
-                                          : colors.alpha(colors.outline, 0.12)
+                    delegate: Rectangle {
+                        required property var modelData
+                        property bool hovered: itemArea.containsMouse
 
-                    RowLayout {
-                        anchors.fill: parent
-                        anchors.leftMargin: 16
-                        anchors.rightMargin: 16
-                        spacing: 12
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 88
+                        radius: 14
+                        scale: hovered ? 1.06 : 1
+                        y: hovered ? -3 : 0
+                        color: hovered ? colors.alpha(colors.primary, 0.16)
+                                       : colors.alpha(colors.surface, 0.5)
+                        border.width: 1
+                        border.color: hovered ? colors.alpha(colors.primary, 0.5)
+                                              : colors.alpha(colors.outline, 0.12)
+                        Behavior on scale { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
+                        Behavior on y { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
 
-                        Text {
-                            text: modelData.icon
-                            color: modelData.label === "Shutdown" && itemArea.containsMouse
-                                   ? colors.error : colors.foreground
-                            font.family: "FiraCode Nerd Font"
-                            font.pixelSize: 14
+                        ColumnLayout {
+                            anchors.centerIn: parent
+                            spacing: 6
+
+                            Text {
+                                text: modelData.icon
+                                color: modelData.label === "Shutdown" && hovered ? colors.error : colors.foreground
+                                font.family: "FiraCode Nerd Font"
+                                font.pixelSize: 22
+                                Layout.alignment: Qt.AlignHCenter
+                            }
+
+                            Text {
+                                text: modelData.label
+                                color: hovered ? colors.foreground : colors.alpha(colors.outline, 0.9)
+                                font.family: "FiraCode Nerd Font"
+                                font.pixelSize: 11
+                                font.weight: Font.DemiBold
+                                Layout.alignment: Qt.AlignHCenter
+                            }
                         }
 
-                        Text {
-                            text: modelData.label
-                            color: colors.foreground
-                            font.family: "FiraCode Nerd Font"
-                            font.pixelSize: 12
-                            font.weight: Font.DemiBold
-                            Layout.fillWidth: true
+                        MouseArea {
+                            id: itemArea
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                root.open = false
+                                Quickshell.execDetached(["sh", "-c", modelData.cmd])
+                            }
                         }
 
-                        Text {
-                            text: ""
-                            color: colors.alpha(colors.outline, itemArea.containsMouse ? 0.9 : 0.35)
-                            font.family: "FiraCode Nerd Font"
-                            font.pixelSize: 11
-                        }
+                        Behavior on color { ColorAnimation { duration: 150 } }
+                        Behavior on border.color { ColorAnimation { duration: 150 } }
                     }
-
-                    MouseArea {
-                        id: itemArea
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: {
-                            root.open = false
-                            Quickshell.execDetached(["sh", "-c", modelData.cmd])
-                        }
-                    }
-
-                    Behavior on color { ColorAnimation { duration: 150 } }
-                    Behavior on border.color { ColorAnimation { duration: 150 } }
                 }
             }
         }

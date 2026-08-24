@@ -175,7 +175,20 @@ poll.interval = 200; poll.repeat = true
 
 ---
 
-## 10. Copy-Paste Checklist for a New Panel
+## 10. System UI Taste (What the User Actually Likes)
+
+* **Rectangular, not square** — center menus are wide and short (520×200), not boxes. Pills are horizontal, evenly spaced, with the icon stacked *above* the label.
+* **Glassmorphic, not flat** — `colors.alpha(surface, 0.5)` idle, `primary @ 0.14–0.16` on hover, `outline @ 0.12` border that lifts to `primary @ 0.4–0.5`. Backdrop dims to `background @ 0.3–0.55`.
+* **Hover must move** — every interactive tile lifts (`y: -3`) and scales (`scale: 1.06`) with `Easing.OutCubic` 180ms, not just a color change. If it doesn't move, the user calls it dead.
+* **8–14px spacing is religion** — 10px between siblings, 14px card padding, `height: 1` hairlines at `outline @ 0.12–0.15`. "Crossing" or cramped = instant reject.
+* **8–18px radii** — pill 14, card 16–18, list row 10–12, divider never has a radius.
+* **8–12px micro-type** — section labels are `9px @ outline 0.6 letterSpacing 1.5 Bold`, row bodies `11px Medium`, never larger.
+* **8–12px vertical rhythm** — nothing ever touches an edge; even the backdrop has 8px right/top margins under the bar.
+* When the user says "go all in" they mean: richer motion, more polish, more detail density — not "keep it minimal."
+
+---
+
+## 11. Copy-Paste Checklist for a New Panel
 
 1. Copy `WifiPanel.qml`'s outer `PanelWindow` shell (backdrop + card).
 2. Swap `target: "wifi"` → your name, update `Bar.qml`'s `WifiPanel { id: … }` and the pill's `signal openRequested()` → `panel.open = !panel.open`.

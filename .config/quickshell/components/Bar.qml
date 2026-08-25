@@ -137,29 +137,13 @@ PanelWindow {
             anchors { right: parent.right; top: parent.top; bottom: parent.bottom; topMargin: 6; bottomMargin: 8 }
             spacing: 6
 
-            // waybar order: idle | dnd | update | tray | memory | temperature | cpu | network | battery
-            ScriptIndicator {
-                colors: bar.colors
-                script: "$HOME/.config/quickshell/scripts/idle-indicators/idle.sh"
-                intervalMs: 5000
-                activeColor: colors.tertiary
-                clickCommand: "sh -c 'pidof hypridle >/dev/null && pkill hypridle || uwsm-app -- hypridle &'"
-            }
-            DndIndicator {
+            // unified transient pill: idle · DND · recording · tray (LocalSend/OBS/etc.)
+            // was 4 separate popping pills — now one glass pill, hidden when empty
+            StatusPill {
                 colors: bar.colors
                 dnd: ntfy.dnd
-                onToggleRequested: ntfy.toggleDnd()
+                onToggleDndRequested: ntfy.toggleDnd()
             }
-            ScriptIndicator {
-                colors: bar.colors
-                script: "~/.config/quickshell/scripts/update.sh"
-                intervalMs: 3600000
-                activeClass: "pending"
-                activeColor: colors.error
-                blink: true
-                clickCommand: "uwsm-app -- ghostty -e sh -c 'yay -Syu; echo done; read'"
-            }
-            Tray { colors: bar.colors }
             Memory { colors: bar.colors; onOpenRequested: sysMon.open = true }
             Temp { colors: bar.colors }
             Cpu { colors: bar.colors; onOpenRequested: sysMon.open = true }

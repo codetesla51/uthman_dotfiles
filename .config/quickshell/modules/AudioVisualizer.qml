@@ -10,7 +10,7 @@ FloatingWindow {
     id: root
 
     property var colors
-    property bool open: true
+    property bool open: false
     readonly property int bars: 32
     property var levels: []
 

@@ -1,5 +1,6 @@
 import Quickshell
 import Quickshell.Io
+import Quickshell.Wayland
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
@@ -21,6 +22,7 @@ PanelWindow {
     color: "transparent"
     visible: root.open
     focusable: true
+    WlrLayershell.namespace: "qs-theme"
     IpcHandler { target: "theme"; function toggle(): void { root.open = !root.open } }
 
     function refresh(){
@@ -98,9 +100,33 @@ PanelWindow {
         width: 720
         height: 640
         radius: 20
-        color: colors.alpha(colors.background, 0.86)
+        color: colors.alpha(colors.background, 0.15)
         border.width: 1
         border.color: colors.alpha(colors.outline, 0.12)
+        // frosted glass — blurred current wallpaper INSIDE the card
+        Image {
+            id: wallSrc
+            anchors.fill: parent
+            source: root.currentWall !== "" ? "file://" + root.currentWall : ""
+            fillMode: Image.PreserveAspectCrop
+            asynchronous: true
+            visible: false
+        }
+        FastBlur {
+            anchors.fill: parent
+            source: wallSrc
+            radius: 48
+            visible: wallSrc.status === Image.Ready
+        }
+        Rectangle {
+            anchors.fill: parent
+            color: colors.alpha(colors.background, 0.42)
+        }
+        // clip all children to the card radius
+        layer.enabled: true
+        layer.effect: OpacityMask {
+            maskSource: Rectangle { width: card.width; height: card.height; radius: 20 }
+        }
         focus: root.open
         Keys.onEscapePressed: root.open=false
         Keys.onLeftPressed: root.prev()

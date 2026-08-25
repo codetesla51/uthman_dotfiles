@@ -12,14 +12,6 @@ WlSessionLock {
     property bool shouldLock: false
     locked: shouldLock
 
-    // Allow Hyprland to trigger lock via loginctl or hyprlock
-    // Also allow manual toggle via ipc
-    IpcHandler {
-        target: "lock"
-        function lock(): void { lock.shouldLock = true }
-        function unlock(): void { lock.shouldLock = false }
-    }
-
     WlSessionLockSurface {
         color: "black"
         Rectangle {
@@ -102,7 +94,7 @@ WlSessionLock {
                 }
                 PamContext {
                     id: pam
-                    onPamResult: function(result, error){
+                    onCompleted: function(result){
                         if(result === PamResult.Success){
                             statusText.text = ""
                             lock.shouldLock = false

@@ -1,4 +1,5 @@
 import Quickshell
+import Quickshell.Io
 import "components"
 import "modules"
 

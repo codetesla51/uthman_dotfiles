@@ -15,6 +15,7 @@ Item {
     property string bubbleText: ""
     property string actionKind: "idle"
     property string userActivity: "idle"
+    property var groq: null
 
     property int fatigue: 0
     property bool isSleeping: false
@@ -196,24 +197,31 @@ Item {
     }
 
     function pickNext() {
-        // if sleeping, only wake via timer or interaction — don't pick new sleep
-        if (root.isSleeping) {
-            // sleep dwell will have fired, wake now
-            wakeFromSleep()
+        if (root.isSleeping) { wakeFromSleep(); return }
+        // Groq smart decision — 42% chance when groq ready and fatigue>15
+        if (root.groq && root.groq.ready && root.fatigue > 15 && Math.random() < 0.42) {
+            var avail = availableNames()
+            root.groq.decideNext(root.currentAction, root.actionKind, root.userActivity, root.fatigue, avail, function(chosen){
+                if (chosen && root.actions[chosen]) {
+                    console.log("[StateMachine] Groq chose " + chosen + " (fatigue " + root.fatigue + ")")
+                    applyAction(chosen)
+                } else {
+                    pickNextLocal()
+                }
+            })
             return
         }
-
+        pickNextLocal()
+    }
+    function pickNextLocal() {
         var allNames = availableNames()
         if (allNames.length === 0) return
-
-        // fatigue-driven sleep check — purposeful, not random
         var sp = sleepProbability()
         if (sp > 0 && Math.random() < sp) {
             console.log("[StateMachine] fatigue " + root.fatigue + " -> sleep (p=" + sp.toFixed(2) + ")")
             triggerSynthetic("sleep")
             return
         }
-
         var cur = currentAction
         var curKind = actionKind
         var r = Math.random()
@@ -221,9 +229,6 @@ Item {
         var idleBias = (userActivity === "idle")
         var codingBias = (userActivity === "coding" || userActivity === "terminal")
         var browsingBias = (userActivity === "browsing")
-
-        // purposeful synthetic branch: hide/walkToMe/sitAnywhere (sleep excluded here — handled above)
-        // 10% hide, 14% walkToMe, 10% sitAnywhere when idle, lower otherwise
         var synthChance = idleBias ? 0.34 : 0.16
         if (r < synthChance) {
             var sr = Math.random()
@@ -231,7 +236,6 @@ Item {
             else if (sr < 0.72) { triggerSynthetic("walkToMe"); return }
             else { triggerSynthetic("sitAnywhere"); return }
         }
-
         if (curKind === "walk" || curKind === "walkToMe") {
             if (r < 0.38) {
                 var idles = filtered(idleActions)
@@ -257,7 +261,7 @@ Item {
             if (r < 0.45) { var wks2 = filtered(walkActions); next = wks2[Math.floor(Math.random()*wks2.length)] }
             else if (r < 0.75) { triggerSynthetic("walkToMe"); return }
             else { var ids2 = filtered(sitAnywhereCandidates); next = ids2[Math.floor(Math.random()*ids2.length)] }
-        } else { // idle
+        } else {
             if (r < (codingBias?0.32:0.44)) {
                 if (codingBias && Math.random() < 0.55) {
                     var watch = filtered(["WatchAction","WatchLoop","Sit","SitAndDangleLegs"])
@@ -274,7 +278,6 @@ Item {
                 next = sp2[Math.floor(Math.random()*sp2.length)]
             } else next = cur
         }
-
         if (!actions[next]) next = allNames[Math.floor(Math.random()*allNames.length)]
         applyAction(next)
     }

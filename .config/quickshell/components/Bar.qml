@@ -1,5 +1,6 @@
 import Quickshell
 import Quickshell.Io
+import Quickshell.Wayland
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Shapes
@@ -16,6 +17,7 @@ PanelWindow {
     exclusionMode: ExclusionMode.Auto
     implicitHeight: 54
     color: "transparent"
+    WlrLayershell.namespace: "qs-bar"
     margins { top: 0; left: 8; right: 8 }
 
     property alias colors: palette
@@ -33,7 +35,9 @@ PanelWindow {
     ClipboardPanel { id: clipPanel; colors: palette }
     ThemePanel { id: themePanel; colors: palette }
     FastFetchWindow { id: fastFetch; colors: palette }
+    ClockWindow { id: clockWin; colors: palette }
     KeybindsPanel { id: keybindsPanel; colors: palette }
+    MediaOsd { id: mediaOsd; colors: palette }
 
     CalendarPanel {
         id: calendarPanel
@@ -65,28 +69,36 @@ PanelWindow {
             anchors { top: parent.top; horizontalCenter: parent.horizontalCenter }
             width: islandRow.implicitWidth + 40      // 20px padding per side (slant eats into it)
             height: 54                               // 46px pill line + 8px hang below
+            // trapezoid geometry shared by fill + border
+            readonly property real inset: 18         // horizontal inset of bottom edge
+            readonly property real cr: 12            // corner radius on the protruding bottom angles
             Behavior on width { NumberAnimation { duration: 280; easing.type: Easing.OutCubic } }
 
             Shape {
                 anchors.fill: parent
                 antialiasing: true
                 ShapePath {
-                    fillColor: colors.alpha(colors.surface, 0.88)
+                    fillColor: colors.alpha(colors.surface, 0.60)
                     strokeColor: "transparent"
                     strokeWidth: 0
                     startX: 0; startY: 0
                     PathLine { x: island.width; y: 0 }
-                    PathLine { x: island.width - 18; y: island.height }
-                    PathLine { x: 18; y: island.height }
+                    PathLine { x: island.width - island.inset; y: island.height - island.cr }
+                    PathQuad { controlX: island.width - island.inset; controlY: island.height; x: island.width - island.inset - island.cr; y: island.height }
+                    PathLine { x: island.inset + island.cr; y: island.height }
+                    PathQuad { controlX: island.inset; controlY: island.height; x: island.inset; y: island.height - island.cr }
                 }
-                // hairline border — three visible edges only, never across the screen top
+                // hairline border — three visible edges only, never across the screen top;
+                // protruding bottom angles get the same rounded corners as the fill
                 ShapePath {
                     fillColor: "transparent"
                     strokeColor: colors.alpha(colors.primary, 0.28)
                     strokeWidth: 1
                     startX: 0.5; startY: 0
-                    PathLine { x: 18.5; y: island.height - 0.5 }
-                    PathLine { x: island.width - 18.5; y: island.height - 0.5 }
+                    PathLine { x: island.inset; y: island.height - island.cr }
+                    PathQuad { controlX: island.inset; controlY: island.height - 0.5; x: island.inset + island.cr; y: island.height - 0.5 }
+                    PathLine { x: island.width - island.inset - island.cr; y: island.height - 0.5 }
+                    PathQuad { controlX: island.width - island.inset; controlY: island.height - 0.5; x: island.width - island.inset; y: island.height - island.cr }
                     PathLine { x: island.width - 0.5; y: 0 }
                 }
             }
@@ -99,7 +111,7 @@ PanelWindow {
                 Clock {
                     id: clockItem
                     colors: bar.colors
-                    onPinRequested: bar.calendarPinned = !bar.calendarPinned
+                    onPinRequested: clockWin.open = !clockWin.open
                 }
                 // | separators — flat content, no inner pills
                 Rectangle { width: 1; height: 14; color: colors.alpha(colors.outline, 0.28) }

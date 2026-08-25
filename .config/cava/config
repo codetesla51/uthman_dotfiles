@@ -1,11 +1,31 @@
+[general]
+# fit bars to the terminal automatically from width/spacing
+bar_width = 4
+bar_spacing = 2
+framerate = 120
+sensitivity = 100
+autosens = 1
+overshoot = 20
+# focus on the musical range, skip rumble and hiss
+lower_cutoff_freq = 50
+higher_cutoff_freq = 12000
+
 [color]
+background = "#11140e"
 gradient = 1
 gradient_count = 8
-gradient_color_1 = "#9dd3af"
-gradient_color_2 = "#9dd3af"
-gradient_color_3 = "#b6ccbb"
-gradient_color_4 = "#b6ccbb"
-gradient_color_5 = "#ffb2b8"
-gradient_color_6 = "#ffb2b8"
-gradient_color_7 = "#909891"
-gradient_color_8 = "#414942"
+gradient_color_1 = "#abe88a"
+gradient_color_2 = "#abe88a"
+gradient_color_3 = "#b4cea3"
+gradient_color_4 = "#b4cea3"
+gradient_color_5 = "#ffc8e2"
+gradient_color_6 = "#ffc8e2"
+gradient_color_7 = "#919989"
+gradient_color_8 = "#42493c"
+
+[smoothing]
+# the rice: clean jitter-free bars with the classic monstercat shoulder
+noise_reduction = 62
+monstercat = 1.4
+waves = 0
+gravity = 80

@@ -5,7 +5,7 @@ import QtQuick.Layouts
 import QtQuick.Controls
 
 // System - mission-control card: live CPU/RAM meters, pkg-temp, real network
-// rates (shared NetRate sampler), Matugen-accented spec rows, entrance motion.
+// System - mission-control card: Matugen-accented spec rows, entrance motion.
 FloatingWindow {
     id: root
     property var colors
@@ -13,9 +13,9 @@ FloatingWindow {
 
     title: "System"
     implicitWidth: 500
-    implicitHeight: 352
-    minimumSize: Qt.size(470, 320)
-    maximumSize: Qt.size(560, 400)
+    implicitHeight: 296
+    minimumSize: Qt.size(470, 280)
+    maximumSize: Qt.size(560, 340)
     color: "transparent"
     visible: root.open
 
@@ -28,6 +28,9 @@ FloatingWindow {
     })
     readonly property var accents: [colors.primary, colors.secondary, colors.tertiary]
 
+    Timer { interval: 6000; running: root.open; repeat: true; onTriggered: infoProc.running = true }
+    onOpenChanged: if (open) infoProc.running = true
+
     // ---------- data ----------
     property string host: ""
     property string uptime: ""
@@ -35,73 +38,22 @@ FloatingWindow {
     property string packages: ""
     property string cpuName: ""
     property string gpuName: ""
-    property int tempC: 0
-    property int cpuPct: 0
-    property real memUsedGb: 0
-    property real memTotalGb: 0
-    property real _prevBusy: -1
-    property real _prevIdle: -1
-    readonly property real ramPct: memTotalGb > 0 ? Math.max(0, Math.min(100, Math.round(memUsedGb / memTotalGb * 100))) : 0
-    readonly property color cpuColor: (cpuPct > 85 || tempC >= 75) ? colors.error : colors.primary
-
-    NetRate { id: netRate }
 
     Process {
         id: infoProc
-        command: ["sh","-c","echo \"$(cat /etc/hostname 2>/dev/null)|$(uptime -p 2>/dev/null | sed 's/up //')|$(uname -r)|$(pacman -Q 2>/dev/null | wc -l | xargs)|$(lscpu 2>/dev/null | grep 'Model name' | cut -d: -f2 | sed 's/Intel(R)//;s/CPU//;s/@.*//;s/  */ /g' | xargs)|$(lspci 2>/dev/null | grep -i 'vga\\|3d' | head -n1 | cut -d: -f3 | xargs)|$(for z in /sys/class/thermal/thermal_zone*; do [ \"$(cat $z/type 2>/dev/null)\" = \"x86_pkg_temp\" ] && cat $z/temp && break; done)\""]
+        command: ["sh","-c","echo \"$(cat /etc/hostname 2>/dev/null)|$(uptime -p 2>/dev/null | sed 's/up //')|$(uname -r)|$(pacman -Q 2>/dev/null | wc -l | xargs)|$(lscpu 2>/dev/null | grep 'Model name' | cut -d: -f2 | sed 's/Intel(R)//;s/CPU//;s/@.*//;s/  */ /g' | xargs)|$(lspci 2>/dev/null | grep -i 'vga\\|3d' | head -n1 | cut -d: -f3 | xargs)\""]
         stdout: StdioCollector {
             waitForEnd: true
             onStreamFinished: {
                 var p = text.trim().split("|")
-                if (p.length >= 7) {
+                if (p.length >= 6) {
                     root.host = p[0]; root.uptime = p[1]; root.kernel = p[2]
                     root.packages = p[3]; root.cpuName = p[4]; root.gpuName = p[5]
-                    root.tempC = Math.round((parseInt(p[6]) || 0) / 1000)
                 }
             }
         }
     }
 
-    function sampleCpu() {
-        var line = statFile.text().split("\n")[0]
-        var f = line.split(/\s+/)
-        if (f.length < 8) return
-        var busy = parseInt(f[1]) + parseInt(f[2]) + parseInt(f[3]) + parseInt(f[6]) + parseInt(f[7]) + parseInt(f[8])
-        var idle = parseInt(f[4]) + parseInt(f[5])
-        if (_prevBusy >= 0) {
-            var bd = busy - _prevBusy, id = idle - _prevIdle
-            if (bd + id > 0) cpuPct = Math.round(bd * 100 / (bd + id))
-        }
-        _prevBusy = busy; _prevIdle = idle
-    }
-    function sampleMem() {
-        var t = 0, a = 0
-        var ls = memFile.text().split("\n")
-        for (var i = 0; i < ls.length; i++) {
-            if (ls[i].indexOf("MemTotal:") === 0) t = parseInt(ls[i].replace(/\D/g, ""))
-            else if (ls[i].indexOf("MemAvailable:") === 0) a = parseInt(ls[i].replace(/\D/g, ""))
-        }
-        if (t > 0) { memTotalGb = t / 1048576; memUsedGb = (t - a) / 1048576 }
-    }
-
-    // matugen-replace-safe polling (reset path first — AGENTS section 5)
-    Timer { interval: 6000; running: root.open; repeat: true; onTriggered: infoProc.running = true }
-    Timer {
-        interval: 2000; running: root.open; repeat: true
-        onTriggered: {
-            statFile.path = ""; statFile.path = "/proc/stat"; sampleCpu()
-            memFile.path = ""; memFile.path = "/proc/meminfo"; sampleMem()
-        }
-    }
-    onOpenChanged: {
-        if (!open) return
-        infoProc.running = true
-        statFile.path = ""; statFile.path = "/proc/stat"; sampleCpu()
-        memFile.path = ""; memFile.path = "/proc/meminfo"; sampleMem()
-    }
-
-    FileView { id: statFile; path: "/proc/stat"; printErrors: false }
-    FileView { id: memFile; path: "/proc/meminfo"; printErrors: false }
 
     // ---------- UI ----------
     Rectangle {
@@ -214,88 +166,6 @@ FloatingWindow {
                         }
                     }
 
-                    Rectangle { Layout.fillWidth: true; height: 1; color: colors.alpha(colors.outline, 0.12) }
-
-                    Text {
-                        text: "LIVE"
-                        color: colors.alpha(colors.outline, 0.65)
-                        font.family: "FiraCode Nerd Font"
-                        font.pixelSize: 9
-                        font.weight: Font.Bold
-                        font.letterSpacing: 1.5
-                    }
-
-                    // -- CPU meter --
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: 4
-                        RowLayout {
-                            Layout.fillWidth: true
-                            Text { text: "CPU"; color: colors.alpha(colors.foreground, 0.7); font.family: "FiraCode Nerd Font"; font.pixelSize: 9; font.weight: Font.Bold; font.letterSpacing: 1 }
-                            Text {
-                                visible: root.tempC > 0
-                                text: root.tempC + "°C"
-                                color: root.tempC >= 70 ? colors.error : colors.tertiary
-                                font.family: "FiraCode Nerd Font"; font.pixelSize: 9; font.weight: Font.Bold
-                            }
-                            Item { Layout.fillWidth: true }
-                            Text { text: root.cpuPct + "%"; color: root.cpuColor; font.family: "FiraCode Nerd Font"; font.pixelSize: 11; font.weight: Font.ExtraBold }
-                        }
-                        Rectangle {
-                            id: cpuTrack
-                            Layout.fillWidth: true
-                            height: 4
-                            radius: 2
-                            color: colors.alpha(colors.surfaceVariant, 0.35)
-                            Rectangle {
-                                width: cpuTrack.width * root.cpuPct / 100
-                                anchors { top: parent.top; bottom: parent.bottom; left: parent.left }
-                                radius: 2
-                                color: root.cpuColor
-                                Behavior on width { NumberAnimation { duration: 600; easing.type: Easing.OutCubic } }
-                                Behavior on color { ColorAnimation { duration: 400 } }
-                            }
-                        }
-                    }
-
-                    // -- RAM meter --
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: 4
-                        RowLayout {
-                            Layout.fillWidth: true
-                            Text { text: "MEMORY"; color: colors.alpha(colors.foreground, 0.7); font.family: "FiraCode Nerd Font"; font.pixelSize: 9; font.weight: Font.Bold; font.letterSpacing: 1 }
-                            Item { Layout.fillWidth: true }
-                            Text { text: root.memUsedGb.toFixed(2) + " / " + root.memTotalGb.toFixed(1) + " GB"; color: colors.alpha(colors.foreground, 0.6); font.family: "FiraCode Nerd Font"; font.pixelSize: 9; font.weight: Font.Medium }
-                            Text { text: root.ramPct + "%"; color: colors.secondary; font.family: "FiraCode Nerd Font"; font.pixelSize: 11; font.weight: Font.ExtraBold }
-                        }
-                        Rectangle {
-                            id: ramTrack
-                            Layout.fillWidth: true
-                            height: 4
-                            radius: 2
-                            color: colors.alpha(colors.surfaceVariant, 0.35)
-                            Rectangle {
-                                width: ramTrack.width * root.ramPct / 100
-                                anchors { top: parent.top; bottom: parent.bottom; left: parent.left }
-                                radius: 2
-                                color: colors.secondary
-                                Behavior on width { NumberAnimation { duration: 600; easing.type: Easing.OutCubic } }
-                            }
-                        }
-                    }
-
-                    // -- NET row --
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: 6
-                        Text { text: root.glyphs.dl; color: colors.tertiary; font.family: "FiraCode Nerd Font"; font.pixelSize: 11 }
-                        Text { text: netRate.fmt(netRate.rxKbs); color: colors.foreground; font.family: "FiraCode Nerd Font"; font.pixelSize: 11; font.weight: Font.Bold; Layout.preferredWidth: 74 }
-                        Text { text: root.glyphs.ul; color: colors.secondary; font.family: "FiraCode Nerd Font"; font.pixelSize: 11 }
-                        Text { text: netRate.fmt(netRate.txKbs); color: colors.foreground; font.family: "FiraCode Nerd Font"; font.pixelSize: 11; font.weight: Font.Bold; Layout.preferredWidth: 74 }
-                        Item { Layout.fillWidth: true }
-                        Text { text: netRate.fmtTotal(netRate.totalRxMb) + " total"; color: colors.alpha(colors.outline, 0.5); font.family: "FiraCode Nerd Font"; font.pixelSize: 9; font.weight: Font.Medium }
-                    }
                 }
             }
         }

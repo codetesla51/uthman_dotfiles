@@ -47,7 +47,7 @@ Item {
     Rectangle {
         anchors.fill: parent
         radius: 14
-        color: root.hovered ? colors.alpha(colors.surface, 0.8) : colors.alpha(colors.surface, 0.6)
+        color: root.hovered ? colors.alpha(colors.surface, 0.75) : colors.alpha(colors.surface, 0.55)
         border.width: 1
         border.color: root.hovered ? colors.alpha(colors.tertiary, 0.45) : colors.alpha(colors.outline, 0.15)
 

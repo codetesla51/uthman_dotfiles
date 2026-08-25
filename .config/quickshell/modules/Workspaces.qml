@@ -29,7 +29,7 @@ Item {
         width: btnRow.implicitWidth + 10
         height: 30
         radius: 14
-        color: colors.alpha(colors.surface, 0.65)
+        color: colors.alpha(colors.surface, 0.55)
         border.width: 1
         border.color: colors.alpha(colors.outline, 0.15)
 

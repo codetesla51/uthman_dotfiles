@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<Mascot>
+	<Information>
+		<Name>Hornet</Name>
+		<PreviewImage>preview.png</PreviewImage>
+		<SplashImage>HornetSplash.png</SplashImage>
+		<Artist Name="FluffyFoxOfFate" URL="https://www.deviantart.com/fluffyfoxoffate"/>
+		<Scripter Name="FluffyFoxOfFate" URL="https://www.deviantart.com/fluffyfoxoffate" />
+		<Support Name="Ko-Fi" URL="https://ko-fi.com/fluffyfoxoffate" />
+		<!--<Commissioner Name="Kilkakon" URL="http://kilkakon.com" />-->
+	</Information>
+</Mascot>

@@ -26,6 +26,8 @@ PanelWindow {
 
     mask: Region { item: petWrapper }
 
+    Groq { id: groq; model: "groq/compound-mini" }
+
     IpcHandler {
         target: "pet"
         function toggle(): void { stateMachine.resetFatigue(); root.visible = !root.visible; saveState(); console.log("[Pet] ipc toggle visible="+root.visible) }
@@ -214,6 +216,7 @@ PanelWindow {
         id: stateMachine
         actions: root.actions
         userActivity: root.userActivity
+        groq: groq
         onActionChanged: function(name, frames, interval, bubble, kind){
             root.currentAction = name
             root.currentFrames = frames
@@ -222,6 +225,16 @@ PanelWindow {
             root.bubbleText = bubble
             if (bubble!=="") bubbleHideTimer.restart()
             frameTimer.interval = interval; frameTimer.restart()
+            // Groq smart bubble override — 55% chance when ready, keeps local as fallback
+            if (groq.ready && Math.random() < 0.55) {
+                groq.bubbleFor(root.userActivity, name, stateMachine.fatigue, function(aiBubble){
+                    if (aiBubble && aiBubble.length > 1) {
+                        root.bubbleText = aiBubble
+                        bubbleHideTimer.restart()
+                        console.log("[Pet] Groq bubble: " + aiBubble + " for " + name)
+                    }
+                })
+            }
             if (!root.isDragging && !root.isFalling) {
                 if (kind==="walk") root.startWalk(name)
                 else if (kind==="walkToMe") root.walkToMe(name)

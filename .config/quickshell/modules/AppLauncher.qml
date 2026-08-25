@@ -307,28 +307,6 @@ PanelWindow {
 
                     }
 
-                    // favorite toggle — hover reveal, wired to the favs DB
-                    Rectangle {
-                        visible: ma.containsMouse || root.favSet[modelData.id] === true
-                        width: 26; height: 26; radius: 13
-                        color: favMa.containsMouse ? colors.alpha(colors.primary, 0.18) : "transparent"
-
-                        Text {
-                            anchors.centerIn: parent
-                            text: root.favSet[modelData.id] ? "" : ""
-                            color: root.favSet[modelData.id] ? colors.primary : colors.alpha(colors.outline, 0.6)
-                            font.family: "FiraCode Nerd Font"
-                            font.pixelSize: 12
-                        }
-
-                        MouseArea {
-                            id: favMa
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            onClicked: root.toggleFav(modelData.id)
-                        }
-                    }
-
                     MouseArea {
                             id: ma
                             anchors.fill: parent

@@ -28,15 +28,15 @@ PanelWindow {
 
     IpcHandler {
         target: "pet"
-        function toggle(): void { root.visible = !root.visible; saveState(); console.log("[Pet] ipc toggle visible="+root.visible) }
-        function show(): void { root.visible = true; saveState(); console.log("[Pet] ipc show"); if (Hyprland.activeToplevel) stateMachine.resume() }
-        function hide(): void { root.visible = false; saveState(); console.log("[Pet] ipc hide") }
-        function pet(): void { console.log("[Pet] ipc pet"); stateMachine.trigger("PetAction") }
-        function walkToMe(): void { console.log("[Pet] ipc walkToMe cursor="+root.cursorX+","+root.cursorY+" win="+JSON.stringify(root.activeWinAt)+"/"+JSON.stringify(root.activeWinSize)); stateMachine.trigger("walkToMe") }
+        function toggle(): void { stateMachine.resetFatigue(); root.visible = !root.visible; saveState(); console.log("[Pet] ipc toggle visible="+root.visible) }
+        function show(): void { stateMachine.resetFatigue(); root.visible = true; saveState(); console.log("[Pet] ipc show"); if (Hyprland.activeToplevel) stateMachine.resume() }
+        function hide(): void { stateMachine.resetFatigue(); root.visible = false; saveState(); console.log("[Pet] ipc hide") }
+        function pet(): void { console.log("[Pet] ipc pet"); stateMachine.resetFatigue(); stateMachine.trigger("PetAction") }
+        function walkToMe(): void { console.log("[Pet] ipc walkToMe cursor="+root.cursorX+","+root.cursorY+" win="+JSON.stringify(root.activeWinAt)+"/"+JSON.stringify(root.activeWinSize)); stateMachine.resetFatigue(); stateMachine.trigger("walkToMe") }
         function sleep(): void { console.log("[Pet] ipc sleep"); stateMachine.trigger("sleep") }
-        function sit(): void { console.log("[Pet] ipc sit"); stateMachine.trigger("sitAnywhere") }
-        function hideMe(): void { console.log("[Pet] ipc hideMe"); stateMachine.trigger("hide") }
-        function status(): string { return JSON.stringify({x:root.petX,y:root.petY,facingRight:root.facingRight,visible:root.visible,action:root.currentAction,kind:stateMachine.actionKind,activity:root.userActivity,cursor:[root.cursorX,root.cursorY]}) }
+        function sit(): void { console.log("[Pet] ipc sit"); stateMachine.resetFatigue(); stateMachine.trigger("sitAnywhere") }
+        function hideMe(): void { console.log("[Pet] ipc hideMe"); stateMachine.resetFatigue(); stateMachine.trigger("hide") }
+        function status(): string { return JSON.stringify({x:root.petX,y:root.petY,facingRight:root.facingRight,visible:root.visible,action:root.currentAction,kind:stateMachine.actionKind,activity:root.userActivity,fatigue:stateMachine.fatigue,isSleeping:stateMachine.isSleeping,cursor:[root.cursorX,root.cursorY]}) }
     }
 
     // ── persistence (LocalStorage qs_pet) ───────────────────────────
@@ -288,12 +288,45 @@ PanelWindow {
         saveState()
     }
     function sitAnywhere(action){
-        console.log("[Pet] sitAnywhere " + action+" wh="+root.width+"x"+root.height)
+        console.log("[Pet] sitAnywhere " + action+" wh="+root.width+"x"+root.height+" activity="+userActivity)
+        // any part of screen — not just below: pick random surface
+        // 55% floor, 20% ceiling (hang), 15% window top, 10% truly random mid-air (with fall)
+        var r = Math.random()
+        var targetY, targetX, useFrames = action
         var floorY = clampY(root.height - spriteH -6)
         if (floorY < 40) floorY = 712
-        var rx = Math.floor(Math.random()*Math.max(4, root.width - spriteW -4))+2
-        var ry = floorY
-        // tiny jitter so not exactly same line every time
+        var ceilingY = 10
+        if (r < 0.55) {
+            // floor — classic sit anywhere along bottom
+            targetY = floorY
+            targetX = Math.floor(Math.random()*Math.max(4, root.width - spriteW -4))+2
+        } else if (r < 0.75) {
+            // ceiling — hang from top (uses GrabCeiling frames)
+            targetY = ceilingY
+            targetX = Math.floor(Math.random()*Math.max(4, root.width - spriteW -4))+2
+            if (actions["GrabCeiling"]) useFrames = "GrabCeiling"
+        } else if (r < 0.90 && activeWinSize[0]>200) {
+            // on window — sit on top edge of active window
+            var winTop = activeWinAt[1] - 54 // window screen y -> window-local (bar offset)
+            targetY = clampY(winTop - spriteH + 12)
+            targetX = clampX(activeWinAt[0] + Math.random()*(activeWinSize[0]-spriteW) )
+            if (targetY < 8) targetY = floorY // fallback if window top offscreen
+        } else {
+            // fallback floor — never truly random mid-air (avoids floating sit)
+            targetY = floorY
+            targetX = Math.floor(Math.random()*Math.max(4, root.width - spriteW -4))+2
+        }
+        // if target is ceiling/wall, use appropriate frames
+        if (targetY < 40 && actions["GrabCeiling"]) useFrames = "GrabCeiling"
+        else if (targetY > floorY - 30) useFrames = action // floor sit keeps original
+        if (useFrames !== action && actions[useFrames]) {
+            root.currentAction = useFrames
+            root.currentFrames = actions[useFrames]
+            root.frameInterval = 600
+            frameTimer.interval = 600
+        }
+        var rx = targetX
+        var ry = targetY
         var dist=Math.hypot(rx-root.petX, ry-root.petY)
         var dur=Math.max(500, Math.min(7000, dist/68*1000))
         root.facingRight = rx > root.petX
@@ -303,18 +336,28 @@ PanelWindow {
     }
     function sleepAnywhere(action){
         console.log("[Pet] sleepAnywhere " + action+" wh="+root.width+"x"+root.height)
+        // sleep can be anywhere but prefers cozy spots: floor corners, ceiling nook, window ledge
         var floorY = clampY(root.height - spriteH -6)
         if (floorY < 40) floorY = 712
-        var corners = [
+        var ceilingY = 12
+        var winY = (activeWinSize[0]>200) ? clampY(activeWinAt[1] - 54 - spriteH/2) : floorY
+        var spots = [
             {x:8, y: floorY},
             {x: root.width - spriteW -8, y: floorY},
             {x: Math.floor(root.width/2 - spriteW/2), y: floorY},
-            {x: 12, y: floorY}
+            {x: 12, y: ceilingY},
+            {x: root.width - spriteW -12, y: ceilingY},
+            {x: clampX(activeWinAt[0] + 20), y: winY}
         ]
-        var pick = corners[Math.floor(Math.random()*corners.length)]
-        pick.x += Math.floor((Math.random()-0.5)*60)
-        // keep y on floor — sleep never floats mid-air
-        var c=clampXY(pick.x, floorY)
+        var pick = spots[Math.floor(Math.random()*spots.length)]
+        pick.x += Math.floor((Math.random()-0.5)*40)
+        pick.y += Math.floor((Math.random()-0.5)*20)
+        var c=clampXY(pick.x, pick.y)
+        // choose frames for spot: ceiling -> GrabCeiling/Sprawl, window -> Sprawl
+        if (c.y < 40 && actions["GrabCeiling"]) {
+            root.currentAction = "GrabCeiling"
+            root.currentFrames = actions["GrabCeiling"]
+        }
         var dist=Math.hypot(c.x-root.petX, c.y-root.petY)
         var dur=Math.max(600, Math.min(7000, dist/55*1000))
         xAnim.duration=dur; yAnim.duration=dur
@@ -437,6 +480,7 @@ PanelWindow {
                 if(root.actions["Pinched"]){
                     root.currentAction="Pinched"; root.currentFrames=root.actions["Pinched"]; root.currentFrameIndex=0; root.frameInterval=90; frameTimer.interval=90; frameTimer.restart()
                 }
+                stateMachine.resetFatigue()
                 stateMachine.pause()
             }
             onPositionChanged: function(mouse){
@@ -471,6 +515,7 @@ PanelWindow {
                 fallTimer.restart()
             }
             onClicked: function(mouse){
+                stateMachine.resetFatigue()
                 if(mouse.button===Qt.RightButton){
                     var specials=["PoseAction","ThrowNeedleAction","EatBerryAction"]
                     var avail=specials.filter(function(n){return root.actions[n]})
@@ -479,7 +524,7 @@ PanelWindow {
                 }
                 if(!root.isDragging && root.actions["PetAction"]) stateMachine.trigger("PetAction")
             }
-            onDoubleClicked: function(mouse){ if(root.actions["Dash"]) stateMachine.trigger("Dash") }
+            onDoubleClicked: function(mouse){ stateMachine.resetFatigue(); if(root.actions["Dash"]) stateMachine.trigger("Dash") }
         }
     }
 

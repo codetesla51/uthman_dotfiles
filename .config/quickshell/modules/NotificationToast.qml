@@ -154,6 +154,50 @@ Rectangle {
             }
         }
 
+        // ── row 2.5: action buttons (invoke the sender's actions) ──
+        Row {
+            Layout.fillWidth: true
+            spacing: 6
+            visible: root.alive && notification.actions !== undefined && notification.actions.length > 0
+
+            Repeater {
+                model: root.alive ? notification.actions : []
+
+                delegate: Rectangle {
+                    id: tAct
+                    required property var modelData
+                    visible: modelData.identifier !== undefined && modelData.identifier !== "default" && modelData.text !== ""
+                    width: tActLbl.implicitWidth + 18
+                    height: 24
+                    radius: 12
+                    color: tActMa.containsMouse ? colors.alpha(colors.primary, 0.25)
+                                               : colors.alpha(colors.surfaceVariant, 0.35)
+                    border.width: 1
+                    border.color: colors.alpha(colors.primary, 0.35)
+
+                    Text {
+                        id: tActLbl
+                        anchors.centerIn: parent
+                        text: tAct.modelData.text || ""
+                        color: colors.foreground
+                        font.family: "FiraCode Nerd Font"
+                        font.pixelSize: 10
+                        font.weight: Font.DemiBold
+                    }
+
+                    MouseArea {
+                        id: tActMa
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        onClicked: {
+                            tAct.modelData.invoke()
+                            root.dismiss()
+                        }
+                    }
+                }
+            }
+        }
+
         // ── row 3: save for screenshots only ──
         Row {
             Layout.fillWidth: true

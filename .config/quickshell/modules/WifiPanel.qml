@@ -61,6 +61,37 @@ PanelWindow {
         net.connect()
     }
 
+    Timer {
+        id: failClear
+        interval: 6000
+        onTriggered: root.errorText = ""
+    }
+    function failText(r) {
+        var m = ["unknown error", "no password saved", "client disconnected", "client failed", "auth timed out", "network lost"]
+        return m[r] !== undefined ? m[r] : "failed"
+    }
+
+    // ── keyboard selection / actions ──
+    property int selectedIndex: 0
+    property string askPwSsid: ""   // which row shows the password field
+
+    function connectSelected() {
+        var n = root.filteredNets[root.selectedIndex]
+        if (!n || n.connected) return
+        if (!n.security || n.security === WifiSecurityType.None || n.known) root.connectTo(n)
+        else root.askPwSsid = n.name.trim()
+    }
+    function forgetSelected() {
+        var n = root.filteredNets[root.selectedIndex]
+        if (n && n.known && !n.connected) n.forget()
+    }
+    function moveSel(d) {
+        if (root.filteredNets.length === 0) return
+        root.selectedIndex = Math.max(0, Math.min(root.filteredNets.length - 1, root.selectedIndex + d))
+        netList.positionViewAtIndex(root.selectedIndex, ListView.Contain)
+    }
+    onFilteredNetsChanged: root.selectedIndex = Math.max(0, Math.min(root.filteredNets.length - 1, root.selectedIndex))
+
     anchors { top: true; bottom: true; left: true; right: true }
     exclusionMode: ExclusionMode.Ignore
     color: "transparent"
@@ -119,6 +150,11 @@ PanelWindow {
                 if (root.wifiDev) { root.wifiDev.scannerEnabled = false; root.wifiDev.scannerEnabled = true; root.scanSpinning = true }
                 event.accepted = true
             } else if (txt === "t" || event.key === Qt.Key_T) { root.runSpeedTest(); event.accepted = true }
+            else if (event.key === Qt.Key_C || event.key === Qt.Key_Return || event.key === Qt.Key_Enter) { root.connectSelected(); event.accepted = true }
+            else if (event.key === Qt.Key_D) { if (root.connectedNet) root.connectedNet.disconnect(); event.accepted = true }
+            else if (event.key === Qt.Key_F) { root.forgetSelected(); event.accepted = true }
+            else if (event.key === Qt.Key_Down) { root.moveSel(1); event.accepted = true }
+            else if (event.key === Qt.Key_Up) { root.moveSel(-1); event.accepted = true }
         }
 
         transform: Translate { id: slide }
@@ -157,6 +193,27 @@ PanelWindow {
                     font.pixelSize: 14
                     font.weight: Font.ExtraBold
                     Layout.fillWidth: true
+                }
+
+                // wifi radio on/off
+                Rectangle {
+                    visible: root.wifiDev !== null
+                    width: 26; height: 26; radius: 13
+                    color: wfMouse.containsMouse ? colors.alpha(colors.surfaceVariant, 0.4)
+                         : root.wifiDev && root.wifiDev.wifiEnabled ? colors.alpha(colors.primary, 0.15) : "transparent"
+                    Text {
+                        anchors.centerIn: parent
+                        text: root.wifiDev && root.wifiDev.wifiEnabled ? "󰤯" : "󰖪"
+                        color: root.wifiDev && root.wifiDev.wifiEnabled ? colors.primary : colors.alpha(colors.outline, 0.7)
+                        font.family: "FiraCode Nerd Font"
+                        font.pixelSize: 13
+                    }
+                    MouseArea {
+                        id: wfMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        onClicked: if (root.wifiDev) root.wifiDev.wifiEnabled = !root.wifiDev.wifiEnabled
+                    }
                 }
 
                 Item {
@@ -251,6 +308,51 @@ PanelWindow {
                             color: colors.alpha(colors.outline, 0.7)
                             font.family: "FiraCode Nerd Font"
                             font.pixelSize: 9
+                        }
+                    }
+
+                    // row 1.5: actions — disconnect from this network
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Layout.leftMargin: connGlyph.width + 8
+                        spacing: 6
+
+                        Rectangle {
+                            width: discRow.implicitWidth + 18
+                            height: 22
+                            radius: 11
+                            color: dcMouse.containsMouse ? colors.alpha(colors.error, 0.2) : colors.alpha(colors.surfaceVariant, 0.3)
+                            border.width: 1
+                            border.color: dcMouse.containsMouse ? colors.alpha(colors.error, 0.45) : colors.alpha(colors.outline, 0.15)
+
+                            Row {
+                                id: discRow
+                                anchors.centerIn: parent
+                                spacing: 5
+
+                                Text {
+                                    text: "󰰡"
+                                    color: dcMouse.containsMouse ? colors.error : colors.alpha(colors.foreground, 0.75)
+                                    font.family: "FiraCode Nerd Font"
+                                    font.pixelSize: 10
+                                    anchors.verticalCenter: parent.verticalCenter
+                                }
+                                Text {
+                                    text: "Disconnect"
+                                    color: dcMouse.containsMouse ? colors.error : colors.alpha(colors.foreground, 0.75)
+                                    font.family: "FiraCode Nerd Font"
+                                    font.pixelSize: 9
+                                    font.weight: Font.DemiBold
+                                    anchors.verticalCenter: parent.verticalCenter
+                                }
+                            }
+
+                            MouseArea {
+                                id: dcMouse
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                onClicked: if (root.connectedNet) root.connectedNet.disconnect()
+                            }
                         }
                     }
 
@@ -507,15 +609,35 @@ PanelWindow {
                     required property int index
 
                     property bool hovered: rowArea.containsMouse
-                    property bool askPw: false
-                    property bool isConnecting: root.connectingSsid === modelData.name.trim()
+                    readonly property bool askPw: root.askPwSsid === modelData.name.trim()
+                    readonly property bool isSelected: index === root.selectedIndex
+                    readonly property bool isConnecting: modelData.stateChanging || modelData.state === ConnectionState.Connecting
+
+                    // real connection feedback: failures surface in the banner, success clears states
+                    Connections {
+                        target: modelData
+                        function onConnectionFailed(reason) {
+                            if (root.connectingSsid === modelData.name.trim()) {
+                                root.errorText = "Failed to join \"" + modelData.name.trim() + "\": " + root.failText(reason)
+                                root.connectingSsid = ""
+                                root.failClear.restart()
+                            }
+                        }
+                        function onStateChanged(state) {
+                            if (state === ConnectionState.Connected && root.connectingSsid === modelData.name.trim()) {
+                                root.connectingSsid = ""
+                                root.errorText = ""
+                            }
+                        }
+                    }
 
                     width: netList.width - 8
                     height: askPw ? 120 : 44
                     radius: 10
                     color: hovered ? colors.alpha(colors.surfaceVariant, 0.3) : "transparent"
-                    border.width: modelData.connected ? 1 : 0
-                    border.color: colors.alpha(colors.primary, 0.45)
+                    border.width: modelData.connected || isSelected ? 1 : 0
+                    border.color: modelData.connected ? colors.alpha(colors.primary, 0.45)
+                                                      : colors.alpha(colors.outline, 0.35)
 
                     Behavior on height { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
 
@@ -561,6 +683,26 @@ PanelWindow {
                                     color: colors.alpha(colors.outline, 0.7)
                                     font.family: "FiraCode Nerd Font"
                                     font.pixelSize: 8
+                                }
+                            }
+
+                            // hover-reveal: forget saved network
+                            Rectangle {
+                                visible: hovered && modelData.known && !modelData.connected && !isConnecting
+                                width: 22; height: 22; radius: 11
+                                color: fgMouse.containsMouse ? colors.alpha(colors.error, 0.25) : "transparent"
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: "󰆴"
+                                    color: fgMouse.containsMouse ? colors.error : colors.alpha(colors.outline, 0.65)
+                                    font.family: "FiraCode Nerd Font"
+                                    font.pixelSize: 11
+                                }
+                                MouseArea {
+                                    id: fgMouse
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    onClicked: modelData.forget()
                                 }
                             }
 
@@ -632,7 +774,7 @@ PanelWindow {
                                         root.connectingSsid = modelData.name.trim()
                                         modelData.connectWithPsk(pwField.text)
                                         pwField.text = ""
-                                        askPw = false
+                                        root.askPwSsid = ""
                                     }
                                 }
                             }
@@ -644,6 +786,12 @@ PanelWindow {
                             color: colors.alpha(colors.primary, 0.9)
                             font.family: "FiraCode Nerd Font"
                             font.pixelSize: 9
+                            SequentialAnimation on opacity {
+                                running: isConnecting
+                                loops: Animation.Infinite
+                                NumberAnimation { to: 0.35; duration: 500 }
+                                NumberAnimation { to: 1; duration: 500 }
+                            }
                         }
                     }
 
@@ -654,16 +802,31 @@ PanelWindow {
                         enabled: !askPw
                         propagateComposedEvents: true
                         onClicked: {
-                            if (modelData.connected) return
+                            if (modelData.connected || isConnecting) return
                             if (!modelData.security || modelData.security === WifiSecurityType.None || modelData.known) {
                                 root.connectTo(modelData)
                             } else {
-                                askPw = !askPw
-                                if (askPw) Qt.callLater(function(){ pwField.forceActiveFocus() })
+                                if (root.askPwSsid === modelData.name.trim()) {
+                                    root.askPwSsid = ""
+                                } else {
+                                    root.askPwSsid = modelData.name.trim()
+                                    Qt.callLater(function(){ pwField.forceActiveFocus() })
+                                }
                             }
                         }
                     }
                 }
+            }
+
+            // keyboard hints
+            Text {
+                Layout.fillWidth: true
+                horizontalAlignment: Text.AlignHCenter
+                text: "↑↓ select  ·  C connect  ·  D disconnect  ·  S scan  ·  F forget  ·  T speed test"
+                color: colors.alpha(colors.outline, 0.5)
+                font.family: "FiraCode Nerd Font"
+                font.pixelSize: 8
+                font.letterSpacing: 0.5
             }
 
             Rectangle { Layout.fillWidth: true; height: 1; color: colors.alpha(colors.outline, 0.15) }

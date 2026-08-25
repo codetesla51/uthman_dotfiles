@@ -1,19 +1,18 @@
 import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
+import Quickshell.Hyprland
 import QtQuick
+import QtQuick.LocalStorage 2.0
 
-// Hornet Shimeji pet — transparent PanelWindow, only PNG visible.
-// - exclusiveZone: 0, click-through except sprite (mask)
-// - sprite size exactly 128×128 (source implicit), no stretching
-// - frame-swap via Timer over pet-actions.json file list
-// - walks across bottom edge when Walk/Run/Dash, idles otherwise
-// - dialogue bubble occasional (via StateMachine)
-// - dragging → Pinched / Falling feedback
+// Hornet Shimeji pet — smart, persistent, free-roaming.
+// - transparent PanelWindow overlay, click-through except sprite (mask)
+// - exact PNG size, frame Timer, 2D walk (x+y), sit anywhere, hide/sleep/walkToMe
+// - smart: watches Hyprland.activeToplevel (coding/browsing/terminal/media/idle)
+// - persists: petX/petY/facing/visible via LocalStorage, always there after reload
 PanelWindow {
     id: root
 
-    // ── window chrome ───────────────────────────────────────────────
     anchors { top: true; bottom: true; left: true; right: true }
     exclusiveZone: 0
     exclusionMode: ExclusionMode.Ignore
@@ -25,253 +24,402 @@ PanelWindow {
     WlrLayershell.exclusiveZone: 0
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
 
-    // only sprite receives input — everything else click-through
     mask: Region { item: petWrapper }
 
-    // ── ipc ─────────────────────────────────────────────────────────
     IpcHandler {
         target: "pet"
-        function toggle(): void { root.visible = !root.visible }
-        function show(): void { root.visible = true }
-        function hide(): void { root.visible = false }
-        function pet(): void { stateMachine.trigger("PetAction") }
+        function toggle(): void { root.visible = !root.visible; saveState(); console.log("[Pet] ipc toggle visible="+root.visible) }
+        function show(): void { root.visible = true; saveState(); console.log("[Pet] ipc show"); if (Hyprland.activeToplevel) stateMachine.resume() }
+        function hide(): void { root.visible = false; saveState(); console.log("[Pet] ipc hide") }
+        function pet(): void { console.log("[Pet] ipc pet"); stateMachine.trigger("PetAction") }
+        function walkToMe(): void { console.log("[Pet] ipc walkToMe cursor="+root.cursorX+","+root.cursorY+" win="+JSON.stringify(root.activeWinAt)+"/"+JSON.stringify(root.activeWinSize)); stateMachine.trigger("walkToMe") }
+        function sleep(): void { console.log("[Pet] ipc sleep"); stateMachine.trigger("sleep") }
+        function sit(): void { console.log("[Pet] ipc sit"); stateMachine.trigger("sitAnywhere") }
+        function hideMe(): void { console.log("[Pet] ipc hideMe"); stateMachine.trigger("hide") }
+        function status(): string { return JSON.stringify({x:root.petX,y:root.petY,facingRight:root.facingRight,visible:root.visible,action:root.currentAction,kind:stateMachine.actionKind,activity:root.userActivity,cursor:[root.cursorX,root.cursorY]}) }
     }
 
-    // ── actions file ────────────────────────────────────────────────
+    // ── persistence (LocalStorage qs_pet) ───────────────────────────
+    function petDb() { return LocalStorage.openDatabaseSync("qs_pet", "1.0", "hornet pet", 100000) }
+    function initDb() {
+        var db = petDb()
+        db.transaction(function(tx){
+            tx.executeSql('CREATE TABLE IF NOT EXISTS state(key TEXT PRIMARY KEY, value TEXT)')
+        })
+    }
+    function saveState() {
+        try {
+            var db = petDb()
+            db.transaction(function(tx){
+                tx.executeSql('INSERT OR REPLACE INTO state VALUES(?,?)', ['petX', String(root.petX)])
+                tx.executeSql('INSERT OR REPLACE INTO state VALUES(?,?)', ['petY', String(root.petY)])
+                tx.executeSql('INSERT OR REPLACE INTO state VALUES(?,?)', ['facingRight', root.facingRight ? '1':'0'])
+                tx.executeSql('INSERT OR REPLACE INTO state VALUES(?,?)', ['visible', root.visible ? '1':'0'])
+                tx.executeSql('INSERT OR REPLACE INTO state VALUES(?,?)', ['currentAction', root.currentAction])
+            })
+        } catch(e) { console.warn("[Pet] saveState failed " + e) }
+    }
+    function loadState() {
+        try {
+            var db = petDb()
+            var vals = {}
+            db.transaction(function(tx){
+                var rs = tx.executeSql('SELECT * FROM state')
+                for (var i=0;i<rs.rows.length;i++) vals[rs.rows.item(i).key] = rs.rows.item(i).value
+            })
+            if (vals.petX !== undefined) {
+                var x = parseInt(vals.petX); if (!isNaN(x)) root.petX = clampX(x)
+            }
+            if (vals.petY !== undefined) {
+                var y = parseInt(vals.petY); if (!isNaN(y)) {
+                    // if saved y is near top (floating), ignore — force floor on next frame
+                    if (y < 100) {
+                        console.log("[Pet] ignoring saved top y="+y+" -> will snap to floor")
+                        root.hasSavedY = false
+                    } else {
+                        root.petY = clampY(y)
+                        root.hasSavedY = true
+                    }
+                }
+            }
+            if (vals.facingRight !== undefined) root.facingRight = vals.facingRight === '1'
+            // persist always there — always visible on start, ignore saved hidden
+            root.visible = true
+            console.log("[Pet] restored petX=" + root.petX + " petY=" + root.petY + " facing=" + root.facingRight + " (forced visible)")
+        } catch(e) { console.warn("[Pet] loadState failed " + e) }
+    }
+    property bool hasSavedY: false
+
+    // ── actions file ───────────────────────────────────────────────
     property var actions: ({})
     property string actionsFile: Quickshell.env("HOME") + "/.config/quickshell/modules/pet/config/pet-actions.json"
     property string assetsBase: Quickshell.env("HOME") + "/.config/quickshell/modules/pet/assets/"
-
-    FileView {
-        id: actionsFileView
-        path: root.actionsFile
-        printErrors: true
+    FileView { id: actionsFileView; path: root.actionsFile; printErrors: true;
         onLoaded: {
-            try {
-                var data = JSON.parse(text())
-                root.actions = data
-                console.log("[Pet] loaded " + Object.keys(data).length + " actions")
-            } catch (e) {
-                console.warn("[Pet] failed to parse pet-actions.json: " + e)
-            }
-        }
-        onLoadFailed: function(err) {
-            console.warn("[Pet] loadFailed " + path + " : " + err)
+            try { var data = JSON.parse(text()); root.actions = data; console.log("[Pet] loaded " + Object.keys(data).length + " actions") }
+            catch(e){ console.warn("[Pet] parse fail " + e) }
         }
     }
-    Component.onCompleted: {
-        // force load
-        actionsFileView.path = ""
-        actionsFileView.path = root.actionsFile
-    }
+    Component.onCompleted: { initDb(); loadState(); actionsFileView.path=""; actionsFileView.path=root.actionsFile }
 
-    // ── state + frames ──────────────────────────────────────────────
+    // ── frames ─────────────────────────────────────────────────────
     property string currentAction: "Stand"
-    property var currentFrames: ["shime1.png", "shime1a.png"]
+    property var currentFrames: ["shime1.png","shime1a.png"]
     property int currentFrameIndex: 0
     property int frameInterval: 180
-    property string currentFile: currentFrames.length > 0 ? currentFrames[currentFrameIndex % currentFrames.length] : "shime1.png"
+    property string currentFile: currentFrames.length>0 ? currentFrames[currentFrameIndex % currentFrames.length] : "shime1.png"
     property string currentFrameUrl: "file://" + assetsBase + currentFile
     property bool facingRight: false
     property string bubbleText: ""
     property bool isDragging: false
     property bool isFalling: false
 
-    // position — floor-anchored, x slides
+    // position — now 2D free roam (x+y), floor fallback if no savedY
     property int petX: 120
-    property int petY: 0 // computed
-    property int spriteW: petWrapper.width > 0 ? petWrapper.width : 128
-    // keep inside screen
-    function clampX(x) {
-        if (root.width <= 0) return x
-        var w = spriteW
-        return Math.max(2, Math.min(x, root.width - w - 2))
+    property int petY: 0
+    property int spriteW: petWrapper.width>0 ? petWrapper.width : 128
+    property int spriteH: petWrapper.height>0 ? petWrapper.height : 128
+    function clampX(x){ if (root.width<=0) return x; return Math.max(2, Math.min(x, root.width - spriteW - 2)) }
+    function clampY(y){ if (root.height<=0) return y; return Math.max(4, Math.min(y, root.height - spriteH - 4)) }
+    function clampXY(x,y){ return {x: clampX(x), y: clampY(y)} }
+
+    // ── smart user activity (Hyprland) ─────────────────────────────
+    property string userActivity: "unknown"
+    property string lastClass: ""
+    property string lastTitle: ""
+    property int cursorX: 800
+    property int cursorY: 450
+    property var activeWinAt: [0,0]
+    property var activeWinSize: [0,0]
+    property int lastActivityChangeMs: 0
+    property bool isUserIdle: false
+
+    function classifyActivity(cls, title) {
+        var c = (cls||"").toLowerCase()
+        var t = (title||"").toLowerCase()
+        if (!c && !t) return "idle"
+        if (c.indexOf("code") !== -1 || c.indexOf("cursor") !== -1 || c.indexOf("nvim") !== -1 || c.indexOf("neovim") !== -1 || c.indexOf("windsurf") !== -1 || t.indexOf(".ts") !== -1 || t.indexOf(".py") !== -1 || t.indexOf(".go") !== -1 || c === "ghostty" && (t.indexOf("nvim")!==-1 || t.indexOf("code")!==-1)) return "coding"
+        if (c.indexOf("ghostty") !== -1 || c.indexOf("alacritty") !== -1 || c.indexOf("kitty") !== -1 || c.indexOf("foot") !== -1 || c.indexOf("konsole") !== -1) return "terminal"
+        if (c.indexOf("firefox") !== -1 || c.indexOf("chrome") !== -1 || c.indexOf("chromium") !== -1 || c.indexOf("brave") !== -1) {
+            if (t.indexOf("youtube")!==-1 || t.indexOf("twitch")!==-1) return "media"
+            return "browsing"
+        }
+        if (c.indexOf("spotify")!==-1 || c.indexOf("mpv")!==-1 || c.indexOf("vlc")!==-1) return "media"
+        if (c.indexOf("slack")!==-1 || c.indexOf("discord")!==-1 || c.indexOf("telegram")!==-1) return "browsing"
+        return "unknown"
+    }
+    function updateActivity() {
+        var tl = Hyprland.activeToplevel
+        var cls = "", title=""
+        var at = [0,0], sz=[0,0]
+        if (tl) {
+            // HyprlandToplevel has lastIpcObject with class/at/size
+            var obj = tl.lastIpcObject
+            if (obj) {
+                cls = obj.class || obj.initialClass || ""
+                title = obj.title || obj.initialTitle || tl.title || ""
+                if (obj.at) at = obj.at
+                if (obj.size) sz = obj.size
+            } else {
+                title = tl.title || ""
+            }
+        }
+        var act = classifyActivity(cls, title)
+        // idle if no window change for 55s and no cursor movement (tracked separately)
+        var now = Date.now()
+        if (cls !== lastClass || title !== lastTitle) {
+            lastClass = cls; lastTitle = title; lastActivityChangeMs = now; isUserIdle = false
+        } else if (now - lastActivityChangeMs > 55000) {
+            isUserIdle = true
+            act = "idle"
+        }
+        if (act !== userActivity) {
+            userActivity = act
+            stateMachine.userActivity = act
+            console.log("[Pet] activity → " + act + " (" + cls + " :: " + title + ")")
+        }
+        activeWinAt = at; activeWinSize = sz
     }
 
+    Timer { id: activityTimer; interval: 3800; running: true; repeat: true; triggeredOnStart: true; onTriggered: updateActivity() }
+    Connections { target: Hyprland; function onActiveToplevelChanged(){ updateActivity() } }
+
+    // cursor polling via hyprctl
+    Process {
+        id: cursorProc
+        command: ["sh","-c","hyprctl cursorpos -j"]
+        stdout: StdioCollector { id: cursorOut; waitForEnd: true; onStreamFinished: {
+                try {
+                    var j = JSON.parse(text.trim())
+                    if (j && typeof j.x==="number") { root.cursorX = Math.round(j.x); root.cursorY = Math.round(j.y) }
+                } catch(e){}
+            }
+        }
+    }
+    Timer { interval: 900; running: true; repeat: true; triggeredOnStart: true; onTriggered: cursorProc.running = true }
+
+    // idle cursor check — if cursor hasn't moved 90s consider idle too
+    property int lastCursorX: 0
+    property int lastCursorY: 0
+    property int lastCursorMoveMs: 0
+    onCursorXChanged: checkCursorMove()
+    onCursorYChanged: checkCursorMove()
+    function checkCursorMove(){
+        if (cursorX!==lastCursorX || cursorY!==lastCursorY){ lastCursorX=cursorX; lastCursorY=cursorY; lastCursorMoveMs=Date.now(); if(isUserIdle) isUserIdle=false }
+        if (Date.now()-lastCursorMoveMs>90000 && !isUserIdle){ isUserIdle=true; userActivity="idle"; stateMachine.userActivity="idle" }
+    }
+
+    // ── state machine ──────────────────────────────────────────────
     StateMachine {
         id: stateMachine
         actions: root.actions
-        onActionChanged: function(name, frames, interval, bubble, kind) {
+        userActivity: root.userActivity
+        onActionChanged: function(name, frames, interval, bubble, kind){
             root.currentAction = name
             root.currentFrames = frames
             root.frameInterval = interval
             root.currentFrameIndex = 0
             root.bubbleText = bubble
-            if (bubble !== "") bubbleHideTimer.restart()
-            frameTimer.interval = interval
-            frameTimer.restart()
-            // movement decision
+            if (bubble!=="") bubbleHideTimer.restart()
+            frameTimer.interval = interval; frameTimer.restart()
             if (!root.isDragging && !root.isFalling) {
-                if (kind === "walk") {
-                    root.startWalk(name)
-                } else {
-                    root.stopWalk()
-                }
+                if (kind==="walk") root.startWalk(name)
+                else if (kind==="walkToMe") root.walkToMe(name)
+                else if (kind==="sitAnywhere") root.sitAnywhere(name)
+                else if (kind==="sleep") root.sleepAnywhere(name)
+                else if (kind==="hide") root.doHide(name)
+                else root.stopWalk()
             }
-            // fade bubble if empty
-            if (bubble === "") bubbleHideTimer.stop()
+            if (bubble==="") bubbleHideTimer.stop()
         }
     }
+    Timer { id: bubbleHideTimer; interval: 2400; repeat:false; onTriggered: root.bubbleText="" }
+    Timer { id: frameTimer; interval: root.frameInterval; repeat:true; running:true; onTriggered: { if(root.currentFrames.length>0) root.currentFrameIndex=(root.currentFrameIndex+1)%root.currentFrames.length } }
 
-    // dialogue auto-hide
-    Timer {
-        id: bubbleHideTimer
-        interval: 2200
-        repeat: false
-        onTriggered: root.bubbleText = ""
-    }
-
-    // frame swap — cycles through file list, no stretching
-    Timer {
-        id: frameTimer
-        interval: root.frameInterval
-        repeat: true
-        running: true
-        onTriggered: {
-            if (root.currentFrames.length === 0) return
-            root.currentFrameIndex = (root.currentFrameIndex + 1) % root.currentFrames.length
-        }
-    }
-
-    // ── movement — x animated across bottom edge ─────────────────────
-    function speedFor(action) {
-        if (action === "Run" || action === "RunWithIe") return 145
-        if (action === "Dash") return 225
-        // Walk default
+    // ── 2D movement ────────────────────────────────────────────────
+    function speedFor(action){
+        if (action==="Run"||action==="RunWithIe") return 145
+        if (action==="Dash") return 225
         return 68
     }
-
-    function startWalk(action) {
-        if (root.width <= 0) {
-            // defer until window mapped
-            Qt.callLater(function(){ startWalk(action) })
-            return
+    function startWalk(action){
+        if (root.width<=0 || root.height<=0){ Qt.callLater(function(){ startWalk(action) }); return }
+        var floorY = clampY(root.height - spriteH -6)
+        // fallback if height not yet valid (e.g. 4) — use 712 default
+        if (floorY < 40) floorY = 712
+        console.log("[Pet] startWalk "+action+" rootWH="+root.width+"x"+root.height+" floorY="+floorY+" curY="+root.petY)
+        if (Math.abs(root.petY - floorY) > 4) {
+            yAnim.duration = 220; root.petY = floorY
         }
-        var w = spriteW
-        if (w <= 0) w = 128
-        var maxX = Math.max(2, root.width - w - 2)
-        // random target not too close
+        var maxX = Math.max(2, root.width - spriteW -2)
         var cur = root.petX
-        var target = Math.floor(Math.random() * (maxX - 2 + 1)) + 2
-        // avoid tiny moves < 120px (unless stuck)
-        var tries = 0
-        while (Math.abs(target - cur) < 120 && tries < 6) {
-            target = Math.floor(Math.random() * (maxX - 2 + 1)) + 2
-            tries++
+        var target = Math.floor(Math.random()*(maxX-2+1))+2
+        var tries=0; while(Math.abs(target-cur)<120 && tries<6){ target=Math.floor(Math.random()*(maxX-2+1))+2; tries++ }
+        var dist=Math.abs(target-cur)
+        var dur=Math.max(900, Math.min(9000, dist / speedFor(action)*1000))
+        root.facingRight = target>cur
+        xAnim.duration=dur; yAnim.duration=240
+        root.petX = clampX(target); root.petY = floorY
+        saveState()
+        console.log("[Pet] startWalk "+action+" to "+target+" dur "+dur+" floorY "+floorY)
+    }
+    function walkToMe(action){
+        console.log("[Pet] walkToMe action="+action+" cursor="+cursorX+","+cursorY+" winAt="+JSON.stringify(activeWinAt)+" size="+JSON.stringify(activeWinSize)+" wh="+root.width+"x"+root.height)
+        if (root.width<=0 || root.height<=0){ Qt.callLater(function(){ walkToMe(action) }); return }
+        var floorY = clampY(root.height - spriteH -6)
+        if (floorY < 40) floorY = 712
+        if (Math.abs(root.petY - floorY) > 4) { yAnim.duration=180; root.petY=floorY }
+        var tx
+        if (activeWinSize[0]>120 && activeWinSize[1]>120) {
+            tx = activeWinAt[0] + activeWinSize[0]/2 - spriteW/2
+        } else {
+            tx = cursorX - spriteW/2
         }
-        var dist = Math.abs(target - cur)
-        var spd = speedFor(action)
-        var dur = Math.max(900, Math.min(9000, dist / spd * 1000))
-        root.facingRight = target > cur
-        xAnim.duration = dur
-        root.petX = clampX(target)
-        walkSettleTimer.restart()
+        var c = clampXY(tx, floorY)
+        // y always floor — no floating
+        var dx=c.x - root.petX, dy=c.y - root.petY
+        var dist=Math.hypot(dx,dy)
+        var dur=Math.max(700, Math.min(8000, dist / speedFor(action)*1000))
+        root.facingRight = dx>0
+        xAnim.duration=dur; yAnim.duration=dur
+        root.petX=c.x; root.petY=c.y
+        root.bubbleText="comin'!"
+        bubbleHideTimer.restart()
+        saveState()
     }
-
-    function stopWalk() {
-        // leave x where it is, cancel settle timer only if we were walking to idle we stay
-        // no action needed — xAnim will finish its current move; interrupt with zero-duration stop
-        // keep facing
+    function sitAnywhere(action){
+        console.log("[Pet] sitAnywhere " + action+" wh="+root.width+"x"+root.height)
+        var floorY = clampY(root.height - spriteH -6)
+        if (floorY < 40) floorY = 712
+        var rx = Math.floor(Math.random()*Math.max(4, root.width - spriteW -4))+2
+        var ry = floorY
+        // tiny jitter so not exactly same line every time
+        var dist=Math.hypot(rx-root.petX, ry-root.petY)
+        var dur=Math.max(500, Math.min(7000, dist/68*1000))
+        root.facingRight = rx > root.petX
+        xAnim.duration=dur; yAnim.duration=dur
+        root.petX = clampX(rx); root.petY = clampY(ry)
+        saveState()
     }
-
-    // if walk interrupted by special/idle, gently stop without jump
-    function cancelWalk() {
-        xAnim.duration = 1
-        // petX stays
+    function sleepAnywhere(action){
+        console.log("[Pet] sleepAnywhere " + action+" wh="+root.width+"x"+root.height)
+        var floorY = clampY(root.height - spriteH -6)
+        if (floorY < 40) floorY = 712
+        var corners = [
+            {x:8, y: floorY},
+            {x: root.width - spriteW -8, y: floorY},
+            {x: Math.floor(root.width/2 - spriteW/2), y: floorY},
+            {x: 12, y: floorY}
+        ]
+        var pick = corners[Math.floor(Math.random()*corners.length)]
+        pick.x += Math.floor((Math.random()-0.5)*60)
+        // keep y on floor — sleep never floats mid-air
+        var c=clampXY(pick.x, floorY)
+        var dist=Math.hypot(c.x-root.petX, c.y-root.petY)
+        var dur=Math.max(600, Math.min(7000, dist/55*1000))
+        xAnim.duration=dur; yAnim.duration=dur
+        root.petX=c.x; root.petY=c.y
+        root.bubbleText = ["Zzz…","night…","…zzz"][Math.floor(Math.random()*3)]
+        bubbleHideTimer.interval=4200; bubbleHideTimer.restart()
+        saveState()
     }
-
-    // after walk completes, StateMachine will pick next via dwellTimer automatically
-
-    Timer {
-        id: walkSettleTimer
-        interval: 80
-        repeat: false
-        // unused, placeholder if we want to chain walks
+    function doHide(action){
+        console.log("[Pet] doHide " + action)
+        var offX = root.width + 40
+        var dur = Math.abs(offX - root.petX)/70*1000
+        xAnim.duration=Math.min(2200, Math.max(700, dur))
+        yAnim.duration=xAnim.duration
+        root.petX = offX
+        root.bubbleText="brb…"
+        bubbleHideTimer.restart()
+        hideTimer.restart()
     }
+    Timer { id: hideTimer; interval: 1800; repeat:false; onTriggered: {
+            root.visible=false; saveState()
+            // reappear after hide dwell
+            reappearTimer.interval = 4200 + Math.random()*3500
+            reappearTimer.restart()
+        }
+    }
+    Timer { id: reappearTimer; interval: 5000; repeat:false; onTriggered: {
+            // re-enter from offscreen right to random visible pos
+            root.visible=true; saveState()
+            root.petX = root.width + 40
+            // next frame will animate in via next state; force walk
+            stateMachine.trigger("Walk")
+            // nudge immediately to visible
+            Qt.callLater(function(){
+                var nx = clampX(Math.floor(Math.random()*(root.width - spriteW -40))+20)
+                var ny = root.height - spriteH -6
+                xAnim.duration=1200; yAnim.duration=1200
+                root.petX=nx; root.petY=ny
+                saveState()
+            })
+        }
+    }
+    function stopWalk(){}
+    function cancelWalk(){ xAnim.duration=1; yAnim.duration=1 }
 
-    // ── drag handling — Pinched / Resisting / Falling ─────────────────
+    // ── persistence on move ────────────────────────────────────────
+    onPetXChanged: { if (!isDragging && !isFalling) saveState() }
+    onPetYChanged: { if (!isDragging && !isFalling) saveState() }
+    onFacingRightChanged: saveState()
+
+    // ── drag handling (free 2D) ────────────────────────────────────
     property point dragPressGlobal: Qt.point(0,0)
     property int dragStartX: 0
     property int dragStartY: 0
 
-    // sprite wrapper — exact PNG dimensions, no scaling
     Item {
         id: petWrapper
-        // floor anchor: bottom of screen minus sprite height
         x: root.petX
-        y: root.isDragging ? dragY : (root.height > 0 && height > 0 ? root.height - height - 6 : root.height - 128 - 6)
-        property int dragY: root.height - height - 6
-        width: sprite.implicitWidth > 0 ? sprite.implicitWidth : 128
-        height: sprite.implicitHeight > 0 ? sprite.implicitHeight : 128
+        y: root.petY
+        width: sprite.implicitWidth>0 ? sprite.implicitWidth : 128
+        height: sprite.implicitHeight>0 ? sprite.implicitHeight : 128
+        Behavior on x { enabled: !root.isDragging; NumberAnimation { id: xAnim; duration: 3200; easing.type: Easing.Linear } }
+        Behavior on y { enabled: !root.isDragging; NumberAnimation { id: yAnim; duration: 3200; easing.type: Easing.Linear } }
 
-        Behavior on x {
-            enabled: !root.isDragging
-            NumberAnimation { id: xAnim; duration: 3200; easing.type: Easing.Linear }
-        }
-        Behavior on y {
-            enabled: !root.isDragging
-            NumberAnimation { duration: 180; easing.type: Easing.OutCubic }
+        // init position to floor if no savedY, otherwise keep saved
+        Component.onCompleted: {
+            if (!root.hasSavedY) {
+                root.petY = clampY(root.height - height -6)
+                saveState()
+            }
         }
 
-        // dialogue bubble — above head, centered, appears occasional
         Item {
             id: bubble
-            visible: root.bubbleText !== ""
-            opacity: visible ? 1 : 0
-            Behavior on opacity { NumberAnimation { duration: 180 } }
-            // center above sprite
-            x: (parent.width - bubbleBg.width) / 2
-            y: -bubbleBg.height - 10
+            visible: root.bubbleText!==""
+            opacity: visible?1:0
+            Behavior on opacity { NumberAnimation{duration:180}}
+            x: (parent.width - bubbleBg.width)/2
+            y: -bubbleBg.height -10
             z: 2
-
             Rectangle {
                 id: bubbleBg
-                width: bubbleTextItem.implicitWidth + 20
-                height: bubbleTextItem.implicitHeight + 14
+                width: bubbleTextItem.implicitWidth+20
+                height: bubbleTextItem.implicitHeight+14
                 radius: 10
-                color: Qt.rgba(0.09, 0.09, 0.09, 0.88)
-                border.width: 1
-                border.color: Qt.rgba(1,1,1,0.12)
-                // small tail
-                Rectangle {
-                    width: 8; height: 8
-                    rotation: 45
-                    color: bubbleBg.color
-                    border.width: 0
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    anchors.top: parent.bottom
-                    anchors.topMargin: -5
-                }
-
-                Text {
-                    id: bubbleTextItem
-                    anchors.centerIn: parent
-                    text: root.bubbleText
-                    color: "white"
-                    font.family: "FiraCode Nerd Font"
-                    font.pixelSize: 11
-                    font.weight: Font.DemiBold
-                }
+                color: Qt.rgba(0.09,0.09,0.09,0.88)
+                border.width:1; border.color:Qt.rgba(1,1,1,0.12)
+                Rectangle{width:8;height:8;rotation:45;color:bubbleBg.color;anchors.horizontalCenter:parent.horizontalCenter;anchors.top:parent.bottom;anchors.topMargin:-5}
+                Text{ id: bubbleTextItem; anchors.centerIn:parent; text: root.bubbleText; color:"white"; font.family:"FiraCode Nerd Font"; font.pixelSize:11; font.weight:Font.DemiBold }
             }
         }
 
         Image {
             id: sprite
             anchors.centerIn: parent
-            // no width/height set — implicitSize = source PNG dimensions (128×128 etc)
-            // prevents stretching
             source: root.currentFrameUrl
             fillMode: Image.Pad
             asynchronous: true
             cache: true
             smooth: false
             mipmap: false
-            // mirror when facing right: use scale transform, not Image.mirror (layoutDirection dependent)
-            transform: Scale { xScale: root.facingRight ? -1 : 1; origin.x: sprite.width / 2; origin.y: sprite.height / 2 }
-            onStatusChanged: if (status === Image.Error) console.warn("[Pet] image error " + source + " → " + currentFile)
+            transform: Scale { xScale: root.facingRight ? -1 : 1; origin.x: sprite.width/2; origin.y: sprite.height/2 }
+            onStatusChanged: if(status===Image.Error) console.warn("[Pet] image error " + source + " → " + currentFile)
         }
 
-        // click + drag — manual so x binding stays intact
         MouseArea {
             id: spriteMouse
             anchors.fill: parent
@@ -279,121 +427,95 @@ PanelWindow {
             cursorShape: root.isDragging ? Qt.ClosedHandCursor : Qt.OpenHandCursor
             acceptedButtons: Qt.LeftButton | Qt.RightButton
             preventStealing: true
-
-            onPressed: function(mouse) {
-                root.isDragging = true
-                root.dragPressGlobal = mapToItem(null, mouse.x, mouse.y)
-                root.dragStartX = petWrapper.x
-                root.dragStartY = petWrapper.y
-                bubbleHideTimer.stop()
-                root.bubbleText = ""
-                // pause frame timer briefly then show Pinched
+            onPressed: function(mouse){
+                root.isDragging=true
+                root.dragPressGlobal=mapToItem(null, mouse.x, mouse.y)
+                root.dragStartX=petWrapper.x
+                root.dragStartY=petWrapper.y
+                bubbleHideTimer.stop(); root.bubbleText=""
                 frameTimer.stop()
-                if (root.actions["Pinched"]) {
-                    root.currentAction = "Pinched"
-                    root.currentFrames = root.actions["Pinched"]
-                    root.currentFrameIndex = 0
-                    root.frameInterval = 90
-                    frameTimer.interval = 90
-                    frameTimer.restart()
+                if(root.actions["Pinched"]){
+                    root.currentAction="Pinched"; root.currentFrames=root.actions["Pinched"]; root.currentFrameIndex=0; root.frameInterval=90; frameTimer.interval=90; frameTimer.restart()
                 }
                 stateMachine.pause()
             }
-            onPositionChanged: function(mouse) {
-                if (!root.isDragging) return
-                var g = mapToItem(null, mouse.x, mouse.y)
-                var dx = g.x - root.dragPressGlobal.x
-                var dy = g.y - root.dragPressGlobal.y
-                var nx = clampX(root.dragStartX + dx)
-                var ny = Math.max(6, Math.min(root.height - petWrapper.height - 6, root.dragStartY + dy))
-                // directly update wrapper while dragging (temporarily break binding via explicit set)
-                // also keep root.petX in sync so facing logic stays correct
-                petWrapper.x = nx
-                petWrapper.dragY = ny
-                root.petX = nx
-                // update facing based on drag direction tiny hysteresis
-                if (dx > 2) root.facingRight = true
-                else if (dx < -2) root.facingRight = false
+            onPositionChanged: function(mouse){
+                if(!root.isDragging) return
+                var g=mapToItem(null, mouse.x, mouse.y)
+                var dx=g.x - root.dragPressGlobal.x
+                var dy=g.y - root.dragPressGlobal.y
+                var nx=clampX(root.dragStartX + dx)
+                var ny=clampY(root.dragStartY + dy)
+                petWrapper.x=nx; petWrapper.y=ny
+                root.petX=nx; root.petY=ny
+                if(dx>2) root.facingRight=true; else if(dx<-2) root.facingRight=false
+                saveState()
             }
-            onReleased: function(mouse) {
-                root.isDragging = false
-                root.petX = clampX(petWrapper.x)
-                // wrapper y will snap back to floor via binding
-                root.isFalling = true
-                if (root.actions["Falling"]) {
-                    root.currentAction = "Falling"
-                    root.currentFrames = root.actions["Falling"]
-                    root.currentFrameIndex = 0
-                    root.frameInterval = 90
-                    frameTimer.interval = 90
-                    frameTimer.restart()
+            onReleased: function(mouse){
+                root.isDragging=false
+                var floorY = clampY(root.height - sprite.implicitHeight -6)
+                // if dragged mid-air, fall to floor — no floating
+                var wasMidAir = Math.abs(petWrapper.y - floorY) > 12
+                root.petX=clampX(petWrapper.x)
+                if (wasMidAir) {
+                    yAnim.duration = 420; root.petY = floorY
+                    console.log("[Pet] drop from "+petWrapper.y+" to floor "+floorY)
+                } else {
+                    root.petY=clampY(petWrapper.y)
+                }
+                saveState()
+                root.isFalling=true
+                if(root.actions["Falling"]){
+                    root.currentAction="Falling"; root.currentFrames=root.actions["Falling"]; root.currentFrameIndex=0; root.frameInterval=90; frameTimer.interval=90; frameTimer.restart()
                 }
                 fallTimer.restart()
             }
-            onClicked: function(mouse) {
-                if (mouse.button === Qt.RightButton) {
-                    // right click → random special
-                    var specials = ["PoseAction","ThrowNeedleAction","EatBerryAction"]
-                    var avail = specials.filter(function(n){ return root.actions[n] })
-                    if (avail.length) stateMachine.trigger(avail[Math.floor(Math.random()*avail.length)])
+            onClicked: function(mouse){
+                if(mouse.button===Qt.RightButton){
+                    var specials=["PoseAction","ThrowNeedleAction","EatBerryAction"]
+                    var avail=specials.filter(function(n){return root.actions[n]})
+                    if(avail.length) stateMachine.trigger(avail[Math.floor(Math.random()*avail.length)])
                     return
                 }
-                // left click quick pet -> PetAction if not dragging
-                if (!root.isDragging && root.actions["PetAction"]) {
-                    stateMachine.trigger("PetAction")
-                }
+                if(!root.isDragging && root.actions["PetAction"]) stateMachine.trigger("PetAction")
             }
-            onDoubleClicked: function(mouse) {
-                // double click → dash across
-                if (root.actions["Dash"]) stateMachine.trigger("Dash")
-            }
+            onDoubleClicked: function(mouse){ if(root.actions["Dash"]) stateMachine.trigger("Dash") }
         }
     }
 
-    Timer {
-        id: fallTimer
-        interval: 520
-        repeat: false
-        onTriggered: {
-            root.isFalling = false
-            // bounce or stand
-            if (root.actions["Bouncing"]) {
-                root.currentAction = "Bouncing"
-                root.currentFrames = root.actions["Bouncing"]
-                root.currentFrameIndex = 0
-                root.frameInterval = 85
-                frameTimer.interval = 85
-                frameTimer.restart()
-                bounceTimer.restart()
-            } else {
-                stateMachine.trigger("Stand")
-            }
+    Timer { id: fallTimer; interval:520; repeat:false; onTriggered:{
+            root.isFalling=false
+            if(root.actions["Bouncing"]){
+                root.currentAction="Bouncing"; root.currentFrames=root.actions["Bouncing"]; root.currentFrameIndex=0; root.frameInterval=85; frameTimer.interval=85; frameTimer.restart(); bounceTimer.restart()
+            } else stateMachine.trigger("Stand")
         }
     }
-    Timer {
-        id: bounceTimer
-        interval: 380
-        repeat: false
-        onTriggered: {
-            var name = root.actions["Stand"] ? "Stand" : Object.keys(root.actions)[0]
-            if (name) stateMachine.trigger(name)
+    Timer { id: bounceTimer; interval:380; repeat:false; onTriggered:{
+            var name=root.actions["Stand"]?"Stand":Object.keys(root.actions)[0]
+            if(name) stateMachine.trigger(name)
         }
     }
 
-    // floor sync — when window resizes, keep pet on floor and clamped
-    onWidthChanged: {
-        root.petX = clampX(root.petX)
-    }
+    onWidthChanged: { root.petX=clampX(root.petX) }
     onHeightChanged: {
-        // petWrapper y auto-computes via binding, nothing else
+        var floor = clampY(root.height - spriteH -6)
+        if (floor < 40) return
+        if (!isDragging && !isFalling && Math.abs(root.petY - floor) > 60) {
+            console.log("[Pet] heightChanged floor fix " + root.petY + " -> " + floor + " h="+root.height)
+            yAnim.duration = 420; root.petY = floor; saveState()
+        } else {
+            root.petY = clampY(root.petY)
+        }
+    }
+    Timer { id: floorFixTimer; interval: 1600; running: true; repeat: false; onTriggered: {
+            var floor = clampY(root.height - spriteH -6)
+            if (floor < 40) return
+            if (Math.abs(root.petY - floor) > 60) {
+                console.log("[Pet] startup floor fix " + root.petY + " -> " + floor)
+                yAnim.duration = 520; root.petY = floor; saveState()
+            }
+        }
     }
 
-    // debug tick
-    Timer {
-        id: dbg
-        interval: 8000
-        running: false // set true for console spam
-        repeat: true
-        onTriggered: console.log("[Pet] " + currentAction + " x=" + petX + " facing=" + (facingRight?"R":"L") + " frame=" + currentFile)
-    }
+    Timer { id: dbg; interval:8000; running:false; repeat:true; onTriggered: console.log("[Pet] " + currentAction + " ("+stateMachine.actionKind+") x="+petX+" y="+petY+" act="+userActivity+" frame="+currentFile) }
 }

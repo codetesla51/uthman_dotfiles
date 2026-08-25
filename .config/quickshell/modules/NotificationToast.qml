@@ -132,24 +132,28 @@ Rectangle {
                 Layout.fillWidth: true
 
                 Text {
-                    text: root.alive ? notification.summary : ""
+                    text: root.alive ? (notification.summary || "").replace(/<[^>]*>/g, "").substring(0, 120) : ""
                     color: colors.foreground
                     font.family: "FiraCode Nerd Font"
                     font.pixelSize: 12
                     font.weight: Font.Bold
                     Layout.fillWidth: true
                     wrapMode: Text.Wrap
+                    maximumLineCount: 2
+                    elide: Text.ElideRight
                 }
 
                 Text {
                     visible: root.alive && notification.body !== ""
-                    text: root.alive ? notification.body.replace(/<[^>]*>/g, "") : ""
+                    text: root.alive ? (notification.body || "").replace(/<[^>]*>/g, "").substring(0, 200) : ""
                     color: colors.on_surface
                     font.family: "FiraCode Nerd Font"
                     font.pixelSize: 11
                     font.letterSpacing: 0.3
                     Layout.fillWidth: true
                     wrapMode: Text.Wrap
+                    maximumLineCount: 3
+                    elide: Text.ElideRight
                 }
             }
         }

@@ -130,7 +130,7 @@ PanelWindow {
                     anchors.fill: parent
                     spacing: 8
                     Text {
-                        text: "💡 ideas"
+                        text: "󰎚 ideas"
                         color: colors.foreground
                         font.family: "FiraCode Nerd Font"
                         font.pixelSize: 13

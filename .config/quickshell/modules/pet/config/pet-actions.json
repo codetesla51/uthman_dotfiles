@@ -1,0 +1,238 @@
+{
+  "Stand": [
+    "shime1.png",
+    "shime1a.png"
+  ],
+  "Walk": [
+    "shime2.png",
+    "shime3.png",
+    "shime3a.png",
+    "shime3b.png",
+    "shime3c.png",
+    "shime3d.png",
+    "shime3ba.png"
+  ],
+  "Run": [
+    "shime3e.png",
+    "shime3f.png",
+    "shime3g.png",
+    "shime3h.png",
+    "shime3i.png",
+    "shime3j.png"
+  ],
+  "Dash": [
+    "shime3e.png",
+    "shime3f.png",
+    "shime3g.png",
+    "shime3h.png",
+    "shime3i.png",
+    "shime3j.png"
+  ],
+  "Sit": [
+    "shime11.png",
+    "shime11a.png"
+  ],
+  "BePet": [
+    "shimePet14.png"
+  ],
+  "PetAction": [
+    "shimePet1.png",
+    "shimePet2.png",
+    "shimePet3.png",
+    "shimePet4.png",
+    "shimePet5.png",
+    "shimePet6.png",
+    "shimePet7.png",
+    "shimePet8.png",
+    "shimePet9.png",
+    "shimePet10.png",
+    "shimePet11.png",
+    "shimePet12.png",
+    "shimePet13.png",
+    "shimePet14.png"
+  ],
+  "SitWithLegsUp": [
+    "shime30.png"
+  ],
+  "SitAndDangleLegs": [
+    "shime31.png",
+    "shime31a.png"
+  ],
+  "BePetDangleLegs": [
+    "shimePet28.png"
+  ],
+  "PetActionDangleLegs": [
+    "shimePet15.png",
+    "shimePet16.png",
+    "shimePet17.png",
+    "shimePet18.png",
+    "shimePet19.png",
+    "shimePet20.png",
+    "shimePet21.png",
+    "shimePet22.png",
+    "shimePet23.png",
+    "shimePet24.png",
+    "shimePet25.png",
+    "shimePet26.png",
+    "shimePet27.png",
+    "shimePet28.png"
+  ],
+  "PoseAction": [
+    "shime29.png",
+    "shime15.png",
+    "shime16.png",
+    "shime17.png",
+    "shime26.png",
+    "shime27.png",
+    "shime28.png"
+  ],
+  "EatBerryAction": [
+    "shime38.png",
+    "shime39.png",
+    "shime40.png",
+    "shime41.png",
+    "shime41a.png",
+    "shime41b.png",
+    "shime41c.png",
+    "shime41d.png",
+    "shime41e.png",
+    "shime41f.png",
+    "shime41g.png",
+    "shime41ga.png",
+    "shime41gb.png",
+    "shime41h.png",
+    "shime41i.png",
+    "shime41j.png"
+  ],
+  "ThrowNeedleAction": [
+    "shime47.png",
+    "shime48.png",
+    "shime49.png",
+    "shime50.png",
+    "shime51.png",
+    "shime52.png",
+    "shime53.png",
+    "shime54.png",
+    "shime55.png",
+    "shime56.png",
+    "shime57.png",
+    "shime58.png",
+    "shime59.png",
+    "shime60.png",
+    "shime61.png",
+    "shime62.png"
+  ],
+  "WatchAction": [
+    "shime32.png",
+    "shime33.png"
+  ],
+  "WatchLoop": [
+    "shime32.png"
+  ],
+  "Sprawl": [
+    "shime20.png",
+    "shime21.png"
+  ],
+  "GrabCeiling": [
+    "shime23.png",
+    "shime23a.png"
+  ],
+  "ClimbCeiling": [
+    "shime25.png",
+    "shime23.png",
+    "shime24.png",
+    "shime23a.png"
+  ],
+  "GrabWall": [
+    "shime13.png",
+    "shime13a.png"
+  ],
+  "ClimbWall": [
+    "shime14.png",
+    "shime12.png",
+    "shime13.png",
+    "shime13a.png"
+  ],
+  "FallWithIe": [
+    "shime36.png"
+  ],
+  "WalkWithIe": [
+    "shime34.png",
+    "shime35.png",
+    "shime36.png",
+    "shime36a.png",
+    "shime36b.png",
+    "shime36c.png",
+    "shime36ab.png"
+  ],
+  "RunWithIe": [
+    "shime34.png",
+    "shime35.png",
+    "shime36.png",
+    "shime36a.png",
+    "shime36b.png",
+    "shime36c.png"
+  ],
+  "ThrowIe": [
+    "shime37.png",
+    "shime37a.png",
+    "shime37b.png",
+    "shime37c.png"
+  ],
+  "Jumping": [
+    "shime22.png"
+  ],
+  "Falling": [
+    "shime4.png"
+  ],
+  "Bouncing": [
+    "shime18.png",
+    "shime19.png"
+  ],
+  "Tripping": [
+    "shime19.png",
+    "shime18.png",
+    "shime11.png"
+  ],
+  "Pinched": [
+    "shime9.png",
+    "shime7.png",
+    "shime5.png",
+    "shime5a.png",
+    "shime5ab.png",
+    "shime6.png",
+    "shime8.png",
+    "shime10.png"
+  ],
+  "Resisting": [
+    "shime5.png",
+    "shime6.png",
+    "shime5a.png"
+  ],
+  "Divide1": [
+    "shime42.png",
+    "shime43.png",
+    "shime44.png",
+    "shime45.png",
+    "shime46.png",
+    "shime46a.png",
+    "shime46b.png",
+    "shime46c.png"
+  ],
+  "Grapple1": [
+    "shimeGrapple1.png"
+  ],
+  "Grapple2": [
+    "shimeGrapple2.png",
+    "shimeGrapple3.png"
+  ],
+  "Grapple3": [
+    "shimeGrapple4.png",
+    "shimeGrapple5.png",
+    "shimeGrapple6.png",
+    "shimeGrapple7.png"
+  ],
+  "Grapple4": [
+    "shimeGrapple8.png"
+  ]
+}

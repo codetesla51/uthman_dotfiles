@@ -13,7 +13,9 @@ import json
 import os
 import sys
 
-BASE = os.path.expanduser("~/.config/omarchy/current/theme/matugen-base.json")
+BASE_NEW = os.path.expanduser("~/.config/theme/current/matugen-base.json")
+BASE_OLD = os.path.expanduser("~/.config/omarchy/current/theme/matugen-base.json")
+BASE = BASE_NEW if os.path.exists(BASE_NEW) else BASE_OLD
 OUT = os.path.expanduser("~/.config/zed/themes/matugen.json")
 
 

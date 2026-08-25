@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
-WALL_DIR="/home/uthman/.config/omarchy/themes/snow_black/backgrounds"
+# Prefer standalone wallpapers, fallback to omarchy path for legacy installs
+WALL_DIR="/home/uthman/dotfiles/wallpapers"
+[[ -d "$WALL_DIR" ]] || WALL_DIR="/home/uthman/.config/omarchy/themes/snow_black/backgrounds"
+[[ -d "$WALL_DIR" ]] || WALL_DIR="$HOME/.config/theme/current"
 THUMB_DIR="/tmp/wall_thumbs"
 LOOKUP_FILE="/tmp/wall_lookup.json"
 SCRIPT_PATH="/home/uthman/.config/rofi/wall.sh"

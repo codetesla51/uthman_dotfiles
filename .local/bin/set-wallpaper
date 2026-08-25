@@ -2,7 +2,8 @@
 # set-wallpaper [image] — crossfade a new wallpaper and regenerate the theme in one go.
 # Falls back to a swaybg relaunch if awww/swww isn't installed.
 
-IMAGE="${1:-$(readlink ~/.config/omarchy/current/background 2>/dev/null | tr -d '[:space:]')}"
+IMAGE="${1:-$(readlink ~/.config/theme/current/background 2>/dev/null | tr -d '[:space:]')}"
+[[ -z "$IMAGE" ]] && IMAGE="$(readlink ~/.config/omarchy/current/background 2>/dev/null | tr -d '[:space:]')"
 
 if [[ -z "$IMAGE" ]]; then
     echo "Error: no wallpaper given and no current background" >&2
@@ -15,7 +16,9 @@ if [[ ! -f "$IMAGE" ]]; then
 fi
 
 IMAGE="$(realpath "$IMAGE")"
-ln -sfn "$IMAGE" ~/.config/omarchy/current/background
+mkdir -p ~/.config/theme/current ~/.config/omarchy/current
+ln -sfn "$IMAGE" ~/.config/theme/current/background
+ln -sfn "$IMAGE" ~/.config/omarchy/current/background  # legacy compat
 
 if command -v awww >/dev/null 2>&1; then
     WALL="awww"

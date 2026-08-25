@@ -23,6 +23,15 @@ Item {
     readonly property int fatigueThreshold: 120 // 2min
     readonly property int fatigueMax: 180 // 3min
 
+    // what Hornet *wants* — autonomous drives, not dice
+    property real wantExplore: 30  // walk/run/dash, see new spots
+    property real wantRest: 10     // sprawl/sleep, grows with fatigue
+    property real wantPlay: 20     // Pose/EatBerry/ThrowNeedle/Divide
+    property real wantWatch: 25    // WatchAction/Loop when user coding
+    property real wantHide: 15     // hide when user busy
+    property real wantSocial: 20   // PetAction near user
+    readonly property string wantsSummary: "explore:"+Math.round(wantExplore)+" rest:"+Math.round(wantRest)+" play:"+Math.round(wantPlay)+" watch:"+Math.round(wantWatch)+" hide:"+Math.round(wantHide)+" social:"+Math.round(wantSocial)
+
     signal actionChanged(string name, var frames, int interval, string bubble, string kind)
 
     readonly property var idleActions: ["Stand", "Sit", "SitWithLegsUp", "SitAndDangleLegs", "WatchAction", "WatchLoop", "Sprawl"]
@@ -72,16 +81,55 @@ Item {
             if (root.actionKind === "idle" || root.actionKind === "walk" || root.actionKind === "walkToMe" || root.actionKind === "sitAnywhere") {
                 if (root.fatigue < 300) root.fatigue += 1
             } else if (root.actionKind === "special") {
-                // specials tire a bit faster
                 if (root.fatigue < 300) root.fatigue += 1
             }
-            // sleep resets fatigue slowly? not while sleeping
         }
+    }
+    // wants — autonomous drives, makes decisions purposeful not dice
+    Timer {
+        id: wantsTimer
+        interval: 1300
+        repeat: true
+        running: !root.isSleeping
+        onTriggered: updateWants()
+    }
+    function updateWants() {
+        // slowly evolve wants based on what user does and what pet does
+        // watch grows when user coding, hide when user busy, explore when idle
+        var coding = (userActivity === "coding" || userActivity === "terminal")
+        var browsing = (userActivity === "browsing")
+        var idle = (userActivity === "idle")
+        // rest follows fatigue
+        wantRest = Math.max(0, Math.min(100, wantRest + (fatigue/25 - 0.2)))
+        if (coding) { wantWatch = Math.min(100, wantWatch + 0.9); wantHide = Math.min(100, wantHide + 0.4); wantExplore = Math.max(0, wantExplore - 0.3) }
+        else if (browsing) { wantPlay = Math.min(100, wantPlay + 0.5); wantExplore = Math.min(100, wantExplore + 0.4) }
+        else if (idle) { wantExplore = Math.min(100, wantExplore + 0.7); wantSocial = Math.min(100, wantSocial + 0.6); wantWatch = Math.max(0, wantWatch - 0.2) }
+        else { wantExplore = Math.min(100, wantExplore + 0.2) }
+        if (actionKind === "walk" || actionKind === "walkToMe") { wantExplore = Math.max(0, wantExplore - 1.2); wantWatch = Math.max(0, wantWatch - 0.4) }
+        if (actionKind === "idle") { wantRest = Math.max(0, wantRest - 0.15) }
+        // natural decay
+        wantPlay = Math.max(0, wantPlay - 0.08); wantHide = Math.max(0, wantHide - 0.07); wantSocial = Math.max(0, wantSocial - 0.05)
+        // clamp
+        wantExplore = Math.max(0, Math.min(100, wantExplore)); wantRest = Math.max(0, Math.min(100, wantRest)); wantPlay = Math.max(0, Math.min(100, wantPlay)); wantWatch = Math.max(0, Math.min(100, wantWatch)); wantHide = Math.max(0, Math.min(100, wantHide)); wantSocial = Math.max(0, Math.min(100, wantSocial))
+    }
+    function satiate(kind, action) {
+        // doing kind reduces its want — pet feels satisfied
+        if (kind === "walk" || kind === "walkToMe") wantExplore = Math.max(0, wantExplore - 18 - Math.random()*8)
+        else if (kind === "sleep" || action === "Sprawl") { wantRest = Math.max(0, wantRest - 35); fatigue = Math.max(0, fatigue - 25) }
+        else if (kind === "special" || kind === "hide") { wantPlay = Math.max(0, wantPlay - 16); wantHide = Math.max(0, wantHide - 14) }
+        else if (kind === "idle" && (action === "WatchAction" || action === "WatchLoop")) wantWatch = Math.max(0, wantWatch - 20)
+        if (action === "PetAction" || action === "BePet") wantSocial = Math.max(0, wantSocial - 22)
+        if (kind === "sitAnywhere") wantExplore = Math.max(0, wantExplore - 10)
     }
 
     function resetFatigue() {
         if (root.fatigue !== 0) console.log("[StateMachine] fatigue reset " + root.fatigue + " -> 0 by interaction")
         root.fatigue = 0
+        // interaction satisfies social, spikes play/curiosity
+        wantSocial = Math.max(0, wantSocial - 26)
+        wantPlay = Math.min(100, wantPlay + 9)
+        wantWatch = Math.min(100, wantWatch + 6)
+        wantExplore = Math.max(0, wantExplore - 4)
         if (root.isSleeping) {
             console.log("[StateMachine] wake by interaction")
             wakeFromSleep()
@@ -223,6 +271,24 @@ Item {
             triggerSynthetic("sleep")
             return
         }
+        var maxWant = Math.max(wantExplore, wantRest, wantPlay, wantWatch, wantHide, wantSocial)
+        if (maxWant > 58 && Math.random() < 0.58) {
+            var wantKind = ""
+            if (wantRest === maxWant) wantKind = "rest"
+            else if (wantExplore === maxWant) wantKind = "explore"
+            else if (wantWatch === maxWant) wantKind = "watch"
+            else if (wantPlay === maxWant) wantKind = "play"
+            else if (wantHide === maxWant) wantKind = "hide"
+            else if (wantSocial === maxWant) wantKind = "social"
+            console.log("[StateMachine] wants " + wantsSummary + " -> " + wantKind + " (fatigue " + fatigue + ")")
+            if (wantKind === "rest") { triggerSynthetic("sleep"); return }
+            if (wantKind === "explore") { var w=filtered(walkActions); var n=w[Math.floor(Math.random()*w.length)]; applyAction(n); return }
+            if (wantKind === "watch") { var wa=filtered(["WatchAction","WatchLoop"]); var nw=wa[Math.floor(Math.random()*wa.length)]; applyAction(nw); return }
+            if (wantKind === "play") { var sp2=filtered(specialActions); var np=sp2[Math.floor(Math.random()*sp2.length)]; applyAction(np); return }
+            if (wantKind === "hide") { triggerSynthetic("hide"); return }
+            if (wantKind === "social") { var so=filtered(petActions.concat(["Walk"])); if (Math.random()<0.6) triggerSynthetic("walkToMe"); else applyAction(so[Math.floor(Math.random()*so.length)]); return }
+        }
+
         var cur = currentAction
         var curKind = actionKind
         var r = Math.random()
@@ -297,6 +363,7 @@ Item {
             actionKind = "hide"
             dwellTimer.interval = dwellFor("Hide", frames, interval, "hide")
             dwellTimer.restart()
+            satiate("hide", "Hide")
             actionChanged("Hide", frames, interval, bubble, "hide")
             return
         }
@@ -315,6 +382,7 @@ Item {
             isSleeping = true
             dwellTimer.interval = dwellFor(name, frames, interval, "sleep")
             dwellTimer.restart()
+            satiate("sleep", name)
             console.log("[StateMachine] -> sleep fatigue=" + fatigue + " for " + dwellTimer.interval + "ms")
             actionChanged(name, frames, interval, bubble, "sleep")
             return
@@ -332,6 +400,7 @@ Item {
             actionKind = "walkToMe"
             dwellTimer.interval = dwellFor(w, frames, interval, "walkToMe")
             dwellTimer.restart()
+            satiate("walkToMe", w)
             actionChanged(w, frames, interval, bubble, "walkToMe")
             return
         }
@@ -348,6 +417,7 @@ Item {
             actionKind = "sitAnywhere"
             dwellTimer.interval = dwellFor(s, frames, interval, "sitAnywhere")
             dwellTimer.restart()
+            satiate("sitAnywhere", s)
             actionChanged(s, frames, interval, bubble, "sitAnywhere")
             return
         }
@@ -368,6 +438,7 @@ Item {
         actionKind = k
         dwellTimer.interval = dwellFor(name, frames, iv, k)
         dwellTimer.restart()
+        satiate(k, name)
         actionChanged(name, frames, iv, bub, k)
     }
 

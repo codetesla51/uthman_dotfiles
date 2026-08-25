@@ -41,7 +41,7 @@ PanelWindow {
         function sleep(): void { console.log("[Pet] ipc sleep"); stateMachine.trigger("sleep") }
         function sit(): void { console.log("[Pet] ipc sit"); stateMachine.resetFatigue(); stateMachine.trigger("sitAnywhere") }
         function hideMe(): void { console.log("[Pet] ipc hideMe"); stateMachine.resetFatigue(); stateMachine.trigger("hide") }
-        function status(): string { return JSON.stringify({x:root.petX,y:root.petY,facingRight:root.facingRight,visible:root.visible,action:root.currentAction,kind:stateMachine.actionKind,activity:root.userActivity,fatigue:stateMachine.fatigue,isSleeping:stateMachine.isSleeping,cursor:[root.cursorX,root.cursorY],sys:sysSummary,spots:sysInfo.freeSpots}) }
+        function status(): string { return JSON.stringify({x:root.petX,y:root.petY,facingRight:root.facingRight,visible:root.visible,action:root.currentAction,kind:stateMachine.actionKind,activity:root.userActivity,fatigue:stateMachine.fatigue,isSleeping:stateMachine.isSleeping,wants:stateMachine.wantsSummary,cursor:[root.cursorX,root.cursorY],sys:sysSummary,spots:sysInfo.freeSpots}) }
         function perches(): string { return JSON.stringify(sysInfo.freeSpots) }
         function explain(): string { var s="Hornet lives in quickshell PanelWindow Overlay mask click-through, StateMachine fatigue "+stateMachine.fatigue+" groq "+groq.model+" free "+sysInfo.freeSpots.length+" spots"; if (groq.ready) groq.chat([{role:"system",content:"Explain Hornet pet how quickshell works: "+sysInfo.shellInfo+" System "+sysSummary},{role:"user",content:"Explain in 1 short sentence how you work"}], 40, 0.7, function(t){ if(t) { root.bubbleText=t.slice(0,40); bubbleHideTimer.restart() } }); return s }
         function up(): void { stateMachine.resetFatigue(); stateMachine.pause(); var y=12; xAnim.duration=600; yAnim.duration=600; root.petY=clampY(y); if (actions["GrabCeiling"]) { root.currentAction="GrabCeiling"; root.currentFrames=actions["GrabCeiling"]; root.frameInterval=600; frameTimer.interval=600; frameTimer.restart() } root.bubbleText="up!"; bubbleHideTimer.restart(); saveState(); stayPutTimer.restart(); console.log("[Pet] up -> y="+y+" stay 6s") }
@@ -50,6 +50,31 @@ PanelWindow {
         function right(): void { stateMachine.resetFatigue(); stateMachine.pause(); root.facingRight=true; xAnim.duration=800; root.petX=clampX(root.width - spriteW -12); root.bubbleText="right!"; bubbleHideTimer.restart(); saveState(); stayPutTimer.restart() }
         function center(): void { stateMachine.resetFatigue(); stateMachine.pause(); xAnim.duration=700; yAnim.duration=700; root.petX=clampX(Math.round(root.width/2 - spriteW/2)); root.petY=clampY(Math.round(root.height/2 - spriteH/2)); root.bubbleText="center!"; bubbleHideTimer.restart(); saveState(); stayPutTimer.restart() }
         function move(x: int, y: int): void { stateMachine.resetFatigue(); stateMachine.pause(); var nx=clampX(x), ny=clampY(y); xAnim.duration=700; yAnim.duration=700; root.petX=nx; root.petY=ny; root.bubbleText=nx+","+ny; bubbleHideTimer.restart(); saveState(); stayPutTimer.restart(); console.log("[Pet] move -> "+nx+","+ny+" stay 6s") }
+        function trigger(action: string): void { console.log("[Pet] ipc trigger "+action); stateMachine.resetFatigue(); stateMachine.trigger(action) }
+    }
+
+    // ── sound — Hornet wav pack (paplay/mpv, non-blocking) ──────────
+    property var soundMap: ({
+        "PoseAction": "Hornet_Final_Boss_yell_02.wav",
+        "ThrowNeedleAction": "Hornet_Fight_Yell_06.wav",
+        "ThrowIe": "Hornet_Fight_Yell_06.wav",
+        "Grapple1": "Hornet_Fight_Stun_02.wav",
+        "Grapple3": "hornet_needle_throw.wav",
+        "Grapple4": "Hornet_Fight_Yell_03.wav"
+    })
+    property string soundDir: assetsBase + "sound/"
+    function playSoundFor(action) {
+        var f = soundMap[action]
+        if (!f) {
+            // also check synthetic mapping: Hide->none, Sleep->none, etc.
+            if (action === "Grapple4") f = "hornet_needle_throw end.wav"
+            else return
+        }
+        var path = soundDir + f
+        // paplay handles wav, fallback mpv; quote for spaces
+        var cmd = "paplay '" + path.replace(/'/g, "'\\''") + "' 2>/dev/null || mpv --no-video --really-quiet '" + path.replace(/'/g, "'\\''") + "' 2>/dev/null &"
+        Quickshell.execDetached(["sh", "-c", cmd])
+        console.log("[Pet] sound " + f + " for " + action)
     }
 
     // ── persistence (LocalStorage qs_pet) ───────────────────────────
@@ -231,6 +256,12 @@ PanelWindow {
             root.bubbleText = bubble
             if (bubble!=="") bubbleHideTimer.restart()
             frameTimer.interval = interval; frameTimer.restart()
+            // sound for this action (Hornet pack)
+            playSoundFor(name)
+            if (name === "Grapple4") {
+                // second sound after 380ms (needle throw end)
+                Qt.callLater(function(){ Quickshell.execDetached(["sh","-c","paplay '" + soundDir + "hornet_needle_throw end.wav' 2>/dev/null || mpv --no-video --really-quiet '" + soundDir + "hornet_needle_throw end.wav' 2>/dev/null &"]) })
+            }
             // Groq smart bubble override — now aware of system + free spots
             if (groq.ready && Math.random() < 0.55) {
                 groq.bubbleFor(root.userActivity, name, stateMachine.fatigue, root.sysSummary, function(aiBubble){

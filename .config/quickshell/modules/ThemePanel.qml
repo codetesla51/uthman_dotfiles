@@ -35,8 +35,23 @@ PanelWindow {
         for(var i=0;i<walls.length;i++) if(walls[i].path===path) { currentIndex=i; break }
         applyTimer.restart()
     }
-    function next(){ if(walls.length===0) return; currentIndex = (currentIndex+1)%walls.length; previewTransition.restart() }
-    function prev(){ if(walls.length===0) return; currentIndex = (currentIndex-1+walls.length)%walls.length; previewTransition.restart() }
+    function next(){ if(walls.length===0) return; currentIndex = (currentIndex+1)%walls.length; }
+    function prev(){ if(walls.length===0) return; currentIndex = (currentIndex-1+walls.length)%walls.length; }
+
+    // ---- orbital ring ----
+    readonly property int slots: Math.min(walls.length, 12)
+    readonly property real step: slots > 0 ? 360/slots : 360
+    property real ringRot: 0                      // degrees, unbounded
+    function imod(a, n){ return n > 0 ? ((a % n) + n) % n : 0 }
+    function rotateTo(idx){
+        if (slots === 0) return
+        var target = -idx * step
+        var delta = ((target - ringRot) % 360 + 540) % 360 - 180   // shortest path
+        rotAnim.to = ringRot + delta
+        rotAnim.restart()
+    }
+    NumberAnimation { id: rotAnim; target: root; property: "ringRot"; duration: 380; easing.type: Easing.OutCubic }
+    onCurrentIndexChanged: rotateTo(currentIndex)
 
     Timer { id: applyTimer; interval: 900; onTriggered: root.applying = false }
 
@@ -81,10 +96,11 @@ PanelWindow {
         id: card
         anchors.centerIn: parent
         width: 720
-        height: 560
+        height: 640
         radius: 20
-        color: "transparent"
-        border.width: 0
+        color: colors.alpha(colors.background, 0.86)
+        border.width: 1
+        border.color: colors.alpha(colors.outline, 0.12)
         focus: root.open
         Keys.onEscapePressed: root.open=false
         Keys.onLeftPressed: root.prev()
@@ -130,7 +146,8 @@ PanelWindow {
             Item {
                 id: previewItem
                 Layout.fillWidth: true
-                Layout.preferredHeight: 320
+                Layout.preferredHeight: 484
+                WheelHandler { acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad; onWheel: (wheel) => { if (wheel.angleDelta.y < 0) root.next(); else root.prev() } }
                 // octagon mask via Shape + OpacityMask
                 Item {
                     id: octagon
@@ -174,11 +191,83 @@ PanelWindow {
                     }
                 }
 
-                // caption
+                // ---- orbital satellites: 12 octagon thumbs on a ring around the main one ----
+                Repeater {
+                    model: root.slots
+                    delegate: Item {
+                        id: sat
+                        required property int index
+                        readonly property real phi: (root.ringRot + index * root.step) * Math.PI / 180
+                        readonly property real ang: phi - Math.PI / 2                       // slot 0 rests at 12 o'clock
+                        readonly property int wIdx: root.imod(Math.round(-root.ringRot / root.step) + index, root.walls.length)
+                        readonly property bool isApplied: root.walls.length > 0 && root.walls[wIdx].path === root.currentWall
+                        readonly property bool isSelected: root.walls.length > 0 && wIdx === root.currentIndex
+                        readonly property real front: 0.5 + 0.5 * Math.cos(phi)             // 1 at top, 0 at bottom
+
+                        width: 62; height: 62
+                        x: parent.width / 2 - 31 + Math.cos(ang) * 204
+                        y: parent.height / 2 - 31 + Math.sin(ang) * 204
+                        opacity: 0.55 + 0.45 * front
+                        scale: (0.92 + 0.14 * front) * (maS.containsMouse ? 1.08 : 1)
+                        z: isSelected ? 2 : 1
+                        Behavior on scale { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
+
+                        Item {
+                            anchors.fill: parent
+                            layer.enabled: true
+                            layer.effect: OpacityMask {
+                                maskSource: Shape {
+                                    anchors.fill: parent
+                                    ShapePath {
+                                        fillColor: "white"
+                                        strokeColor: "transparent"
+                                        PathSvg { path: "M 19 0 L 45 0 L 64 19 L 64 45 L 45 64 L 19 64 L 0 45 L 0 19 Z" }
+                                    }
+                                }
+                            }
+                            // frosted glass base so the thumb reads on any wallpaper
+                            Shape {
+                                anchors.fill: parent
+                                ShapePath {
+                                    fillColor: colors.alpha(colors.background, 0.62)
+                                    strokeColor: "transparent"
+                                    PathSvg { path: "M 19 0 L 45 0 L 64 19 L 64 45 L 45 64 L 19 64 L 0 45 L 0 19 Z" }
+                                }
+                            }
+                            Image {
+                                anchors.fill: parent
+                                opacity: 0.87
+                                source: root.walls.length > 0 ? "file://" + root.walls[sat.wIdx].path : ""
+                                fillMode: Image.PreserveAspectCrop
+                                asynchronous: true
+                                cache: true
+                            }
+                        }
+                        Shape {
+                            anchors.fill: parent
+                            ShapePath {
+                                strokeColor: sat.isApplied ? colors.primary
+                                           : maS.containsMouse ? colors.alpha(colors.primary, 0.45)
+                                           : colors.alpha(colors.outline, 0.18)
+                                fillColor: "transparent"
+                                strokeWidth: sat.isApplied ? 2 : maS.containsMouse ? 1.5 : 1
+                                PathSvg { path: "M 19 0 L 45 0 L 64 19 L 64 45 L 45 64 L 19 64 L 0 45 L 0 19 Z" }
+                            }
+                        }
+                        MouseArea {
+                            id: maS
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onClicked: root.currentIndex = sat.wIdx
+                            onDoubleClicked: root.setWall(root.walls[sat.wIdx].path)
+                        }
+                    }
+                }
+
+                // caption — docked inside the octagon's lower edge
                 Rectangle {
-                    anchors.bottom: parent.bottom
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    anchors.bottomMargin: 10
+                    anchors.centerIn: parent
+                    anchors.verticalCenterOffset: 129
                     width: capText.implicitWidth+16
                     height: 22
                     radius: 11
@@ -211,78 +300,11 @@ PanelWindow {
                 }
             }
 
-            // circular — pics around center, rotating
-
-            // slider — horizontal, circular thumbs
-            ListView {
-                id: slider
-                Layout.fillWidth: true
-                Layout.preferredHeight: 72
-                orientation: ListView.Horizontal
-                clip: true
-                spacing: 8
-                model: walls
-                boundsBehavior: Flickable.StopAtBounds
-                ScrollBar.horizontal: ScrollBar { policy: ScrollBar.AsNeeded }
-                delegate: Item {
-                    required property var modelData
-                    required property int index
-                    width: 64; height: 64
-                    Item {
-                        anchors.fill: parent
-                        layer.enabled: true
-                        layer.effect: OpacityMask {
-                            maskSource: Shape {
-                                anchors.fill: parent
-                                ShapePath {
-                                    fillColor: "white"
-                                    strokeColor: "transparent"
-                                    PathSvg { path: "M 19 0 L 45 0 L 64 19 L 64 45 L 45 64 L 19 64 L 0 45 L 0 19 Z" }
-                                }
-                            }
-                        }
-                        Image {
-                            anchors.fill: parent
-                            source: "file://"+modelData.path
-                            fillMode: Image.PreserveAspectCrop
-                            asynchronous: true
-                        }
-                        Rectangle {
-                            anchors.fill: parent
-                            color: "transparent"
-                            border.width: modelData.path===root.currentWall ? 2 : 1
-                            border.color: modelData.path===root.currentWall ? colors.primary : maS.containsMouse ? colors.alpha(colors.primary,0.4) : "transparent"
-                            // octagon border via Shape
-                            Shape {
-                                anchors.fill: parent
-                                ShapePath {
-                                    strokeColor: modelData.path===root.currentWall ? colors.primary : maS.containsMouse ? colors.alpha(colors.primary,0.4) : "transparent"
-                                    fillColor: "transparent"
-                                    strokeWidth: modelData.path===root.currentWall ? 2 : 1
-                                    PathSvg { path: "M 19 0 L 45 0 L 64 19 L 64 45 L 45 64 L 19 64 L 0 45 L 0 19 Z" }
-                                }
-                            }
-                        }
-                    }
-                    MouseArea {
-                        id: maS
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        onClicked: { root.currentIndex=index; previewTransition.restart() }
-                        onDoubleClicked: root.setWall(modelData.path)
-                    }
-                }
-                onCurrentIndexChanged: positionViewAtIndex(currentIndex, ListView.Center)
-                Connections { target: root; function onCurrentIndexChanged(){ slider.currentIndex=root.currentIndex; slider.positionViewAtIndex(root.currentIndex, ListView.Center) } }
-            }
-
-
-
             RowLayout {
                 Layout.fillWidth: true
                 spacing: 8
                 Text {
-                    text: "Press Enter to apply  •  ← → to navigate"
+                    text: "scroll or ←→ to rotate the ring  •  enter applies  •  esc closes"
                     color: colors.alpha(colors.outline,0.5)
                     font.family:"FiraCode Nerd Font"; font.pixelSize: 9
                     Layout.fillWidth: true

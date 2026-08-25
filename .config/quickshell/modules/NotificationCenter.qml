@@ -21,11 +21,18 @@ Item {
     property var archive: []
 
     property int _idCounter: 0
+    property var _live: ({})   // nid -> live Notification object (for invoking actions)
 
     function togglePanel() { panelOpen = !panelOpen }
     function toggleDnd() { dnd = !dnd }
 
     function addToArchive(n) {
+        let acts = []
+        let alist = n.actions || []
+        for (let ai = 0; ai < alist.length; ai++) {
+            if (alist[ai].identifier && alist[ai].identifier !== "default" && alist[ai].text)
+                acts.push({ id: alist[ai].identifier, label: alist[ai].text })
+        }
         let entry = {
             nid: ++root._idCounter,
             appName: n.appName,
@@ -33,18 +40,24 @@ Item {
             body: n.body.replace(/<[^>]*>/g, ""),
             icon: n.appIcon,
             urgent: n.urgency === NotificationUrgency.Critical,
-            time: Qt.formatDateTime(new Date(), "HH:mm")
+            time: Qt.formatDateTime(new Date(), "HH:mm"),
+            actions: acts
         }
+        root._live[entry.nid] = n
         let list = archive.slice()
         list.unshift(entry)
         if (list.length > 100) list.length = 100
         archive = list
     }
 
-    function clearHistory() { archive = [] }
+    function clearHistory() {
+        archive = []
+        _live = ({})
+    }
 
 
     function removeAt(nid) {
+        delete _live[nid]
         let list = archive.slice()
         for (let i = 0; i < list.length; i++)
             if (list[i].nid === nid) { list.splice(i, 1); break }
@@ -287,14 +300,17 @@ Item {
                             model: root.archive   // newest first already
 
                             delegate: Rectangle {
+                                id: notifRow
                                 required property var modelData
                                 required property int index
 
                                 Layout.fillWidth: true
-                                height: 56
+                                height: Math.max(56, rowContent.implicitHeight + 18)
                                 radius: 10
                                 color: itemMouse.containsMouse ? colors.alpha(colors.surfaceVariant, 0.3)
                                                                : "transparent"
+                                border.width: modelData.urgent ? 1 : 0
+                                border.color: colors.alpha(colors.error, 0.45)
 
                                 RowLayout {
                                     id: rowContent
@@ -367,7 +383,55 @@ Item {
                                             font.family: "FiraCode Nerd Font"
                                             font.pixelSize: 10
                                             Layout.fillWidth: true
+                                            wrapMode: Text.WordWrap
+                                            maximumLineCount: 2
                                             elide: Text.ElideRight
+                                        }
+
+                                        // action chips — invoke the live notification's action
+                                        Row {
+                                            visible: notifRow.modelData.actions && notifRow.modelData.actions.length > 0
+                                            spacing: 5
+
+                                            Repeater {
+                                                model: notifRow.modelData.actions || []
+
+                                                delegate: Rectangle {
+                                                    id: actChip
+                                                    required property var modelData
+                                                    width: actLbl.implicitWidth + 18
+                                                    height: 20
+                                                    radius: 10
+                                                    color: actMa.containsMouse ? colors.alpha(colors.primary, 0.25)
+                                                                              : colors.alpha(colors.primary, 0.12)
+                                                    border.width: 1
+                                                    border.color: colors.alpha(colors.primary, 0.35)
+
+                                                    Text {
+                                                        id: actLbl
+                                                        anchors.centerIn: parent
+                                                        text: actChip.modelData.label
+                                                        color: colors.primary
+                                                        font.family: "FiraCode Nerd Font"
+                                                        font.pixelSize: 9
+                                                        font.weight: Font.Bold
+                                                    }
+
+                                                    MouseArea {
+                                                        id: actMa
+                                                        anchors.fill: parent
+                                                        hoverEnabled: true
+                                                        onClicked: {
+                                                            let live = root._live[notifRow.modelData.nid]
+                                                            if (!live) return
+                                                            let list = live.actions || []
+                                                            for (let i = 0; i < list.length; i++)
+                                                                if (list[i].identifier === actChip.modelData.id) { list[i].invoke(); break }
+                                                            root.removeAt(notifRow.modelData.nid)
+                                                        }
+                                                    }
+                                                }
+                                            }
                                         }
                                     }
 

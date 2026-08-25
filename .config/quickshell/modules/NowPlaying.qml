@@ -78,7 +78,7 @@ Item {
         // one Matugen accent per bar, cycling primary / secondary / tertiary
         Row {
             id: visRow
-            visible: root.hasPlayer
+            opacity: root.hasPlayer ? 1 : 0.5
             spacing: 2
             readonly property var barColors: [colors.primary, colors.secondary, colors.tertiary]
             Repeater {
@@ -104,8 +104,9 @@ Item {
         }
 
         // -- transport: ghost prev/next, filled play, hover lift --
+        // always visible; dims when idle so the bar never feels dead
         RowLayout {
-            visible: root.hasPlayer
+            opacity: root.hasPlayer ? 1 : 0.45
             spacing: 3
             Rectangle {
                 width: 20; height: 20; radius: 10

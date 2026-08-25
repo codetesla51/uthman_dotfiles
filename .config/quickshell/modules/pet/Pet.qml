@@ -44,6 +44,12 @@ PanelWindow {
         function status(): string { return JSON.stringify({x:root.petX,y:root.petY,facingRight:root.facingRight,visible:root.visible,action:root.currentAction,kind:stateMachine.actionKind,activity:root.userActivity,fatigue:stateMachine.fatigue,isSleeping:stateMachine.isSleeping,cursor:[root.cursorX,root.cursorY],sys:sysSummary,spots:sysInfo.freeSpots}) }
         function perches(): string { return JSON.stringify(sysInfo.freeSpots) }
         function explain(): string { var s="Hornet lives in quickshell PanelWindow Overlay mask click-through, StateMachine fatigue "+stateMachine.fatigue+" groq "+groq.model+" free "+sysInfo.freeSpots.length+" spots"; if (groq.ready) groq.chat([{role:"system",content:"Explain Hornet pet how quickshell works: "+sysInfo.shellInfo+" System "+sysSummary},{role:"user",content:"Explain in 1 short sentence how you work"}], 40, 0.7, function(t){ if(t) { root.bubbleText=t.slice(0,40); bubbleHideTimer.restart() } }); return s }
+        function up(): void { stateMachine.resetFatigue(); stateMachine.pause(); var y=12; xAnim.duration=600; yAnim.duration=600; root.petY=clampY(y); if (actions["GrabCeiling"]) { root.currentAction="GrabCeiling"; root.currentFrames=actions["GrabCeiling"]; root.frameInterval=600; frameTimer.interval=600; frameTimer.restart() } root.bubbleText="up!"; bubbleHideTimer.restart(); saveState(); stayPutTimer.restart(); console.log("[Pet] up -> y="+y+" stay 6s") }
+        function down(): void { stateMachine.resetFatigue(); stateMachine.pause(); var y=clampY(root.height - spriteH -6); xAnim.duration=500; yAnim.duration=500; root.petY=y; root.currentAction="Falling"; if(actions["Falling"]) root.currentFrames=actions["Falling"]; frameTimer.restart(); root.bubbleText="down!"; bubbleHideTimer.restart(); saveState(); stayPutTimer.restart(); console.log("[Pet] down -> y="+y) }
+        function left(): void { stateMachine.resetFatigue(); stateMachine.pause(); root.facingRight=false; xAnim.duration=800; root.petX=clampX(12); root.bubbleText="left!"; bubbleHideTimer.restart(); saveState(); stayPutTimer.restart() }
+        function right(): void { stateMachine.resetFatigue(); stateMachine.pause(); root.facingRight=true; xAnim.duration=800; root.petX=clampX(root.width - spriteW -12); root.bubbleText="right!"; bubbleHideTimer.restart(); saveState(); stayPutTimer.restart() }
+        function center(): void { stateMachine.resetFatigue(); stateMachine.pause(); xAnim.duration=700; yAnim.duration=700; root.petX=clampX(Math.round(root.width/2 - spriteW/2)); root.petY=clampY(Math.round(root.height/2 - spriteH/2)); root.bubbleText="center!"; bubbleHideTimer.restart(); saveState(); stayPutTimer.restart() }
+        function move(x: int, y: int): void { stateMachine.resetFatigue(); stateMachine.pause(); var nx=clampX(x), ny=clampY(y); xAnim.duration=700; yAnim.duration=700; root.petX=nx; root.petY=ny; root.bubbleText=nx+","+ny; bubbleHideTimer.restart(); saveState(); stayPutTimer.restart(); console.log("[Pet] move -> "+nx+","+ny+" stay 6s") }
     }
 
     // ── persistence (LocalStorage qs_pet) ───────────────────────────
@@ -79,14 +85,8 @@ PanelWindow {
             }
             if (vals.petY !== undefined) {
                 var y = parseInt(vals.petY); if (!isNaN(y)) {
-                    // if saved y is near top (floating), ignore — force floor on next frame
-                    if (y < 100) {
-                        console.log("[Pet] ignoring saved top y="+y+" -> will snap to floor")
-                        root.hasSavedY = false
-                    } else {
-                        root.petY = clampY(y)
-                        root.hasSavedY = true
-                    }
+                    root.petY = clampY(y)
+                    root.hasSavedY = true
                 }
             }
             if (vals.facingRight !== undefined) root.facingRight = vals.facingRight === '1'
@@ -397,6 +397,8 @@ PanelWindow {
             })
         }
     }
+    // stay put after explicit move — keeps pet at requested coords, not immediately walking away
+    Timer { id: stayPutTimer; interval: 6000; repeat: false; onTriggered: stateMachine.resume() }
     function stopWalk(){}
     function cancelWalk(){ xAnim.duration=1; yAnim.duration=1 }
 
@@ -542,9 +544,17 @@ PanelWindow {
     onHeightChanged: {
         var floor = clampY(root.height - spriteH -6)
         if (floor < 40) return
-        if (!isDragging && !isFalling && Math.abs(root.petY - floor) > 60) {
-            console.log("[Pet] heightChanged floor fix " + root.petY + " -> " + floor + " h="+root.height)
-            yAnim.duration = 420; root.petY = floor; saveState()
+        if (isDragging || isFalling) { root.petY = clampY(root.petY); return }
+        // keep ceiling pets at ceiling, floor pets on floor, else clamp
+        if (root.petY < 40) {
+            // was on ceiling (y<40) — keep at ceiling (12) after resize, not floor
+            root.petY = clampY(root.petY)
+        } else if (Math.abs(root.petY - floor) < 80 || root.petY > floor - 80) {
+            // was on/near floor — snap to new floor
+            if (Math.abs(root.petY - floor) > 8) {
+                console.log("[Pet] heightChanged floor fix " + root.petY + " -> " + floor + " h="+root.height)
+                yAnim.duration = 420; root.petY = floor; saveState()
+            }
         } else {
             root.petY = clampY(root.petY)
         }
@@ -552,7 +562,9 @@ PanelWindow {
     Timer { id: floorFixTimer; interval: 1600; running: true; repeat: false; onTriggered: {
             var floor = clampY(root.height - spriteH -6)
             if (floor < 40) return
-            if (Math.abs(root.petY - floor) > 60) {
+            if (isDragging || isFalling) return
+            // only fix if was supposed to be on floor but is floating mid-air due to early height
+            if (root.petY > 40 && Math.abs(root.petY - floor) > 120 && root.petY !== 12) {
                 console.log("[Pet] startup floor fix " + root.petY + " -> " + floor)
                 yAnim.duration = 520; root.petY = floor; saveState()
             }

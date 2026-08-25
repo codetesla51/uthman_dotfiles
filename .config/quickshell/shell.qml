@@ -9,6 +9,7 @@ ShellRoot {
     PowerMenu { colors: barPalette }
     AppLauncher { colors: barPalette }
     AudioVisualizer { colors: barPalette }
+    QuickNotes { colors: barPalette }
 
     Colors { id: barPalette }
 }

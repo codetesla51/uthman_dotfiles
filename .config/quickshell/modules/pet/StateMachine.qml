@@ -16,6 +16,7 @@ Item {
     property string actionKind: "idle"
     property string userActivity: "idle"
     property var groq: null
+    property string sysSummary: ""
 
     property int fatigue: 0
     property bool isSleeping: false
@@ -198,10 +199,10 @@ Item {
 
     function pickNext() {
         if (root.isSleeping) { wakeFromSleep(); return }
-        // Groq smart decision — 42% chance when groq ready and fatigue>15
+        // Groq smart decision — 42% chance when groq ready and fatigue>15, now aware of system
         if (root.groq && root.groq.ready && root.fatigue > 15 && Math.random() < 0.42) {
             var avail = availableNames()
-            root.groq.decideNext(root.currentAction, root.actionKind, root.userActivity, root.fatigue, avail, function(chosen){
+            root.groq.decideNext(root.currentAction, root.actionKind, root.userActivity, root.fatigue, avail, root.sysSummary, function(chosen){
                 if (chosen && root.actions[chosen]) {
                     console.log("[StateMachine] Groq chose " + chosen + " (fatigue " + root.fatigue + ")")
                     applyAction(chosen)

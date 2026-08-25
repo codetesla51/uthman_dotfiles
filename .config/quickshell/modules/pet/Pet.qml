@@ -27,6 +27,9 @@ PanelWindow {
     mask: Region { item: petWrapper }
 
     Groq { id: groq; model: "groq/compound-mini" }
+    SystemInfo { id: sysInfo }
+    // real system summary for Groq — makes Hornet actually aware of what's happening
+    property string sysSummary: "CPU "+sysInfo.cpuPct+"% MEM "+sysInfo.memPct+"% BAT "+sysInfo.batPct+(sysInfo.batCharging?"⚡":"%")+" T"+sysInfo.tempC+"C up "+sysInfo.uptime+" "+sysInfo.clock+" apps "+sysInfo.toplevelCount+" focused:"+sysInfo.focusedApp+" spots:"+sysInfo.freeSpots.length+" at "+petX+","+petY+" " + sysInfo.shellInfo
 
     IpcHandler {
         target: "pet"
@@ -38,7 +41,9 @@ PanelWindow {
         function sleep(): void { console.log("[Pet] ipc sleep"); stateMachine.trigger("sleep") }
         function sit(): void { console.log("[Pet] ipc sit"); stateMachine.resetFatigue(); stateMachine.trigger("sitAnywhere") }
         function hideMe(): void { console.log("[Pet] ipc hideMe"); stateMachine.resetFatigue(); stateMachine.trigger("hide") }
-        function status(): string { return JSON.stringify({x:root.petX,y:root.petY,facingRight:root.facingRight,visible:root.visible,action:root.currentAction,kind:stateMachine.actionKind,activity:root.userActivity,fatigue:stateMachine.fatigue,isSleeping:stateMachine.isSleeping,cursor:[root.cursorX,root.cursorY]}) }
+        function status(): string { return JSON.stringify({x:root.petX,y:root.petY,facingRight:root.facingRight,visible:root.visible,action:root.currentAction,kind:stateMachine.actionKind,activity:root.userActivity,fatigue:stateMachine.fatigue,isSleeping:stateMachine.isSleeping,cursor:[root.cursorX,root.cursorY],sys:sysSummary,spots:sysInfo.freeSpots}) }
+        function perches(): string { return JSON.stringify(sysInfo.freeSpots) }
+        function explain(): string { var s="Hornet lives in quickshell PanelWindow Overlay mask click-through, StateMachine fatigue "+stateMachine.fatigue+" groq "+groq.model+" free "+sysInfo.freeSpots.length+" spots"; if (groq.ready) groq.chat([{role:"system",content:"Explain Hornet pet how quickshell works: "+sysInfo.shellInfo+" System "+sysSummary},{role:"user",content:"Explain in 1 short sentence how you work"}], 40, 0.7, function(t){ if(t) { root.bubbleText=t.slice(0,40); bubbleHideTimer.restart() } }); return s }
     }
 
     // ── persistence (LocalStorage qs_pet) ───────────────────────────
@@ -217,6 +222,7 @@ PanelWindow {
         actions: root.actions
         userActivity: root.userActivity
         groq: groq
+        sysSummary: root.sysSummary
         onActionChanged: function(name, frames, interval, bubble, kind){
             root.currentAction = name
             root.currentFrames = frames
@@ -225,9 +231,9 @@ PanelWindow {
             root.bubbleText = bubble
             if (bubble!=="") bubbleHideTimer.restart()
             frameTimer.interval = interval; frameTimer.restart()
-            // Groq smart bubble override — 55% chance when ready, keeps local as fallback
+            // Groq smart bubble override — now aware of system + free spots
             if (groq.ready && Math.random() < 0.55) {
-                groq.bubbleFor(root.userActivity, name, stateMachine.fatigue, function(aiBubble){
+                groq.bubbleFor(root.userActivity, name, stateMachine.fatigue, root.sysSummary, function(aiBubble){
                     if (aiBubble && aiBubble.length > 1) {
                         root.bubbleText = aiBubble
                         bubbleHideTimer.restart()
@@ -301,37 +307,23 @@ PanelWindow {
         saveState()
     }
     function sitAnywhere(action){
-        console.log("[Pet] sitAnywhere " + action+" wh="+root.width+"x"+root.height+" activity="+userActivity)
-        // any part of screen — not just below: pick random surface
-        // 55% floor, 20% ceiling (hang), 15% window top, 10% truly random mid-air (with fall)
-        var r = Math.random()
-        var targetY, targetX, useFrames = action
+        console.log("[Pet] sitAnywhere " + action+" wh="+root.width+"x"+root.height+" activity="+userActivity+" spots="+sysInfo.freeSpots.length)
+        // truly free — pick from SystemInfo.freeSpots (floor/ceiling/bar/window) so pet not always below
+        var spots = sysInfo.freeSpots
+        var pick = spots.length ? spots[Math.floor(Math.random()*spots.length)] : null
+        var targetX, targetY, useFrames = action
         var floorY = clampY(root.height - spriteH -6)
         if (floorY < 40) floorY = 712
-        var ceilingY = 10
-        if (r < 0.55) {
-            // floor — classic sit anywhere along bottom
-            targetY = floorY
-            targetX = Math.floor(Math.random()*Math.max(4, root.width - spriteW -4))+2
-        } else if (r < 0.75) {
-            // ceiling — hang from top (uses GrabCeiling frames)
-            targetY = ceilingY
-            targetX = Math.floor(Math.random()*Math.max(4, root.width - spriteW -4))+2
-            if (actions["GrabCeiling"]) useFrames = "GrabCeiling"
-        } else if (r < 0.90 && activeWinSize[0]>200) {
-            // on window — sit on top edge of active window
-            var winTop = activeWinAt[1] - 54 // window screen y -> window-local (bar offset)
-            targetY = clampY(winTop - spriteH + 12)
-            targetX = clampX(activeWinAt[0] + Math.random()*(activeWinSize[0]-spriteW) )
-            if (targetY < 8) targetY = floorY // fallback if window top offscreen
+        if (pick) {
+            targetX = pick.x; targetY = pick.y
+            if (pick.surface === "ceiling" && actions["GrabCeiling"]) useFrames = "GrabCeiling"
+            else if (pick.surface === "window" && targetY < 100 && actions["GrabCeiling"]) useFrames = "GrabCeiling"
         } else {
-            // fallback floor — never truly random mid-air (avoids floating sit)
-            targetY = floorY
             targetX = Math.floor(Math.random()*Math.max(4, root.width - spriteW -4))+2
+            targetY = floorY
         }
-        // if target is ceiling/wall, use appropriate frames
         if (targetY < 40 && actions["GrabCeiling"]) useFrames = "GrabCeiling"
-        else if (targetY > floorY - 30) useFrames = action // floor sit keeps original
+        else if (targetY > floorY - 30) useFrames = action
         if (useFrames !== action && actions[useFrames]) {
             root.currentAction = useFrames
             root.currentFrames = actions[useFrames]
@@ -352,19 +344,11 @@ PanelWindow {
         // sleep can be anywhere but prefers cozy spots: floor corners, ceiling nook, window ledge
         var floorY = clampY(root.height - spriteH -6)
         if (floorY < 40) floorY = 712
-        var ceilingY = 12
-        var winY = (activeWinSize[0]>200) ? clampY(activeWinAt[1] - 54 - spriteH/2) : floorY
-        var spots = [
-            {x:8, y: floorY},
-            {x: root.width - spriteW -8, y: floorY},
-            {x: Math.floor(root.width/2 - spriteW/2), y: floorY},
-            {x: 12, y: ceilingY},
-            {x: root.width - spriteW -12, y: ceilingY},
-            {x: clampX(activeWinAt[0] + 20), y: winY}
-        ]
-        var pick = spots[Math.floor(Math.random()*spots.length)]
-        pick.x += Math.floor((Math.random()-0.5)*40)
-        pick.y += Math.floor((Math.random()-0.5)*20)
+        var spots = sysInfo.freeSpots.length ? sysInfo.freeSpots : [{x:8,y:floorY},{x:root.width-spriteW-8,y:floorY}]
+        var cozy = spots.filter(function(s){ return s.surface==="floor" || s.surface==="window" || s.surface==="bar" })
+        if (cozy.length===0) cozy = spots
+        var pick = cozy[Math.floor(Math.random()*cozy.length)]
+        pick = {x: pick.x + Math.floor((Math.random()-0.5)*30), y: pick.y + Math.floor((Math.random()-0.5)*16)}
         var c=clampXY(pick.x, pick.y)
         // choose frames for spot: ceiling -> GrabCeiling/Sprawl, window -> Sprawl
         if (c.y < 40 && actions["GrabCeiling"]) {

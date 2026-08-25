@@ -11,8 +11,6 @@ Item {
     property string model: "groq/compound-mini"
     property bool ready: apiKey.length > 10
     property string keyFile: Quickshell.env("HOME") + "/.config/quickshell/modules/pet/groq.key"
-
-    // fallback to env GROQ_API_KEY if file not present
     property string envKey: Quickshell.env("GROQ_API_KEY") || ""
 
     FileView {
@@ -30,12 +28,10 @@ Item {
     }
     Component.onCompleted: {
         if (envKey.length > 10 && apiKey.length === 0) apiKey = envKey
-        // trigger load
         keyView.path = ""
         keyView.path = keyFile
     }
 
-    // generic chat: messages = [{role, content}], callback(text)
     function chat(messages, maxTokens, temperature, callback) {
         if (!ready) { callback("", "no key"); return }
         var xhr = new XMLHttpRequest()
@@ -68,29 +64,30 @@ Item {
         xhr.send(body)
     }
 
-    // smart bubble: short (3-7 words), contextual
-    function bubbleFor(activity, action, fatigue, callback) {
-        var sys = "You are Hornet from Hollow Knight, a tiny shimeji pet on a Linux desktop. Reply ONLY with a short bubble 2-6 words, no quotes, no emoji spam. Be witty, warm, slightly teasing. Context: activity=" + activity + " action=" + action + " fatigue=" + fatigue
-        var usr = "Bubble for " + action + " while user is " + activity + " (fatigue " + fatigue + "). Keep 2-6 words."
+    // smart bubble: short (3-7 words), contextual with system
+    function bubbleFor(activity, action, fatigue, sysInfo, callback) {
+        if (typeof sysInfo === 'function') { callback = sysInfo; sysInfo = "" }
+        var sysSummary = sysInfo || ""
+        var sys = "You are Hornet from Hollow Knight, a tiny shimeji pet living inside quickshell on Hyprland. You know the system: " + sysSummary + ". Reply ONLY with a short bubble 2-6 words, no quotes, no emoji spam. Be witty, warm, slightly teasing. Context: activity=" + activity + " action=" + action + " fatigue=" + fatigue
+        var usr = "Bubble for " + action + " while user is " + activity + " (fatigue " + fatigue + "). System: " + sysSummary + ". Keep 2-6 words."
         chat([{role:"system", content: sys}, {role:"user", content: usr}], 18, 0.9, function(txt, err){
             if (err || !txt) { callback("") ; return }
-            // clean: take first line, strip quotes
             var line = txt.split("\n")[0].trim().replace(/^\"|\"$/g, "").replace(/^['`]|['`]$/g, "")
             if (line.length > 28) line = line.slice(0,28)
-            // filter too long
             if (line.split(" ").length > 8) line = line.split(" ").slice(0,6).join(" ")
             callback(line)
         })
     }
 
-    // smart decision: choose next action kind (optional, not required)
-    function decideNext(curAction, curKind, activity, fatigue, availableActions, callback) {
-        var sys = "You are Hornet pet AI. Choose next action JSON only: {\"action\":\"Name\",\"reason\":\"short\"}. Actions: " + availableActions.join(", ") + ". Cur=" + curAction + "(" + curKind + ") activity=" + activity + " fatigue=" + fatigue + ". Be purposeful: walk when user idle, watch when coding, sleep only if fatigue>120."
-        var usr = "Pick next action. Fatigue " + fatigue + " (0-300, sleep likely >120). Activity " + activity + ". Cur " + curAction + ". Reply JSON only."
+    // smart decision: choose next action with system awareness
+    function decideNext(curAction, curKind, activity, fatigue, availableActions, sysInfo, callback) {
+        if (typeof sysInfo === 'function') { callback = sysInfo; sysInfo = "" }
+        var sysSummary = sysInfo || ""
+        var sys = "You are Hornet pet AI living in quickshell. System: " + sysSummary + ". Choose next action JSON only: {\"action\":\"Name\",\"reason\":\"short\"}. Actions: " + availableActions.join(", ") + ". Cur=" + curAction + "(" + curKind + ") activity=" + activity + " fatigue=" + fatigue + ". Be purposeful: walk when user idle, watch when coding, sleep only if fatigue>120. Prefer freeSpots surfaces."
+        var usr = "Pick next action. Fatigue " + fatigue + " (0-300, sleep likely >120). Activity " + activity + " Sys " + sysSummary + " Cur " + curAction + ". Reply JSON only."
         chat([{role:"system", content: sys}, {role:"user", content: usr}], 40, 0.7, function(txt, err){
             if (err || !txt) { callback(null); return }
             try {
-                // extract JSON
                 var m = txt.match(/\{[^}]+\}/)
                 if (!m) { callback(null); return }
                 var j = JSON.parse(m[0])

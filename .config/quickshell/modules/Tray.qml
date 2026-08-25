@@ -29,7 +29,7 @@ Item {
         width: trayRow.implicitWidth + 20
         height: 22
         radius: 14
-        color: colors.alpha(colors.surface, 0.6)
+        color: colors.alpha(colors.surface, 0.55)
         border.width: 1
         border.color: colors.alpha(colors.outline, 0.15)
 

@@ -822,11 +822,13 @@ PanelWindow {
             Text {
                 Layout.fillWidth: true
                 horizontalAlignment: Text.AlignHCenter
-                text: "↑↓ select  ·  C connect  ·  D disconnect  ·  S scan  ·  F forget  ·  T speed test"
+                verticalAlignment: Text.AlignVCenter
+                elide: Text.ElideRight
+                text: "↑↓ select · C connect · D disconnect · S scan · F forget"
                 color: colors.alpha(colors.outline, 0.5)
                 font.family: "FiraCode Nerd Font"
                 font.pixelSize: 8
-                font.letterSpacing: 0.5
+                font.letterSpacing: 0.3
             }
 
             Rectangle { Layout.fillWidth: true; height: 1; color: colors.alpha(colors.outline, 0.15) }

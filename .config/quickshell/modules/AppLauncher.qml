@@ -1,5 +1,6 @@
 import Quickshell
 import Quickshell.Io
+import Quickshell.Wayland
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
@@ -17,6 +18,7 @@ PanelWindow {
     anchors { top:true; bottom:true; left:true; right:true }
     exclusionMode: ExclusionMode.Ignore
     color: "transparent"
+    WlrLayershell.namespace: "qs-launcher"
     focusable: true
 
     IpcHandler { target: "launcher"; function toggle(): void { root.open = !root.open } }
@@ -33,6 +35,7 @@ PanelWindow {
     readonly property var denylist: ["rofi","kvantum","qv4l2","qt5ct","qt6ct","v4l2 test","logseq","printer","assistant","ava","btop","htop","xterm","uxterm","kvantummanager"]
     property var usageMap: ({})
     property var favSet: ({})
+
     readonly property var allApps: DesktopEntries.applications.values.filter(e => {
         if (e.noDisplay) return false
         if (!e.icon) return false  // no icon = hidden per user request
@@ -120,9 +123,9 @@ PanelWindow {
         width: 560
         height: Math.min(520, col.implicitHeight + 28)
         radius: 18
-        color: colors.alpha(colors.background, 0.96)
+        color: colors.alpha(colors.background, 0.78)
         border.width: 1
-        border.color: colors.alpha(colors.outline, 0.25)
+        border.color: colors.alpha(colors.outline, 0.15)
         opacity: root.open ? 1 : 0
         scale: root.open ? 1 : 0.96
         Behavior on opacity { NumberAnimation { duration: 180 } }
@@ -178,7 +181,7 @@ PanelWindow {
                                 event.accepted = true
                             }
                         }
-                        onTextChanged: root.selected = -1
+                        onTextChanged: root.selected = 0
                     }
 
                     Text {
@@ -207,7 +210,7 @@ PanelWindow {
             ListView {
                 id: resultList
                 Layout.fillWidth: true
-                Layout.preferredHeight: Math.min(7*56, root.filtered.length*56)
+                Layout.preferredHeight: Math.min(7*54, root.filtered.length*54)
                 visible: root.filtered.length > 0
                 clip: true
                 model: root.filtered
@@ -221,7 +224,7 @@ PanelWindow {
                     required property var modelData
                     required property int index
                     width: resultList.width
-                    height: 52
+                    height: 54
                     Rectangle {
                         anchors.fill: parent
                         anchors.leftMargin: 2
@@ -241,9 +244,9 @@ PanelWindow {
                         spacing: 12
 
                         Rectangle {
-                            Layout.preferredWidth: 32
-                            Layout.preferredHeight: 32
-                            radius: 8
+                            Layout.preferredWidth: 36
+                            Layout.preferredHeight: 36
+                            radius: 9
                             color: colors.alpha(colors.primary, 0.10)
                             border.width: 1
                             border.color: colors.alpha(colors.primary, 0.15)
@@ -302,6 +305,28 @@ PanelWindow {
                             }
                         }
 
+                    }
+
+                    // favorite toggle — hover reveal, wired to the favs DB
+                    Rectangle {
+                        visible: ma.containsMouse || root.favSet[modelData.id] === true
+                        width: 26; height: 26; radius: 13
+                        color: favMa.containsMouse ? colors.alpha(colors.primary, 0.18) : "transparent"
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: root.favSet[modelData.id] ? "" : ""
+                            color: root.favSet[modelData.id] ? colors.primary : colors.alpha(colors.outline, 0.6)
+                            font.family: "FiraCode Nerd Font"
+                            font.pixelSize: 12
+                        }
+
+                        MouseArea {
+                            id: favMa
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onClicked: root.toggleFav(modelData.id)
+                        }
                     }
 
                     MouseArea {

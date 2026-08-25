@@ -30,7 +30,7 @@ Item {
     Rectangle {
         anchors.fill: parent
         radius: 14
-        color: root.hovered ? colors.alpha(colors.surface, 0.8) : colors.alpha(colors.surface, 0.6)
+        color: root.hovered ? colors.alpha(colors.surface, 0.75) : colors.alpha(colors.surface, 0.55)
         border.width: 1
         border.color: root.critical ? colors.alpha(colors.error, 0.5)
                     : root.warning ? colors.alpha(colors.tertiary, 0.35)

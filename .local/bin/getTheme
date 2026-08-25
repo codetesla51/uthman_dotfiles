@@ -31,7 +31,8 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$WALLPAPER" ]]; then
-    WALLPAPER=$(readlink ~/.config/omarchy/current/background 2>/dev/null | tr -d '[:space:]')
+    WALLPAPER=$(readlink ~/.config/theme/current/background 2>/dev/null | tr -d '[:space:]')
+    [[ -z "$WALLPAPER" ]] && WALLPAPER=$(readlink ~/.config/omarchy/current/background 2>/dev/null | tr -d '[:space:]')
 fi
 
 if [[ -z "$WALLPAPER" ]]; then
@@ -67,17 +68,18 @@ echo "Applying colors..."
 # Hyprland re-sources colors.conf, so borders/window colors update too.
 hyprctl reload &
 
-if ! omarchy-toggle-enabled waybar-off 2>/dev/null; then
+if command -v omarchy-toggle-enabled >/dev/null 2>&1 && ! omarchy-toggle-enabled waybar-off 2>/dev/null; then
     omarchy-restart-waybar &
 fi
 
-swaync-client --reload-css &
+swaync-client --reload-css 2>/dev/null &
 pkill -SIGUSR1 mako 2>/dev/null &
-omarchy-restart-walker &
-omarchy-restart-swayosd &
-omarchy-restart-terminal &
-omarchy-theme-set-browser &
-gen-zed-theme &
+command -v omarchy-restart-walker >/dev/null 2>&1 && omarchy-restart-walker 2>/dev/null & true
+command -v omarchy-restart-swayosd >/dev/null 2>&1 && omarchy-restart-swayosd 2>/dev/null & true
+# ghostty: send SIGUSR2 to reload config (standalone, no omarchy)
+pkill -SIGUSR2 -x ghostty 2>/dev/null & true
+command -v omarchy-theme-set-browser >/dev/null 2>&1 && omarchy-theme-set-browser 2>/dev/null & true
+gen-zed-theme 2>/dev/null & true
 
 # Live-update Cavasik colors (matugen already regenerated ~/.config/cavasik/colors.rgb)
 dbus-send --session --type=method_call --dest="io.github.TheWisker.Cavasik" \

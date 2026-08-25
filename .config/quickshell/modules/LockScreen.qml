@@ -19,7 +19,7 @@ WlSessionLock {
             // background with blur — use current wallpaper
             Image {
                 anchors.fill: parent
-                source: "file:///home/uthman/.config/omarchy/current/background"
+                source: "file:///home/uthman/.config/theme/current/background"
                 fillMode: Image.PreserveAspectCrop
                 asynchronous: true
             }

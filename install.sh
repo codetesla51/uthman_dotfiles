@@ -26,7 +26,7 @@ header()  { echo -e "\n${BOLD}$*${RESET}"; }
 # ── Step 1: Check dependencies ────────────────────────────────────────────────
 header "Checking dependencies..."
 
-DEPS=(matugen waybar hyprland ghostty starship zsh lsd zoxide fzf cava btop wl-screenrec walker swaync stow)
+DEPS=(hyprland quickshell ghostty matugen starship zsh lsd zoxide fzf cava btop stow hyprlock hypridle hyprsunset wl-clipboard cliphist swaync mako walker rofi)
 MISSING=()
 
 for dep in "${DEPS[@]}"; do
@@ -123,7 +123,15 @@ if [[ "$run_matugen" =~ ^[Yy]$ ]]; then
 
     if [ -f "$wallpaper_path" ]; then
         info "Running: matugen image $wallpaper_path"
-        matugen image "$wallpaper_path"
+        # Use getTheme wrapper if available (handles reload + compat symlinks)
+        if [[ -x "$DOTFILES_DIR/.local/bin/getTheme" ]]; then
+            bash "$DOTFILES_DIR/.local/bin/getTheme" "$wallpaper_path" || matugen image "$wallpaper_path" --mode dark --type scheme-fidelity --contrast 0.2
+        else
+            matugen image "$wallpaper_path" --mode dark --type scheme-fidelity --contrast 0.2 || matugen image "$wallpaper_path"
+        fi
+        mkdir -p ~/.config/theme/current ~/.config/omarchy/current 2>/dev/null || true
+        ln -sfn "$(realpath "$wallpaper_path")" ~/.config/theme/current/background 2>/dev/null || true
+        ln -sfn "$(realpath "$wallpaper_path")" ~/.config/omarchy/current/background 2>/dev/null || true
         success "Matugen ran successfully — colors updated!"
     else
         warn "File not found: $wallpaper_path"

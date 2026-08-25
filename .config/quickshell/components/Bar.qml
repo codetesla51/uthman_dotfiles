@@ -143,7 +143,7 @@ PanelWindow {
                 script: "$HOME/.config/quickshell/scripts/idle-indicators/idle.sh"
                 intervalMs: 5000
                 activeColor: colors.tertiary
-                clickCommand: "omarchy-toggle-idle"
+                clickCommand: "sh -c 'pidof hypridle >/dev/null && pkill hypridle || uwsm-app -- hypridle &'"
             }
             DndIndicator {
                 colors: bar.colors
@@ -157,7 +157,7 @@ PanelWindow {
                 activeClass: "pending"
                 activeColor: colors.error
                 blink: true
-                clickCommand: "omarchy-update"
+                clickCommand: "uwsm-app -- ghostty -e sh -c 'yay -Syu; echo done; read'"
             }
             Tray { colors: bar.colors }
             Memory { colors: bar.colors; onOpenRequested: sysMon.open = true }

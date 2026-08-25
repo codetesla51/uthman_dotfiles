@@ -7,5 +7,6 @@
 # control panel build artifact
 panel/panel
 # quickshell session log — never commit
+memory.md
 .config/quickshell/memory.md
 .config/quickshell/*Qt6QMLForBeginners*

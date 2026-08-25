@@ -17,9 +17,17 @@ output_path = "~/.config/theme/themes/snow_black/colors.conf"
 input_path = "~/.config/matugen/templates/hyprland-colors.conf"
 output_path = "~/.config/omarchy/current/theme/colors.conf"
 
+[templates.hyprland-standalone]
+input_path = "~/.config/matugen/templates/hyprland-colors.conf"
+output_path = "~/.config/theme/current/colors.conf"
+
 [templates.hyprlock-current]
 input_path = "~/.config/matugen/templates/hyprlock-colors.conf"
 output_path = "~/.config/omarchy/current/theme/hyprlock.conf"
+
+[templates.hyprlock-standalone]
+input_path = "~/.config/matugen/templates/hyprlock-colors.conf"
+output_path = "~/.config/theme/current/hyprlock.conf"
 
 [templates.ghostty-theme]
 input_path = "~/.config/matugen/templates/ghostty-theme.conf"
@@ -28,6 +36,10 @@ output_path = "~/.config/theme/themes/snow_black/ghostty.conf"
 [templates.ghostty-current]
 input_path = "~/.config/matugen/templates/ghostty-theme.conf"
 output_path = "~/.config/omarchy/current/theme/ghostty.conf"
+
+[templates.ghostty-standalone]
+input_path = "~/.config/matugen/templates/ghostty-theme.conf"
+output_path = "~/.config/theme/current/ghostty.conf"
 
 
 [templates.pear-desktop-theme]
@@ -61,6 +73,10 @@ output_path = "~/.config/theme/themes/snow_black/gtk.css"
 [templates.gtk-current]
 input_path = "~/.config/matugen/templates/gtk.css"
 output_path = "~/.config/omarchy/current/theme/gtk.css"
+
+[templates.gtk-standalone]
+input_path = "~/.config/matugen/templates/gtk.css"
+output_path = "~/.config/theme/current/gtk.css"
 
 [templates.chromium-theme]
 input_path = "~/.config/matugen/templates/chromium.theme"
@@ -118,13 +134,25 @@ output_path = "~/.config/rofi/colors.rasi"
 input_path = "~/.config/matugen/templates/neovim.lua"
 output_path = "~/.config/omarchy/current/theme/neovim.lua"
 
+[templates.neovim-standalone]
+input_path = "~/.config/matugen/templates/neovim.lua"
+output_path = "~/.config/theme/current/neovim.lua"
+
 [templates.swayosd-current]
 input_path = "~/.config/matugen/templates/swayosd.css"
 output_path = "~/.config/omarchy/current/theme/swayosd.css"
 
+[templates.swayosd-standalone]
+input_path = "~/.config/matugen/templates/swayosd.css"
+output_path = "~/.config/theme/current/swayosd.css"
+
 [templates.zed-palette]
 input_path = "~/.config/matugen/templates/zed-palette.json"
 output_path = "~/.config/omarchy/current/theme/matugen-base.json"
+
+[templates.zed-standalone]
+input_path = "~/.config/matugen/templates/zed-palette.json"
+output_path = "~/.config/theme/current/matugen-base.json"
 
 [templates.obsidian-current]
 input_path = "~/.config/matugen/templates/obsidian.css"

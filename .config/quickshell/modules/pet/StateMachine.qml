@@ -1,9 +1,10 @@
 import QtQuick
 
-// StateMachine — smart decision tree over Shimeji actions.
-// Enhanced: aware of userActivity (coding/browsing/idle/terminal/media)
-// Exposes: currentAction, frames, interval, bubble, kind
-// Kinds: idle | walk | special | hide | sleep | walkToMe | sitAnywhere
+// StateMachine — purposeful decision tree with fatigue.
+// - fatigue++ while idle/walk, resets on user interaction
+// - sleep probability 0 → ~high after 2-3min, excluded early
+// - once asleep, only wake on interaction or fixed sleep duration
+// - idle<->walk/sit weighted-random, no sleep in that pool until threshold
 Item {
     id: root
 
@@ -13,7 +14,12 @@ Item {
     property int frameInterval: 180
     property string bubbleText: ""
     property string actionKind: "idle"
-    property string userActivity: "idle" // coding | browsing | terminal | media | idle | unknown
+    property string userActivity: "idle"
+
+    property int fatigue: 0
+    property bool isSleeping: false
+    readonly property int fatigueThreshold: 120 // 2min
+    readonly property int fatigueMax: 180 // 3min
 
     signal actionChanged(string name, var frames, int interval, string bubble, string kind)
 
@@ -23,6 +29,8 @@ Item {
     readonly property var petActions: ["PetAction", "PetActionDangleLegs", "BePet", "BePetDangleLegs"]
     readonly property var sleepActions: ["Sprawl", "SitWithLegsUp"]
     readonly property var sitAnywhereCandidates: ["Sit", "SitWithLegsUp", "SitAndDangleLegs", "Sprawl", "WatchAction"]
+    readonly property var wallActions: ["GrabWall", "ClimbWall"]
+    readonly property var ceilingActions: ["GrabCeiling", "ClimbCeiling"]
 
     readonly property var bubbleMap: ({
         "PoseAction": ["Shaw!", "…!", "Hmph.", "Heh!"],
@@ -35,15 +43,15 @@ Item {
         "WatchAction": ["…", "Hm?", "·ω·", "what'cha doing?"],
         "WatchLoop": ["…", "· · ·", "I see you!"],
         "Sprawl": ["Zzz…", "…zzz", "zzZ"],
-        "GrabWall": ["…cling"],
-        "GrabCeiling": ["…hang"],
+        "GrabWall": ["…cling", "whoa!"],
+        "GrabCeiling": ["…hang", "whee!"],
+        "ClimbWall": ["huff…", "climb!"],
+        "ClimbCeiling": ["scurry…"],
         "Hide": ["…", "brb", "peek…"],
-        "Sleep": ["Zzz…", "night…", "zzz"],
+        "Sleep": ["Zzz…", "night…", "zzz", "…zzz"],
         "WalkToMe": ["comin'!", "wait!"],
         "SitAnywhere": ["ahh~", "here?", "comfy"]
     })
-
-    // Activity aware bubbles
     readonly property var activityBubbles: ({
         "coding": ["coding? cool!", "compile!", "git push!", "bracket…", "·ω·"],
         "browsing": ["surf's up!", "click!", "scroll?"],
@@ -52,15 +60,52 @@ Item {
         "idle": ["you there?", "poke!", "…zzz"]
     })
 
+    // fatigue timer: increments while awake and idle/walk
+    Timer {
+        id: fatigueTimer
+        interval: 1000
+        repeat: true
+        running: !root.isSleeping
+        onTriggered: {
+            if (root.actionKind === "idle" || root.actionKind === "walk" || root.actionKind === "walkToMe" || root.actionKind === "sitAnywhere") {
+                if (root.fatigue < 300) root.fatigue += 1
+            } else if (root.actionKind === "special") {
+                // specials tire a bit faster
+                if (root.fatigue < 300) root.fatigue += 1
+            }
+            // sleep resets fatigue slowly? not while sleeping
+        }
+    }
+
+    function resetFatigue() {
+        if (root.fatigue !== 0) console.log("[StateMachine] fatigue reset " + root.fatigue + " -> 0 by interaction")
+        root.fatigue = 0
+        if (root.isSleeping) {
+            console.log("[StateMachine] wake by interaction")
+            wakeFromSleep()
+        }
+    }
+
+    function sleepProbability() {
+        if (root.fatigue < 40) return 0
+        if (root.fatigue < 80) return 0.02
+        if (root.fatigue < 110) return 0.08
+        if (root.fatigue < 140) return 0.18
+        if (root.fatigue < 170) return 0.32
+        if (root.fatigue < 200) return 0.52
+        return 0.68
+    }
+
     function dwellFor(action, frames, interval, kind) {
+        if (kind === "sleep") return 28000 + Math.random() * 14000 // fixed 28-42s sleep, only wake via timer or interaction
+        if (kind === "hide") return 3500 + Math.random() * 3500
         if (kind === "walk" || kind === "walkToMe") return 2600 + Math.random() * 3400
-        if (kind === "hide") return 3500 + Math.random() * 3500 // hidden dwell
-        if (kind === "sleep") return 6000 + Math.random() * 5000 // long sleep
         if (kind === "sitAnywhere") return 3000 + Math.random() * 3000
         if (specialActions.indexOf(action) !== -1) return Math.max(1200, frames.length * interval + 700 + Math.random() * 600)
         if (petActions.indexOf(action) !== -1) return frames.length * interval + 500
         if (action === "WatchAction" || action === "WatchLoop") return 1800 + Math.random() * 2200
         if (action === "Sprawl") return 2200 + Math.random() * 2600
+        if (wallActions.indexOf(action) !== -1 || ceilingActions.indexOf(action) !== -1) return 1800 + Math.random() * 2200
         return 1500 + Math.random() * 2400
     }
 
@@ -89,6 +134,8 @@ Item {
     function kindFor(action) {
         if (walkActions.indexOf(action) !== -1) return "walk"
         if (specialActions.indexOf(action) !== -1 || petActions.indexOf(action) !== -1) return "special"
+        if (wallActions.indexOf(action) !== -1) return "idle" // treat wall hang as idle-ish but not sleep
+        if (ceilingActions.indexOf(action) !== -1) return "idle"
         if (action === "Falling" || action === "Jumping" || action === "Bouncing" || action === "Tripping" || action === "Pinched" || action === "Resisting") return "special"
         if (action.indexOf("Climb") === 0 || action.indexOf("Grab") === 0) return "walk"
         return "idle"
@@ -99,16 +146,13 @@ Item {
         if (!list || Math.random() > 0.22) return ""
         return list[Math.floor(Math.random() * list.length)]
     }
-
     function pickBubble(action, kind) {
-        // synthetic kinds have own bubbles
         if (kind === "hide" || kind === "sleep" || kind === "walkToMe" || kind === "sitAnywhere") {
             var lk = bubbleMap[kind === "walkToMe" ? "WalkToMe" : kind === "sitAnywhere" ? "SitAnywhere" : kind === "sleep" ? "Sleep" : "Hide"]
             if (lk && Math.random() < 0.75) return lk[Math.floor(Math.random()*lk.length)]
         }
         var lines = bubbleMap[action]
         if (!lines) {
-            // occasional activity aware or generic
             var ab = pickActivityBubble()
             if (ab !== "") return ab
             if (Math.random() < 0.12) {
@@ -131,7 +175,6 @@ Item {
         for (var k in actions) if (actions[k] && actions[k].length > 0) out.push(k)
         return out
     }
-
     function filtered(names) {
         var res = []
         for (var i = 0; i < names.length; i++) if (actions[names[i]]) res.push(names[i])
@@ -143,63 +186,79 @@ Item {
         return res
     }
 
+    function wakeFromSleep() {
+        root.isSleeping = false
+        root.fatigue = 0
+        console.log("[StateMachine] wake, fatigue reset")
+        var idles = filtered(idleActions)
+        var next = idles[Math.floor(Math.random()*idles.length)]
+        applyAction(next)
+    }
+
     function pickNext() {
+        // if sleeping, only wake via timer or interaction — don't pick new sleep
+        if (root.isSleeping) {
+            // sleep dwell will have fired, wake now
+            wakeFromSleep()
+            return
+        }
+
         var allNames = availableNames()
         if (allNames.length === 0) return
 
-        // smart weights based on userActivity + current kind
+        // fatigue-driven sleep check — purposeful, not random
+        var sp = sleepProbability()
+        if (sp > 0 && Math.random() < sp) {
+            console.log("[StateMachine] fatigue " + root.fatigue + " -> sleep (p=" + sp.toFixed(2) + ")")
+            triggerSynthetic("sleep")
+            return
+        }
+
         var cur = currentAction
-        var curKind = actionKind // use stored kind (includes synthetic)
+        var curKind = actionKind
         var r = Math.random()
         var next = cur
-        var nextKind = kindFor(cur) // default
-
-        // idle detection heavily biases to sleep/hide
         var idleBias = (userActivity === "idle")
         var codingBias = (userActivity === "coding" || userActivity === "terminal")
         var browsingBias = (userActivity === "browsing")
 
-        // synthetic choice branch: occasionally pick hide/sleep/walkToMe/sitAnywhere regardless of cur
-        // 12% hide, 10% sleep, 14% walkToMe, 12% sitAnywhere (total ~48% synthetic when idle, ~18% otherwise)
-        var synthChance = idleBias ? 0.48 : 0.18
+        // purposeful synthetic branch: hide/walkToMe/sitAnywhere (sleep excluded here — handled above)
+        // 10% hide, 14% walkToMe, 10% sitAnywhere when idle, lower otherwise
+        var synthChance = idleBias ? 0.34 : 0.16
         if (r < synthChance) {
             var sr = Math.random()
-            if (sr < 0.25) { triggerSynthetic("hide"); return }
-            else if (sr < 0.46) { triggerSynthetic("sleep"); return }
-            else if (sr < 0.74) { triggerSynthetic("walkToMe"); return }
+            if (sr < 0.30) { triggerSynthetic("hide"); return }
+            else if (sr < 0.72) { triggerSynthetic("walkToMe"); return }
             else { triggerSynthetic("sitAnywhere"); return }
         }
 
-        // normal decision tree with activity tweaks
         if (curKind === "walk" || curKind === "walkToMe") {
-            if (r < 0.36) {
+            if (r < 0.38) {
                 var idles = filtered(idleActions)
                 next = idles[Math.floor(Math.random()*idles.length)]
-            } else if (r < 0.58) {
+            } else if (r < 0.60) {
                 var walks = filtered(walkActions)
                 next = walks[Math.floor(Math.random()*walks.length)]
-            } else if (r < 0.80) {
+            } else if (r < 0.82) {
                 var specials = filtered(specialActions)
                 if (specials.length && Math.random() < (browsingBias?0.7:0.5)) next = specials[Math.floor(Math.random()*specials.length)]
                 else { var id2 = filtered(idleActions); next = id2[Math.floor(Math.random()*id2.length)] }
             } else next = cur
-        } else if (curKind === "special" || curKind === "hide" || curKind === "sleep") {
-            if (r < 0.50) {
+        } else if (curKind === "special" || curKind === "hide") {
+            if (r < 0.52) {
                 var id3 = filtered(idleActions)
                 next = id3[Math.floor(Math.random()*id3.length)]
             } else {
-                // after special, maybe walk to user if coding (come closer)
                 if (codingBias && Math.random() < 0.35) { triggerSynthetic("walkToMe"); return }
                 var wk = filtered(walkActions)
                 next = wk[Math.floor(Math.random()*wk.length)]
             }
-        } else if (curKind === "sitAnywhere" || curKind === "sleep") {
+        } else if (curKind === "sitAnywhere") {
             if (r < 0.45) { var wks2 = filtered(walkActions); next = wks2[Math.floor(Math.random()*wks2.length)] }
             else if (r < 0.75) { triggerSynthetic("walkToMe"); return }
             else { var ids2 = filtered(sitAnywhereCandidates); next = ids2[Math.floor(Math.random()*ids2.length)] }
         } else { // idle
             if (r < (codingBias?0.32:0.44)) {
-                // coding → less walking, more watching/sitting near window
                 if (codingBias && Math.random() < 0.55) {
                     var watch = filtered(["WatchAction","WatchLoop","Sit","SitAndDangleLegs"])
                     next = watch[Math.floor(Math.random()*watch.length)]
@@ -211,8 +270,8 @@ Item {
                 if (ids.length>1) { var pick = ids[Math.floor(Math.random()*ids.length)]; next = (pick===cur && ids.length>1) ? ids[(ids.indexOf(pick)+1)%ids.length] : pick }
                 else next = ids[0]
             } else if (r < 0.86) {
-                var sp = filtered(specialActions.concat(petActions))
-                next = sp[Math.floor(Math.random()*sp.length)]
+                var sp2 = filtered(specialActions.concat(petActions))
+                next = sp2[Math.floor(Math.random()*sp2.length)]
             } else next = cur
         }
 
@@ -220,7 +279,6 @@ Item {
         applyAction(next)
     }
 
-    // synthetic triggers map to real frames
     function triggerSynthetic(kind) {
         var frames, name, interval, bubble
         if (kind === "hide") {
@@ -250,8 +308,10 @@ Item {
             frameInterval = interval
             bubbleText = bubble
             actionKind = "sleep"
+            isSleeping = true
             dwellTimer.interval = dwellFor(name, frames, interval, "sleep")
             dwellTimer.restart()
+            console.log("[StateMachine] -> sleep fatigue=" + fatigue + " for " + dwellTimer.interval + "ms")
             actionChanged(name, frames, interval, bubble, "sleep")
             return
         }
@@ -295,6 +355,8 @@ Item {
         var iv = intervalFor(name)
         var k = kindFor(name)
         var bub = pickBubble(name, k)
+        // leaving sleep -> not sleeping
+        if (isSleeping && k !== "sleep") isSleeping = false
         currentAction = name
         currentFrames = frames
         frameInterval = iv

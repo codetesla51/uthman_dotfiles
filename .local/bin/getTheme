@@ -45,8 +45,6 @@ if [[ ! -f "$WALLPAPER" ]]; then
     exit 1
 fi
 
-notify-send -a getTheme -u low "Theme" "Generating theme from $(basename "$WALLPAPER")…" 2>/dev/null
-
 echo "Generating theme from wallpaper..."
 echo "  Wallpaper: $WALLPAPER"
 echo "  Type: $THEME_TYPE"
@@ -57,28 +55,18 @@ matugen image "$WALLPAPER" --mode "$MODE" --type "$THEME_TYPE" --contrast "$CONT
 
 if [[ $? -ne 0 ]]; then
     echo "Error: matugen failed"
-    notify-send -a getTheme -u critical "Theme" "matugen failed" 2>/dev/null
     exit 1
 fi
 
-notify-send -a getTheme -u low "Theme" "Applying…" 2>/dev/null
 echo "Applying colors..."
 
 # Fire every reload in parallel so nothing flashes sequentially.
 # Hyprland re-sources colors.conf, so borders/window colors update too.
 hyprctl reload &
 
-if command -v omarchy-toggle-enabled >/dev/null 2>&1 && ! omarchy-toggle-enabled waybar-off 2>/dev/null; then
-    omarchy-restart-waybar &
-fi
-
 swaync-client --reload-css 2>/dev/null &
 pkill -SIGUSR1 mako 2>/dev/null &
-command -v omarchy-restart-walker >/dev/null 2>&1 && omarchy-restart-walker 2>/dev/null & true
-command -v omarchy-restart-swayosd >/dev/null 2>&1 && omarchy-restart-swayosd 2>/dev/null & true
-# ghostty: send SIGUSR2 to reload config (standalone, no omarchy)
 pkill -SIGUSR2 -x ghostty 2>/dev/null & true
-command -v omarchy-theme-set-browser >/dev/null 2>&1 && omarchy-theme-set-browser 2>/dev/null & true
 gen-zed-theme 2>/dev/null & true
 
 # Live-update Cavasik colors (matugen already regenerated ~/.config/cavasik/colors.rgb)
@@ -94,5 +82,4 @@ done
 
 wait
 
-notify-send -a getTheme -u normal "Theme" "Theme applied" 2>/dev/null
 echo "Done!"

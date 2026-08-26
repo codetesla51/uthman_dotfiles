@@ -598,13 +598,13 @@ PanelWindow {
             }
         }
         // high fatigue / isCursorNear — subtle glow/lean already via proximity, plus dim when sleepy
+        // quick fix: no dark box behind sprite (was visible on wall/ceiling/sleep)
         Rectangle {
             id: sleepDim
             anchors.fill: parent
             radius: 16
-            color: Qt.rgba(0,0,0, stateMachine.isSleeping ? 0.18 : (stateMachine.fatigue > 110 ? 0.08 : 0))
-            Behavior on color { ColorAnimation { duration: 600 } }
-            visible: color.a > 0.01
+            color: Qt.rgba(0,0,0, 0)
+            visible: false
         }
         Item {
             id: bubble

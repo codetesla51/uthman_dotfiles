@@ -57,7 +57,7 @@ FloatingWindow {
 
     Process {
         id: batteryProc
-        command: ["kdeconnect-cli", "-d", root.deviceId, "--list-notifications"]
+        command: ["~/.config/quickshell/scripts/kde-battery.sh", root.deviceId]
         stdout: StdioCollector {
             waitForEnd: true
             onStreamFinished: {
@@ -69,7 +69,7 @@ FloatingWindow {
 
     Process {
         id: dbusBatteryProc
-        command: ["sh", "-c", "qdbus org.kde.kdeconnect /modules/kdeconnect/" + root.deviceId + "/battery org.kde.kdeconnect.device.battery.charge 2>/dev/null || echo -1"]
+        command: ["~/.config/quickshell/scripts/kde-battery.sh", root.deviceId]
         stdout: StdioCollector {
             waitForEnd: true
             onStreamFinished: {
@@ -92,12 +92,12 @@ FloatingWindow {
 
     Process {
         id: clipSendProc
-        command: ["kdeconnect-cli", "-d", root.deviceId, "--send-clipboard"]
+        command: ["~/.config/quickshell/scripts/kde-send-clipboard.sh", root.deviceId]
         stdout: StdioCollector {}
     }
     Process {
         id: clipRecvProc
-        command: ["sh", "-c", "qdbus org.kde.kdeconnect /modules/kdeconnect/" + root.deviceId + "/clipboard org.kde.kdeconnect.device.clipboard.clipboard 2>/dev/null"]
+        command: ["~/.config/quickshell/scripts/kde-receive-clipboard.sh", root.deviceId]
         stdout: StdioCollector {
             waitForEnd: true
             onStreamFinished: {
@@ -118,6 +118,7 @@ FloatingWindow {
     Timer { id: recvTimer; interval: 2000; onTriggered: recvLabel.text = "" }
 
     // ---------- send file ----------
+    function openFilePicker() { filePickerProc.running = true }
     function sendFile(path) {
         if (!path || !root.deviceId) return
         fileSendProc.command = ["kdeconnect-cli", "-d", root.deviceId, "--share", path]
@@ -136,7 +137,18 @@ FloatingWindow {
         stdout: StdioCollector {}
     }
 
-    // File dialog — Qt native, no external deps
+    // File picker — GTK native via helper (better than QML FileDialog)
+    Process {
+        id: filePickerProc
+        command: ["~/.config/quickshell/scripts/filepicker.py"]
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: {
+                var path = text.trim()
+                if (path) root.sendFile(path)
+            }
+        }
+    }
     FileDialog {
         id: filePicker
         title: "Send to " + root.deviceName
@@ -208,11 +220,12 @@ FloatingWindow {
                     color: refreshMa.containsMouse ? colors.alpha(colors.primary, 0.15) : "transparent"
                     Text {
                         anchors.centerIn: parent
-                        text: "refresh"
+                        text: listProc.running ? "" : "refresh"
                         color: colors.primary
                         font.family: "FiraCode Nerd Font"
-                        font.pixelSize: 8
+                        font.pixelSize: listProc.running ? 10 : 8
                         font.weight: Font.Bold
+                        RotationAnimation on rotation { running: listProc.running; loops: Animation.Infinite; from: 0; to: 360; duration: 800 }
                     }
                     MouseArea { id: refreshMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.refreshDevices() }
                 }
@@ -260,7 +273,7 @@ FloatingWindow {
                             Layout.alignment: Qt.AlignHCenter
                         }
                     }
-                    MouseArea { id: sendMa; anchors.fill: parent; hoverEnabled: true; onClicked: filePicker.open() }
+                    MouseArea { id: sendMa; anchors.fill: parent; hoverEnabled: true; onClicked: filePickerProc.running = true }
                 }
 
                 Rectangle {

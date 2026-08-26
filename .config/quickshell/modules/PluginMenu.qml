@@ -19,6 +19,7 @@ PanelWindow {
     // belong here; they have their own binds/pills. Add real extras below:
     // { name: "Example", desc: "what it does", target: "ipcTarget" },
     readonly property var plugins: [
+        { name: "Quick Notes",   desc: "idea capture · draggable",    target: "notes" },
         { name: "Screen Time",   desc: "usage heatmaps · app ranks",  target: "screentime" },
         { name: "Phone Link",    desc: "send files · clipboard sync", target: "phonelink" }
     ]

@@ -213,10 +213,50 @@ PanelWindow {
         activeWinAt = at; activeWinSize = sz
     }
 
-    Timer { id: activityTimer; interval: 3800; running: true; repeat: true; triggeredOnStart: true; onTriggered: updateActivity() }
+    Timer { id: activityTimer; interval: 1000; running: true; repeat: true; triggeredOnStart: true; onTriggered: updateActivity() }
     Connections { target: Hyprland; function onActiveToplevelChanged(){ updateActivity() } }
+    // also watch raw Hyprland events for instant update (activewindow, etc.)
+    Connections { target: Hyprland; function onRawEvent(event){ if (event.name === "activewindow" || event.name === "activewindowv2" || event.name === "openwindow" || event.name === "closewindow") updateActivity() } }
 
-    // cursor polling via hyprctl
+    // proximity hover — real Shimeji glances when cursor nears, before click
+    property bool isCursorNear: false
+    property int proximityThreshold: 140
+    property int lastProximityMs: 0
+    function checkProximity() {
+        // cursor is screen coords, pet center is window-local + window top offset (54 bar)
+        var petCx = petX + spriteW/2
+        var petCy = petY + spriteH/2 + 54 // window top 54 -> screen
+        var dx = cursorX - petCx
+        var dy = cursorY - petCy
+        var dist = Math.hypot(dx, dy)
+        var near = dist < proximityThreshold
+        if (near && !isCursorNear) {
+            isCursorNear = true
+            if (!isDragging && !isFalling && Date.now() - lastProximityMs > 2800) {
+                lastProximityMs = Date.now()
+                // perk up — glance / lean toward cursor
+                var nearAction = (dist < 90) ? "BePet" : (Math.random()<0.6 ? "WatchAction" : "PetAction")
+                if (actions[nearAction]) {
+                    console.log("[Pet] proximity near dist="+Math.round(dist)+" -> "+nearAction)
+                    stateMachine.resetFatigue() // also resets wantSocial
+                    stateMachine.trigger(nearAction)
+                    // lean toward cursor
+                    facingRight = dx > 0
+                    // quick bubble, Groq will override if ready
+                    bubbleText = (dist < 90) ? "heh?" : "·ω·"
+                    bubbleHideTimer.restart()
+                    // subtle lean animation
+                    petWrapper.scale = 1.06; leanBack.restart()
+                }
+            }
+        } else if (!near && isCursorNear) {
+            isCursorNear = false
+        }
+    }
+    Timer { id: leanBack; interval: 320; repeat: false; onTriggered: petWrapper.scale = 1.0 }
+    Timer { id: proximityTimer; interval: 220; running: true; repeat: true; onTriggered: checkProximity() }
+
+    // cursor polling via hyprctl (faster for proximity)
     Process {
         id: cursorProc
         command: ["sh","-c","hyprctl cursorpos -j"]
@@ -451,6 +491,11 @@ PanelWindow {
         height: sprite.implicitHeight>0 ? sprite.implicitHeight : 128
         Behavior on x { enabled: !root.isDragging; NumberAnimation { id: xAnim; duration: 3200; easing.type: Easing.Linear } }
         Behavior on y { enabled: !root.isDragging; NumberAnimation { id: yAnim; duration: 3200; easing.type: Easing.Linear } }
+        Behavior on scale { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
+        Behavior on opacity { NumberAnimation { duration: 220 } }
+        // quick pop on action change — more alive
+        Connections { target: root; function onCurrentActionChanged() { petWrapper.scale = 1.08; petWrapper.opacity = 0.88; popBack.restart() } }
+        Timer { id: popBack; interval: 180; repeat: false; onTriggered: { petWrapper.scale = 1.0; petWrapper.opacity = 1.0 } }
 
         // init position to floor if no savedY, otherwise keep saved
         Component.onCompleted: {
@@ -460,6 +505,35 @@ PanelWindow {
             }
         }
 
+        // emotional state visuals — sleepy/drowsy, not just action frames
+        Item {
+            id: sleepZzz
+            visible: stateMachine.isSleeping
+            opacity: visible ? 1 : 0
+            Behavior on opacity { NumberAnimation { duration: 400 } }
+            x: parent.width - 18
+            y: -14
+            z: 3
+            Text {
+                text: "Zzz"
+                color: Qt.rgba(1,1,1,0.92)
+                font.family: "FiraCode Nerd Font"
+                font.pixelSize: 10
+                font.weight: Font.Bold
+                opacity: 0.9
+                SequentialAnimation on y { running: sleepZzz.visible; loops: Animation.Infinite; NumberAnimation { from: -14; to: -20; duration: 1400; easing.type: Easing.InOutSine } NumberAnimation { from: -20; to: -14; duration: 1400; easing.type: Easing.InOutSine } }
+                SequentialAnimation on opacity { running: sleepZzz.visible; loops: Animation.Infinite; NumberAnimation { from: 0.9; to: 0.55; duration: 900 } NumberAnimation { from: 0.55; to: 0.9; duration: 900 } }
+            }
+        }
+        // high fatigue / isCursorNear — subtle glow/lean already via proximity, plus dim when sleepy
+        Rectangle {
+            id: sleepDim
+            anchors.fill: parent
+            radius: 16
+            color: Qt.rgba(0,0,0, stateMachine.isSleeping ? 0.18 : (stateMachine.fatigue > 110 ? 0.08 : 0))
+            Behavior on color { ColorAnimation { duration: 600 } }
+            visible: color.a > 0.01
+        }
         Item {
             id: bubble
             visible: root.bubbleText!==""

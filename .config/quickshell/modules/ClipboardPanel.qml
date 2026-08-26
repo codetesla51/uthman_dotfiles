@@ -39,7 +39,11 @@ PanelWindow {
         entries = []
     }
 
-    onOpenChanged: if(open){ filter=""; filterField.text=""; refresh() }
+    property int navIndex: 0
+    property bool allowHover: false
+    onOpenChanged: { if(open){ filter=""; filterField.text=""; navIndex = 0; allowHover = false; Qt.callLater(function(){ filterField.forceActiveFocus() }) ; refresh() } }
+    onFilterChanged: navIndex = 0
+    onEntriesChanged: navIndex = 0
 
     property var filtered: {
         if(filter.trim()==="") return entries
@@ -135,7 +139,13 @@ PanelWindow {
                     color: colors.alpha(colors.surface,0.8)
                     border.width:1; border.color: filterField.activeFocus?colors.alpha(colors.primary,0.4):colors.alpha(colors.outline,0.15)
                 }
-                onTextChanged: root.filter=text
+                onTextChanged: { root.filter=text; root.navIndex = 0 }
+                Keys.onPressed: function(event) {
+                    if (event.key === Qt.Key_Down) { root.navIndex = Math.min(root.navIndex+1, root.filtered.length-1); clipList.positionViewAtIndex(root.navIndex, ListView.Contain); event.accepted = true }
+                    else if (event.key === Qt.Key_Up) { root.navIndex = Math.max(root.navIndex-1, 0); clipList.positionViewAtIndex(root.navIndex, ListView.Contain); event.accepted = true }
+                    else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) { var e = root.filtered[root.navIndex]; if(e) root.copyEntry(e.id); event.accepted = true }
+                    else if (event.key === Qt.Key_Escape) { root.open = false; event.accepted = true }
+                }
             }
 
             ListView {
@@ -144,22 +154,29 @@ PanelWindow {
                 Layout.fillHeight: true
                 clip: true
                 model: root.filtered
+                currentIndex: root.navIndex
+                onCurrentIndexChanged: root.navIndex = currentIndex
                 spacing: 6
                 boundsBehavior: Flickable.StopAtBounds
                 ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
                 delegate: Rectangle {
+                    id: clipEntry
                     required property var modelData
                     required property int index
+                    property string thumbPath: "/tmp/quickshell-cliphist/" + modelData.id + ".png"
+                    property bool thumbReady: false
+                    onThumbPathChanged: { thumbReady = false; if(modelData.isImage) thumbProc.running = true }
+                    Component.onCompleted: if(modelData.isImage) thumbProc.running = true
                     width: clipList.width
                     height: modelData.isImage ? 72 : 48
                     radius: 12
-                    color: ma.containsMouse ? colors.alpha(colors.primary,0.10) : colors.alpha(colors.surface,0.5)
-                    border.width:1; border.color: ma.containsMouse?colors.alpha(colors.primary,0.3):colors.alpha(colors.outline,0.12)
+                    color: index === root.navIndex ? colors.alpha(colors.primary,0.18) : ma.containsMouse ? colors.alpha(colors.primary,0.10) : colors.alpha(colors.surface,0.5)
+                    border.width:1; border.color: index === root.navIndex ? colors.alpha(colors.primary,0.5) : ma.containsMouse?colors.alpha(colors.primary,0.3):colors.alpha(colors.outline,0.12)
                     RowLayout {
                         anchors.fill: parent
                         anchors.leftMargin: 10; anchors.rightMargin: 8
                         spacing: 10
-                        // image preview for binary data
+                        // image preview for binary data — actual thumbnail from cliphist decode
                         Rectangle {
                             visible: modelData.isImage
                             Layout.preferredWidth: 56
@@ -168,16 +185,18 @@ PanelWindow {
                             color: colors.alpha(colors.surfaceVariant,0.3)
                             clip: true
                             Image {
+                                id: thumbImg
                                 anchors.fill: parent
                                 anchors.margins: 2
-                                // cliphist image preview — decode to temp file and show
-                                // For now show a placeholder icon, as decoding 50 images upfront is heavy
-                                // On demand, we could decode on hover, but for super nice we show icon + size
-                                source: ""
+                                source: clipEntry.thumbReady ? "file://" + clipEntry.thumbPath : ""
                                 fillMode: Image.PreserveAspectCrop
+                                asynchronous: true
+                                cache: false
+                                visible: status === Image.Ready
                             }
                             Text {
                                 anchors.centerIn: parent
+                                visible: thumbImg.status !== Image.Ready
                                 text: ""
                                 color: colors.primary
                                 font.family: "FiraCode Nerd Font"
@@ -187,6 +206,7 @@ PanelWindow {
                                 anchors.bottom: parent.bottom
                                 anchors.horizontalCenter: parent.horizontalCenter
                                 anchors.bottomMargin: 2
+                                visible: thumbImg.status !== Image.Ready
                                 text: {
                                     var m=modelData.preview.match(/(\d+)\s*x\s*(\d+)/)
                                     return m ? m[1]+"×"+m[2] : "IMG"
@@ -214,7 +234,17 @@ PanelWindow {
                         }
 
                     }
-                    MouseArea { id: ma; anchors.fill: parent; hoverEnabled:true; onClicked: root.copyEntry(modelData.id) }
+                    // decode image to /tmp for thumbnail (cached, only once per id)
+                    Process {
+                        id: thumbProc
+                        running: false
+                        command: ["sh","-c", "mkdir -p /tmp/quickshell-cliphist; [ -f " + clipEntry.thumbPath + " ] || cliphist decode " + modelData.id + " > " + clipEntry.thumbPath + " 2>/dev/null; echo done"]
+                        stdout: StdioCollector {
+                            waitForEnd: true
+                            onStreamFinished: clipEntry.thumbReady = true
+                        }
+                    }
+                    MouseArea { id: ma; anchors.fill: parent; hoverEnabled:true; onEntered: if(root.allowHover) root.navIndex = index; onPositionChanged: if(!root.allowHover) root.allowHover = true; onClicked: root.copyEntry(modelData.id) }
                 }
             }
 

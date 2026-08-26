@@ -36,7 +36,7 @@ PanelWindow {
         {key:"SUPER Alt + T", desc:"Screen time", cat:"System", disp:"exec", arg:"quickshell -p ~/.config/quickshell ipc call screentime toggle"},
         {key:"SUPER Alt + K", desc:"Phone link", cat:"System", disp:"exec", arg:"quickshell -p ~/.config/quickshell ipc call phonelink toggle"},
         {key:"SUPER Alt + V", desc:"Audio visualizer", cat:"System", disp:"exec", arg:"quickshell -p ~/.config/quickshell ipc call visualizer toggle"},
-        {key:"SUPER + I", desc:"Quick notes", cat:"System", disp:"exec", arg:"quickshell -p ~/.config/quickshell ipc call notes toggle"},
+        {key:"Plugins → Quick Notes", desc:"Quick notes (via SUPER ALT P)", cat:"System", disp:"exec", arg:"quickshell -p ~/.config/quickshell ipc call notes toggle"},
         {key:"SUPER Alt + Comma", desc:"Notification center", cat:"System", disp:"exec", arg:"quickshell -p ~/.config/quickshell ipc call notifications toggle"},
         {key:"SUPER + W", desc:"Close window", cat:"Windows", disp:"killactive", arg:""},
         {key:"SUPER + F", desc:"Full screen", cat:"Windows", disp:"fullscreen", arg:"0"},

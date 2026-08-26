@@ -28,8 +28,8 @@ PanelWindow {
 
     Groq { id: groq; model: "allam-2-7b" }
     SystemInfo { id: sysInfo }
-    // real system summary for Groq — makes Hornet actually aware of what's happening
-    property string sysSummary: "CPU "+sysInfo.cpuPct+"% MEM "+sysInfo.memPct+"% BAT "+sysInfo.batPct+(sysInfo.batCharging?"⚡":"%")+" T"+sysInfo.tempC+"C up "+sysInfo.uptime+" "+sysInfo.clock+" apps "+sysInfo.toplevelCount+" focused:"+sysInfo.focusedApp+" spots:"+sysInfo.freeSpots.length+" at "+petX+","+petY+" " + sysInfo.shellInfo
+    // real system summary for Groq — makes Hornet actually aware
+    property string sysSummary: "CPU "+sysInfo.cpuPct+"% MEM "+sysInfo.memPct+"% BAT "+sysInfo.batPct+(sysInfo.batCharging?"⚡":"%")+" T"+sysInfo.tempC+"C up "+sysInfo.uptime+" "+sysInfo.clock+" apps "+sysInfo.toplevelCount+" focused:"+sysInfo.focusedApp+" spots:"+sysInfo.freeSpots.length+" at "+petX+","+petY+" screen:"+(petY+54)+" spot:"+currentSpot+" dragging:"+isDragging+" falling:"+isFalling+" "+sysInfo.shellInfo
 
     IpcHandler {
         target: "pet"
@@ -41,7 +41,7 @@ PanelWindow {
         function sleep(): void { console.log("[Pet] ipc sleep"); stateMachine.trigger("sleep") }
         function sit(): void { console.log("[Pet] ipc sit"); stateMachine.resetFatigue(); stateMachine.trigger("sitAnywhere") }
         function hideMe(): void { console.log("[Pet] ipc hideMe"); stateMachine.resetFatigue(); stateMachine.trigger("hide") }
-        function status(): string { return JSON.stringify({x:root.petX,y:root.petY,facingRight:root.facingRight,visible:root.visible,action:root.currentAction,kind:stateMachine.actionKind,activity:root.userActivity,fatigue:stateMachine.fatigue,isSleeping:stateMachine.isSleeping,wants:stateMachine.wantsSummary,cursor:[root.cursorX,root.cursorY],sys:sysSummary,spots:sysInfo.freeSpots}) }
+        function status(): string { return JSON.stringify({x:root.petX,y:root.petY,screenX:root.petX,screenY:root.petY+54,facingRight:root.facingRight,visible:root.visible,action:root.currentAction,kind:stateMachine.actionKind,activity:root.userActivity,fatigue:stateMachine.fatigue,isSleeping:stateMachine.isSleeping,isDragging:root.isDragging,isFalling:root.isFalling,spot:root.currentSpot,wants:stateMachine.wantsSummary,cursor:[root.cursorX,root.cursorY],sys:sysSummary,spots:sysInfo.freeSpots}) }
         function perches(): string { return JSON.stringify(sysInfo.freeSpots) }
         function explain(): string { var s="Hornet lives in quickshell PanelWindow Overlay mask click-through, StateMachine fatigue "+stateMachine.fatigue+" groq "+groq.model+" free "+sysInfo.freeSpots.length+" spots"; if (groq.ready) groq.chat([{role:"system",content:"Explain Hornet pet how quickshell works: "+sysInfo.shellInfo+" System "+sysSummary},{role:"user",content:"Explain in 1 short sentence how you work"}], 40, 0.7, function(t){ if(t) { root.bubbleText=t.slice(0,40); bubbleHideTimer.restart() } }); return s }
         function up(): void { stateMachine.resetFatigue(); stateMachine.pause(); var y=12; xAnim.duration=600; yAnim.duration=600; root.petY=clampY(y); if (actions["GrabCeiling"]) { root.currentAction="GrabCeiling"; root.currentFrames=actions["GrabCeiling"]; root.frameInterval=600; frameTimer.interval=600; frameTimer.restart() } root.bubbleText="up!"; bubbleHideTimer.restart(); saveState(); stayPutTimer.restart(); console.log("[Pet] up -> y="+y+" stay 6s") }
@@ -473,10 +473,32 @@ PanelWindow {
     function stopWalk(){}
     function cancelWalk(){ xAnim.duration=1; yAnim.duration=1 }
 
-    // ── persistence on move ────────────────────────────────────────
-    onPetXChanged: { if (!isDragging && !isFalling) saveState() }
-    onPetYChanged: { if (!isDragging && !isFalling) saveState() }
+    // ── persistence + spot awareness ───────────────────────────────
+    onPetXChanged: { if (!isDragging && !isFalling) saveState(); updateSpot() }
+    onPetYChanged: { if (!isDragging && !isFalling) saveState(); updateSpot() }
     onFacingRightChanged: saveState()
+    onIsDraggingChanged: { updateSpot(); stateMachine.isDragging = isDragging; console.log("[Pet] dragging " + isDragging + " at " + petX + "," + petY + " spot " + currentSpot) }
+    onIsFallingChanged: updateSpot()
+
+    // ── where am I? — pet knows its spot, not floating guess ────────
+    property string currentSpot: "unknown"
+    property string screenPos: "(" + petX + "," + (petY+54) + ") screen, (" + petX + "," + petY + ") window"
+    function updateSpot() {
+        var spots = sysInfo.freeSpots
+        var best = "free", bestDist = 9999
+        for (var i=0;i<spots.length;i++) {
+            var d = Math.hypot(petX - spots[i].x, petY - spots[i].y)
+            if (d < bestDist) { bestDist = d; best = spots[i].name + "/" + spots[i].surface }
+        }
+        // also detect dragging
+        if (isDragging) best = "dragging@" + petX + "," + petY
+        else if (isFalling) best = "falling"
+        else if (bestDist < 48) currentSpot = best
+        else currentSpot = "floating mid-air? -> will fall to floor"
+        // keep sysSummary fresh so Groq knows where it is
+        // screenPos already bound
+    }
+    Timer { id: spotTimer; interval: 800; running: true; repeat: true; onTriggered: updateSpot() }
 
     // ── drag handling (free 2D) ────────────────────────────────────
     property point dragPressGlobal: Qt.point(0,0)

@@ -327,6 +327,15 @@ PanelWindow {
             if (bubble==="") bubbleHideTimer.stop()
         }
     }
+    // animation must complete at least one cycle before next decision — no cut mid-walk
+    onCurrentFrameIndexChanged: {
+        var can = (currentFrameIndex === 0)
+        if (stateMachine.canTransition !== can) {
+            stateMachine.canTransition = can
+            if (can && stateMachine.pendingPick) stateMachine.tryPick()
+        }
+    }
+
     Timer { id: bubbleHideTimer; interval: 2400; repeat:false; onTriggered: root.bubbleText="" }
     Timer { id: frameTimer; interval: root.frameInterval; repeat:true; running:true; onTriggered: { if(root.currentFrames.length>0) root.currentFrameIndex=(root.currentFrameIndex+1)%root.currentFrames.length } }
 

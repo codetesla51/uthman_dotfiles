@@ -64,12 +64,12 @@ Item {
         xhr.send(body)
     }
 
-    // smart bubble: short (3-7 words), contextual with system
+    // smart bubble: more text, you own all text, based on structured info
     function bubbleFor(activity, action, fatigue, sysInfo, callback) {
         if (typeof sysInfo === 'function') { callback = sysInfo; sysInfo = "" }
-        var sysSummary = sysInfo || ""
-        var sys = "You are Hornet from Hollow Knight, a tiny shimeji pet living inside quickshell on Hyprland. You know the system: " + sysSummary + ". Reply ONLY with a short bubble 2-6 words, no quotes, no emoji spam. Be witty, warm, slightly teasing. Context: activity=" + activity + " action=" + action + " fatigue=" + fatigue
-        var usr = "Bubble for " + action + " while user is " + activity + " (fatigue " + fatigue + "). System: " + sysSummary + ". Keep 2-6 words."
+        var info = sysInfo || ""
+        var sys = "You are Hornet, you own all bubble text (2-6 words, witty, warm, teasing, no quotes). System structured: " + info + ". Activity=" + activity + " action=" + action + " fatigue=" + fatigue + " -- make bubble based on info, not just text. Add more text if needed but keep bubble short."
+        var usr = "Bubble for " + action + " while user is " + activity + " (fatigue " + fatigue + "). System info: " + info + ". You own all text, add more if you want but bubble 2-6 words.";
         chat([{role:"system", content: sys}, {role:"user", content: usr}], 18, 0.9, function(txt, err){
             if (err || !txt) { callback("") ; return }
             var line = txt.split("\n")[0].trim().replace(/^\"|\"$/g, "").replace(/^['`]|['`]$/g, "")
@@ -79,12 +79,12 @@ Item {
         })
     }
 
-    // smart decision: choose next action with system awareness
+    // smart decision: structured info, not just text — Hornet owns all text, add more
     function decideNext(curAction, curKind, activity, fatigue, availableActions, sysInfo, callback) {
         if (typeof sysInfo === 'function') { callback = sysInfo; sysInfo = "" }
-        var sysSummary = sysInfo || ""
-        var sys = "You are Hornet pet AI living in quickshell. System: " + sysSummary + ". Choose next action JSON only: {\"action\":\"Name\",\"reason\":\"short\"}. Actions: " + availableActions.join(", ") + ". Cur=" + curAction + "(" + curKind + ") activity=" + activity + " fatigue=" + fatigue + ". Be purposeful: walk when user idle, watch when coding, sleep only if fatigue>120. Prefer freeSpots surfaces."
-        var usr = "Pick next action. Fatigue " + fatigue + " (0-300, sleep likely >120). Activity " + activity + " Sys " + sysSummary + " Cur " + curAction + ". Reply JSON only."
+        var info = sysInfo || ""
+        var sys = "You are Hornet, a real shimeji living in quickshell PanelWindow Overlay (Hyprland, LocalStorage, mask click-through). You decide what YOU want, not dice. System info (structured, not just text): " + info + ". Available actions: " + availableActions.join(", ") + ". You are at " + curAction + "(" + curKind + ") activity=" + activity + " fatigue=" + fatigue + " (0-300, sleep p 0%<40 68%>200). You own all bubble text -- be witty, warm, teasing, 2-6 words, but decision is based on structured info: CPU/MEM/BAT/T/uptime/clock/apps/focused/spots/at. Prefer near surfaces (wall/ceiling/window) occasionally, not just floor. Reply JSON only {\"action\":\"Name\",\"reason\":\"short why\"}.";
+        var usr = "Decide next. Fatigue " + fatigue + " Activity " + activity + " Info: " + info + " Cur " + curAction + " (" + curKind + "). You want to do what YOU want. Reply JSON only.";
         chat([{role:"system", content: sys}, {role:"user", content: usr}], 40, 0.7, function(txt, err){
             if (err || !txt) { callback(null); return }
             try {

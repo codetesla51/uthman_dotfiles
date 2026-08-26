@@ -4,6 +4,7 @@ import Quickshell.Services.UPower
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
+import QtQuick.LocalStorage 2.0
 
 // Battery Panel — nice battery UI, change performance, calculate life & usage.
 PanelWindow {
@@ -54,6 +55,9 @@ PanelWindow {
     }
 
     property string curProfile: "unknown"
+    property bool autoSwitch: true
+    property int lastAutoSwitchMs: 0
+    property string lastAutoProfile: ""
     Process {
         id: profileProc
         command: ["sh","-c","powerprofilesctl get 2>/dev/null || echo unknown"]
@@ -62,10 +66,43 @@ PanelWindow {
             onStreamFinished: root.curProfile = text.trim()
         }
     }
-    function setProfile(p){
+    function setProfile(p, manual){
         Quickshell.execDetached(["sh","-c","powerprofilesctl set "+p+" 2>/dev/null || notify-send -u low 'Power profiles' 'daemon not running'"])
         curProfile=p
+        if (manual) { lastAutoProfile=""; lastAutoSwitchMs=Date.now() }
     }
+    function autoTargetProfile(){
+        if (!dev) return ""
+        if (dev.state===UPowerDeviceState.Charging || dev.state===UPowerDeviceState.FullyCharged || dev.state===UPowerDeviceState.PendingCharge) return "performance"
+        if (dev.state===UPowerDeviceState.Discharging) {
+            if (pct < 45) return "power-saver"
+            return "balanced"
+        }
+        return ""
+    }
+    function maybeAutoSwitch(){
+        if (!autoSwitch || !dev || curProfile==="unknown") return
+        var target = autoTargetProfile()
+        if (!target || target===curProfile) return
+        if (target===lastAutoProfile && Date.now()-lastAutoSwitchMs < 45000) return
+        if (Date.now()-lastAutoSwitchMs < 8000) return
+        console.log("[Battery] auto " + curProfile + " -> " + target + " (" + stateStr + " " + pct + "%)")
+        Quickshell.execDetached(["sh","-c","powerprofilesctl set "+target+" && notify-send -u low -i battery 'Power " + target + "' 'Auto: " + stateStr + " " + pct + "% -> " + target + "' 2>/dev/null &"])
+        curProfile=target; lastAutoProfile=target; lastAutoSwitchMs=Date.now()
+    }
+    function loadAutoSwitch(){
+        try{ var db=LocalStorage.openDatabaseSync("qs_battery","1.0","battery",10000); var v=true; db.transaction(function(tx){ tx.executeSql('CREATE TABLE IF NOT EXISTS prefs(k TEXT PRIMARY KEY, v TEXT)'); var rs=tx.executeSql("SELECT v FROM prefs WHERE k='autoSwitch'"); if(rs.rows.length>0) v=rs.rows.item(0).v==="1"}); autoSwitch=v; }catch(e){}
+    }
+    function saveAutoSwitch(){
+        try{ var db=LocalStorage.openDatabaseSync("qs_battery","1.0","battery",10000); db.transaction(function(tx){ tx.executeSql('INSERT OR REPLACE INTO prefs VALUES(?,?)',['autoSwitch',autoSwitch?"1":"0"])}) }catch(e){}
+    }
+    Component.onCompleted: loadAutoSwitch()
+    onAutoSwitchChanged: saveAutoSwitch()
+    // watch battery state
+    Connections { target: root.dev; function onStateChanged(){ maybeAutoSwitch() } }
+    onPctChanged: maybeAutoSwitch()
+    onCurProfileChanged: { if (Date.now()-lastAutoSwitchMs > 90000) maybeAutoSwitch() }
+    Timer { id: autoPoll; interval: 12000; running: true; repeat: true; onTriggered: { profileProc.running=true; if(!root.open) maybeAutoSwitch() } }
 
     anchors { top:true; bottom:true; left:true; right:true }
     exclusionMode: ExclusionMode.Ignore
@@ -194,8 +231,18 @@ PanelWindow {
                 spacing: 6
                 RowLayout {
                     Layout.fillWidth: true
+                    spacing: 8
                     Text { text: "PERFORMANCE"; color: colors.alpha(colors.outline,0.6); font.family:"FiraCode Nerd Font"; font.pixelSize: 9; font.weight: Font.Bold; font.letterSpacing: 1.2; Layout.fillWidth: true }
                     Text { text: "Current: "+root.curProfile; color: root.curProfile==="unknown" ? colors.alpha(colors.outline,0.6) : colors.primary; font.family:"FiraCode Nerd Font"; font.pixelSize: 9; font.weight: Font.Bold; font.capitalization: Font.Capitalize }
+                    RowLayout {
+                        spacing: 4
+                        Text { text: "Auto"; color: root.autoSwitch ? colors.primary : colors.alpha(colors.outline,0.6); font.family:"FiraCode Nerd Font"; font.pixelSize: 9; font.weight: Font.Bold }
+                        Switch {
+                            checked: root.autoSwitch
+                            onToggled: root.autoSwitch = checked
+                            scale: 0.75
+                        }
+                    }
                 }
                 RowLayout {
                     Layout.fillWidth: true
@@ -217,7 +264,7 @@ PanelWindow {
                                 Text { text: modelData.icon; color: root.curProfile===modelData.id ? colors.primary : colors.alpha(colors.outline,0.7); font.family:"FiraCode Nerd Font"; font.pixelSize: 14; Layout.alignment: Qt.AlignHCenter }
                                 Text { text: modelData.label; color: root.curProfile===modelData.id ? colors.primary : colors.foreground; font.family:"FiraCode Nerd Font"; font.pixelSize: 9; font.weight: Font.DemiBold; Layout.alignment: Qt.AlignHCenter }
                             }
-                            MouseArea { anchors.fill: parent; enabled: !disabled; onClicked: root.setProfile(modelData.id) }
+                            MouseArea { anchors.fill: parent; enabled: !disabled; onClicked: root.setProfile(modelData.id, true) }
                         }
                     }
                 }

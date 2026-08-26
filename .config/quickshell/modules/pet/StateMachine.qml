@@ -17,6 +17,7 @@ Item {
     property string userActivity: "idle"
     property var groq: null
     property string sysSummary: ""
+    property bool isDragging: false
 
     property int fatigue: 0
     property bool isSleeping: false
@@ -71,13 +72,14 @@ Item {
         "idle": ["you there?", "poke!", "…zzz"]
     })
 
-    // fatigue timer: increments while awake and idle/walk
+    // fatigue timer: increments while awake and idle/walk, faster when dragged
     Timer {
         id: fatigueTimer
         interval: 1000
         repeat: true
         running: !root.isSleeping
         onTriggered: {
+            if (root.isDragging) { if (root.fatigue < 300) root.fatigue += 2; return }
             if (root.actionKind === "idle" || root.actionKind === "walk" || root.actionKind === "walkToMe" || root.actionKind === "sitAnywhere") {
                 if (root.fatigue < 300) root.fatigue += 1
             } else if (root.actionKind === "special") {
@@ -94,6 +96,7 @@ Item {
         onTriggered: updateWants()
     }
     function updateWants() {
+        if (isDragging) { wantSocial = Math.max(0, wantSocial - 1.8); wantRest = Math.min(100, wantRest + 0.9); wantExplore = Math.max(0, wantExplore - 0.6); wantHide = Math.max(0, wantHide - 0.4); return }
         // slowly evolve wants based on what user does and what pet does
         // watch grows when user coding, hide when user busy, explore when idle
         var coding = (userActivity === "coding" || userActivity === "terminal")

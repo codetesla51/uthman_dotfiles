@@ -8,7 +8,7 @@ import QtQuick
 Item {
     id: root
     property string apiKey: ""
-    property string model: "groq/compound-mini"
+    property string model: "allam-2-7b"
     property bool ready: apiKey.length > 10
     property string keyFile: Quickshell.env("HOME") + "/.config/quickshell/modules/pet/groq.key"
     property string envKey: Quickshell.env("GROQ_API_KEY") || ""

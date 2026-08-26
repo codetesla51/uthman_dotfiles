@@ -248,7 +248,7 @@ Item {
     function pickNext() {
         if (root.isSleeping) { wakeFromSleep(); return }
         // Groq smart decision — 42% chance when groq ready and fatigue>15, now aware of system
-        if (root.groq && root.groq.ready && root.fatigue > 15 && Math.random() < 0.42) {
+        if (root.groq && root.groq.ready && root.fatigue > 15 && Math.random() < 0.22) {
             var avail = availableNames()
             root.groq.decideNext(root.currentAction, root.actionKind, root.userActivity, root.fatigue, avail, root.sysSummary, function(chosen){
                 if (chosen && root.actions[chosen]) {

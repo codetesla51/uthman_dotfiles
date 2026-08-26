@@ -26,7 +26,7 @@ PanelWindow {
 
     mask: Region { item: petWrapper }
 
-    Groq { id: groq; model: "groq/compound-mini" }
+    Groq { id: groq; model: "allam-2-7b" }
     SystemInfo { id: sysInfo }
     // real system summary for Groq — makes Hornet actually aware of what's happening
     property string sysSummary: "CPU "+sysInfo.cpuPct+"% MEM "+sysInfo.memPct+"% BAT "+sysInfo.batPct+(sysInfo.batCharging?"⚡":"%")+" T"+sysInfo.tempC+"C up "+sysInfo.uptime+" "+sysInfo.clock+" apps "+sysInfo.toplevelCount+" focused:"+sysInfo.focusedApp+" spots:"+sysInfo.freeSpots.length+" at "+petX+","+petY+" " + sysInfo.shellInfo
@@ -263,7 +263,7 @@ PanelWindow {
                 Qt.callLater(function(){ Quickshell.execDetached(["sh","-c","paplay '" + soundDir + "hornet_needle_throw end.wav' 2>/dev/null || mpv --no-video --really-quiet '" + soundDir + "hornet_needle_throw end.wav' 2>/dev/null &"]) })
             }
             // Groq smart bubble override — now aware of system + free spots
-            if (groq.ready && Math.random() < 0.55) {
+            if (groq.ready && Math.random() < 0.28) {
                 groq.bubbleFor(root.userActivity, name, stateMachine.fatigue, root.sysSummary, function(aiBubble){
                     if (aiBubble && aiBubble.length > 1) {
                         root.bubbleText = aiBubble

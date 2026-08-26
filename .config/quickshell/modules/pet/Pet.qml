@@ -484,16 +484,18 @@ PanelWindow {
     property string currentSpot: "unknown"
     property string screenPos: "(" + petX + "," + (petY+54) + ") screen, (" + petX + "," + petY + ") window"
     function updateSpot() {
+        var floorY = root.height - spriteH -6
         var spots = sysInfo.freeSpots
         var best = "free", bestDist = 9999
         for (var i=0;i<spots.length;i++) {
             var d = Math.hypot(petX - spots[i].x, petY - spots[i].y)
             if (d < bestDist) { bestDist = d; best = spots[i].name + "/" + spots[i].surface }
         }
-        // also detect dragging
         if (isDragging) best = "dragging@" + petX + "," + petY
         else if (isFalling) best = "falling"
-        else if (bestDist < 48) currentSpot = best
+        else if (bestDist < 64) currentSpot = best
+        else if (Math.abs(petY - floorY) < 30) currentSpot = "floor (window)"
+        else if (petY < 32) currentSpot = "ceiling"
         else currentSpot = "floating mid-air? -> will fall to floor"
         // keep sysSummary fresh so Groq knows where it is
         // screenPos already bound

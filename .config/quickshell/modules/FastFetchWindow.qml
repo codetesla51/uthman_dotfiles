@@ -122,7 +122,7 @@ FloatingWindow {
                     }
                     Image {
                         anchors.centerIn: parent
-                        source: "file:///home/uthman/fastfetchImages/95771929570969777-removebg-preview.png"
+                        source: "file:///home/uthman/fastfetchImages/Hollow_Knight_Game_Team_Cherry_Sticker_PNG-removebg-preview.png"
                         width: 132
                         height: 132
                         fillMode: Image.PreserveAspectFit

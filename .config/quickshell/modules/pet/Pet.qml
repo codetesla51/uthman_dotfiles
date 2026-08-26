@@ -288,6 +288,8 @@ PanelWindow {
         userActivity: root.userActivity
         groq: groq
         sysSummary: root.sysSummary
+        surfaces: sysInfo.surfaces
+        freeSpots: sysInfo.freeSpots
         onActionChanged: function(name, frames, interval, bubble, kind){
             root.currentAction = name
             root.currentFrames = frames
@@ -318,6 +320,8 @@ PanelWindow {
                 else if (kind==="sitAnywhere") root.sitAnywhere(name)
                 else if (kind==="sleep") root.sleepAnywhere(name)
                 else if (kind==="hide") root.doHide(name)
+                else if (name==="GrabWall" || name==="ClimbWall") root.grabWall(name)
+                else if (name==="GrabCeiling" || name==="ClimbCeiling") root.grabCeiling(name)
                 else root.stopWalk()
             }
             if (bubble==="") bubbleHideTimer.stop()
@@ -376,6 +380,41 @@ PanelWindow {
         root.bubbleText="comin'!"
         bubbleHideTimer.restart()
         saveState()
+    }
+    function grabWall(action){
+        var wallSpots = sysInfo.freeSpots.filter(function(s){ return s.surface==="wall" })
+        if (wallSpots.length===0) { startWalk(action); return }
+        var best=null, bestD=1e9
+        for (var i=0;i<wallSpots.length;i++){ var s=wallSpots[i]; var d=Math.hypot(petX - s.x, petY - s.y); if(d<bestD){bestD=d; best=s} }
+        var tx = best.x, ty = best.y
+        var c = clampXY(tx, ty)
+        var dx=c.x - petX, dy=c.y - petY
+        var dist=Math.hypot(dx,dy)
+        var dur=Math.max(600, Math.min(7000, dist/75*1000))
+        facingRight = dx>0
+        xAnim.duration=dur; yAnim.duration=dur
+        petX=c.x; petY=c.y
+        bubbleText = (Math.random()<0.5 ? "cling!" : "wall!")
+        bubbleHideTimer.restart()
+        saveState()
+        console.log("[Pet] grabWall "+action+" -> "+c.x+","+c.y+" "+best.name)
+    }
+    function grabCeiling(action){
+        var ceilSpots = sysInfo.freeSpots.filter(function(s){ return s.surface==="ceiling" || s.surface==="bar" || s.surface==="window-top" })
+        if (ceilSpots.length===0) { sitAnywhere(action); return }
+        var best=null, bestD=1e9
+        for (var i=0;i<ceilSpots.length;i++){ var s=ceilSpots[i]; var d=Math.hypot(petX - s.x, petY - s.y); if(d<bestD){bestD=d; best=s} }
+        var tx = best.x, ty = best.y
+        var c = clampXY(tx, ty)
+        var dx=c.x - petX
+        var dur=Math.max(600, Math.min(7000, Math.hypot(c.x-petX, c.y-petY)/80*1000))
+        facingRight = dx>0
+        xAnim.duration=dur; yAnim.duration=dur
+        petX=c.x; petY=c.y
+        bubbleText="hang!";
+        bubbleHideTimer.restart()
+        saveState()
+        console.log("[Pet] grabCeiling "+action+" -> "+c.x+","+c.y+" "+best.name)
     }
     function sitAnywhere(action){
         console.log("[Pet] sitAnywhere " + action+" wh="+root.width+"x"+root.height+" activity="+userActivity+" spots="+sysInfo.freeSpots.length)

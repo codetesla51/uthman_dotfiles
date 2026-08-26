@@ -18,6 +18,8 @@ Item {
     property var groq: null
     property string sysSummary: ""
     property bool isDragging: false
+    property var surfaces: []
+    property var freeSpots: []
 
     property int fatigue: 0
     property bool isSleeping: false
@@ -290,6 +292,24 @@ Item {
             if (wantKind === "play") { var sp2=filtered(specialActions); var np=sp2[Math.floor(Math.random()*sp2.length)]; applyAction(np); return }
             if (wantKind === "hide") { triggerSynthetic("hide"); return }
             if (wantKind === "social") { var so=filtered(petActions.concat(["Walk"])); if (Math.random()<0.6) triggerSynthetic("walkToMe"); else applyAction(so[Math.floor(Math.random()*so.length)]); return }
+        }
+
+        // real surface awareness — pet picks nearby wall/ceiling/window occasionally, not just floor
+        if (surfaces.length > 0 && Math.random() < 0.28) {
+            var cand=[]
+            for (var i=0;i<surfaces.length;i++) {
+                var s=surfaces[i]
+                if ((s.surface==="wall" || s.surface==="window-bottom") && actions["GrabWall"]) cand.push("GrabWall")
+                if ((s.surface==="ceiling" || s.surface==="bar" || s.surface==="window-top") && actions["GrabCeiling"]) cand.push("GrabCeiling")
+                if (s.surface==="window-top" && actions["Sit"]) cand.push("Sit")
+            }
+            cand = cand.filter(function(v,i,a){ return a.indexOf(v)===i })
+            if (cand.length && Math.random() < 0.55) {
+                var pick=cand[Math.floor(Math.random()*cand.length)]
+                console.log("[StateMachine] surface -> " + pick + " (" + surfaces.length + " surfaces, want " + wantsSummary + ")")
+                applyAction(pick)
+                return
+            }
         }
 
         var cur = currentAction

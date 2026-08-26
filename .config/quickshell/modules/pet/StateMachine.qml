@@ -20,6 +20,8 @@ Item {
     property bool isDragging: false
     property var surfaces: []
     property var freeSpots: []
+    property bool canTransition: true
+    property bool pendingPick: false
 
     property int fatigue: 0
     property bool isSleeping: false
@@ -474,8 +476,9 @@ Item {
         applyAction(name)
     }
 
-    Timer { id: dwellTimer; interval: 2200; repeat: false; onTriggered: root.pickNext() }
-    function pause() { dwellTimer.stop() }
+    Timer { id: dwellTimer; interval: 2200; repeat: false; onTriggered: { root.pendingPick = true; tryPick() } }
+    function tryPick() { if (canTransition) { pendingPick = false; pickNext() } }
+    function pause() { dwellTimer.stop(); pendingPick = false }
     function resume() { dwellTimer.restart() }
     function isPaused() { return !dwellTimer.running }
 

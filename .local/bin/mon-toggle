@@ -1,0 +1,9 @@
+#!/bin/bash
+# mon-toggle — toggle the internal laptop display on/off (presentation mode)
+export HYPRLAND_INSTANCE_SIGNATURE=$(ls -t /run/user/1000/hypr/ 2>/dev/null | head -1)
+DISABLED=$(hyprctl monitors -j 2>/dev/null | python3 -c "import json,sys; ms=json.load(sys.stdin); print(next((str(m.get('disabled', False)) for m in ms if m.get('name')=='eDP-1'), 'True')))  # absent from list = treat as disabled so toggle re-enables")
+if [[ "$DISABLED" == "True" ]]; then
+  hyprctl keyword monitor "eDP-1,1920x1080@60,auto,1.2" >/dev/null
+else
+  hyprctl keyword monitor "eDP-1,disable" >/dev/null
+fi

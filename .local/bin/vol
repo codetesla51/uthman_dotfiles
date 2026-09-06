@@ -1,0 +1,12 @@
+#!/bin/bash
+# vol — audio helpers (volume keys are handled by quickshell MediaOsd)
+# usage: vol cycle-sink — rotate the default audio output
+command -v pactl >/dev/null || exit 0
+[[ "$1" == "cycle-sink" ]] || exit 0
+SINKS=($(pactl list short sinks | awk '{print $1}'))
+[[ ${#SINKS[@]} -lt 2 ]] && exit 0
+CUR=$(pactl get-default-sink)
+IDX=0
+for i in "${!SINKS[@]}"; do [[ "${SINKS[$i]}" == "$CUR"* ]] && IDX=$i && break; done
+NEXT=${SINKS[$(( (IDX + 1) % ${#SINKS[@]} ))]}
+pactl set-default-sink "$NEXT"

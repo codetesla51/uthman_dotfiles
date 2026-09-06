@@ -1,0 +1,6 @@
+#!/bin/bash
+# layout-toggle — toggle dwindle/master tiling layout via hyprctl
+export HYPRLAND_INSTANCE_SIGNATURE=$(ls -t /run/user/1000/hypr/ 2>/dev/null | head -1)
+CUR=$(hyprctl getoption general:layout 2>/dev/null | awk '/str:/{print $2}')
+if [[ "$CUR" == "master" ]]; then hyprctl keyword general:layout dwindle >/dev/null
+else hyprctl keyword general:layout master >/dev/null; fi

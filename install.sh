@@ -30,7 +30,10 @@ DEPS=(hyprland quickshell ghostty matugen starship zsh lsd zoxide fzf cava btop 
 MISSING=()
 
 for dep in "${DEPS[@]}"; do
-    if ! command -v "$dep" &>/dev/null; then
+    # wl-clipboard ships wl-copy/wl-paste, not a `wl-clipboard` binary
+    check="$dep"
+    [ "$dep" = "wl-clipboard" ] && check="wl-copy"
+    if ! command -v "$check" &>/dev/null; then
         MISSING+=("$dep")
         warn "Not found: $dep"
     else
@@ -67,18 +70,13 @@ else
     warn "No fallback colors found at $FALLBACK_DIR — run matugen after install."
 fi
 
-# ── Step 4: Create integration symlinks ───────────────────────────────────────
-header "Creating theme integration symlinks..."
+# ── Step 4: Clear integration symlinks before stow ────────────────────────────
+# (Recreated after stowing in Step 6 — stow aborts on absolute symlinks it
+# doesn't own, so they must not exist when stow runs. Safe on re-runs.)
+header "Clearing stale theme integration symlinks..."
 
-# btop: color_theme = "current" looks for ~/.config/btop/themes/current.theme
-mkdir -p "$HOME/.config/btop/themes"
-ln -sf "$HOME/.config/theme/current/btop.theme" "$HOME/.config/btop/themes/current.theme"
-success "btop theme symlink: ~/.config/btop/themes/current.theme -> ~/.config/theme/current/btop.theme"
-
-# cava: theme = 'matugen' looks for ~/.config/cava/themes/matugen
-mkdir -p "$HOME/.config/cava/themes"
-ln -sf "$HOME/.config/theme/current/cava_theme" "$HOME/.config/cava/themes/matugen"
-success "cava theme symlink: ~/.config/cava/themes/matugen -> ~/.config/theme/current/cava_theme"
+rm -f "$HOME/.config/btop/themes/current.theme" "$HOME/.config/cava/themes/matugen"
+success "Cleared (recreated after stow)"
 
 
 # ── Step 5: Stow dotfiles ─────────────────────────────────────────────────────
@@ -111,7 +109,20 @@ fi
 stow --dir="$DOTFILES_DIR" --target="$HOME" --restow .
 success "Stow complete — all configs symlinked to \$HOME"
 
-# ── Step 6: Matugen (optional) ────────────────────────────────────────────────
+# ── Step 6: Create integration symlinks (AFTER stow) ──────────────────────────
+header "Creating theme integration symlinks..."
+
+# btop: color_theme = "current" looks for ~/.config/btop/themes/current.theme
+mkdir -p "$HOME/.config/btop/themes"
+ln -sf "$HOME/.config/theme/current/btop.theme" "$HOME/.config/btop/themes/current.theme"
+success "btop theme symlink: ~/.config/btop/themes/current.theme -> ~/.config/theme/current/btop.theme"
+
+# cava: theme = 'matugen' looks for ~/.config/cava/themes/matugen
+mkdir -p "$HOME/.config/cava/themes"
+ln -sf "$HOME/.config/theme/current/cava_theme" "$HOME/.config/cava/themes/matugen"
+success "cava theme symlink: ~/.config/cava/themes/matugen -> ~/.config/theme/current/cava_theme"
+
+# ── Step 7: Matugen (optional) ────────────────────────────────────────────────
 header "Matugen dynamic theming (optional)"
 
 echo ""

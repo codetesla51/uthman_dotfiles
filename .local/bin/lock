@@ -1,0 +1,3 @@
+#!/bin/bash
+# lock — lock the session with hyprlock (standalone, no omarchy-system-lock)
+pidof hyprlock >/dev/null || hyprlock &

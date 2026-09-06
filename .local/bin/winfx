@@ -1,0 +1,15 @@
+#!/bin/bash
+# winfx [transparent|gaps] — window effect toggles via hyprctl
+export HYPRLAND_INSTANCE_SIGNATURE=$(ls -t /run/user/1000/hypr/ 2>/dev/null | head -1)
+case "$1" in
+  transparent) hyprctl dispatch toggleopaque >/dev/null ;;
+  gaps)
+    IN=$(hyprctl getoption general:gaps_in 2>/dev/null | awk '/int:/{print $2}')
+    if [[ "$IN" == "0" ]]; then
+      hyprctl keyword general:gaps_in 5 >/dev/null
+      hyprctl keyword general:gaps_out 10 >/dev/null
+    else
+      hyprctl keyword general:gaps_in 0 >/dev/null
+      hyprctl keyword general:gaps_out 0 >/dev/null
+    fi ;;
+esac

@@ -1,4 +1,6 @@
 config-file = ?"~/.config/theme/current/ghostty.conf"
+# ── Shell (login shell is bash; force zsh for starship prompt) ──
+command = /usr/bin/zsh
 # ── Font ──────────────────────────────────────────────────────
 font-family = "JetBrainsMono NF"
 font-style = Medium

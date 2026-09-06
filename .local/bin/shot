@@ -1,0 +1,12 @@
+#!/bin/bash
+# shot [area|ocr] — screenshot via grim+slurp. Area (default) saves to
+# ~/Pictures/Screenshots and copies to clipboard. OCR pipes through tesseract.
+DIR=~/Pictures/Screenshots
+mkdir -p "$DIR"
+GEO=$(slurp) || exit 0
+if [[ "$1" == "ocr" ]]; then
+  command -v tesseract >/dev/null || exit 1
+  grim -g "$GEO" - | tesseract stdin stdout 2>/dev/null | wl-copy && exit 0
+fi
+FILE="$DIR/shot-$(date +%Y%m%d-%H%M%S).png"
+grim -g "$GEO" "$FILE" && wl-copy < "$FILE"

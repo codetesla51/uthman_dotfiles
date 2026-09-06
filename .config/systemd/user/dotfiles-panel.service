@@ -1,10 +1,10 @@
 [Unit]
-Description=Omarchy Control Panel
+Description=Dotfiles Control Panel
 After=graphical-session.target
 
 [Service]
-ExecStart=/home/uthman/omarchy-control-panel/panel
-WorkingDirectory=/home/uthman/omarchy-control-panel
+ExecStart=/home/uthman/dotfiles/panel/panel
+WorkingDirectory=/home/uthman/dotfiles/panel
 Restart=on-failure
 Environment=PORT=8765
 Environment=PATH=/home/uthman/.local/bin:/home/uthman/.local/share/omarchy/bin:/usr/local/bin:/usr/bin:/bin

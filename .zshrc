@@ -58,8 +58,8 @@ export FZF_DEFAULT_OPTS="--height 40% --layout=reverse --border=rounded"
 source /usr/share/fzf/key-bindings.zsh
 
 # ── Plugins ───────────────────────────────────────────────────
-source /usr/share/zsh/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
-source /usr/share/zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh
+[[ -f /usr/share/zsh/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh ]] && source /usr/share/zsh/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
+[[ -f /usr/share/zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh ]] && source /usr/share/zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh
 
 # ── Mise ──────────────────────────────────────────────────────
 eval "$(mise activate zsh)"
@@ -71,4 +71,4 @@ eval "$(zoxide init zsh)"
 eval "$(starship init zsh)"
 export LIBVA_DRIVER_NAME=iHD
 export PATH="$HOME/.cargo/bin:$PATH"
-source ~/azure.sh
+[[ -f ~/azure.sh ]] && source ~/azure.sh

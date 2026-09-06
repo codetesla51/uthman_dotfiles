@@ -64,7 +64,9 @@ echo "Applying colors..."
 # Hyprland re-sources colors.conf, so borders/window colors update too.
 hyprctl reload &
 
-swaync-client --reload-css 2>/dev/null &
+# swaync-client blocks forever waiting for a daemon that may not be running
+# (e.g. when Quickshell owns notifications) — cap it so `wait` can't hang.
+timeout 5 swaync-client --reload-css 2>/dev/null &
 pkill -SIGUSR1 mako 2>/dev/null &
 pkill -SIGUSR2 -x ghostty 2>/dev/null & true
 gen-zed-theme 2>/dev/null & true

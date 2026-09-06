@@ -1,0 +1,15 @@
+#!/bin/bash
+# bright — display and keyboard backlight via brightnessctl
+# usage: bright +5%|-5%|+1%|-1%|100%|1%|kbd-up|kbd-down|kbd-cycle
+KBDDEV=$(brightnessctl --list 2>/dev/null | grep -oiE "'[^']*kbd[^']*'" | head -1 | tr -d "'")
+case "$1" in
+  +5%|-5%|+1%|-1%|100%|1%) brightnessctl set "$1" -q ;;
+  kbd-up) [[ -n "$KBDDEV" ]] && brightnessctl --device="$KBDDEV" set +1 -q ;;
+  kbd-down) [[ -n "$KBDDEV" ]] && brightnessctl --device="$KBDDEV" set 1- -q ;;
+  kbd-cycle)
+    [[ -z "$KBDDEV" ]] && exit 0
+    CUR=$(brightnessctl --device="$KBDDEV" get 2>/dev/null)
+    MAX=$(brightnessctl --device="$KBDDEV" max 2>/dev/null)
+    NEXT=$(( (CUR + 1) % (MAX + 1) ))
+    brightnessctl --device="$KBDDEV" set "$NEXT" -q ;;
+esac

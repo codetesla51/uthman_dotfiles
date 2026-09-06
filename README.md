@@ -45,7 +45,7 @@ The installer will:
 Apply a wallpaper after install:
 
 ```bash
-matugen image ~/dotfiles/wallpapers/wallhaven-5y57x8_1920x1080.png
+matugen image ~/Pictures/your-wallpaper.jpg
 # shims also work
 set-wallpaper <image>         # ~/.local/bin/set-wallpaper (wallpaper + regen in one go)
 getTheme                      # ~/.local/bin/getTheme
@@ -198,7 +198,7 @@ What it controls: live CPU/RAM/battery/network charts, theme + Ghostty font/opac
 ├── assets/                   # vendored blobs + README screenshots (stow-ignored)
 ├── firefox/user.js             # enables userChrome.css theming (symlinked into profile, stow-ignored)
 ├── panel/                    # Go control panel (main.go + static/ embedded UI)
-├── wallpapers/               # 7 wallpapers (wallhaven collection)
+├── wallpapers/               # local only — git-ignored, never committed
 ├── theme-fallback/           # static snow_black seed (8 files)
 ├── .zshrc                    # zsh + lsd/zoxide/fzf/starship/mise
 ├── .stow-local-ignore

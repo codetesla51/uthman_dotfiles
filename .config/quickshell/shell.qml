@@ -10,6 +10,8 @@ ShellRoot {
     AppLauncher { colors: barPalette }
     AudioVisualizer { colors: barPalette }
     QuickNotes { colors: barPalette }
+    PkgManager { colors: barPalette }
+    ControlCenter { colors: barPalette }
 
     Colors { id: barPalette }
 }

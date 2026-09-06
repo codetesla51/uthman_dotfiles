@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=Package Manager
+Comment=Search, install, remove and update Arch packages (pacman + AUR via yay)
+Exec=quickshell -p ~/.config/quickshell ipc call pkgman toggle
+Icon=system-software-install
+Terminal=false
+Type=Application
+Categories=System;PackageManager;
+Keywords=pacman;yay;aur;arch;install;update;
+StartupWMClass=quickshell

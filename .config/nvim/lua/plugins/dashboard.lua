@@ -5,8 +5,7 @@ return {
     opts = {
       dashboard = {
         preset = {
-          header = [[
-                                        ▒██             ▒██░
+          header = [[                                        ▒██             ▒██░
                                        █   █            █   █
                                       █    █            █    █
                                     ░█    █             ▒▒    █

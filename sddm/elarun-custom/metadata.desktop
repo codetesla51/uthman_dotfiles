@@ -1,0 +1,11 @@
+[SddmGreeterTheme]
+Name=ElarunCustom
+Description=Dark password-only greeter — Hollow Knight mask, Iceland font, matugen palette
+Type=sddm-theme
+Author=uthman (ported from Elarun by Reza Fatahilah Shah)
+License=GPL
+Version=1.0
+MainScript=Main.qml
+ConfigFile=theme.conf
+Theme-Id=elarun-custom
+Theme-API=2.0

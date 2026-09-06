@@ -4,7 +4,7 @@
  */
 
 configuration {
-    icon-theme: "Papirus-Dark";
+    icon-theme: "Papirus";
 }
 
 * {
@@ -43,13 +43,13 @@ inputbar {
 prompt {
     background-color: transparent;
     text-color:        @accent;
-    font:               "JetBrainsMono Nerd Font 11";
+    font:               "FiraCode Nerd Font 11";
 }
 
 entry {
     background-color:  transparent;
     text-color:         @text;
-    font:               "JetBrainsMono Nerd Font 11";
+    font:               "FiraCode Nerd Font 11";
     placeholder:        "Search apps...";
     placeholder-color:  @placeholder;
 }
@@ -91,7 +91,7 @@ element-icon {
 element-text {
     background-color: transparent;
     text-color:         @text;
-    font:               "JetBrainsMono Nerd Font 10";
+    font:               "FiraCode Nerd Font 10";
     horizontal-align:    0.5;
     vertical-align:      0.5;
 }

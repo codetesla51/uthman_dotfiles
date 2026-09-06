@@ -18,7 +18,7 @@ if [[ -n "$selected" ]]; then
     fi
     full_path="${WALL_DIR}/${cleaned}"
     nohup /home/uthman/.local/bin/set-wallpaper "$full_path" >/dev/null 2>&1 &
-    gsettings set org.gnome.desktop.interface icon-theme 'Papirus-Dark'
+    gsettings set org.gnome.desktop.interface icon-theme 'Papirus'
 else
     pairs=()
     for f in "$WALL_DIR"/*.jpg "$WALL_DIR"/*.png "$WALL_DIR"/*.jpeg; do

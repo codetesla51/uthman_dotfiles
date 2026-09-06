@@ -23,7 +23,7 @@
     }
   },
   "show_edit_predictions": false,
-  "icon_theme": "Colored Zed Icons Theme Dark",
+  "icon_theme": "Icons modern material (Dark)",
   "auto_update_extensions": {
     "catppuccin-blur": false
   },
@@ -43,6 +43,8 @@
   },
   "ui_font_size": 18,
   "buffer_font_size": 18,
+  "buffer_font_family": "FiraCode Nerd Font Mono",
+  "ui_font_family": "FiraCode Nerd Font",
   "theme": {
     "mode": "dark",
     "light": "macOS Classic Light",

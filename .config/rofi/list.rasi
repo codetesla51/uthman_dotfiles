@@ -40,13 +40,13 @@ inputbar {
 prompt {
     background-color: transparent;
     text-color:        @accent;
-    font:               "JetBrainsMono Nerd Font 10";
+    font:               "FiraCode Nerd Font 10";
 }
 
 entry {
     background-color:  transparent;
     text-color:         @text;
-    font:               "JetBrainsMono Nerd Font 10";
+    font:               "FiraCode Nerd Font 10";
     placeholder-color:  @placeholder;
 }
 
@@ -79,7 +79,7 @@ element selected {
 element-text {
     background-color: transparent;
     text-color:         @text;
-    font:               "JetBrainsMono Nerd Font 10";
+    font:               "FiraCode Nerd Font 10";
     horizontal-align:    0.0;
     vertical-align:      0.5;
 }

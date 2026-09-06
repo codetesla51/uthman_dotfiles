@@ -43,7 +43,8 @@ PanelWindow {
         {key:"SUPER Shift + F", desc:"File manager", cat:"Apps", disp:"exec", arg:"nautilus"},
         {key:"SUPER Shift + B", desc:"Browser", cat:"Apps", disp:"exec", arg:"firefox"},
         {key:"SUPER Shift + N", desc:"Editor", cat:"Apps", disp:"exec", arg:"code"},
-        {key:"Print", desc:"Screenshot", cat:"System", disp:"exec", arg:"flameshot gui"},
+        {key:"Print", desc:"Screenshot (drag area)", cat:"System", disp:"exec", arg:"shot"},
+        {key:"Shift + Print", desc:"Screenshot fullscreen", cat:"System", disp:"exec", arg:"shot full"},
         {key:"SUPER + L", desc:"Lock screen", cat:"System", disp:"exec", arg:"loginctl lock-session"},
         {key:"XF86AudioRaiseVolume", desc:"Volume up", cat:"Media", disp:"exec", arg:"pamixer -i 5"},
         {key:"XF86AudioLowerVolume", desc:"Volume down", cat:"Media", disp:"exec", arg:"pamixer -d 5"},
@@ -65,7 +66,7 @@ PanelWindow {
         {key:"SUPER + Tab", desc:"Next workspace", cat:"Workspaces", disp:"workspace", arg:"e+1"},
         {key:"SUPER Shift + Tab", desc:"Prev workspace", cat:"Workspaces", disp:"workspace", arg:"e-1"},
         {key:"SUPER Shift + W", desc:"Close all windows", cat:"Windows", disp:"exec", arg:"hyprctl dispatch killactive"},
-        {key:"Print", desc:"Screenshot", cat:"System", disp:"exec", arg:"flameshot gui"},
+        {key:"Print", desc:"Screenshot (drag area)", cat:"System", disp:"exec", arg:"shot"},
         {key:"SUPER + Print", desc:"Color picker", cat:"System", disp:"exec", arg:"hyprpicker -a"}
     ]
 

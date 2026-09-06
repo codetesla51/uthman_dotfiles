@@ -154,6 +154,10 @@ output_path = "~/.config/omarchy/current/theme/matugen-base.json"
 input_path = "~/.config/matugen/templates/zed-palette.json"
 output_path = "~/.config/theme/current/matugen-base.json"
 
+[templates.sddm]
+input_path = "~/.config/matugen/templates/sddm-palette.qml"
+output_path = "/usr/share/sddm/themes/elarun-custom/Palette.qml"
+
 [templates.obsidian-current]
 input_path = "~/.config/matugen/templates/obsidian.css"
 output_path = "~/Documents/Obsidian Vault/.obsidian/snippets/matugen.css"

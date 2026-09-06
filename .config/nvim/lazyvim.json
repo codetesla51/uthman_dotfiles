@@ -1,0 +1,9 @@
+{
+  "extras": [
+    "lazyvim.plugins.extras.lang.go"
+  ],
+  "news": {
+    "NEWS.md": "11866"
+  },
+  "version": 8
+}

@@ -152,6 +152,47 @@ else
     info "Skipped. Run later with: matugen image ~/your-wallpaper.jpg"
 fi
 
+# ── Step 8: System-level extras (fonts, SDDM, fastfetch art) ───────────────
+header "System extras (needs sudo for fonts/SDDM)..."
+
+# Inter from repos; Iceland is vendored (SDDM runs as its own user and
+# cannot read $HOME fonts, so both must live in /usr/share/fonts).
+if fc-list | grep -qi " inter"; then
+    success "Inter already installed"
+else
+    info "Installing inter-font (sudo)..."
+    sudo pacman -S --needed --noconfirm inter-font && success "Inter installed" || warn "inter-font install failed"
+fi
+if fc-list | grep -qi iceland; then
+    success "Iceland already installed"
+else
+    info "Installing vendored Iceland to /usr/share/fonts (sudo)..."
+    sudo cp "$DOTFILES_DIR/assets/fonts/Iceland-Regular.ttf" /usr/share/fonts/TTF/ && sudo fc-cache -f && success "Iceland installed" || warn "Iceland install failed"
+fi
+
+# SDDM theme (source of truth: sddm/elarun-custom/; Palette.qml refreshes
+# on every matugen run via the [templates.sddm] template).
+if [ -d /usr/share/sddm/themes/elarun-custom ]; then
+    success "SDDM theme already installed"
+else
+    info "Installing elarun-custom SDDM theme (sudo)..."
+    sudo cp -r "$DOTFILES_DIR/sddm/elarun-custom" /usr/share/sddm/themes/ && sudo chown -R "$USER:$USER" /usr/share/sddm/themes/elarun-custom && success "SDDM theme installed" || warn "SDDM install failed"
+fi
+if grep -q "Current=elarun-custom" /etc/sddm.conf.d/10-theme.conf 2>/dev/null; then
+    success "SDDM already points at elarun-custom"
+else
+    info "Pointing SDDM at elarun-custom (sudo)..."
+    sudo mkdir -p /etc/sddm.conf.d && printf '[Theme]\nCurrent=elarun-custom\n' | sudo tee /etc/sddm.conf.d/10-theme.conf >/dev/null && success "SDDM configured" || warn "SDDM config failed"
+fi
+
+# fastfetch art (absolute path referenced by fastfetch config + quickshell)
+mkdir -p "$HOME/fastfetchImages"
+if [ -f "$HOME/fastfetchImages/The_Knight__Hollow_Knight_-removebg-preview.png" ]; then
+    success "fastfetch art already present"
+else
+    cp "$DOTFILES_DIR/assets/fastfetch/The_Knight__Hollow_Knight_-removebg-preview.png" "$HOME/fastfetchImages/" && success "fastfetch art installed"
+fi
+
 # ── Done ──────────────────────────────────────────────────────────────────────
 echo ""
 echo -e "${GREEN}${BOLD}  Installation complete!${RESET}"
@@ -161,4 +202,5 @@ echo -e "  ${CYAN}1.${RESET} Log out and back in (or restart Hyprland)"
 echo -e "  ${CYAN}2.${RESET} Apply a wallpaper:  ${BOLD}matugen image ~/your-wallpaper.jpg${RESET}"
 echo -e "  ${CYAN}3.${RESET} Colors live in:     ${BOLD}~/.config/theme/current/${RESET}"
 echo -e "  ${CYAN}4.${RESET} Saved themes in:    ${BOLD}~/.config/theme/themes/${RESET}"
+echo -e "  ${CYAN}5.${RESET} SDDM theme, fonts + fetch art handled by Step 8 (needs sudo)"
 echo ""

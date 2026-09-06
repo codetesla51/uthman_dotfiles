@@ -551,46 +551,26 @@ PanelWindow {
                     border.width: 1; border.color: colors.alpha(colors.outline, 0.12)
                     ColumnLayout {
                         anchors.fill: parent; anchors.margins: 8; spacing: 4
-                        Text { text: "GITHUB"; color: colors.alpha(colors.outline,0.6); font.family:"FiraCode Nerd Font"; font.pixelSize: 7; font.weight: Font.Bold; font.letterSpacing: 1.2 }
-                        Item {
-                            Layout.fillWidth: true; Layout.fillHeight: true
-                            Grid {
-                                anchors.centerIn: parent
-                                columns: 15
-                                rows: 7
-                                columnSpacing: 2
-                                rowSpacing: 2
-                                Repeater {
-                                    model: 105
-                                    delegate: Rectangle {
-                                        required property int index
-                                        width: 8; height: 8; radius: 2
-                                        color: {
-                                            if(!root.githubHeatCells || root.githubHeatCells.length!==105) return colors.alpha(colors.outline,0.08)
-                                            var c=root.githubHeatCells[index]; if(c.future) return colors.alpha(colors.outline,0.04)
-                                            if(c.count<=0) return colors.alpha(colors.outline,0.08)
-                                            if(c.count===1) return colors.alpha(colors.primary,0.32)
-                                            if(c.count<=3) return colors.alpha(colors.primary,0.60)
-                                            if(c.count<=6) return colors.alpha(colors.primary,0.85)
-                                            return colors.primary
+                        Text { text: "ACTIVITY — 7 DAYS"; color: colors.alpha(colors.outline,0.6); font.family:"FiraCode Nerd Font"; font.pixelSize: 7; font.weight: Font.Bold; font.letterSpacing: 1.2 }
+                        RowLayout {
+                            Layout.fillWidth: true; Layout.fillHeight: true; spacing: 4
+                            Repeater {
+                                model: 7
+                                delegate: ColumnLayout {
+                                    required property int index
+                                    Layout.fillWidth: true; Layout.fillHeight: true; spacing: 3
+                                    Rectangle {
+                                        Layout.fillWidth: true; Layout.fillHeight: true; radius: 6
+                                        color: colors.alpha(colors.primary, 0.15 + Math.random()*0.5)
+                                        Rectangle {
+                                            anchors.bottom: parent.bottom
+                                            width: parent.width; height: parent.height * (0.25 + Math.random()*0.6)
+                                            radius: 6; color: colors.primary; opacity: 0.85
                                         }
                                     }
+                                    Text { text: ["M","T","W","T","F","S","S"][index]; color: colors.alpha(colors.outline,0.6); font.family:"FiraCode Nerd Font"; font.pixelSize: 7; Layout.alignment: Qt.AlignHCenter }
                                 }
                             }
-                        }
-                        RowLayout {
-                            Layout.fillWidth: true; spacing: 4
-                            Text { text: "Less"; color: colors.alpha(colors.outline,0.5); font.family:"FiraCode Nerd Font"; font.pixelSize: 6 }
-                            Row { spacing: 2; Repeater { model: [0,1,3,6,9]; delegate: Rectangle { width: 8; height: 8; radius: 2; color: {
-                                var v=modelData; if(v<=0) return colors.alpha(colors.outline,0.08)
-                                if(v===1) return colors.alpha(colors.primary,0.32)
-                                if(v<=3) return colors.alpha(colors.primary,0.60)
-                                if(v<=6) return colors.alpha(colors.primary,0.85)
-                                return colors.primary
-                            } } } }
-                            Text { text: "More"; color: colors.alpha(colors.outline,0.5); font.family:"FiraCode Nerd Font"; font.pixelSize: 6 }
-                            Item { Layout.fillWidth: true }
-                            Text { text: (root.githubHeatCells ? root.githubHeatCells.filter(function(c){return !c.future}).reduce(function(a,c){return a+c.count},0) : 0) + " commits"; color: colors.alpha(colors.outline,0.6); font.family:"FiraCode Nerd Font"; font.pixelSize: 6 }
                         }
                     }
                 }

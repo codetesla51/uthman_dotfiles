@@ -72,9 +72,9 @@ PanelWindow {
             anchors { top: parent.top; horizontalCenter: parent.horizontalCenter }
             width: islandRow.implicitWidth + 40      // 20px padding per side (slant eats into it)
             height: 54                               // 46px pill line + 8px hang below
-            // trapezoid geometry shared by fill + border
-            readonly property real inset: 18         // horizontal inset of bottom edge
-            readonly property real cr: 12            // corner radius on the protruding bottom angles
+            // trapezoid geometry shared by fill + border — smoother radius per request
+            readonly property real inset: 20         // horizontal inset of bottom edge
+            readonly property real cr: 16            // corner radius on the protruding bottom angles — was 12, now 16 for softer
             Behavior on width { NumberAnimation { duration: 280; easing.type: Easing.OutCubic } }
 
             Shape {

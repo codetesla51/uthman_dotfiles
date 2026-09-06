@@ -1,29 +1,11 @@
--- Picker — file picker with branding header (reads ~/.config/branding)
-local branding_path = vim.fn.expand("~/.config/branding")
-local branding_lines = {}
-if vim.fn.filereadable(branding_path) == 1 then
-  branding_lines = vim.fn.readfile(branding_path)
-  while #branding_lines > 0 and branding_lines[#branding_lines]:match("^%s*$") do table.remove(branding_lines) end
-  while #branding_lines > 0 and branding_lines[1]:match("^%s*$") do table.remove(branding_lines, 1) end
-  if #branding_lines > 8 then
-    local trimmed = {}
-    for i = 1, 8 do table.insert(trimmed, branding_lines[i]) end
-    branding_lines = trimmed
-  end
-end
-local first_line = ""
-if #branding_lines > 0 then
-  first_line = branding_lines[1]:gsub("^%s+", ""):gsub("%s+$", "")
-  if #first_line > 40 then first_line = first_line:sub(1, 40) end
-end
-local has_branding = #branding_lines > 0
-
+-- Picker — file picker with branding header (direct text)
+local branding_first = "▒██             ▒██░"
 return {
   {
     "folke/snacks.nvim",
     opts = {
       picker = {
-        prompt = has_branding and "  " .. first_line .. " ▸ " or " ",
+        prompt = "  " .. branding_first .. " ▸ ",
         layouts = {
           branding = {
             layout = {
@@ -35,7 +17,7 @@ return {
                 win = "input",
                 height = 1,
                 border = "rounded",
-                title = has_branding and "  " .. first_line .. "  " or " {title} ",
+                title = "  " .. branding_first .. "  ",
                 title_pos = "center",
               },
               {

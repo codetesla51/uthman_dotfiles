@@ -1,0 +1,39 @@
+set notification-error-bg       "{{colors.error.default.hex}}"
+set notification-error-fg       "{{colors.on_error.default.hex}}"
+set notification-warning-bg     "{{colors.tertiary.default.hex}}"
+set notification-warning-fg     "{{colors.on_tertiary.default.hex}}"
+set notification-bg             "{{colors.surface.default.hex}}"
+set notification-fg             "{{colors.on_surface.default.hex}}"
+
+set completion-bg               "{{colors.surface_container.default.hex}}"
+set completion-fg               "{{colors.on_surface.default.hex}}"
+set completion-group-bg         "{{colors.surface_container.default.hex}}"
+set completion-group-fg         "{{colors.secondary.default.hex}}"
+set completion-highlight-bg     "{{colors.primary.default.hex}}"
+set completion-highlight-fg     "{{colors.on_primary.default.hex}}"
+
+set index-bg                    "{{colors.surface.default.hex}}"
+set index-fg                    "{{colors.on_surface.default.hex}}"
+set index-active-bg             "{{colors.primary_container.default.hex}}"
+set index-active-fg             "{{colors.on_primary_container.default.hex}}"
+
+set inputbar-bg                 "{{colors.surface_container.default.hex}}"
+set inputbar-fg                 "{{colors.on_surface.default.hex}}"
+set statusbar-bg                "{{colors.surface_container.default.hex}}"
+set statusbar-fg                "{{colors.on_surface.default.hex}}"
+
+set highlight-color             "{{colors.primary.default.hex}}"
+set highlight-active-color      "{{colors.secondary.default.hex}}"
+set default-bg                  "{{colors.surface.default.hex}}"
+set default-fg                  "{{colors.on_surface.default.hex}}"
+set recolor-lightcolor          "{{colors.surface.default.hex}}"
+set recolor-darkcolor           "{{colors.on_surface.default.hex}}"
+
+set render-loading              true
+set page-padding                6
+set recolor                     true
+set recolor-keephue             true
+set adjust-open                 width
+set scroll-page-aware           true
+set smooth-scroll               true
+set selection-clipboard         clipboard

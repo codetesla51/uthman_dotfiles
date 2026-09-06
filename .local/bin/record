@@ -3,6 +3,7 @@
 if pgrep -f "gpu-screen-recorder -w" >/dev/null || pgrep -x wf-recorder >/dev/null; then
   pkill -f "gpu-screen-recorder -w" 2>/dev/null
   pkill -x wf-recorder 2>/dev/null
+  notify-send -u normal 'Recording stopped' 'Saved to ~/Videos/Recordings' 2>/dev/null
   exit 0
 fi
 DIR=~/Videos/Recordings
@@ -10,6 +11,7 @@ mkdir -p "$DIR"
 FILE="$DIR/rec-$(date +%Y%m%d-%H%M%S).mp4"
 if command -v gpu-screen-recorder >/dev/null; then
   setsid gpu-screen-recorder -w eDP-1 -a default_output -o "$FILE" >/dev/null 2>&1 < /dev/null &
+  notify-send -u normal 'Recording started' 'SUPER+R again to stop' 2>/dev/null
 elif command -v wf-recorder >/dev/null; then
   setsid wf-recorder -f "$FILE" >/dev/null 2>&1 < /dev/null &
 fi

@@ -166,6 +166,10 @@ output_path = "~/.config/theme/current/firefox-usercontent.css"
 input_path = "~/.config/matugen/templates/filemanager-colors.toml"
 output_path = "~/.local/state/omarchy/current/theme/colors.toml"
 
+[templates.zathura]
+input_path = "~/.config/matugen/templates/zathurarc"
+output_path = "~/.config/zathura/zathurarc"
+
 [templates.sddm]
 input_path = "~/.config/matugen/templates/sddm-palette.qml"
 output_path = "/usr/share/sddm/themes/elarun-custom/Palette.qml"

@@ -30,12 +30,10 @@ set recolor-lightcolor          "{{colors.surface.default.hex}}"
 set recolor-darkcolor           "{{colors.on_surface.default.hex}}"
 
 set render-loading              true
-set page-padding                6
 set recolor                     true
 set recolor-keephue             true
 set adjust-open                 width
 set scroll-page-aware           true
-set smooth-scroll               true
 set selection-clipboard         clipboard
 
 # n/N flip pages (search-match nav moves to t/T)

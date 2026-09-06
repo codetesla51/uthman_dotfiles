@@ -24,6 +24,7 @@ image/bmp=mpv.desktop
 image/tiff=mpv.desktop
 image/svg+xml=mpv.desktop
 application/pdf=org.pwmt.zathura.desktop
+application/epub+zip=org.pwmt.zathura.desktop
 text/html=firefox.desktop
 x-scheme-handler/http=firefox.desktop
 x-scheme-handler/https=firefox.desktop

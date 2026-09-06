@@ -93,7 +93,7 @@ PanelWindow {
     }
     Process {
         id: scanProc
-        command: ["sh","-c","find '"+Quickshell.env("HOME")+"' -maxdepth 4 -iname '*.pdf' -not -path '*/.*' 2>/dev/null | head -n 500"]
+        command: ["sh","-c","find '"+Quickshell.env("HOME")+"' -maxdepth 4 \\( -iname '*.pdf' -o -iname '*.epub' \\) -not -path '*/.*' 2>/dev/null | head -n 500"]
         stdout: StdioCollector {
             waitForEnd: true
             onStreamFinished: {
@@ -106,7 +106,7 @@ PanelWindow {
                     if(!p) continue
                     if(old[p]){ files.push(old[p]); continue }
                     var parts = p.split("/")
-                    files.push({path: p, title: parts[parts.length-1].replace(/\.pdf$/i,""), folder: parts.length>1?parts[parts.length-2]:"~", reads: 0, last: 0, fav: false})
+                    files.push({path: p, title: parts[parts.length-1].replace(/\.(pdf|epub)$/i,""), folder: parts.length>1?parts[parts.length-2]:"~", reads: 0, last: 0, fav: false})
                 }
                 root.library = files
                 root.libReady = true
@@ -171,13 +171,6 @@ PanelWindow {
                             MouseArea { id: openMa; anchors.fill: parent; hoverEnabled:true; onClicked: root.openWith(pathField.text.trim()) }
                         }
                     }
-                }
-                Rectangle {
-                    width: 28; height: 28; radius: 14
-                    color: closeMa.containsMouse ? colors.alpha(colors.surfaceVariant,0.6) : colors.alpha(colors.surface,0.6)
-                    border.width:1; border.color: colors.alpha(colors.outline,0.15)
-                    Text { anchors.centerIn: parent; text: ""; color: colors.foreground; font.family:"FiraCode Nerd Font"; font.pixelSize: 12 }
-                    MouseArea { id: closeMa; anchors.fill: parent; hoverEnabled:true; onClicked: root.open=false }
                 }
             }
 

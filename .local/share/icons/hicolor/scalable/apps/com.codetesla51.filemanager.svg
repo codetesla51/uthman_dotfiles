@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24">
+  <!-- The canvas's own mark, BrandMoments.dc.html: the Omarchy spiral recut on the 24 grid, drawn by ui/FilemanagerMark.qml and ui/Spinner.qml with the same path. A static file cannot read the live palette, so it takes the palette every artboard is drawn in. -->
+  <rect width="24" height="24" fill="#1a1b26"/>
+  <path d="M21 21H3V3h18v14H7V7h10v6h-6" fill="none" stroke="#9ece6a" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter"/>
+</svg>

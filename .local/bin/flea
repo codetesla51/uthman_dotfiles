@@ -1,3 +1,0 @@
-#!/bin/sh
-# Standalone-system launcher: flea's ui/ lives in ~/projects/flea (not /usr/share/flea).
-exec env FLEA_UI="$HOME/projects/flea/ui" "$HOME/projects/flea/target/release/flea" "$@"

@@ -1,0 +1,3 @@
+#!/bin/sh
+# Standalone-system launcher: filemanager's ui/ lives in ~/projects/filemanager (not /usr/share/filemanager).
+exec env FILEMANAGER_UI="$HOME/projects/filemanager/ui" "$HOME/projects/filemanager/target/release/filemanager" "$@"

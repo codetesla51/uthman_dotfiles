@@ -43,7 +43,7 @@ PanelWindow {
         {key:"SUPER Alt + Comma", desc:"Notification center", cat:"System", disp:"exec", arg:"quickshell -p ~/.config/quickshell ipc call notifications toggle"},
         {key:"SUPER + W", desc:"Close window", cat:"Windows", disp:"killactive", arg:""},
         {key:"SUPER + F", desc:"Full screen", cat:"Windows", disp:"fullscreen", arg:"0"},
-        {key:"SUPER Shift + F", desc:"File manager", cat:"Apps", disp:"exec", arg:"flea --gui"},
+        {key:"SUPER Shift + F", desc:"File manager", cat:"Apps", disp:"exec", arg:"filemanager --gui"},
         {key:"SUPER Shift + B", desc:"Browser", cat:"Apps", disp:"exec", arg:"firefox"},
         {key:"SUPER Shift + N", desc:"Editor", cat:"Apps", disp:"exec", arg:"code"},
         {key:"Print", desc:"Screenshot (drag area)", cat:"System", disp:"exec", arg:"shot"},

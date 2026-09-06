@@ -1,4 +1,4 @@
-# matugen → fake omarchy state dir so stock flea Theme.qml picks up wallpaper colors.
+# matugen → fake omarchy state dir so stock filemanager Theme.qml picks up wallpaper colors.
 background = "{{ colors.background.default.hex }}"
 foreground = "{{ colors.on_background.default.hex }}"
 accent = "{{ colors.primary.default.hex }}"

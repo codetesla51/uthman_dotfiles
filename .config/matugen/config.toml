@@ -162,8 +162,8 @@ output_path = "~/.config/theme/themes/snow_black/firefox-usercontent.css"
 input_path = "~/.config/matugen/templates/firefox-content.css"
 output_path = "~/.config/theme/current/firefox-usercontent.css"
 
-[templates.flea-colors]
-input_path = "~/.config/matugen/templates/flea-colors.toml"
+[templates.filemanager-colors]
+input_path = "~/.config/matugen/templates/filemanager-colors.toml"
 output_path = "~/.local/state/omarchy/current/theme/colors.toml"
 
 [templates.sddm]

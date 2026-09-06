@@ -44,6 +44,6 @@ fi
 getTheme "$IMAGE" &
 wait
 
-# Nudge flea (watches theme.name) to hot-reload its matugen colors.
+# Nudge filemanager (watches theme.name) to hot-reload its matugen colors.
 mkdir -p ~/.local/state/omarchy/current
 basename "$IMAGE" > ~/.local/state/omarchy/current/theme.name

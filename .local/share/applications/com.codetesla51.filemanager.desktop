@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Filemanager
+GenericName=File Manager
+Comment=Fast, keyboard-first file manager
+# The entry always means the window: without --gui the mode would be inferred from whatever stdio the launcher hands over.
+Exec=filemanager --gui %f
+Icon=com.codetesla51.filemanager
+Terminal=false
+Categories=System;FileTools;FileManager;
+MimeType=inode/directory;
+Keywords=files;folder;manager;browser;filemanager;
+StartupWMClass=com.codetesla51.filemanager

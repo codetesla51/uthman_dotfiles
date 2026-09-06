@@ -9,6 +9,5 @@ panel/panel
 # quickshell session log — never commit
 memory.md
 .config/quickshell/memory.md
-# local screenshots — never commit
-Pictures/Screenshots/
+# local screenshots live in ~/Pictures (real dir, not stowed) — never commit
 .config/quickshell/*Qt6QMLForBeginners*

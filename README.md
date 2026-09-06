@@ -2,7 +2,9 @@
 
 > Arch Linux · Hyprland · Quickshell · Matugen — wallpaper sets the palette, everything else follows.
 
-![screenshot](./screenshot.png)
+![screenshot](./assets/screenshots/screenshot-1.png)
+![screenshot](./assets/screenshots/screenshot-2.png)
+![screenshot](./assets/screenshots/screenshot-3.png)
 
 A minimal, dynamic rice for Arch Linux. [Hyprland](https://hyprland.org) as the compositor, [Quickshell](https://quickshell.outfoxxed.me) as the desktop shell, and [Matugen](https://github.com/InioX/matugen) (Material You) extracting a full palette from any wallpaper — change the wallpaper and every app recolors live, login screen included.
 
@@ -193,16 +195,14 @@ What it controls: live CPU/RAM/battery/network charts, theme + Ghostty font/opac
 │   └── starship.toml
 │   ├── .local/bin/omarchy-launch-walker   # rofi/walker dmenu shim
 ├── sddm/elarun-custom/       # login theme source (Main.qml, Palette.qml, logos) → /usr/share/sddm/themes/
-├── assets/                   # vendored blobs: fastfetch knight art, Iceland font (stow-ignored)
+├── assets/                   # vendored blobs + README screenshots (stow-ignored)
 ├── firefox/user.js             # enables userChrome.css theming (symlinked into profile, stow-ignored)
 ├── panel/                    # Go control panel (main.go + static/ embedded UI)
 ├── wallpapers/               # 7 wallpapers (wallhaven collection)
 ├── theme-fallback/           # static snow_black seed (8 files)
-├── Pictures/                 # screenshot drop folder (`shot` saves here)
 ├── .zshrc                    # zsh + lsd/zoxide/fzf/starship/mise
-├── .stow-local-ignore        # README.md, install.sh, theme-fallback, screenshot.png, wallpapers
-├── install.sh
-└── screenshot.png            # 1920×1080 hero (this README)
+├── .stow-local-ignore
+└── install.sh
 ```
 
 ---

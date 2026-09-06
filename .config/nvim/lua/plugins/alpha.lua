@@ -1,4 +1,4 @@
--- Alpha dashboard — small, uses first 8 lines of branding
+-- Alpha dashboard — full branding (49 lines), not cropped
 return {
   {
     "goolord/alpha-nvim",
@@ -11,13 +11,7 @@ return {
         local lines = vim.fn.readfile(branding_path)
         while #lines > 0 and lines[#lines]:match("^%s*$") do table.remove(lines) end
         while #lines > 0 and lines[1]:match("^%s*$") do table.remove(lines, 1) end
-        -- take only first 6 lines and trim to keep it small
-        if #lines >= 6 then
-          header = {}
-          for i = 1, 6 do table.insert(header, lines[i]) end
-        else
-          header = lines
-        end
+        header = lines
       end
       dashboard.section.header.val = header
       dashboard.section.header.opts = { hl = "Title", position = "center" }

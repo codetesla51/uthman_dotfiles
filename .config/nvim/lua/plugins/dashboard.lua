@@ -1,53 +1,14 @@
--- Dashboard — uses direct text (not file) for startup ASCII
+-- Dashboard — small text, name first
 return {
   {
     "folke/snacks.nvim",
     opts = {
       dashboard = {
         preset = {
-          header = [[                                        ▒██             ▒██░
-                                       █   █            █   █
-                                      █    █            █    █
-                                    ░█    █             ▒▒    █
-                                   ░█     █              █     █
-                                  ░█     █               █░     █
-                                 ░█      █                █      █
-                                 █       █                █       █
-                                █       ▒░                █        █
-                               █        █                 ░▒       ░█
-                              ░█        █                  █        █
-                              █         █                  █         █
-                             █          █                  █         ▓░
-                             █          █                  █          █
-                            █           █                 ▒░          ░▒
-                            █           ░▓                █            █
-                           ░░            █                █            █
-                           █             █               ░▒             █
-                           █              █              █              █
-                           █              ░█            █               █
-                          ░░               ▓█          █                █
-                          █░                 █       ▓█                 █
-                          █                    ██████                   ▓░
-                          █                                             █░
-                          █░                                            █
-                           █                                            █
-                           █                                            █
-                           █                                            █
-                           █                                           █
-                            █                                          █
-                            █                                         ▓▒
-                             █                                        █
-                             ░█     ██                       ░██     █
-                              █░   ▒█████                 ░█████░   █░
-                               █░   ███████              ███████   █▓
-                                █░  ░████████          ████████   █▒
-                                 ▒█  ░████████        ████████░  █
-                                   █   ███████        ███████  ░█
-                                    ░█  ▓██████      ██████   █
-                                      ██   ██░         ▓    █░
-                                         █▒              ██
-                                           ▒██        ██
-                                               █████▓]],
+          header = [[
+  OLADELE USMAN
+  codetesla51 — Arch • Hyprland
+]],
         },
         sections = {
           { section = "keys", gap = 1, padding = 1 },

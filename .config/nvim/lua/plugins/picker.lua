@@ -1,11 +1,10 @@
--- Picker — file picker with branding header (direct text)
-local branding_first = "▒██             ▒██░"
+-- Picker — small name first
 return {
   {
     "folke/snacks.nvim",
     opts = {
       picker = {
-        prompt = "  " .. branding_first .. " ▸ ",
+        prompt = "  OLADELE ▸ ",
         layouts = {
           branding = {
             layout = {
@@ -17,7 +16,7 @@ return {
                 win = "input",
                 height = 1,
                 border = "rounded",
-                title = "  " .. branding_first .. "  ",
+                title = "  OLADELE USMAN  ",
                 title_pos = "center",
               },
               {

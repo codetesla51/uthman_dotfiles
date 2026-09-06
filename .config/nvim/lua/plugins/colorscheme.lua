@@ -1,15 +1,15 @@
--- Zed-like theme: tokyonight `night` (dark, neutral-blue, high contrast).
+-- Tokyonight kept as fallback (LazyVim default) for fresh clones before
+-- the first matugen run. The active scheme comes from matugen.lua.
 return {
   {
     "folke/tokyonight.nvim",
     opts = {
       style = "night",
-    },
-  },
-  {
-    "LazyVim/LazyVim",
-    opts = {
-      colorscheme = "tokyonight",
+      transparent = true,
+      styles = {
+        sidebars = "transparent",
+        floats = "transparent",
+      },
     },
   },
 }

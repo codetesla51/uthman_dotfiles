@@ -43,8 +43,8 @@
   },
   "ui_font_size": 18,
   "buffer_font_size": 18,
-  "buffer_font_family": "FiraCode Nerd Font Mono",
-  "ui_font_family": "FiraCode Nerd Font",
+  "buffer_font_family": "JetBrainsMono Nerd Font Mono",
+  "ui_font_family": "JetBrainsMono Nerd Font",
   "theme": {
     "mode": "dark",
     "light": "macOS Classic Light",

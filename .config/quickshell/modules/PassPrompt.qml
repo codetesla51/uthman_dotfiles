@@ -3,6 +3,7 @@ import Quickshell.Io
 import Quickshell.Wayland
 import QtQuick
 import QtQuick.Layouts
+import QtQuick.Controls
 
 // PassPrompt — system password prompt (SUDO_ASKPASS backend), same glass
 // style as PkgManager's dialog. Flow: ask() shows, result()/state() poll.

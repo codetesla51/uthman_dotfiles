@@ -4,7 +4,7 @@
 # scripts, agents via sudo -A). Prompt text arrives in $1.
 # (Rofi, not the quickshell dialog, on purpose: the system prompt must also
 # work when quickshell itself is down. Theme comes from colors.rasi.)
-: "${ROFI_ASKPASS_THEME:=~/.config/rofi/askpass.rasi}"
+: "${ROFI_ASKPASS_THEME:=$HOME/.config/rofi/askpass.rasi}"
 prompt="${1:-Password:}"
 if [ -f "$ROFI_ASKPASS_THEME" ]; then
   exec rofi -dmenu -password -p "$prompt" -theme "$ROFI_ASKPASS_THEME" -l 0

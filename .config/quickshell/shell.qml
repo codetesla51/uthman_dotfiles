@@ -13,6 +13,7 @@ ShellRoot {
     PkgManager { colors: barPalette }
     ControlCenter { colors: barPalette }
     PdfViewer { colors: barPalette }
+    PassPrompt { colors: barPalette }
 
     Colors { id: barPalette }
 }

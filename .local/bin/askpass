@@ -1,11 +1,33 @@
 #!/bin/sh
-# General sudo password prompt: rofi dmenu in your matugen theme, SUDO_ASKPASS-compatible.
-# sudo uses this automatically whenever it has no terminal (GUI apps,
-# scripts, agents via sudo -A). Prompt text arrives in $1.
-# (Rofi, not the quickshell dialog, on purpose: the system prompt must also
-# work when quickshell itself is down. Theme comes from colors.rasi.)
-: "${ROFI_ASKPASS_THEME:=$HOME/.config/rofi/askpass.rasi}"
+# System sudo password prompt (SUDO_ASKPASS): quickshell glass dialog first,
+# rofi fallback for when quickshell is down. Prompt text arrives in $1.
 prompt="${1:-Password:}"
+QS="quickshell -p $HOME/.config/quickshell"
+
+if $QS ipc call passprompt ask "$prompt" >/dev/null 2>&1; then
+    # poll up to ~2 min for submit or cancel
+    i=0
+    while [ "$i" -lt 600 ]; do
+        st=$($QS ipc call passprompt st 2>/dev/null | tr -d '"')
+        case "$st" in
+            done)
+                # strip quotes in case ipc prints a quoted string
+                $QS ipc call passprompt result 2>/dev/null | sed 's/^"//; s/"$//'
+                exit 0
+                ;;
+            cancelled|idle)
+                exit 1
+                ;;
+        esac
+        i=$((i + 1))
+        sleep 0.2
+    done
+    $QS ipc call passprompt close >/dev/null 2>&1
+    exit 1
+fi
+
+# quickshell not answering — emergency fallback
+: "${ROFI_ASKPASS_THEME:=$HOME/.config/rofi/askpass.rasi}"
 if [ -f "$ROFI_ASKPASS_THEME" ]; then
   exec rofi -dmenu -password -p "$prompt" -theme "$ROFI_ASKPASS_THEME" -l 0
 else

@@ -136,6 +136,13 @@ PanelWindow {
         border.color: colors.alpha(colors.primary, 0.14)
         focus: true
         Keys.onEscapePressed: root.open = false
+        Keys.onPressed: function(e){
+            if(!root.libRows().length) return
+            if(e.key===Qt.Key_F){ var r=root.libRows()[libList.currentIndex]; if(r) root.toggleFav(r.path); e.accepted=true }
+            else if(e.key===Qt.Key_J||e.key===Qt.Key_Down){ libList.currentIndex=Math.min(root.libRows().length-1,libList.currentIndex+1); e.accepted=true }
+            else if(e.key===Qt.Key_K||e.key===Qt.Key_Up){ libList.currentIndex=Math.max(0,libList.currentIndex-1); e.accepted=true }
+            else if(e.key===Qt.Key_Return||e.key===Qt.Key_Enter){ var o=root.libRows()[libList.currentIndex]; if(o) root.openWith(o.path); e.accepted=true }
+        }
 
         ColumnLayout {
             anchors.fill: parent
@@ -207,8 +214,11 @@ PanelWindow {
             }
             // rows — click opens in Zathura
             ListView {
+                id: libList
                 Layout.fillWidth: true; Layout.fillHeight: true
                 clip: true; spacing: 4
+                highlightMoveDuration: 120
+                highlight: Rectangle { radius: 9; color: colors.alpha(colors.primary,0.10); border.width: 1; border.color: colors.alpha(colors.primary,0.25) }
                 model: root.libRows()
                 delegate: Rectangle {
                     width: ListView.view.width; height: 44; radius: 9

@@ -37,3 +37,9 @@ set adjust-open                 width
 set scroll-page-aware           true
 set smooth-scroll               true
 set selection-clipboard         clipboard
+
+# n/N flip pages (search-match nav moves to t/T)
+map n navigate next
+map N navigate previous
+map t search next
+map T search previous

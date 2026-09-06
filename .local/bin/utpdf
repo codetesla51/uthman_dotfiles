@@ -1,0 +1,24 @@
+#!/bin/bash
+# utpdf — single cmd to open PDF in Quickshell pdfviewer
+# Usage: utpdf /path/to/file.pdf  (also supports no arg → opens viewer)
+if [ $# -eq 0 ]; then
+  # no file → just toggle viewer
+  quickshell -p ~/.config/quickshell ipc call pdfviewer toggle 2>&1 | head -5
+  exit 0
+fi
+# resolve to absolute path for qml
+path="$1"
+if [ ! -f "$path" ]; then
+  echo "utpdf: file not found: $path" >&2
+  exit 1
+fi
+# realpath if available
+if command -v realpath >/dev/null 2>&1; then
+  path=$(realpath "$path" 2>/dev/null || echo "$path")
+else
+  path=$(readlink -f "$path" 2>/dev/null || echo "$path")
+fi
+# escape single quotes for qml ipc
+esc=$(printf '%s' "$path" | sed "s/'/'\\\\''/g")
+# call via quickshell ipc — open will set pdfPath and render
+quickshell -p ~/.config/quickshell ipc call pdfviewer open "$path" 2>&1 | head -10

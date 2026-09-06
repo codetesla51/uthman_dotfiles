@@ -12,6 +12,7 @@ ShellRoot {
     QuickNotes { colors: barPalette }
     PkgManager { colors: barPalette }
     ControlCenter { colors: barPalette }
+    PdfViewer { colors: barPalette }
 
     Colors { id: barPalette }
 }

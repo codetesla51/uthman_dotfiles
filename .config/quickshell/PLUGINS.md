@@ -27,8 +27,10 @@ Rules of the house (from AGENTS.md / memory.md):
 | FastFetchWindow.qml | system info card w/ avatar | `fastfetch` | `SUPER N` | FloatingWindow 560x340 |
 | AudioVisualizer.qml | cava bars in draggable window | `visualizer` | `SUPER ALT V` | cava raw/ascii feed, scripts/cava-qs.conf |
 | PkgManager.qml | **package manager** — search pacman+AUR, queue, install progress, uninstall (native vs foreign), updates | `pkgman` (`packages` alias) | `SUPER I` | FloatingWindow 980×640 — Hyprland window, not popup; pacman for repo, yay for AUR; .desktop for rofi/walker |
+| PdfViewer.qml | **PDF viewer** — poppler pdftoppm 150 DPI, one-page PNG, pre-render next, glass layershell popup | `pdfviewer` | `SUPER ALT N` | PanelWindow 900×700 Overlay, Matugen, page nav ←→, zoom +/-; `utpdf <file>` wrapper |
+| ControlCenter.qml | **control center** — bento grid (now playing, wifi graph, quick controls, pet, activity) | `controlcenter` | `SUPER ALT P` | PanelWindow Overlay 860×700, Esc to close |
 | MediaOsd.qml | volume/brightness/mic OSD overlay | `media` (`volup/voldown/volmute/micmute/briup/bridown/brimax/brimin`) | Fn-row keys (XF86) | replaced omarchy swayosd; binds in bindings.conf |
-| PluginMenu.qml | pick-and-open grid for **extras/plugins only** | `plugins` | `SUPER ALT P` | native modules excluded |
+| PluginMenu.qml | pick-and-open grid for **extras/plugins only** | `plugins` | `SUPER ALT P` → `controlcenter` now | native modules excluded, use `plugins` ipc directly |
 | ScreenTime.qml | usage tracker: GitHub heatmap, top apps ranked, week bars, login count | `screentime` | `SUPER ALT T` | samples focused window every 10s → SQLite; gap >4h = new login |
 | PhoneLink.qml | KDE Connect wrapper: send files, clipboard sync, device status | `phonelink` | `SUPER ALT K` | needs kdeconnect-cli + paired phone |
 | Bar pills (ArchLogo, Memory, Cpu, Network, Temp, Tray, DndIndicator, ScriptIndicator) | status pills | — | — | ScriptIndicator runs scripts/update.sh + idle.sh |

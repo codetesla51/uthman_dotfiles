@@ -1,0 +1,14 @@
+#!/bin/bash
+if ! command -v tte &>/dev/null; then echo "tte not found" >&2; exit 1; fi
+pgrep -f org.screensaver >/dev/null && exit 0
+if [ -f ~/.config/branding-off ] && [ "$1" != "force" ]; then exit 0; fi
+command -v walker >/dev/null 2>&1 && walker -q 2>/dev/null || true
+focused=$(hyprctl monitors -j 2>/dev/null | jq -r '.[] | select(.focused==true) | .name // empty' 2>/dev/null)
+[ -z "$focused" ] && focused=$(hyprctl monitors -j 2>/dev/null | jq -r '.[0].name // empty' 2>/dev/null)
+EFFECT_ARGS=""
+[[ "$*" == *"decrypt"* ]] && EFFECT_ARGS="--effect decrypt"
+for m in $(hyprctl monitors -j 2>/dev/null | jq -r '.[] | .name' 2>/dev/null); do
+  hyprctl dispatch focusmonitor "$m" >/dev/null 2>&1
+  hyprctl dispatch exec -- ghostty --class=org.screensaver --font-size=10 -e screensaver $EFFECT_ARGS >/dev/null 2>&1 &
+done
+[ -n "$focused" ] && hyprctl dispatch focusmonitor "$focused" >/dev/null 2>&1

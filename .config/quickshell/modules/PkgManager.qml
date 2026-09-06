@@ -36,6 +36,10 @@ FloatingWindow {
     property string installLog: ""
     property string installMode: "" // "install" or "remove" or "update"
     property string lastChecked: ""
+    property string sudoPass: ""
+    property bool showPassDialog: false
+    property string pendingAction: "" // "install" | "remove" | "update" | "updateAll"
+    property string passError: ""
     property var sizeMap: ({}) // name -> "15.7 MiB"
     property string totalQueuedSizeStr: {
         var total=0
@@ -331,6 +335,8 @@ FloatingWindow {
         return arr
     }
 
+    function escPass(p){ return p.replace(/'/g, "'\\''") }
+    function sudoPrefix(){ return sudoPass ? "echo '"+escPass(sudoPass)+"' | sudo -S " : "" }
     function buildInstallCmd() {
         var off=[]
         var aur=[]
@@ -340,10 +346,11 @@ FloatingWindow {
             else off.push(k)
         }
         var cmds=[]
-        if(off.length>0) cmds.push("echo ':: Installing official: "+off.join(" ")+"' ; pkexec pacman -S --noconfirm --needed "+off.join(" ")+" 2>&1")
-        else if(aur.length>0) {} // no off
+        var sp=sudoPrefix()
+        if(off.length>0) cmds.push("echo ':: Installing official: "+off.join(" ")+"' ; "+sp+"pacman -S --noconfirm --needed "+off.join(" ")+" 2>&1")
         if(aur.length>0) {
-            var aurCmd="echo ':: Installing AUR: "+aur.join(" ")+"' ; yay -S --noconfirm --needed "+aur.join(" ")+" 2>&1"
+            // yay internally calls sudo, but we pre-auth via sudo -v with the same pass
+            var aurCmd="echo ':: Installing AUR: "+aur.join(" ")+"' ; "+(sudoPass ? "printf '%s\\n' '"+escPass(sudoPass)+"' | sudo -S true 2>&1; " : "")+"yay -S --noconfirm --needed "+aur.join(" ")+" 2>&1"
             if(cmds.length>0) cmds.push("echo '___AUR_START___' ; "+aurCmd)
             else cmds.push(aurCmd)
         }
@@ -355,7 +362,7 @@ FloatingWindow {
         var names=[]
         for(var k in uninstallMap) names.push(k)
         if(names.length===0) return ""
-        return "pkexec pacman -Rns --noconfirm "+names.join(" ")+" 2>&1"
+        return sudoPrefix()+"pacman -Rns --noconfirm "+names.join(" ")+" 2>&1"
     }
 
     function buildUpdateCmd(all) {
@@ -366,8 +373,6 @@ FloatingWindow {
             for(var k in updateSelected) names.push(k)
         }
         if(names.length===0) return ""
-        // split by source to call correct tool, but for updates single yay handles both
-        // respect requirement: pacman for official, yay for AUR
         var off=[]
         var aur=[]
         for(var j=0;j<names.length;j++){
@@ -377,14 +382,23 @@ FloatingWindow {
             if(src==="AUR") aur.push(n)
             else off.push(n)
         }
+        var sp=sudoPrefix()
         var parts=[]
-        if(off.length>0) parts.push("pkexec pacman -S --noconfirm "+off.join(" ")+" 2>&1")
-        if(aur.length>0) parts.push("yay -S --noconfirm "+aur.join(" ")+" 2>&1")
-        if(parts.length===0) return "yay -Syu --noconfirm 2>&1"
+        if(off.length>0) parts.push(sp+"pacman -S --noconfirm "+off.join(" ")+" 2>&1")
+        if(aur.length>0) parts.push((sudoPass ? "printf '%s\\n' '"+escPass(sudoPass)+"' | sudo -S true 2>&1; " : "")+"yay -S --noconfirm "+aur.join(" ")+" 2>&1")
+        if(parts.length===0) return (sudoPass ? "printf '%s\\n' '"+escPass(sudoPass)+"' | sudo -S true 2>&1; " : "")+"yay -Syu --noconfirm 2>&1"
         return parts.join(" ; echo '___AUR_START___' ; ")
     }
 
+    function needPass(action){
+        if(sudoPass!=="") return false
+        // check if sudo timestamp is still valid (sudo -n true)
+        // we do a quick check via process, but for now just ask if empty
+        pendingAction=action; showPassDialog=true; passError=""
+        return true
+    }
     function startInstall() {
+        if(needPass("install")) return
         var cmd=buildInstallCmd()
         if(!cmd) return
         installMode="install"
@@ -393,6 +407,7 @@ FloatingWindow {
         installProc.running=true
     }
     function startRemove() {
+        if(needPass("remove")) return
         var cmd=buildRemoveCmd()
         if(!cmd) return
         installMode="remove"
@@ -401,12 +416,19 @@ FloatingWindow {
         installProc.running=true
     }
     function startUpdate(all) {
+        if(needPass(all ? "updateAll" : "update")) return
         var cmd=buildUpdateCmd(all)
         if(!cmd) return
         installMode="update"
         installLog=""; installPct=0.05; installing=true
         installProc.command=["sh","-c", cmd]
         installProc.running=true
+    }
+    function submitPass(){
+        if(passField.text.trim()===""){ passError="Enter password"; return }
+        var esc = passField.text.replace(/'/g, "'\\''")
+        passVerifyProc.command=["sh","-c","printf '%s\\n' '"+esc+"' | sudo -S true 2>&1; echo EXIT:$?"]
+        passVerifyProc.running=true
     }
 
     // ---- Processes ----
@@ -507,6 +529,37 @@ FloatingWindow {
             }
         }
     }
+    Process {
+        id: passVerifyProc
+        running: false
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: {
+                var ok = text.indexOf("EXIT:0") !== -1
+                if(ok){
+                    root.sudoPass = passField.text
+                    root.showPassDialog = false
+                    root.passError = ""
+                    // clear field
+                    passField.text = ""
+                    // dispatch pending
+                    var a = root.pendingAction
+                    root.pendingAction = ""
+                    if(a==="install") root.startInstall()
+                    else if(a==="remove") root.startRemove()
+                    else if(a==="update") root.startUpdate(false)
+                    else if(a==="updateAll") root.startUpdate(true)
+                    // auto-clear after 5 min
+                    passClearTimer.restart()
+                } else {
+                    root.passError = "Wrong password, try again"
+                    passField.text = ""
+                    passField.forceActiveFocus()
+                }
+            }
+        }
+    }
+    Timer { id: passClearTimer; interval: 300000; onTriggered: root.sudoPass="" }
     Process {
         id: installProc
         running: false
@@ -1252,6 +1305,69 @@ FloatingWindow {
                 font.family:"FiraCode Nerd Font"; font.pixelSize: 8
                 Layout.alignment: Qt.AlignHCenter
             }
+
+
+            }
+
+            // password dialog — glass, in-app, caches for 5 min so you don't retype each tab
+            Rectangle {
+                visible: root.showPassDialog
+                anchors.fill: parent
+                color: colors.alpha(colors.background, 0.72)
+                radius: 16
+                border.width: 1; border.color: colors.alpha(colors.primary, 0.18)
+                // block clicks behind
+                MouseArea { anchors.fill: parent; onClicked: {} }
+                ColumnLayout {
+                    anchors.centerIn: parent
+                    width: parent.width*0.74
+                    spacing: 14
+                    Text { text: "  Authentication required"; color: colors.primary; font.family:"FiraCode Nerd Font"; font.pixelSize: 12; font.weight: Font.Bold; Layout.alignment: Qt.AlignHCenter }
+                    Text { text: "Enter sudo password — cached for 5 min, used for pacman / yay across Install / Remove / Updates"; color: colors.alpha(colors.outline,0.7); font.family:"FiraCode Nerd Font"; font.pixelSize: 8; wrapMode: Text.Wrap; Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter }
+                    Rectangle {
+                        Layout.fillWidth: true; height: 42; radius: 10
+                        color: colors.alpha(colors.surface, 0.85)
+                        border.width: 1; border.color: passField.activeFocus ? colors.alpha(colors.primary,0.5) : (root.passError ? colors.alpha(colors.error,0.6) : colors.alpha(colors.outline,0.14))
+                        RowLayout {
+                            anchors.fill: parent; anchors.leftMargin: 12; anchors.rightMargin: 10; spacing: 8
+                            Text { text: ""; color: colors.alpha(colors.outline,0.6); font.family:"FiraCode Nerd Font"; font.pixelSize: 12 }
+                            TextField {
+                                id: passField
+                                Layout.fillWidth: true
+                                placeholderText: "sudo password"
+                                placeholderTextColor: colors.alpha(colors.outline,0.45)
+                                color: colors.foreground
+                                font.family:"FiraCode Nerd Font"; font.pixelSize: 11
+                                echoMode: TextInput.Password
+                                background: null
+                                selectByMouse: true
+                                onAccepted: root.submitPass()
+                                Keys.onEscapePressed: root.showPassDialog=false
+                            }
+                            Text { visible: passField.text!==""; text: "✕"; color: colors.alpha(colors.outline,0.6); font.family:"FiraCode Nerd Font"; font.pixelSize: 12; MouseArea { anchors.fill: parent; onClicked: passField.text="" } }
+                        }
+                    }
+                    Text { visible: root.passError!==""; text: root.passError; color: colors.error; font.family:"FiraCode Nerd Font"; font.pixelSize: 9; Layout.alignment: Qt.AlignHCenter }
+                    RowLayout {
+                        Layout.fillWidth: true; spacing: 10
+                        Rectangle {
+                            Layout.fillWidth: true; height: 36; radius: 9
+                            color: cancelMa.containsMouse?colors.alpha(colors.surfaceVariant,0.5):colors.alpha(colors.surface,0.6)
+                            border.width:1; border.color: colors.alpha(colors.outline,0.12)
+                            Text { anchors.centerIn: parent; text: "Cancel"; color: colors.foreground; font.family:"FiraCode Nerd Font"; font.pixelSize: 10; font.weight: Font.Bold }
+                            MouseArea { id: cancelMa; anchors.fill: parent; hoverEnabled:true; onClicked: root.showPassDialog=false }
+                        }
+                        Rectangle {
+                            Layout.fillWidth: true; height: 36; radius: 9
+                            color: passField.text.trim()==="" ? colors.alpha(colors.surfaceVariant,0.35) : okMa.containsMouse?colors.alpha(colors.primary,0.32):colors.alpha(colors.primary,0.22)
+                            border.width:1; border.color: passField.text.trim()==="" ? colors.alpha(colors.outline,0.12) : colors.alpha(colors.primary,0.5)
+                            enabled: passField.text.trim()!==""
+                            Text { anchors.centerIn: parent; text: "Unlock"; color: passField.text.trim()===""?colors.alpha(colors.outline,0.6):colors.primary; font.family:"FiraCode Nerd Font"; font.pixelSize: 10; font.weight: Font.ExtraBold }
+                            MouseArea { id: okMa; anchors.fill: parent; hoverEnabled:true; enabled: passField.text.trim()!==""; onClicked: root.submitPass() }
+                        }
+                    }
+                    Text { text: "Password is cached in memory only, cleared on close or after 5 min"; color: colors.alpha(colors.outline,0.45); font.family:"FiraCode Nerd Font"; font.pixelSize: 7; Layout.alignment: Qt.AlignHCenter }
+                }
         }
     }
 }

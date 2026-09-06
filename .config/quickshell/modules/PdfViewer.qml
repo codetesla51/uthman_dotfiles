@@ -87,12 +87,14 @@ PanelWindow {
             waitForEnd: true
             onStreamFinished: {
                 if(text.indexOf("RENDER_OK") !== -1){
-                    root.pageImage = "file:///tmp/pdf_viewer/page.png?t=" + Date.now()
+                    // bust cache by toggling source: set empty then real, no ?t= query (file:// doesn't handle it)
+                    root.pageImage = ""
+                    Qt.callLater(function(){ root.pageImage = "file:///tmp/pdf_viewer/page.png" })
                     root.loading = false
                     root.errorMsg = ""
                 } else {
                     root.loading = false
-                    root.errorMsg = "Render failed"
+                    root.errorMsg = "Render failed: " + text.slice(0,200)
                 }
             }
         }
@@ -200,26 +202,21 @@ PanelWindow {
                     Text { visible: !errorMsg; text: "Try:  " + Quickshell.env("HOME") + "/projects/Portfolio/src/assets/OLADELE USMAN.pdf"; color: colors.alpha(colors.outline,0.45); font.family:"FiraCode Nerd Font"; font.pixelSize: 8 }
                 }
 
-                Flickable {
+                Item {
                     anchors.fill: parent
                     anchors.margins: 8
                     visible: pageImage && !errorMsg
-                    contentWidth: pageImg.paintedWidth
-                    contentHeight: pageImg.paintedHeight
                     clip: true
-                    boundsBehavior: Flickable.StopAtBounds
-                    ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
-                    ScrollBar.horizontal: ScrollBar { policy: ScrollBar.AsNeeded }
-
                     Image {
                         id: pageImg
+                        anchors.fill: parent
                         source: root.pageImage
                         fillMode: Image.PreserveAspectFit
-                        width: parent.width
-                        height: parent.height
                         cache: false
                         asynchronous: true
-                        sourceSize.width: 0 // keep native
+                        // debug
+                        onStatusChanged: if(status===Image.Error) console.log("[PdfViewer] Image error:", source, "status", status)
+                        onSourceChanged: console.log("[PdfViewer] source ->", source)
                     }
                 }
 

@@ -48,6 +48,10 @@ PanelWindow {
         onCloseRequested: { bar.calendarPinned = false; calendarPanel.open = false }
     }
 
+    // bar sides toggle — SUPER SHIFT SPACE leaves middle island
+    property bool barsVisible: true
+    IpcHandler { target: "bar"; function toggle(): void { bar.barsVisible = !bar.barsVisible } }
+
     // calendar — manual only, you control open/close (click clock or Super+C, Esc/backdrop to close)
     property bool calendarPinned: false
     onCalendarPinnedChanged: calendarPanel.open = calendarPinned
@@ -61,6 +65,9 @@ PanelWindow {
             id: leftRow
             anchors { left: parent.left; top: parent.top; bottom: parent.bottom; topMargin: 6; bottomMargin: 8 }
             spacing: 6
+            opacity: bar.barsVisible ? 1 : 0
+            Behavior on opacity { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
+            transform: Translate { x: bar.barsVisible ? 0 : -40; Behavior on x { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } } }
             ArchLogo { colors: bar.colors }
             Workspaces { colors: bar.colors }
         }
@@ -72,9 +79,9 @@ PanelWindow {
             anchors { top: parent.top; horizontalCenter: parent.horizontalCenter }
             width: islandRow.implicitWidth + 40      // 20px padding per side (slant eats into it)
             height: 54                               // 46px pill line + 8px hang below
-            // trapezoid geometry shared by fill + border — smoother radius per request
-            readonly property real inset: 20         // horizontal inset of bottom edge
-            readonly property real cr: 16            // corner radius on the protruding bottom angles — was 12, now 16 for softer
+            // trapezoid geometry shared by fill + border — fixed rounding
+            readonly property real inset: 18         // horizontal inset of bottom edge
+            readonly property real cr: 12            // corner radius — reverted from 16, 16 was too bulbous with inset 20
             Behavior on width { NumberAnimation { duration: 280; easing.type: Easing.OutCubic } }
 
             Shape {
@@ -109,20 +116,24 @@ PanelWindow {
             RowLayout {
                 id: islandRow
                 anchors.centerIn: parent
-                anchors.verticalCenterOffset: -1     // center on the pill line (y=26), not the tab body
-                spacing: 8
+                anchors.verticalCenterOffset: -1
+                spacing: 14
+                // clock small left
                 Clock {
                     id: clockItem
                     colors: bar.colors
+                    // smaller clock when NowPlaying is focus — keep time but de-emphasized
                     onPinRequested: clockWin.open = !clockWin.open
                 }
-                // | separators — flat content, no inner pills
-                Rectangle { width: 1; height: 14; color: colors.alpha(colors.outline, 0.28) }
+                // NowPlaying focus — big centered, fills available width
                 NowPlaying {
                     id: nowPlaying
                     colors: bar.colors
+                    Layout.fillWidth: true
+                    Layout.alignment: Qt.AlignHCenter
+                    Layout.maximumWidth: 340
                 }
-                Rectangle { width: 1; height: 14; color: colors.alpha(colors.outline, 0.28) }
+                // bell small right
                 BellButton {
                     colors: bar.colors
                     historyCount: ntfy.historyCount
@@ -136,6 +147,9 @@ PanelWindow {
             id: rightRow
             anchors { right: parent.right; top: parent.top; bottom: parent.bottom; topMargin: 6; bottomMargin: 8 }
             spacing: 6
+            opacity: bar.barsVisible ? 1 : 0
+            Behavior on opacity { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
+            transform: Translate { x: bar.barsVisible ? 0 : 40; Behavior on x { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } } }
 
             // unified transient pill: idle · DND · recording · tray (LocalSend/OBS/etc.)
             // was 4 separate popping pills — now one glass pill, hidden when empty

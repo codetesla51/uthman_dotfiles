@@ -1,8 +1,8 @@
 * {
-    background:  #141312ee;
-    selected:    #46474126;
-    accent:      #c7c7bc;
-    border-col:  #97978f1a;
-    text:        #eae6e4;
-    placeholder: #eae6e433;
+    background:  #131313ee;
+    selected:    #43484626;
+    accent:      #bec9c6;
+    border-col:  #9297951a;
+    text:        #e9e6e5;
+    placeholder: #e9e6e533;
 }

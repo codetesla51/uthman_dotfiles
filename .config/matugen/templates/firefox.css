@@ -1,34 +1,129 @@
+/* ── matugen Firefox chrome — regenerated on every wallpaper change ──
+ * Browser UI only. Never touches web content. */
+
 :root {
-  --background: {{ colors.background.default.hex }};
-  --foreground: {{ colors.on_background.default.hex }};
-  --accent: {{ colors.primary.default.hex }};
-  --color0: {{ colors.background.default.hex }};
-  --color1: {{ colors.error.default.hex }};
-  --color2: {{ colors.secondary.default.hex }};
-  --color3: {{ colors.tertiary.default.hex }};
-  --color4: {{ colors.primary.default.hex }};
-  --color5: {{ colors.primary.default.hex }};
-  --color6: {{ colors.secondary.default.hex }};
-  --color7: {{ colors.on_background.default.hex }};
-  --color8: {{ colors.surface_variant.default.hex }};
-  --color9: {{ colors.error.default.hex }};
-  --color10: {{ colors.secondary.default.hex }};
-  --color11: {{ colors.tertiary.default.hex }};
-  --color12: {{ colors.primary.default.hex }};
-  --color13: {{ colors.primary.default.hex }};
-  --color14: {{ colors.secondary.default.hex }};
-  --color15: {{ colors.on_background.default.hex }};
+  --m-bg: {{ colors.background.default.hex }};
+  --m-surface: {{ colors.surface.default.hex }};
+  --m-raised: {{ colors.surface_variant.default.hex }};
+  --m-fg: {{ colors.on_background.default.hex }};
+  --m-sub: {{ colors.on_surface.default.hex }};
+  --m-accent: {{ colors.primary.default.hex }};
+  --m-accent2: {{ colors.secondary.default.hex }};
+  --m-line: {{ colors.outline.default.hex }};
+  --m-err: {{ colors.error.default.hex }};
+  --m-dim: color-mix(in srgb, {{ colors.on_background.default.hex }} 55%, transparent);
 }
 
-* {
-  background-color: var(--background) !important;
-  color: var(--foreground) !important;
+/* ── top chrome ── */
+#navigator-toolbox {
+  background: var(--m-bg) !important;
+  border-bottom: 1px solid color-mix(in srgb, var(--m-line) 40%, transparent) !important;
+}
+#nav-bar {
+  background: var(--m-bg) !important;
+  box-shadow: none !important;
+}
+#TabsToolbar,
+#tabbrowser-tabs {
+  background: transparent !important;
 }
 
-scrollbar {
-  background-color: var(--color0) !important;
+/* tab separators off */
+.tabbrowser-tab::before,
+.tabbrowser-tab::after {
+  border: none !important;
 }
 
-scrollbar thumb {
-  background-color: var(--color4) !important;
+/* tabs */
+.tabbrowser-tab .tab-background {
+  border-radius: 10px 10px 0 0 !important;
+  background: transparent !important;
+}
+.tabbrowser-tab[selected="true"] .tab-background {
+  background: var(--m-raised) !important;
+  box-shadow: inset 0 2px 0 var(--m-accent) !important;
+}
+.tabbrowser-tab:hover:not([selected="true"]) .tab-background {
+  background: color-mix(in srgb, var(--m-raised) 55%, transparent) !important;
+}
+.tab-content {
+  color: var(--m-dim) !important;
+}
+.tabbrowser-tab[selected="true"] .tab-content {
+  color: var(--m-fg) !important;
+}
+
+/* new-tab + list-all buttons */
+#tabs-newtab-button,
+#alltabs-button {
+  fill: var(--m-dim) !important;
+}
+#tabs-newtab-button:hover,
+#alltabs-button:hover {
+  background: color-mix(in srgb, var(--m-raised) 60%, transparent) !important;
+  border-radius: 8px !important;
+}
+
+/* ── urlbar ── */
+#urlbar {
+  --urlbar-box-bgcolor: var(--m-surface) !important;
+}
+#urlbar-background {
+  background: var(--m-surface) !important;
+  border: 1px solid color-mix(in srgb, var(--m-line) 45%, transparent) !important;
+  border-radius: 10px !important;
+  box-shadow: none !important;
+}
+#urlbar[focused="true"] > #urlbar-background,
+#urlbar[breakout][breakout-extend] > #urlbar-background {
+  border-color: var(--m-accent) !important;
+}
+#urlbar-input {
+  color: var(--m-fg) !important;
+}
+.urlbarView {
+  background: var(--m-surface) !important;
+  border-radius: 0 0 12px 12px !important;
+}
+.urlbarView-row[selected] {
+  background: color-mix(in srgb, var(--m-raised) 70%, transparent) !important;
+}
+
+/* ── bookmark bar ── */
+#PersonalToolbar {
+  background: var(--m-bg) !important;
+  color: var(--m-sub) !important;
+}
+toolbarbutton.bookmark-item:hover {
+  background: color-mix(in srgb, var(--m-raised) 65%, transparent) !important;
+}
+
+/* ── sidebar ── */
+#sidebar-box {
+  background: var(--m-surface) !important;
+}
+#sidebar-header {
+  background: var(--m-surface) !important;
+  color: var(--m-fg) !important;
+  border-bottom: 1px solid color-mix(in srgb, var(--m-line) 40%, transparent) !important;
+}
+
+/* ── popups / menus ── */
+.panel-arrowcontent,
+menupopup {
+  --panel-background: var(--m-raised) !important;
+  background: var(--m-raised) !important;
+  color: var(--m-fg) !important;
+  border-radius: 12px !important;
+}
+menuitem:hover,
+menu:hover {
+  background: color-mix(in srgb, var(--m-accent) 30%, transparent) !important;
+}
+
+/* ── find bar ── */
+findbar {
+  background: var(--m-surface) !important;
+  color: var(--m-fg) !important;
+  border-top: 1px solid color-mix(in srgb, var(--m-line) 40%, transparent) !important;
 }

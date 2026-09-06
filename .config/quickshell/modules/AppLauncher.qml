@@ -106,7 +106,14 @@ PanelWindow {
         if (!entry) return
         bumpUsage(entry.id)
         root.open = false
-        Qt.callLater(function(){ entry.execute() })
+        Qt.callLater(function(){
+            // Terminal apps die instantly with no TTY — run them inside
+            // ghostty (same uwsm-app scope as SUPER+RETURN).
+            if (entry.runInTerminal && entry.command && entry.command.length > 0)
+                Quickshell.execDetached(["uwsm-app", "--", "ghostty", "-e"].concat(entry.command))
+            else
+                entry.execute()
+        })
     }
 
     // dim backdrop

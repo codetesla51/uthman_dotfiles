@@ -89,16 +89,16 @@ return {
 
         -- ── Matugen scheme (wallpaper-derived) ────────────────────────
         local base = {
-          bg         = "#141312",
-          bg_subtle  = "#1d1c1b",
-          bg_raised  = "#232322",
-          bg_select  = "#2e2d2c",
-          fg         = "#e5e2e0",
-          fg_dim     = "#c7c7be",
-          fg_muted   = "#97978f",
-          primary    = "#c7c7bc",
-          secondary  = "#c8c6c1",
-          tertiary   = "#d0c3c9",
+          bg         = "#131313",
+          bg_subtle  = "#1c1c1c",
+          bg_raised  = "#232323",
+          bg_select  = "#2d2d2d",
+          fg         = "#e4e2e1",
+          fg_dim     = "#c3c7c5",
+          fg_muted   = "#929795",
+          primary    = "#bec9c6",
+          secondary  = "#c4c7c5",
+          tertiary   = "#d8c2bc",
           error      = "#ffb4ab",
         }
 
@@ -138,8 +138,8 @@ return {
           hint_green = tweak(hue_from(base.primary, 142, -0.10, -0.07), 0, -0.12, 0.02), -- muted hint green
           -- keep compatibility: warn alias == yellow
           -- UI chrome
-          border    = "#393837",
-          hint      = "#64655e",
+          border    = "#383838",
+          hint      = "#606564",
         }
 
         -- ── Base ──────────────────────────────────────────────────────
@@ -315,10 +315,10 @@ return {
         hl(0, "GitSignsAdd", { fg = c.success })
         hl(0, "GitSignsChange", { fg = c.teal })
         hl(0, "GitSignsDelete", { fg = c.red })
-        hl(0, "DiffAdd", { bg = "#2e2d2c" })
-        hl(0, "DiffChange", { bg = "#b2a6ac" })
+        hl(0, "DiffAdd", { bg = "#2d2d2d" })
+        hl(0, "DiffChange", { bg = "#72615c" })
         hl(0, "DiffDelete", { bg = "#c32220" })
-        hl(0, "DiffText", { bg = "#a9aa9f" })
+        hl(0, "DiffText", { bg = "#5c6764" })
 
         -- ── LSP semantic tokens ───────────────────────────────────────
         hl(0, "@lsp.type.function", { link = "@function" })

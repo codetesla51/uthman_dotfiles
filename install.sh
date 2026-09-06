@@ -193,6 +193,20 @@ else
     cp "$DOTFILES_DIR/assets/fastfetch/The_Knight__Hollow_Knight_-removebg-preview.png" "$HOME/fastfetchImages/" && success "fastfetch art installed"
 fi
 
+# Firefox theme: matugen userChrome.css + user.js pref, symlinked into the
+# default profile (no prefs.js edits — user.js is read-only for Firefox).
+for _ffbase in "$HOME/.mozilla/firefox" "$HOME/.config/mozilla/firefox"; do
+    [ -f "$_ffbase/profiles.ini" ] || continue
+    _profdir=$(ls -d "$_ffbase"/*.default-release 2>/dev/null | head -1)
+    [ -z "$_profdir" ] && _profdir=$(ls -d "$_ffbase"/*.default* 2>/dev/null | head -1)
+    [ -z "$_profdir" ] && continue
+    mkdir -p "$_profdir/chrome"
+    ln -sf "$HOME/.config/theme/current/firefox.css" "$_profdir/chrome/userChrome.css"
+    ln -sf "$HOME/.config/theme/current/firefox-usercontent.css" "$_profdir/chrome/userContent.css"
+    ln -sf "$DOTFILES_DIR/firefox/user.js" "$_profdir/user.js"
+    success "Firefox theme wired: $_profdir"
+done
+
 # ── Done ──────────────────────────────────────────────────────────────────────
 echo ""
 echo -e "${GREEN}${BOLD}  Installation complete!${RESET}"

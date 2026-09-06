@@ -1,0 +1,57 @@
+/* ── matugen Firefox content — new-tab / home pages only ── */
+@-moz-document url("about:newtab"), url("about:home"), url("about:blank") {
+  body {
+    background: {{ colors.background.default.hex }} !important;
+    color: {{ colors.on_background.default.hex }} !important;
+  }
+
+  /* search box (handoff button + real input variants) */
+  .search-handoff-button,
+  .search-wrapper input,
+  .search-inner-wrapper,
+  input[type="search"] {
+    background: {{ colors.surface.default.hex }} !important;
+    color: {{ colors.on_background.default.hex }} !important;
+    border: 1px solid {{ colors.outline.default.hex }} !important;
+    border-radius: 10px !important;
+    box-shadow: none !important;
+  }
+  .search-handoff-button:focus,
+  .search-handoff-button:focus-within,
+  .search-wrapper input:focus {
+    border-color: {{ colors.primary.default.hex }} !important;
+  }
+  .fake-textbox,
+  .search-handoff-button::placeholder,
+  .search-wrapper input::placeholder {
+    color: {{ colors.on_surface.default.hex }} !important;
+  }
+
+  /* top-site cards */
+  .top-site-outer .tile {
+    background: {{ colors.surface_variant.default.hex }} !important;
+    border-radius: 12px !important;
+    box-shadow: none !important;
+  }
+  .top-site-outer .title {
+    color: {{ colors.on_background.default.hex }} !important;
+  }
+
+  /* pocket / highlights cards */
+  .card-outer,
+  .ds-card {
+    background: {{ colors.surface.default.hex }} !important;
+    border-radius: 12px !important;
+  }
+
+  /* logo + wordmark follow accent */
+  .logo-and-wordmark .wordmark {
+    fill: {{ colors.primary.default.hex }} !important;
+  }
+
+  /* settings gear + close */
+  .icon-settings,
+  .personalize-button {
+    color: {{ colors.on_surface.default.hex }} !important;
+  }
+}

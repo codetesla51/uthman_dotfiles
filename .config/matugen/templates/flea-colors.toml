@@ -1,0 +1,10 @@
+# matugen → fake omarchy state dir so stock flea Theme.qml picks up wallpaper colors.
+background = "{{ colors.background.default.hex }}"
+foreground = "{{ colors.on_background.default.hex }}"
+accent = "{{ colors.primary.default.hex }}"
+muted = "{{ colors.outline.default.hex }}"
+cyan = "{{ colors.tertiary.default.hex }}"
+green = "{{ colors.secondary.default.hex }}"
+urgent = "{{ colors.error.default.hex }}"
+dark_background = "{{ colors.background.default.hex }}"
+selection = "{{ colors.surface_variant.default.hex }}"

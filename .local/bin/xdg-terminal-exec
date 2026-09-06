@@ -1,0 +1,16 @@
+#!/bin/sh
+# Minimal xdg-terminal-exec: `xdg-terminal-exec [--dir=<path>] [--] [command ...]`.
+dir="$HOME"
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --dir=*) dir="${1#--dir=}"; shift ;;
+    --) shift; break ;;
+    -*) shift ;;
+    *) break ;;
+  esac
+done
+if [ $# -eq 0 ]; then
+  exec uwsm-app -- ghostty --working-directory="$dir"
+else
+  exec uwsm-app -- ghostty --working-directory="$dir" -e "$@"
+fi

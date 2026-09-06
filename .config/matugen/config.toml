@@ -154,6 +154,18 @@ output_path = "~/.config/omarchy/current/theme/matugen-base.json"
 input_path = "~/.config/matugen/templates/zed-palette.json"
 output_path = "~/.config/theme/current/matugen-base.json"
 
+[templates.firefox-content-theme]
+input_path = "~/.config/matugen/templates/firefox-content.css"
+output_path = "~/.config/theme/themes/snow_black/firefox-usercontent.css"
+
+[templates.firefox-content-current]
+input_path = "~/.config/matugen/templates/firefox-content.css"
+output_path = "~/.config/theme/current/firefox-usercontent.css"
+
+[templates.flea-colors]
+input_path = "~/.config/matugen/templates/flea-colors.toml"
+output_path = "~/.local/state/omarchy/current/theme/colors.toml"
+
 [templates.sddm]
 input_path = "~/.config/matugen/templates/sddm-palette.qml"
 output_path = "/usr/share/sddm/themes/elarun-custom/Palette.qml"

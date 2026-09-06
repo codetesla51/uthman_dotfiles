@@ -1,25 +1,23 @@
--- Alpha dashboard — uses ~/.config/branding (100x49 art) as header
+-- Alpha dashboard — small, uses first 8 lines of branding
 return {
   {
     "goolord/alpha-nvim",
     event = "VimEnter",
     opts = function()
       local dashboard = require("alpha.themes.dashboard")
-      -- read branding file
       local branding_path = vim.fn.expand("~/.config/branding")
-      local header = {}
+      local header = { "  OLADELE USMAN", "  codetesla51" }
       if vim.fn.filereadable(branding_path) == 1 then
         local lines = vim.fn.readfile(branding_path)
-        -- trim empty top/bottom, keep art
         while #lines > 0 and lines[#lines]:match("^%s*$") do table.remove(lines) end
         while #lines > 0 and lines[1]:match("^%s*$") do table.remove(lines, 1) end
-        -- alpha expects a table of strings, one per line
-        header = lines
-      else
-        header = {
-          "  OLADELE USMAN",
-          "  codetesla51 — Arch • Hyprland",
-        }
+        -- take only first 6 lines and trim to keep it small
+        if #lines >= 6 then
+          header = {}
+          for i = 1, 6 do table.insert(header, lines[i]) end
+        else
+          header = lines
+        end
       end
       dashboard.section.header.val = header
       dashboard.section.header.opts = { hl = "Title", position = "center" }

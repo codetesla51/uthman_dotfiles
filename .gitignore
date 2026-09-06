@@ -11,3 +11,6 @@ memory.md
 .config/quickshell/memory.md
 # local screenshots live in ~/Pictures (real dir, not stowed) — never commit
 .config/quickshell/*Qt6QMLForBeginners*
+
+# wallpapers live here but never get committed — no more pushing them
+wallpapers/

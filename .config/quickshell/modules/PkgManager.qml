@@ -337,6 +337,8 @@ FloatingWindow {
 
     function escPass(p){ return p.replace(/'/g, "'\\''") }
     function sudoPrefix(){ return sudoPass ? "echo '"+escPass(sudoPass)+"' | sudo -S " : "" }
+    // yay's inner sudo has no terminal here, so it reaches the GUI prompt via askpass whenever the timestamp lapses
+    function askpassEnv(){ return "export SUDO_ASKPASS=\"$HOME/.local/bin/askpass\"; " }
     function buildInstallCmd() {
         var off=[]
         var aur=[]
@@ -350,7 +352,7 @@ FloatingWindow {
         if(off.length>0) cmds.push("echo ':: Installing official: "+off.join(" ")+"' ; "+sp+"pacman -S --noconfirm --needed "+off.join(" ")+" 2>&1")
         if(aur.length>0) {
             // yay internally calls sudo, but we pre-auth via sudo -v with the same pass
-            var aurCmd="echo ':: Installing AUR: "+aur.join(" ")+"' ; "+(sudoPass ? "printf '%s\\n' '"+escPass(sudoPass)+"' | sudo -S true 2>&1; " : "")+"yay -S --noconfirm --needed "+aur.join(" ")+" 2>&1"
+            var aurCmd="echo ':: Installing AUR: "+aur.join(" ")+"' ; "+askpassEnv()+(sudoPass ? "printf '%s\\n' '"+escPass(sudoPass)+"' | sudo -S true 2>&1; " : "")+"yay -S --noconfirm --needed "+aur.join(" ")+" 2>&1"
             if(cmds.length>0) cmds.push("echo '___AUR_START___' ; "+aurCmd)
             else cmds.push(aurCmd)
         }
@@ -385,8 +387,8 @@ FloatingWindow {
         var sp=sudoPrefix()
         var parts=[]
         if(off.length>0) parts.push(sp+"pacman -S --noconfirm "+off.join(" ")+" 2>&1")
-        if(aur.length>0) parts.push((sudoPass ? "printf '%s\\n' '"+escPass(sudoPass)+"' | sudo -S true 2>&1; " : "")+"yay -S --noconfirm "+aur.join(" ")+" 2>&1")
-        if(parts.length===0) return (sudoPass ? "printf '%s\\n' '"+escPass(sudoPass)+"' | sudo -S true 2>&1; " : "")+"yay -Syu --noconfirm 2>&1"
+        if(aur.length>0) parts.push(askpassEnv()+(sudoPass ? "printf '%s\\n' '"+escPass(sudoPass)+"' | sudo -S true 2>&1; " : "")+"yay -S --noconfirm "+aur.join(" ")+" 2>&1")
+        if(parts.length===0) return askpassEnv()+(sudoPass ? "printf '%s\\n' '"+escPass(sudoPass)+"' | sudo -S true 2>&1; " : "")+"yay -Syu --noconfirm 2>&1"
         return parts.join(" ; echo '___AUR_START___' ; ")
     }
 

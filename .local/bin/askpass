@@ -1,0 +1,11 @@
+#!/bin/sh
+# General sudo password prompt: rofi dmenu, SUDO_ASKPASS-compatible.
+# sudo uses this automatically whenever it has no terminal (GUI apps,
+# scripts, agents via sudo -A). Prompt text arrives in $1.
+: "${ROFI_ASKPASS_THEME:=~/.config/rofi/askpass.rasi}"
+prompt="${1:-Password:}"
+if [ -f "$ROFI_ASKPASS_THEME" ]; then
+  exec rofi -dmenu -password -p "$prompt" -theme "$ROFI_ASKPASS_THEME" -l 0
+else
+  exec rofi -dmenu -password -p "$prompt" -l 0
+fi

@@ -4,6 +4,7 @@ compinit
 
 # ── Path ──────────────────────────────────────────────────────
 export PATH="$HOME/.local/bin:$HOME/.local/share/mise/shims:$HOME/.local/share/pi-node/node-v22.23.2-linux-x64/bin:$PATH"
+export SUDO_ASKPASS="$HOME/.local/bin/askpass"
 
 # ── History ───────────────────────────────────────────────────
 HISTFILE=~/.zsh_history

@@ -1,0 +1,42 @@
+// askpass.rasi — sudo prompt, matugen colors via colors.rasi
+@import "colors.rasi"
+
+* {
+    font: "FiraCode Nerd Font 11";
+}
+
+window {
+    background-color: @background;
+    border: 1px;
+    border-color: @border-col;
+    border-radius: 14px;
+    width: 420px;
+    padding: 18px;
+    anchor: center;
+    location: center;
+}
+
+prompt {
+    background-color: transparent;
+    text-color: @accent;
+    font: "FiraCode Nerd Font Bold 11";
+    margin: 0px 0px 10px 0px;
+}
+
+inputbar {
+    background-color: transparent;
+    children: [ prompt, entry ];
+    orientation: vertical;
+}
+
+entry {
+    background-color: @selected;
+    text-color: @text;
+    placeholder-color: @placeholder;
+    border-radius: 10px;
+    padding: 10px 12px;
+}
+
+listview {
+    enabled: false;
+}

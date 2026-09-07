@@ -17,6 +17,7 @@ exit_screensaver() {
 trap exit_screensaver SIGINT SIGTERM SIGHUP SIGQUIT
 printf '\033]11;rgb:00/00/00\007'
 hyprctl keyword cursor:invisible true &>/dev/null || true
+hyprctl dispatch focuswindow 'class:org.screensaver' &>/dev/null || true
 tty=$(tty 2>/dev/null)
 BRAND_FILE="$HOME/.config/branding"
 [ -f "$BRAND_FILE" ] || BRAND_FILE="$HOME/.config/branding/screensaver.txt"
@@ -27,12 +28,26 @@ if [ "$EFFECT_MODE" = "decrypt" ]; then
 else
   CMD=(tte -i "$BRAND_FILE" --frame-rate 120 --canvas-width 0 --canvas-height 0 --reuse-canvas --anchor-canvas c --anchor-text c --random-effect --no-eol --no-restore-cursor)
 fi
+GRACE_SEC=5       # compositor gets this long to focus us before we judge
+UNFOCUS_EXIT=3    # unfocused this long (after grace) -> someone took over, exit
+start_ts=$(date +%s)
+unfocused_since=0
 while true; do
   "${CMD[@]}" &
-  while pgrep -t "${tty#/dev/}" -x tte >/dev/null 2>&1; do
-    if read -n1 -t 1 2>/dev/null || ! screensaver_in_focus; then
-      exit_screensaver
+  TPID=$!
+  while kill -0 "$TPID" 2>/dev/null; do
+    if read -n1 -t 1 2>/dev/null; then
+      exit_screensaver  # any key always exits
+    fi
+    now_ts=$(date +%s)
+    if [ $((now_ts - start_ts)) -gt "$GRACE_SEC" ]; then
+      if screensaver_in_focus; then
+        unfocused_since=0
+      else
+        [ "$unfocused_since" -eq 0 ] && unfocused_since=$now_ts
+        [ $((now_ts - unfocused_since)) -ge "$UNFOCUS_EXIT" ] && exit_screensaver
+      fi
     fi
   done
-  sleep 0.1
+  sleep 0.5
 done

@@ -466,13 +466,18 @@ PanelWindow {
                         TextField { id: qField; Layout.fillWidth: true; placeholderText: "Search Wallhaven…  (v/s select • d download • t delete)"; placeholderTextColor: colors.alpha(colors.outline, 0.45); color: colors.foreground; font.family: "FiraCode Nerd Font"; font.pixelSize: 10; background: null; selectByMouse: true; onAccepted: { root.query = text.trim(); root.search(true) } }
                     }
                 }
-                // loader
+                // loader (font-independent spinning bar)
                 Rectangle {
                     width: 34; height: 34; radius: 17
                     visible: root.loading || root.scanningLocal
                     color: colors.alpha(colors.primary, 0.15)
-                    Text { anchors.centerIn: parent; text: ""; color: colors.primary; font.family: "FiraCode Nerd Font"; font.pixelSize: 14
-                        RotationAnimation on rotation { running: root.loading || root.scanningLocal; loops: Animation.Infinite; from: 0; to: 360; duration: 800 } }
+                    Rectangle {
+                        width: 14; height: 3; radius: 2
+                        anchors.centerIn: parent
+                        color: colors.primary
+                        transformOrigin: Item.Center
+                        RotationAnimation on rotation { running: root.loading || root.scanningLocal; loops: Animation.Infinite; from: 0; to: 360; duration: 800 }
+                    }
                 }
                 // selected counter + bulk button
                 Rectangle {

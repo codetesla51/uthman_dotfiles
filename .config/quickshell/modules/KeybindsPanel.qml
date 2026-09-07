@@ -46,6 +46,7 @@ PanelWindow {
         {key:"SUPER Shift + R", desc:"Reboot", cat:"System", disp:"exec", arg:"systemctl reboot"},
         {key:"SUPER Alt + P", desc:"Control center", cat:"System", disp:"exec", arg:"quickshell -p ~/.config/quickshell ipc call controlcenter toggle"},
         {key:"SUPER + I", desc:"Package manager", cat:"System", disp:"exec", arg:"quickshell -p ~/.config/quickshell ipc call pkgman toggle"},
+        {key:"SUPER Alt + W", desc:"Wallpaper store", cat:"System", disp:"exec", arg:"quickshell -p ~/.config/quickshell ipc call wallshelf toggle"},
         {key:"SUPER Alt + N", desc:"PDF library", cat:"System", disp:"exec", arg:"quickshell -p ~/.config/quickshell ipc call pdfviewer toggle"},
         {key:"SUPER Shift + Space", desc:"Toggle bar sides", cat:"System", disp:"exec", arg:"quickshell -p ~/.config/quickshell ipc call bar toggle"},
         {key:"SUPER Alt + T", desc:"Screen time", cat:"System", disp:"exec", arg:"quickshell -p ~/.config/quickshell ipc call screentime toggle"},

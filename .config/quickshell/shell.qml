@@ -14,6 +14,7 @@ ShellRoot {
     ControlCenter { colors: barPalette }
     PdfViewer { colors: barPalette }
     PassPrompt { colors: barPalette }
+    Wallshelf { colors: barPalette }
 
     Colors { id: barPalette }
 }

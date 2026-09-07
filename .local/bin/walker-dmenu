@@ -1,15 +1,12 @@
 #!/bin/bash
-# Personal rofi shim that shadows omarchy-launch-walker on PATH
-# (~/.local/bin precedes ~/.local/share/omarchy/bin).
-# Routes every omarchy-menu dmenu picker through rofi.
+# walker-dmenu — rofi-based dmenu shim (drun grid + list picker).
 # Walker plugin modes (-m) are delegated to the real walker.
 
-REAL="/home/uthman/.local/share/omarchy/bin/omarchy-launch-walker"
 GRID_RASI="$HOME/.config/rofi/walker.rasi"
 LIST_RASI="$HOME/.config/rofi/list.rasi"
 
 case " $* " in
-  *" -m "*|*" --mode "*) exec "$REAL" "$@" ;;
+  *" -m "*|*" --mode "*) exec walker "$@" ;;
 esac
 
 if [[ $# -eq 0 ]]; then

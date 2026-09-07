@@ -8,7 +8,7 @@
 
 A minimal, dynamic rice for Arch Linux. [Hyprland](https://hyprland.org) as the compositor, [Quickshell](https://quickshell.outfoxxed.me) as the desktop shell, and [Matugen](https://github.com/InioX/matugen) (Material You) extracting a full palette from any wallpaper — change the wallpaper and every app recolors live, login screen included.
 
-Standalone: no distro or framework required. It was originally scaffolded from [Omarchy](https://omarchy.org) defaults, but every Omarchy source has been vendored or removed — see [Omarchy independence](#omarchy-independence).
+Standalone: no distro or framework required.
 
 ---
 
@@ -62,7 +62,7 @@ getTheme                      # ~/.local/bin/getTheme
 | **Theming** | Matugen — 42 templates, writes to `~/.config/theme/current/*` + `~/.config/quickshell/colors.css` + SDDM `Palette.qml` (`~/.config/omarchy/current/theme/*` still written as legacy mirror) |
 | **Terminal** | Ghostty (`config-file` sources `~/.config/theme/current/ghostty.conf`) |
 | **Shell** | Zsh + Starship + `lsd`/`zoxide`/`fzf`/`mise` |
-| **Launcher** | Walker + Rofi (`rofi/emoji.sh`, `clipboard.sh`, `wall.sh` via walker dmenu shim `~/.local/bin/omarchy-launch-walker` — name is legacy, script is local) |
+| **Launcher** | Walker + Rofi (`rofi/emoji.sh`, `clipboard.sh`, `wall.sh` via local dmenu shim `~/.local/bin/walker-dmenu`) |
 | **Notifications** | Quickshell daemon (`org.freedesktop.Notifications`) — toast + drawer + history; `swaync`/`mako` kept as fallback |
 | **Visualizer** | Cava + Cavasik + Quickshell `AudioVisualizer` |
 | **Monitors** | btop, `SystemMonitor.qml` (CPU per-core rings, RAM, network, process kill), `swayosd` |
@@ -208,7 +208,7 @@ Full list lives in `.config/hypr/bindings.conf` (+ vendored defaults in `.config
 │   ├── tmux/tmux.conf        # C-Space prefix, vim keys
 │   ├── zed/settings.json
 │   ├── btop/ cava/ fastfetch/ swaync/ swayosd/ gtk-3.0/ gtk-4.0/
-│   ├── omarchy/              # legacy mirror (matugen outputs) + hooks — see Omarchy independence
+│   ├── omarchy/              # compat mirror some matugen outputs still write
 │   ├── systemd/user/         # panel service
 │   └── starship.toml
 │   ├── .local/bin/           # local scripts: record, shot, askpass, filemanager, set-wallpaper, …
@@ -237,22 +237,8 @@ Full list lives in `.config/hypr/bindings.conf` (+ vendored defaults in `.config
 
 ---
 
-## Omarchy independence
-
-No Omarchy install required — nothing is sourced from `~/.local/share/omarchy/` and no `omarchy-*` package is needed. What remains of that history:
-
-- **Vendored defaults** — `.config/hypr/vendor/` started as copies of Omarchy's Hyprland defaults, sanitized for standalone use.
-- **Legacy mirror** — matugen still writes `~/.config/omarchy/current/theme/*`; harmless, kept for old overrides.
-- **Legacy names** — `~/.local/bin/omarchy-launch-walker` is a local walker/dmenu shim, name kept so existing binds keep working.
-- **Dead binds** — a few keybinds still call Omarchy helpers that don't exist here (`omarchy-menu*`, `omarchy-reminder*`, `omarchy-transcode`, `omarchy-launch-audio/bluetooth/wifi`, `omarchy-hyprland-window-*`, `omarchy-battery/weather-status`). They fail silent. Everything essential (screenshot, record, lock, volume, brightness, nightlight, gaps, touchpad, monitors) is a local script in `.local/bin/`.
-
-Replacing the dead binds with local scripts is the remaining decoupling work.
-
----
-
 ## Credits
 
-- [Omarchy](https://omarchy.org) — original scaffold this rice was built from (since fully decoupled)
 - [Matugen](https://github.com/InioX/matugen) — Material You generation
 - [Hyprland](https://hyprland.org) · [Quickshell](https://quickshell.outfoxxed.me) · [Ghostty](https://ghostty.org) · [Walker](https://github.com/abenz1267/walker)
 - [Starship](https://starship.rs) · [FiraCode / JetBrainsMono Nerd Fonts](https://www.nerdfonts.com)

@@ -432,7 +432,7 @@ PanelWindow {
             }
             if(e.key === Qt.Key_D){ root.downloadBulk(); e.accepted = true }
             else if(e.key === Qt.Key_T){ var t = root.wAt(grid.currentIndex); if(t) root.removeWall(t); e.accepted = true }
-            else if(e.key === Qt.Key_V){ var v = root.wAt(grid.currentIndex); if(v) root.toggleSelect(v); e.accepted = true }
+            else if(e.key === Qt.Key_V || e.key === Qt.Key_S){ var v = root.wAt(grid.currentIndex); if(v) root.toggleSelect(v); e.accepted = true }
             else if(e.key === Qt.Key_Left){ grid.moveCurrentIndexLeft(); e.accepted = true }
             else if(e.key === Qt.Key_Right){ grid.moveCurrentIndexRight(); e.accepted = true }
             else if(e.key === Qt.Key_Up){ grid.moveCurrentIndexUp(); e.accepted = true }
@@ -463,7 +463,7 @@ PanelWindow {
                     border.width: 1; border.color: qField.activeFocus ? colors.alpha(colors.primary, 0.5) : colors.alpha(colors.outline, 0.14)
                     RowLayout { anchors.fill: parent; anchors.leftMargin: 10; anchors.rightMargin: 8; spacing: 6
                         Text { text: ""; color: colors.alpha(colors.outline, 0.6); font.family: "FiraCode Nerd Font"; font.pixelSize: 11 }
-                        TextField { id: qField; Layout.fillWidth: true; placeholderText: "Search Wallhaven…  (v select • d download • t delete)"; placeholderTextColor: colors.alpha(colors.outline, 0.45); color: colors.foreground; font.family: "FiraCode Nerd Font"; font.pixelSize: 10; background: null; selectByMouse: true; onAccepted: { root.query = text.trim(); root.search(true) } }
+                        TextField { id: qField; Layout.fillWidth: true; placeholderText: "Search Wallhaven…  (v/s select • d download • t delete)"; placeholderTextColor: colors.alpha(colors.outline, 0.45); color: colors.foreground; font.family: "FiraCode Nerd Font"; font.pixelSize: 10; background: null; selectByMouse: true; onAccepted: { root.query = text.trim(); root.search(true) } }
                     }
                 }
                 // loader
@@ -644,7 +644,7 @@ PanelWindow {
                 color: colors.alpha(colors.outline, 0.55); font.family: "FiraCode Nerd Font"; font.pixelSize: 8; Layout.alignment: Qt.AlignHCenter
             }
 
-            Text { visible: root.tab === "browse"; text: "arrows move • v select • d download • t delete • enter preview"; color: colors.alpha(colors.outline, 0.45); font.family: "FiraCode Nerd Font"; font.pixelSize: 7; Layout.alignment: Qt.AlignHCenter }
+            Text { visible: root.tab === "browse"; text: "arrows move • v/s select • d download • t delete • enter preview"; color: colors.alpha(colors.outline, 0.45); font.family: "FiraCode Nerd Font"; font.pixelSize: 7; Layout.alignment: Qt.AlignHCenter }
         }
 
         // ── preview overlay ──

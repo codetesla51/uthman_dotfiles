@@ -40,9 +40,7 @@ PanelWindow {
     function openWith(path){
         if(!path) return
         recordRead(path)
-        // epubs read best in Foliate (reflow), everything else in Zathura
-        if(/\.epub$/i.test(path)) Quickshell.execDetached(["foliate", path])
-        else Quickshell.execDetached(["zathura", path])
+        Quickshell.execDetached(["zathura", path])
     }
     function libSave(){
         if(!libReady) return

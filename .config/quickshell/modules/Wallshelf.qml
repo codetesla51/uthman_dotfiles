@@ -36,7 +36,12 @@ PanelWindow {
     property int lastPage: 1
     property bool loading: false
     property string errorMsg: ""
-    property var results: []
+    ListModel { id: resultModel }
+    function wAt(i){
+        if(i < 0 || i >= resultModel.count) return null
+        var m = resultModel.get(i)
+        return {id: m.wid, page: m.wpage, full: m.wfull, thumb: m.wthumb, res: m.wres, cat: m.wcat, purity: m.wpurity, views: m.wviews, favs: m.wfavs}
+    }
     property var downloaded: ({})
     property var selected: ({})
     property int selCount: 0
@@ -63,7 +68,7 @@ PanelWindow {
     WlrLayershell.layer: WlrLayer.Overlay
     IpcHandler { target: "wallshelf"; function toggle(): void { root.open = !root.open } }
 
-    onOpenChanged: if(open){ Qt.callLater(function(){ card.forceActiveFocus() }); if(!results.length) search(true) }
+    onOpenChanged: if(open){ Qt.callLater(function(){ card.forceActiveFocus() }); if(resultModel.count === 0) search(true) }
 
     // ── config ──
     FileView {
@@ -172,7 +177,7 @@ PanelWindow {
     }
     function search(reset){
         if(root.loading){ root.searchQueued = true; return }
-        if(reset){ root.page = 1; root.results = []; root.selected = {}; root.selCount = 0; root.previewIdx = -1; root.useFallback = true }
+        if(reset){ root.page = 1; resultModel.clear(); root.selected = {}; root.selCount = 0; root.previewIdx = -1; root.useFallback = true }
         var now = Date.now()
         var wait = Math.max(0, 1500 - (now - root.lastCall)) + root.backoffMs
         root.pendingUrl = apiUrl(root.page, false)
@@ -226,9 +231,10 @@ PanelWindow {
             return
         }
         root.useFallback = false
-        var keepY = grid.contentY
-        root.results = root.results.concat(rows)
-        Qt.callLater(function(){ grid.contentY = Math.min(keepY, Math.max(0, grid.contentHeight - grid.height)) })
+        for(var k=0;k<rows.length;k++){
+            var r = rows[k]
+            resultModel.append({wid: r.id, wpage: r.page, wfull: r.full, wthumb: r.thumb, wres: r.res, wcat: r.cat, wpurity: r.purity, wviews: r.views, wfavs: r.favs})
+        }
         if(root.searchQueued){ root.searchQueued = false; root.search(false) }
     }
     function loadMore(){
@@ -274,14 +280,14 @@ PanelWindow {
         var ids = Object.keys(root.selected)
         if(ids.length){
             var byId = {}
-            for(var i=0;i<root.results.length;i++) byId[root.results[i].id] = root.results[i]
+            for(var i=0;i<resultModel.count;i++){ var it = root.wAt(i); byId[it.id] = it }
             var n = 0
             for(var j=0;j<ids.length;j++){ if(byId[ids[j]] && !root.downloaded[ids[j]]){ root.enqueue(byId[ids[j]]); n++ } }
             root.selected = {}; root.selCount = 0
             if(n) root.errorMsg = "Queued " + n + "…"
             return
         }
-        var w = root.results[grid.currentIndex]
+        var w = root.wAt(grid.currentIndex)
         if(w) root.enqueue(w)
     }
     function pumpQueue(){
@@ -291,22 +297,47 @@ PanelWindow {
         root.dlCurrent = w.id
         root.dlActive = root.dlQueue.length + 1
         var fn = fnameFor(w)
+        dlTotal = 0
+        dlPath = root.cacheDir + "/" + fn
         root.dlSet(w.id, 0, "downloading")
-        dlProc.command = ["sh","-c","mkdir -p '"+root.cacheDir+"' '"+root.linkDir+"' && curl -sSL --progress-bar -m 300 -H 'User-Agent: wallshelf/1.0' '"+w.full.replace(/'/g,"'\\''")+"' -o '"+root.cacheDir+"/"+fn+"' 2>&1 && ln -sf '"+root.cacheDir+"/"+fn+"' '"+root.linkDir+"/"+fn+"' && echo DL_OK_"+w.id+" || echo DL_FAIL_"+w.id]
+        dlProc.command = ["sh","-c","mkdir -p '"+root.cacheDir+"' '"+root.linkDir+"' && rm -f '"+dlPath+"' && total=$(curl -sIL -m 20 -H 'User-Agent: wallshelf/1.0' '"+w.full.replace(/'/g,"'\\''")+"' | grep -i '^content-length:' | tail -1 | tr -dc '0-9'); echo TOTAL_${total:-0} && curl -sSL -m 600 -H 'User-Agent: wallshelf/1.0' '"+w.full.replace(/'/g,"'\\''")+"' -o '"+dlPath+"' && ln -sf '"+dlPath+"' '"+root.linkDir+"/"+fn+"' && echo DL_OK || echo DL_FAIL"]
         dlProc.running = true
+        pollTimer.restart()
+    }
+    property string dlPath: ""
+    property double dlTotal: 0
+    Timer {
+        id: pollTimer
+        interval: 400
+        repeat: true
+        onTriggered: {
+            if(root.dlCurrent === ""){ pollTimer.stop(); return }
+            if(root.dlTotal > 0){
+                szProc.command = ["sh","-c","stat -c%s '"+root.dlPath+"' 2>/dev/null || echo 0"]
+                szProc.running = true
+            }
+        }
+    }
+    Process {
+        id: szProc
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: {
+                if(root.dlCurrent === "" || root.dlTotal <= 0) return
+                var got = parseInt(text.trim()) || 0
+                root.dlSet(root.dlCurrent, Math.min(99, Math.round(got / root.dlTotal * 100)), "downloading")
+            }
+        }
     }
     Process {
         id: dlProc
         stdout: StdioCollector {
-            onTextChanged: {
-                if(root.dlCurrent === "") return
-                var m = text.match(/(\d+(?:\.\d+)?)%[^%]*$/)
-                if(m) root.dlSet(root.dlCurrent, parseFloat(m[1]), "downloading")
-            }
+            waitForEnd: true
             onStreamFinished: {
-                var idm = text.match(/DL_(OK|FAIL)_(\S+)/)
-                var id = idm ? idm[2] : root.dlCurrent
-                if(idm && idm[1] === "OK"){
+                pollTimer.stop()
+                var ok = text.indexOf("DL_OK") !== -1
+                var id = root.dlCurrent
+                if(ok){
                     root.dlClear(id)
                     root.refreshDownloaded()
                     if(root.tab === "downloaded") root.refreshLocal()
@@ -315,8 +346,10 @@ PanelWindow {
                     root.errorMsg = "Download failed: " + id
                 }
                 root.dlCurrent = ""
+                root.dlPath = ""
+                root.dlTotal = 0
                 root.dlActive = root.dlQueue.length
-                if(!root.dlQueue.length) root.errorMsg = ""
+                if(!root.dlQueue.length && ok) root.errorMsg = ""
                 pumpQueue()
             }
         }
@@ -393,13 +426,13 @@ PanelWindow {
             }
             if(root.previewIdx !== -1){
                 if(e.key === Qt.Key_Left){ root.previewIdx = Math.max(0, root.previewIdx - 1); e.accepted = true }
-                else if(e.key === Qt.Key_Right){ root.previewIdx = Math.min(root.results.length - 1, root.previewIdx + 1); e.accepted = true }
-                else if(e.key === Qt.Key_D){ var p = root.results[root.previewIdx]; if(p) root.downloadOne(p); e.accepted = true }
+                else if(e.key === Qt.Key_Right){ root.previewIdx = Math.min(resultModel.count - 1, root.previewIdx + 1); e.accepted = true }
+                else if(e.key === Qt.Key_D){ var p = root.wAt(root.previewIdx); if(p) root.downloadOne(p); e.accepted = true }
                 return
             }
             if(e.key === Qt.Key_D){ root.downloadBulk(); e.accepted = true }
-            else if(e.key === Qt.Key_T){ var t = root.results[grid.currentIndex]; if(t) root.removeWall(t); e.accepted = true }
-            else if(e.key === Qt.Key_V){ var v = root.results[grid.currentIndex]; if(v) root.toggleSelect(v); e.accepted = true }
+            else if(e.key === Qt.Key_T){ var t = root.wAt(grid.currentIndex); if(t) root.removeWall(t); e.accepted = true }
+            else if(e.key === Qt.Key_V){ var v = root.wAt(grid.currentIndex); if(v) root.toggleSelect(v); e.accepted = true }
             else if(e.key === Qt.Key_Left){ grid.moveCurrentIndexLeft(); e.accepted = true }
             else if(e.key === Qt.Key_Right){ grid.moveCurrentIndexRight(); e.accepted = true }
             else if(e.key === Qt.Key_Up){ grid.moveCurrentIndexUp(); e.accepted = true }
@@ -462,7 +495,7 @@ PanelWindow {
             // applied-query echo (tags visibly applied) + counts
             Text {
                 visible: root.tab === "browse"
-                text: (root.query !== "" ? "\"" + root.query + "\"  •  " : "") + root.results.length + " walls" + (root.page > 1 || root.lastPage > 1 ? "  •  page " + root.page + "/" + root.lastPage : "") + "  •  " + root.resolution
+                text: (root.query !== "" ? "\"" + root.query + "\"  •  " : "") + resultModel.count + " walls" + (root.page > 1 || root.lastPage > 1 ? "  •  page " + root.page + "/" + root.lastPage : "") + "  •  " + root.resolution
                 color: colors.alpha(colors.outline, 0.65); font.family: "FiraCode Nerd Font"; font.pixelSize: 8
             }
 
@@ -512,7 +545,7 @@ PanelWindow {
                 Layout.fillWidth: true; Layout.fillHeight: true
                 clip: true
                 cellWidth: 178; cellHeight: 130
-                model: root.results
+                model: resultModel
                 keyNavigationWraps: true
                 onContentYChanged: { if(!root.loading && contentY + height > contentHeight - 300) root.loadMore() }
                 delegate: Rectangle {
@@ -524,7 +557,7 @@ PanelWindow {
                     Behavior on scale { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
                     Image {
                         anchors.fill: parent; anchors.margins: 3
-                        source: modelData.thumb
+                        source: wthumb
                         fillMode: Image.PreserveAspectCrop
                         asynchronous: true
                         cache: true
@@ -532,7 +565,7 @@ PanelWindow {
                     // selected tint
                     Rectangle {
                         anchors.fill: parent; radius: 12
-                        visible: !!root.selected[modelData.id]
+                        visible: !!root.selected[wid]
                         color: colors.alpha(colors.primary, 0.22)
                         border.width: 2; border.color: colors.alpha(colors.primary, 0.7)
                     }
@@ -540,12 +573,12 @@ PanelWindow {
                         anchors.left: parent.left; anchors.bottom: parent.bottom; anchors.margins: 7
                         width: resText.implicitWidth + 12; height: 18; radius: 9
                         color: colors.alpha(colors.background, 0.78)
-                        Text { id: resText; anchors.centerIn: parent; text: modelData.res; color: colors.foreground; font.family: "FiraCode Nerd Font"; font.pixelSize: 7; font.weight: Font.Bold }
+                        Text { id: resText; anchors.centerIn: parent; text: wres; color: colors.foreground; font.family: "FiraCode Nerd Font"; font.pixelSize: 7; font.weight: Font.Bold }
                     }
                     Rectangle {
                         anchors.right: parent.right; anchors.top: parent.top; anchors.margins: 7
                         width: 22; height: 22; radius: 11
-                        visible: !!root.downloaded[modelData.id]
+                        visible: !!root.downloaded[wid]
                         color: colors.alpha(colors.primary, 0.9)
                         Text { anchors.centerIn: parent; text: "✓"; color: colors.alpha(colors.background, 1); font.family: "FiraCode Nerd Font"; font.pixelSize: 11; font.weight: Font.ExtraBold }
                     }
@@ -553,24 +586,24 @@ PanelWindow {
                     Rectangle {
                         anchors.left: parent.left; anchors.top: parent.top; anchors.margins: 7
                         width: 22; height: 22; radius: 6
-                        color: root.selected[modelData.id] ? colors.alpha(colors.primary, 0.9) : colors.alpha(colors.background, 0.6)
+                        color: root.selected[wid] ? colors.alpha(colors.primary, 0.9) : colors.alpha(colors.background, 0.6)
                         border.width: 1; border.color: colors.alpha(colors.primary, 0.6)
-                        visible: root.selected[modelData.id] || thumbMa.containsMouse
-                        Text { anchors.centerIn: parent; text: "✓"; visible: root.selected[modelData.id]; color: colors.alpha(colors.background, 1); font.family: "FiraCode Nerd Font"; font.pixelSize: 11; font.weight: Font.ExtraBold }
-                        MouseArea { anchors.fill: parent; onClicked: root.toggleSelect(modelData) }
+                        visible: root.selected[wid] || thumbMa.containsMouse
+                        Text { anchors.centerIn: parent; text: "✓"; visible: root.selected[wid]; color: colors.alpha(colors.background, 1); font.family: "FiraCode Nerd Font"; font.pixelSize: 11; font.weight: Font.ExtraBold }
+                        MouseArea { anchors.fill: parent; onClicked: root.toggleSelect({id: wid}) }
                     }
                     Rectangle {
                         anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
                         height: 26
-                        visible: !!root.dlState[modelData.id]
+                        visible: !!root.dlState[wid]
                         color: colors.alpha(colors.background, 0.8)
                         Rectangle {
                             anchors.left: parent.left; anchors.top: parent.top; anchors.bottom: parent.bottom
                             anchors.margins: 3; radius: 6
-                            width: Math.max(0, (parent.width - 6) * ((root.dlState[modelData.id] || {}).pct || 0) / 100)
+                            width: Math.max(0, (parent.width - 6) * ((root.dlState[wid] || {}).pct || 0) / 100)
                             color: colors.alpha(colors.primary, 0.7)
                         }
-                        Text { anchors.centerIn: parent; text: ((root.dlState[modelData.id] || {}).status === "queued") ? "queued" : (Math.round(((root.dlState[modelData.id] || {}).pct || 0)) + "%  ↓"); color: colors.foreground; font.family: "FiraCode Nerd Font"; font.pixelSize: 8; font.weight: Font.Bold }
+                        Text { anchors.centerIn: parent; text: ((root.dlState[wid] || {}).status === "queued") ? "queued" : (Math.round(((root.dlState[wid] || {}).pct || 0)) + "%  ↓"); color: colors.foreground; font.family: "FiraCode Nerd Font"; font.pixelSize: 8; font.weight: Font.Bold }
                     }
                     MouseArea {
                         id: thumbMa; anchors.fill: parent; hoverEnabled: true
@@ -631,15 +664,15 @@ PanelWindow {
                 anchors.fill: parent; anchors.margins: 18; spacing: 10
                 RowLayout {
                     Layout.fillWidth: true; spacing: 10
-                    Text { text: (root.previewIdx + 1) + " / " + root.results.length; color: colors.alpha(colors.outline, 0.7); font.family: "FiraCode Nerd Font"; font.pixelSize: 9 }
-                    Text { Layout.fillWidth: true; horizontalAlignment: Text.AlignCenter; elide: Text.ElideMiddle; text: root.previewIdx !== -1 ? (root.results[root.previewIdx].res + "  •  " + root.results[root.previewIdx].id) : ""; color: colors.foreground; font.family: "FiraCode Nerd Font"; font.pixelSize: 10; font.weight: Font.Bold }
+                    Text { text: (root.previewIdx + 1) + " / " + resultModel.count; color: colors.alpha(colors.outline, 0.7); font.family: "FiraCode Nerd Font"; font.pixelSize: 9 }
+                    Text { Layout.fillWidth: true; horizontalAlignment: Text.AlignCenter; elide: Text.ElideMiddle; text: root.previewIdx !== -1 && root.wAt(root.previewIdx) ? (root.wAt(root.previewIdx).res + "  •  " + root.wAt(root.previewIdx).id) : ""; color: colors.foreground; font.family: "FiraCode Nerd Font"; font.pixelSize: 10; font.weight: Font.Bold }
                     Rectangle { width: 30; height: 30; radius: 15; color: pvCloseMa.containsMouse ? colors.alpha(colors.error, 0.18) : colors.alpha(colors.surface, 0.6); border.width: 1; border.color: colors.alpha(colors.outline, 0.15)
                         Text { anchors.centerIn: parent; text: "✕"; color: colors.foreground; font.family: "FiraCode Nerd Font"; font.pixelSize: 12; font.weight: Font.Bold }
                         MouseArea { id: pvCloseMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.previewIdx = -1 } }
                 }
                 Image {
                     Layout.fillWidth: true; Layout.fillHeight: true
-                    source: root.previewIdx !== -1 ? root.results[root.previewIdx].full : ""
+                    source: (root.previewIdx !== -1 && root.wAt(root.previewIdx)) ? root.wAt(root.previewIdx).full : ""
                     fillMode: Image.PreserveAspectFit
                     asynchronous: true
                     cache: false
@@ -648,10 +681,10 @@ PanelWindow {
                     Layout.fillWidth: true; spacing: 10; Layout.alignment: Qt.AlignHCenter
                     Rectangle { width: 150; height: 36; radius: 10; color: pvDlMa.containsMouse ? colors.alpha(colors.primary, 0.32) : colors.alpha(colors.primary, 0.2); border.width: 1; border.color: colors.alpha(colors.primary, 0.5)
                         Text { anchors.centerIn: parent; text: "↓ Download"; color: colors.primary; font.family: "FiraCode Nerd Font"; font.pixelSize: 10; font.weight: Font.ExtraBold }
-                        MouseArea { id: pvDlMa; anchors.fill: parent; hoverEnabled: true; onClicked: { var w = root.results[root.previewIdx]; if(w) root.downloadOne(w) } } }
+                        MouseArea { id: pvDlMa; anchors.fill: parent; hoverEnabled: true; onClicked: { var w = root.wAt(root.previewIdx); if(w) root.downloadOne(w) } } }
                     Rectangle { width: 130; height: 36; radius: 10; color: pvDelMa.containsMouse ? colors.alpha(colors.error, 0.2) : colors.alpha(colors.surface, 0.6); border.width: 1; border.color: colors.alpha(colors.outline, 0.15)
                         Text { anchors.centerIn: parent; text: "Delete"; color: colors.error; font.family: "FiraCode Nerd Font"; font.pixelSize: 10; font.weight: Font.Bold }
-                        MouseArea { id: pvDelMa; anchors.fill: parent; hoverEnabled: true; onClicked: { var w = root.results[root.previewIdx]; if(w){ root.removeWall(w); root.previewIdx = -1 } } } }
+                        MouseArea { id: pvDelMa; anchors.fill: parent; hoverEnabled: true; onClicked: { var w = root.wAt(root.previewIdx); if(w){ root.removeWall(w); root.previewIdx = -1 } } } }
                 }
             }
         }

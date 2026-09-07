@@ -226,7 +226,9 @@ PanelWindow {
             return
         }
         root.useFallback = false
+        var keepY = grid.contentY
         root.results = root.results.concat(rows)
+        Qt.callLater(function(){ grid.contentY = Math.min(keepY, Math.max(0, grid.contentHeight - grid.height)) })
         if(root.searchQueued){ root.searchQueued = false; root.search(false) }
     }
     function loadMore(){
@@ -245,16 +247,14 @@ PanelWindow {
     property var dlState: ({})          // id -> {pct, status}
     property int dlActive: 0
     function dlSet(id, pct, status){
-        var s = root.dlState
+        var s = Object.assign({}, root.dlState)
         s[id] = {pct: pct, status: status}
         root.dlState = s
-        root.dlStateChanged()
     }
     function dlClear(id){
-        var s = root.dlState
+        var s = Object.assign({}, root.dlState)
         delete s[id]
         root.dlState = s
-        root.dlStateChanged()
     }
     function fnameFor(w){
         var ext = "jpg"
@@ -345,10 +345,9 @@ PanelWindow {
             onStreamFinished: {
                 if(text.indexOf("RM_OK") !== -1){
                     if(rmProc.pendingId){
-                        var set = root.downloaded
+                        var set = Object.assign({}, root.downloaded)
                         delete set[rmProc.pendingId]
                         root.downloaded = set
-                        root.downloadedChanged()
                     }
                     root.refreshDownloaded()
                     if(root.tab === "downloaded") root.refreshLocal()
@@ -360,11 +359,10 @@ PanelWindow {
     }
     function toggleSelect(w){
         if(!w) return
-        var s = root.selected
+        var s = Object.assign({}, root.selected)
         if(s[w.id]){ delete s[w.id]; root.selCount -= 1 }
         else { s[w.id] = true; root.selCount += 1 }
         root.selected = s
-        root.selectedChanged()
     }
 
     Component.onCompleted: { detectResolution(); refreshDownloaded() }
@@ -576,7 +574,7 @@ PanelWindow {
                     }
                     MouseArea {
                         id: thumbMa; anchors.fill: parent; hoverEnabled: true
-                        onClicked: { grid.currentIndex = index; grid.forceActiveFocus() }
+                        onClicked: { grid.currentIndex = index }
                         onDoubleClicked: root.downloadOne(modelData)
                     }
                 }

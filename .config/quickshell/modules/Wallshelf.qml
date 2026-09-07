@@ -239,43 +239,85 @@ PanelWindow {
         else root.doFetch(root.pendingUrl)
     }
 
-    // ── download (single + bulk) / delete ──
+    // ── download queue: sequential curl with live % from --progress-bar ──
+    property var dlQueue: []
+    property string dlCurrent: ""
+    property var dlState: ({})          // id -> {pct, status}
+    property int dlActive: 0
+    function dlSet(id, pct, status){
+        var s = root.dlState
+        s[id] = {pct: pct, status: status}
+        root.dlState = s
+        root.dlStateChanged()
+    }
+    function dlClear(id){
+        var s = root.dlState
+        delete s[id]
+        root.dlState = s
+        root.dlStateChanged()
+    }
     function fnameFor(w){
         var ext = "jpg"
         var m = w.full.match(/\.([a-z0-9]+)(\?|$)/i)
         if(m) ext = m[1].toLowerCase()
         return "wallhaven-" + w.id + "." + ext
     }
-    function downloadOne(w){
+    function enqueue(w){
         if(!w || root.downloaded[w.id]) return
-        var fn = fnameFor(w)
-        dlProc.command = ["sh","-c","mkdir -p '"+root.cacheDir+"' '"+root.linkDir+"' && curl -sSL -m 180 -H 'User-Agent: wallshelf/1.0' '"+w.full.replace(/'/g,"'\\''")+"' -o '"+root.cacheDir+"/"+fn+"' && ln -sf '"+root.cacheDir+"/"+fn+"' '"+root.linkDir+"/"+fn+"' && echo DL_OK || echo DL_FAIL"]
-        dlProc.running = true
+        for(var i=0;i<root.dlQueue.length;i++) if(root.dlQueue[i].id === w.id) return
+        root.dlQueue = root.dlQueue.concat([w])
+        root.dlSet(w.id, 0, "queued")
+        pumpQueue()
     }
+    function downloadOne(w){ root.enqueue(w) }
     function downloadBulk(){
         var ids = Object.keys(root.selected)
-        if(!ids.length) return
-        var byId = {}
-        for(var i=0;i<root.results.length;i++) byId[root.results[i].id] = root.results[i]
-        var cmds = []
-        for(var j=0;j<ids.length;j++){
-            var w = byId[ids[j]]
-            if(!w || root.downloaded[w.id]) continue
-            var fn = fnameFor(w)
-            cmds.push("curl -sSL -m 180 -H 'User-Agent: wallshelf/1.0' '"+w.full.replace(/'/g,"'\\''")+"' -o '"+root.cacheDir+"/"+fn+"' && ln -sf '"+root.cacheDir+"/"+fn+"' '"+root.linkDir+"/"+fn+"'")
+        if(ids.length){
+            var byId = {}
+            for(var i=0;i<root.results.length;i++) byId[root.results[i].id] = root.results[i]
+            var n = 0
+            for(var j=0;j<ids.length;j++){ if(byId[ids[j]] && !root.downloaded[ids[j]]){ root.enqueue(byId[ids[j]]); n++ } }
+            root.selected = {}; root.selCount = 0
+            if(n) root.errorMsg = "Queued " + n + "…"
+            return
         }
-        if(!cmds.length){ root.selected = {}; root.selCount = 0; return }
-        root.errorMsg = "Downloading " + cmds.length + "…"
-        dlProc.command = ["sh","-c","mkdir -p '"+root.cacheDir+"' '"+root.linkDir+"' && (" + cmds.join(" ; ") + ") && echo DL_OK || echo DL_FAIL"]
+        var w = root.results[grid.currentIndex]
+        if(w) root.enqueue(w)
+    }
+    function pumpQueue(){
+        if(root.dlCurrent !== "" || !root.dlQueue.length) return
+        var w = root.dlQueue[0]
+        root.dlQueue = root.dlQueue.slice(1)
+        root.dlCurrent = w.id
+        root.dlActive = root.dlQueue.length + 1
+        var fn = fnameFor(w)
+        root.dlSet(w.id, 0, "downloading")
+        dlProc.command = ["sh","-c","mkdir -p '"+root.cacheDir+"' '"+root.linkDir+"' && curl -sSL --progress-bar -m 300 -H 'User-Agent: wallshelf/1.0' '"+w.full.replace(/'/g,"'\\''")+"' -o '"+root.cacheDir+"/"+fn+"' 2>&1 && ln -sf '"+root.cacheDir+"/"+fn+"' '"+root.linkDir+"/"+fn+"' && echo DL_OK_"+w.id+" || echo DL_FAIL_"+w.id]
         dlProc.running = true
     }
     Process {
         id: dlProc
         stdout: StdioCollector {
-            waitForEnd: true
+            onTextChanged: {
+                if(root.dlCurrent === "") return
+                var m = text.match(/(\d+(?:\.\d+)?)%[^%]*$/)
+                if(m) root.dlSet(root.dlCurrent, parseFloat(m[1]), "downloading")
+            }
             onStreamFinished: {
-                if(text.indexOf("DL_OK") !== -1){ root.errorMsg = ""; root.selected = {}; root.selCount = 0; root.refreshDownloaded(); if(root.tab === "downloaded") root.refreshLocal() }
-                else root.errorMsg = "Download failed"
+                var idm = text.match(/DL_(OK|FAIL)_(\S+)/)
+                var id = idm ? idm[2] : root.dlCurrent
+                if(idm && idm[1] === "OK"){
+                    root.dlClear(id)
+                    root.refreshDownloaded()
+                    if(root.tab === "downloaded") root.refreshLocal()
+                } else {
+                    root.dlSet(id, 0, "failed")
+                    root.errorMsg = "Download failed: " + id
+                }
+                root.dlCurrent = ""
+                root.dlActive = root.dlQueue.length
+                if(!root.dlQueue.length) root.errorMsg = ""
+                pumpQueue()
             }
         }
     }
@@ -357,7 +399,7 @@ PanelWindow {
                 else if(e.key === Qt.Key_D){ var p = root.results[root.previewIdx]; if(p) root.downloadOne(p); e.accepted = true }
                 return
             }
-            if(e.key === Qt.Key_D){ var w = root.results[grid.currentIndex]; if(w) root.downloadOne(w); e.accepted = true }
+            if(e.key === Qt.Key_D){ root.downloadBulk(); e.accepted = true }
             else if(e.key === Qt.Key_T){ var t = root.results[grid.currentIndex]; if(t) root.removeWall(t); e.accepted = true }
             else if(e.key === Qt.Key_V){ var v = root.results[grid.currentIndex]; if(v) root.toggleSelect(v); e.accepted = true }
             else if(e.key === Qt.Key_Left){ grid.moveCurrentIndexLeft(); e.accepted = true }
@@ -508,6 +550,29 @@ PanelWindow {
                         visible: !!root.downloaded[modelData.id]
                         color: colors.alpha(colors.primary, 0.9)
                         Text { anchors.centerIn: parent; text: "✓"; color: colors.alpha(colors.background, 1); font.family: "FiraCode Nerd Font"; font.pixelSize: 11; font.weight: Font.ExtraBold }
+                    }
+                    // selected checkbox (top-left) + progress overlay
+                    Rectangle {
+                        anchors.left: parent.left; anchors.top: parent.top; anchors.margins: 7
+                        width: 22; height: 22; radius: 6
+                        color: root.selected[modelData.id] ? colors.alpha(colors.primary, 0.9) : colors.alpha(colors.background, 0.6)
+                        border.width: 1; border.color: colors.alpha(colors.primary, 0.6)
+                        visible: root.selected[modelData.id] || thumbMa.containsMouse
+                        Text { anchors.centerIn: parent; text: "✓"; visible: root.selected[modelData.id]; color: colors.alpha(colors.background, 1); font.family: "FiraCode Nerd Font"; font.pixelSize: 11; font.weight: Font.ExtraBold }
+                        MouseArea { anchors.fill: parent; onClicked: root.toggleSelect(modelData) }
+                    }
+                    Rectangle {
+                        anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
+                        height: 26
+                        visible: !!root.dlState[modelData.id]
+                        color: colors.alpha(colors.background, 0.8)
+                        Rectangle {
+                            anchors.left: parent.left; anchors.top: parent.top; anchors.bottom: parent.bottom
+                            anchors.margins: 3; radius: 6
+                            width: Math.max(0, (parent.width - 6) * ((root.dlState[modelData.id] || {}).pct || 0) / 100)
+                            color: colors.alpha(colors.primary, 0.7)
+                        }
+                        Text { anchors.centerIn: parent; text: ((root.dlState[modelData.id] || {}).status === "queued") ? "queued" : (Math.round(((root.dlState[modelData.id] || {}).pct || 0)) + "%  ↓"); color: colors.foreground; font.family: "FiraCode Nerd Font"; font.pixelSize: 8; font.weight: Font.Bold }
                     }
                     MouseArea {
                         id: thumbMa; anchors.fill: parent; hoverEnabled: true

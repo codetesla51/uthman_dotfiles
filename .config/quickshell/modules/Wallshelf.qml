@@ -471,7 +471,7 @@ PanelWindow {
                     width: 34; height: 34; radius: 17
                     visible: root.loading || root.scanningLocal
                     color: colors.alpha(colors.primary, 0.15)
-                    Text { anchors.centerIn: parent; text: ""; color: colors.primary; font.family: "FiraCode Nerd Font"; font.pixelSize: 13
+                    Text { anchors.centerIn: parent; text: ""; color: colors.primary; font.family: "FiraCode Nerd Font"; font.pixelSize: 14
                         RotationAnimation on rotation { running: root.loading || root.scanningLocal; loops: Animation.Infinite; from: 0; to: 360; duration: 800 } }
                 }
                 // selected counter + bulk button
@@ -481,14 +481,6 @@ PanelWindow {
                     border.width: 1; border.color: colors.alpha(colors.primary, 0.4)
                     Text { anchors.centerIn: parent; text: "↓ " + root.selCount + " selected"; color: colors.primary; font.family: "FiraCode Nerd Font"; font.pixelSize: 9; font.weight: Font.ExtraBold }
                     MouseArea { id: bulkMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.downloadBulk() }
-                }
-                // close
-                Rectangle {
-                    width: 34; height: 34; radius: 17
-                    color: closeMa.containsMouse ? colors.alpha(colors.error, 0.18) : colors.alpha(colors.surface, 0.6)
-                    border.width: 1; border.color: colors.alpha(colors.outline, 0.15)
-                    Text { anchors.centerIn: parent; text: "✕"; color: closeMa.containsMouse ? colors.error : colors.foreground; font.family: "FiraCode Nerd Font"; font.pixelSize: 13; font.weight: Font.Bold }
-                    MouseArea { id: closeMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.open = false }
                 }
             }
 

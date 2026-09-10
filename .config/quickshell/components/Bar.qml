@@ -40,6 +40,7 @@ PanelWindow {
     PhoneLink { id: phoneLink; colors: palette }
     PluginMenu { id: pluginMenu; colors: palette }
     KeybindsPanel { id: keybindsPanel; colors: palette }
+    DriveHealth { id: driveHealth; colors: palette }
     MediaOsd { id: mediaOsd; colors: palette }
 
     CalendarPanel {

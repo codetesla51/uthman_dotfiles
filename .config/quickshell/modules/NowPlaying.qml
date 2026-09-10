@@ -8,6 +8,7 @@ import QtQuick.Layouts
 Item {
     id: root
     property var colors
+    signal hoverChanged(bool hovered)
     property var player: Mpris.players.values.find(function(p){ return p.isPlaying }) || Mpris.players.values[0] || null
     readonly property bool hasPlayer: player !== null
     readonly property bool isPlaying: hasPlayer && player.playbackState === MprisPlaybackState.Playing
@@ -19,7 +20,6 @@ Item {
         id: row
         anchors.centerIn: parent
         spacing: 9
-
         // -- album art: 26px, radius 8, hairline ring --
         Rectangle {
             visible: root.hasPlayer && player.trackArtUrl !== ""
@@ -135,5 +135,14 @@ Item {
                 MouseArea { id: nextMa; anchors.fill: parent; hoverEnabled: true; onClicked: if(root.hasPlayer && root.player.canGoNext) root.player.next() }
             }
         }
+    }
+
+    // hover-only catcher behind everything: acceptedButtons none, so transport
+    // clicks pass straight through while hover still tracks
+    MouseArea {
+        anchors.fill: parent
+        hoverEnabled: true
+        acceptedButtons: Qt.NoButton
+        onContainsMouseChanged: root.hoverChanged(containsMouse)
     }
 }

@@ -27,6 +27,17 @@ PanelWindow {
     property string weatherFeel: "25°"
     property string weatherLoc: "Lagos"
     property string weatherCond: "Partly cloudy"
+    property string weatherIcon: ""
+    function condGlyph(c) {
+        var t = String(c || "").toLowerCase()
+        if (t.indexOf("thunder") !== -1 || t.indexOf("storm") !== -1) return ""
+        if (t.indexOf("rain") !== -1 || t.indexOf("drizzle") !== -1 || t.indexOf("shower") !== -1) return ""
+        if (t.indexOf("snow") !== -1 || t.indexOf("sleet") !== -1 || t.indexOf("hail") !== -1) return ""
+        if (t.indexOf("fog") !== -1 || t.indexOf("mist") !== -1 || t.indexOf("haze") !== -1) return ""
+        if (t.indexOf("clear") !== -1 || t.indexOf("sun") !== -1) return ""
+        if (t.indexOf("cloud") !== -1 || t.indexOf("overcast") !== -1) return ""
+        return ""
+    }
 
     property var player: Mpris.players.values.find(function(p){ return p.isPlaying }) || Mpris.players.values[0] || null
     readonly property bool hasPlayer: player !== null
@@ -65,6 +76,7 @@ PanelWindow {
         {app: "spotify", secs: 900}
     ]
     property var activityLast7: []
+    property real activityMax: 1
     function fmtDurShort(s){ if(s<60) return s+"s"; var m=Math.floor(s/60); if(m<60) return m+"m"; var h=Math.floor(m/60); var rm=m%60; return h+"h"+(rm>0?" "+rm+"m":"") }
     function loadTopActivities(){
         try {
@@ -94,14 +106,50 @@ PanelWindow {
                 var ds=Qt.formatDate(d,"yyyy-MM-dd")
                 var s=byDay[ds]||0
                 if(s>maxS) maxS=s
-                days.push({date:d, secs:s})
+                days.push({date:d, dow:"MTWTFSS"[(d.getDay()+6)%7], secs:s, today: ds===todayStr})
             }
             // store normalized
             activityLast7=days
+            activityMax=maxS
         } catch(e){ activityLast7=[] }
     }
 
+    // mini calendar state: offset in months from today, rebuilt on open and on flip
+    property int calOffset: 0
+    property var calCells: []
+    property string calTitle: ""
+    function rebuildCal() {
+        var now = new Date()
+        var base = new Date(now.getFullYear(), now.getMonth() + root.calOffset, 1)
+        var y = base.getFullYear(), m = base.getMonth()
+        var first = (new Date(y, m, 1).getDay() + 6) % 7
+        var dim = new Date(y, m + 1, 0).getDate()
+        var cells = []
+        for (var i = 0; i < first; i++) cells.push({ d: 0, today: false })
+        for (var d = 1; d <= dim; d++) cells.push({ d: d, today: root.calOffset === 0 && d === now.getDate() })
+        root.calCells = cells
+        root.calTitle = Qt.formatDate(base, "MMMM yyyy")
+    }
     function setBrightness(v){ Quickshell.execDetached(["sh","-c","brightnessctl set "+Math.round(v*100)+"% >/dev/null 2>&1 &"]) }
+    Process {
+        id: weatherProc
+        command: ["sh", "-c", "curl -s --max-time 8 'wttr.in/Lagos?format=j1' 2>/dev/null"]
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: {
+                try {
+                    var j = JSON.parse(text)
+                    var cur = j.current_condition[0]
+                    root.weatherTemp = cur.temp_C + "°"
+                    root.weatherFeel = cur.FeelsLikeC + "°"
+                    root.weatherCond = cur.weatherDesc[0].value
+                    root.weatherIcon = root.condGlyph(root.weatherCond)
+                    var area = j.nearest_area[0]
+                    if (area) root.weatherLoc = area.areaName[0].value
+                } catch (e) {}
+            }
+        }
+    }
     function setVolume(v){ Quickshell.execDetached(["sh","-c","wpctl set-volume @DEFAULT_AUDIO_SINK@ "+v.toFixed(2)+" >/dev/null 2>&1 || pactl set-sink-volume @DEFAULT_SINK@ "+Math.round(v*100)+"% >/dev/null 2>&1 &"]) }
 
     anchors { top: true; bottom: true; left: true; right: true }
@@ -114,7 +162,7 @@ PanelWindow {
 
     IpcHandler { target: "controlcenter"; function toggle(): void { root.open = !root.open } }
 
-    onOpenChanged: if(open) { ghUserProc.running=true; btProc.running=true; Qt.callLater(function(){ card.forceActiveFocus() }) }
+    onOpenChanged: if(open) { ghUserProc.running=true; btProc.running=true; weatherProc.running=true; root.calOffset=0; root.rebuildCal(); root.loadActivityLast7(); Qt.callLater(function(){ card.forceActiveFocus() }) }
 
     // pet actions loader — full behavior
     FileView {
@@ -196,9 +244,9 @@ PanelWindow {
 
     Rectangle {
         anchors.fill: parent
-        color: colors.alpha(colors.background, root.open ? 0.28 : 0)
+        color: colors.alpha(colors.background, root.open ? 0.38 : 0)
         Behavior on color { ColorAnimation { duration: 200 } }
-        MouseArea { anchors.fill: parent; onClicked: root.toggleBt(index) }
+        MouseArea { anchors.fill: parent }
     }
 
     Rectangle {
@@ -206,14 +254,14 @@ PanelWindow {
         anchors.centerIn: parent
         width: 860
         height: 700
-        radius: 20
-        color: colors.alpha(colors.background, 0.92)
+        radius: 24
+        color: colors.alpha(colors.background, 0.62)
         border.width: 1
-        border.color: colors.alpha(colors.outline, 0.12)
+        border.color: colors.alpha(colors.outline, 0.18)
         scale: root.open ? 1 : 0.97
         opacity: root.open ? 1 : 0
-        Behavior on scale { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
-        Behavior on opacity { NumberAnimation { duration: 180 } }
+        Behavior on scale { NumberAnimation { duration: 240; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] } }
+        Behavior on opacity { NumberAnimation { duration: 200; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] } }
         focus: root.open
         Keys.onEscapePressed: root.open = false
 
@@ -244,8 +292,8 @@ PanelWindow {
                     Layout.fillWidth: true; Layout.fillHeight: true
                     Layout.preferredWidth: 540
                     radius: 14
-                    color: colors.alpha(colors.surface, 0.55)
-                    border.width: 1; border.color: colors.alpha(colors.outline, 0.12)
+                    color: colors.alpha(colors.surface, 0.38)
+                    border.width: 1; border.color: colors.alpha(colors.outline, 0.18)
                     ColumnLayout {
                         anchors.fill: parent; anchors.margins: 10; spacing: 6
                         Text { text: "NOW PLAYING"; color: colors.alpha(colors.outline,0.6); font.family:"FiraCode Nerd Font"; font.pixelSize: 7; font.weight: Font.Bold; font.letterSpacing: 1.2 }
@@ -254,7 +302,7 @@ PanelWindow {
                             Rectangle {
                                 Layout.preferredWidth: 64; Layout.preferredHeight: 64; radius: 10
                                 color: colors.alpha(colors.surfaceVariant, 0.5)
-                                border.width: 1; border.color: colors.alpha(colors.outline, 0.12)
+                                border.width: 1; border.color: colors.alpha(colors.outline, 0.18)
                                 clip: true
                                 Image {
                                     anchors.fill: parent
@@ -332,14 +380,14 @@ PanelWindow {
                     Layout.preferredWidth: 320; Layout.maximumWidth: 340
                     Layout.fillWidth: false; Layout.fillHeight: true
                     radius: 14
-                    color: colors.alpha(colors.surface, 0.55)
-                    border.width: 1; border.color: colors.alpha(colors.outline, 0.12)
+                    color: colors.alpha(colors.surface, 0.38)
+                    border.width: 1; border.color: colors.alpha(colors.outline, 0.18)
                     ColumnLayout {
                         anchors.centerIn: parent; width: parent.width - 20; spacing: 4
                         Text { text: "WEATHER"; color: colors.alpha(colors.outline,0.6); font.family:"FiraCode Nerd Font"; font.pixelSize: 7; font.weight: Font.Bold; font.letterSpacing: 1.2 }
                         RowLayout {
                             Layout.fillWidth: true; spacing: 8
-                            Text { text: ""; color: colors.tertiary; font.family:"FiraCode Nerd Font"; font.pixelSize: 28 }
+                            Text { text: root.weatherIcon !== "" ? root.weatherIcon : ""; color: colors.tertiary; font.family:"FiraCode Nerd Font"; font.pixelSize: 28 }
                             ColumnLayout {
                                 spacing: 1
                                 Text { text: root.weatherTemp; color: colors.foreground; font.family:"FiraCode Nerd Font"; font.pixelSize: 22; font.weight: Font.ExtraBold }
@@ -361,8 +409,8 @@ PanelWindow {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 108
                 radius: 14
-                color: colors.alpha(colors.surface, 0.55)
-                border.width: 1; border.color: colors.alpha(colors.outline, 0.12)
+                color: colors.alpha(colors.surface, 0.38)
+                border.width: 1; border.color: colors.alpha(colors.outline, 0.18)
                 RowLayout {
                     anchors.fill: parent; anchors.margins: 10
                     spacing: 10
@@ -408,6 +456,7 @@ PanelWindow {
                                 model: root.btDevices
                                 delegate: Rectangle {
                                     required property var modelData
+                                    required property int index
                                     Layout.fillWidth: true; height: 30; radius: 8
                                     color: modelData.connected ? colors.alpha(colors.tertiary,0.12) : colors.alpha(colors.surface,0.45)
                                     border.width: 1; border.color: modelData.connected ? colors.alpha(colors.tertiary,0.35) : colors.alpha(colors.outline,0.12)
@@ -430,7 +479,7 @@ PanelWindow {
                                             color: modelData.connected ? colors.alpha(colors.surface,0.6) : colors.alpha(colors.primary,0.14)
                                             border.width: 1; border.color: modelData.connected?colors.alpha(colors.outline,0.12):colors.alpha(colors.primary,0.35)
                                             Text { anchors.centerIn: parent; text: modelData.connected?"Connected":"Connect"; color: modelData.connected?colors.alpha(colors.outline,0.7):colors.primary; font.family:"FiraCode Nerd Font"; font.pixelSize: 7; font.weight: Font.Bold }
-                                            MouseArea { anchors.fill: parent; onClicked: {} }
+                                            MouseArea { anchors.fill: parent; onClicked: root.toggleBt(index) }
                                         }
                                     }
                                 }
@@ -496,13 +545,13 @@ PanelWindow {
             // MIDDLE — Pet (alive, full behavior) | Activity | Calendar
             RowLayout {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 128
+                Layout.preferredHeight: 142
                 spacing: 10
                 Rectangle {
                     Layout.fillWidth: true; Layout.fillHeight: true
                     radius: 14
-                    color: colors.alpha(colors.surface, 0.55)
-                    border.width: 1; border.color: colors.alpha(colors.outline, 0.12)
+                    color: colors.alpha(colors.surface, 0.38)
+                    border.width: 1; border.color: colors.alpha(colors.outline, 0.18)
                     clip: true
                     ColumnLayout {
                         anchors.fill: parent; anchors.margins: 8; spacing: 4
@@ -547,28 +596,35 @@ PanelWindow {
                 Rectangle {
                     Layout.fillWidth: true; Layout.fillHeight: true
                     radius: 14
-                    color: colors.alpha(colors.surface, 0.55)
-                    border.width: 1; border.color: colors.alpha(colors.outline, 0.12)
+                    color: colors.alpha(colors.surface, 0.38)
+                    border.width: 1; border.color: colors.alpha(colors.outline, 0.18)
                     ColumnLayout {
                         anchors.fill: parent; anchors.margins: 8; spacing: 4
                         Text { text: "ACTIVITY — 7 DAYS"; color: colors.alpha(colors.outline,0.6); font.family:"FiraCode Nerd Font"; font.pixelSize: 7; font.weight: Font.Bold; font.letterSpacing: 1.2 }
                         RowLayout {
                             Layout.fillWidth: true; Layout.fillHeight: true; spacing: 4
                             Repeater {
-                                model: 7
+                                model: root.activityLast7
                                 delegate: ColumnLayout {
+                                    required property var modelData
                                     required property int index
                                     Layout.fillWidth: true; Layout.fillHeight: true; spacing: 3
                                     Rectangle {
                                         Layout.fillWidth: true; Layout.fillHeight: true; radius: 6
-                                        color: colors.alpha(colors.primary, 0.15 + Math.random()*0.5)
+                                        color: colors.alpha(colors.primary, 0.12)
                                         Rectangle {
                                             anchors.bottom: parent.bottom
-                                            width: parent.width; height: parent.height * (0.25 + Math.random()*0.6)
+                                            width: parent.width
+                                            height: {
+                                                var s = modelData.secs || 0
+                                                if (s <= 0) return 0
+                                                return Math.max(5, parent.height * s / Math.max(1, root.activityMax))
+                                            }
                                             radius: 6; color: colors.primary; opacity: 0.85
+                                            Behavior on height { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
                                         }
                                     }
-                                    Text { text: ["M","T","W","T","F","S","S"][index]; color: colors.alpha(colors.outline,0.6); font.family:"FiraCode Nerd Font"; font.pixelSize: 7; Layout.alignment: Qt.AlignHCenter }
+                                    Text { text: modelData.dow; color: modelData.today ? colors.primary : colors.alpha(colors.outline,0.6); font.family:"FiraCode Nerd Font"; font.pixelSize: 7; font.weight: modelData.today ? Font.Bold : Font.Normal; Layout.alignment: Qt.AlignHCenter }
                                 }
                             }
                         }
@@ -577,25 +633,37 @@ PanelWindow {
                 Rectangle {
                     Layout.fillWidth: true; Layout.fillHeight: true
                     radius: 14
-                    color: colors.alpha(colors.surface, 0.55)
-                    border.width: 1; border.color: colors.alpha(colors.outline, 0.12)
+                    color: colors.alpha(colors.surface, 0.38)
+                    border.width: 1; border.color: colors.alpha(colors.outline, 0.18)
                     ColumnLayout {
                         anchors.fill: parent; anchors.margins: 8; spacing: 4
                         RowLayout {
                             Layout.fillWidth: true
-                            Text { text: Qt.formatDate(new Date(), "MMMM yyyy"); color: colors.foreground; font.family:"FiraCode Nerd Font"; font.pixelSize: 10; font.weight: Font.ExtraBold; Layout.fillWidth: true }
-                            Rectangle { width: 20; height: 20; radius: 10; color: colors.alpha(colors.primary,0.12); Text { anchors.centerIn: parent; text: "›"; color: colors.primary; font.pixelSize: 11 } }
+                            spacing: 4
+                            Rectangle {
+                                width: 20; height: 20; radius: 10
+                                color: prevCalMa.containsMouse ? colors.alpha(colors.primary,0.18) : colors.alpha(colors.primary,0.08)
+                                Text { anchors.centerIn: parent; text: "‹"; color: colors.primary; font.pixelSize: 11 }
+                                MouseArea { id: prevCalMa; anchors.fill: parent; hoverEnabled: true; onClicked: { root.calOffset -= 1; root.rebuildCal() } }
+                            }
+                            Text { text: root.calTitle; color: colors.foreground; font.family:"FiraCode Nerd Font"; font.pixelSize: 10; font.weight: Font.ExtraBold; Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter }
+                            Rectangle {
+                                width: 20; height: 20; radius: 10
+                                color: nextCalMa.containsMouse ? colors.alpha(colors.primary,0.18) : colors.alpha(colors.primary,0.08)
+                                Text { anchors.centerIn: parent; text: "›"; color: colors.primary; font.pixelSize: 11 }
+                                MouseArea { id: nextCalMa; anchors.fill: parent; hoverEnabled: true; onClicked: { root.calOffset += 1; root.rebuildCal() } }
+                            }
                         }
                         GridLayout {
                             Layout.fillWidth: true; columns: 7; rowSpacing: 1; columnSpacing: 3
                             Repeater { model: ["M","T","W","T","F","S","S"]; Text { text: modelData; color: colors.alpha(colors.outline,0.5); font.family:"FiraCode Nerd Font"; font.pixelSize: 6; font.weight: Font.Bold; Layout.alignment: Qt.AlignHCenter } }
                             Repeater {
-                                model: 30
+                                model: root.calCells
                                 delegate: Rectangle {
-                                    required property int index
-                                    Layout.fillWidth: true; Layout.preferredHeight: 15; radius: 7
-                                    color: (index+1)===new Date().getDate() ? colors.primary : "transparent"
-                                    Text { anchors.centerIn: parent; text: index+1; color: (index+1)===new Date().getDate() ? colors.background : colors.alpha(colors.foreground,0.8); font.family:"FiraCode Nerd Font"; font.pixelSize: 8; font.weight: (index+1)===new Date().getDate() ? Font.Bold : Font.Normal }
+                                    required property var modelData
+                                    Layout.fillWidth: true; Layout.preferredHeight: 13; radius: 6
+                                    color: modelData.today ? colors.primary : "transparent"
+                                    Text { anchors.centerIn: parent; visible: modelData.d > 0; text: modelData.d; color: modelData.today ? colors.background : colors.alpha(colors.foreground,0.8); font.family:"FiraCode Nerd Font"; font.pixelSize: 8; font.weight: modelData.today ? Font.Bold : Font.Normal }
                                 }
                             }
                         }

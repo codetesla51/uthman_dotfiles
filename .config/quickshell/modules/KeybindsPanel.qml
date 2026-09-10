@@ -49,6 +49,7 @@ PanelWindow {
         {key:"SUPER Alt + W", desc:"Wallpaper store", cat:"System", disp:"exec", arg:"quickshell -p ~/.config/quickshell ipc call wallshelf toggle"},
         {key:"SUPER Alt + N", desc:"PDF library", cat:"System", disp:"exec", arg:"quickshell -p ~/.config/quickshell ipc call pdfviewer toggle"},
         {key:"SUPER Shift + Space", desc:"Toggle bar sides", cat:"System", disp:"exec", arg:"quickshell -p ~/.config/quickshell ipc call bar toggle"},
+        {key:"SUPER Alt + Space", desc:"Island style", cat:"System", disp:"exec", arg:"quickshell -p ~/.config/quickshell ipc call bar toggleIsland"},
         {key:"SUPER Alt + T", desc:"Screen time", cat:"System", disp:"exec", arg:"quickshell -p ~/.config/quickshell ipc call screentime toggle"},
         {key:"SUPER Alt + K", desc:"Phone link", cat:"System", disp:"exec", arg:"quickshell -p ~/.config/quickshell ipc call phonelink toggle"},
         {key:"SUPER Alt + V", desc:"Audio visualizer", cat:"System", disp:"exec", arg:"quickshell -p ~/.config/quickshell ipc call visualizer toggle"},

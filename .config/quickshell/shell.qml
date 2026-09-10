@@ -4,7 +4,9 @@ import "components"
 import "modules"
 
 ShellRoot {
-    Bar {}
+    Bar { id: mainBar }
+
+    NowPlayingCard { colors: barPalette; hovered: mainBar.musicHover }
 
     PowerMenu { colors: barPalette }
     AppLauncher { colors: barPalette }

@@ -50,7 +50,21 @@ PanelWindow {
 
     // bar sides toggle — SUPER SHIFT SPACE leaves middle island
     property bool barsVisible: true
-    IpcHandler { target: "bar"; function toggle(): void { bar.barsVisible = !bar.barsVisible } }
+    // center style — SUPER ALT SPACE flips Dynamic Island against the trapezoid tab
+    property bool dynamicIsland: true
+    // island hover swells the NowPlaying glass card; the linger timer keeps it from
+    // flickering when the cursor cuts the corner between island and card
+    property bool musicHover: false
+    Timer {
+        id: musicLinger
+        interval: 250
+        onTriggered: bar.musicHover = false
+    }
+    IpcHandler {
+        target: "bar"
+        function toggle(): void { bar.barsVisible = !bar.barsVisible }
+        function toggleIsland(): void { bar.dynamicIsland = !bar.dynamicIsland }
+    }
 
     // calendar — manual only, you control open/close (click clock or Super+C, Esc/backdrop to close)
     property bool calendarPinned: false
@@ -72,19 +86,32 @@ PanelWindow {
             Workspaces { colors: bar.colors }
         }
 
-        // middle cluster — true trapezoid tab (\_____/), flush with physical screen top.
-        // No border: the fill alone defines the shape, slanted sides carved by Shape.
         Item {
             id: island
             anchors { top: parent.top; horizontalCenter: parent.horizontalCenter }
-            width: islandRow.implicitWidth + 40      // 20px padding per side (slant eats into it)
-            height: 54                               // 46px pill line + 8px hang below
+            anchors.topMargin: bar.dynamicIsland ? 7 : 0
+            width: islandRow.implicitWidth + (bar.dynamicIsland ? 36 : 40)
+            height: bar.dynamicIsland ? 40 : 54
+            Behavior on anchors.topMargin { NumberAnimation { duration: 320; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] } }
+            Behavior on height { NumberAnimation { duration: 320; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] } }
             // trapezoid geometry shared by fill + border — fixed rounding
             readonly property real inset: 18         // horizontal inset of bottom edge
             readonly property real cr: 12            // corner radius — reverted from 16, 16 was too bulbous with inset 20
-            Behavior on width { NumberAnimation { duration: 280; easing.type: Easing.OutCubic } }
+            Behavior on width { NumberAnimation { duration: 380; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] } }
 
+            // Dynamic-Island capsule: floating black glass, no border
+            Rectangle {
+                opacity: bar.dynamicIsland ? 1 : 0
+                Behavior on opacity { NumberAnimation { duration: 220; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] } }
+                anchors.fill: parent
+                radius: height / 2
+                color: colors.alpha(colors.background, 0.82)
+            }
+
+            // trapezoid tab (\_____/) for the classic look
             Shape {
+                opacity: bar.dynamicIsland ? 0 : 1
+                Behavior on opacity { NumberAnimation { duration: 220; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] } }
                 anchors.fill: parent
                 antialiasing: true
                 ShapePath {
@@ -116,8 +143,9 @@ PanelWindow {
             RowLayout {
                 id: islandRow
                 anchors.centerIn: parent
-                anchors.verticalCenterOffset: -1
-                spacing: 14
+                anchors.verticalCenterOffset: bar.dynamicIsland ? 0 : -1
+                Behavior on anchors.verticalCenterOffset { NumberAnimation { duration: 220; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] } }
+                spacing: 12
                 // clock small left
                 Clock {
                     id: clockItem
@@ -132,6 +160,10 @@ PanelWindow {
                     Layout.fillWidth: true
                     Layout.alignment: Qt.AlignHCenter
                     Layout.maximumWidth: 340
+                    onHoverChanged: function(h) {
+                        if (h) { musicLinger.stop(); bar.musicHover = true }
+                        else musicLinger.restart()
+                    }
                 }
                 // bell small right
                 BellButton {

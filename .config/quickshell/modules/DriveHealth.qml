@@ -350,7 +350,7 @@ FloatingWindow {
         var f = Quickshell.env("HOME") + "/.cache/drive-speed-test.tmp"
         var q = function (s) { return "'" + String(s).replace(/'/g, "'\\''") + "'" }
         root.speedFile = f
-        writeProc.command = ["sh", "-c", "dd if=/dev/zero of=" + q(f) + " bs=1M count=256 oflag=direct status=progress"]
+        writeProc.command = ["sh", "-c", "dd if=/dev/zero of=" + q(f) + " bs=1M count=1024 oflag=direct status=progress"]
         writeProc.running = true
     }
     // write phase streams dd status=progress on stderr; the gauge paints live
@@ -612,7 +612,7 @@ FloatingWindow {
                     MouseArea { id: speedMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.runSpeed() }
                 }
                 Text {
-                    text: root.speedMsg
+                    text: root.speedBusy ? ("↓ " + root.fmtRate(root.liveReadMBs) + "   ↑ " + root.fmtRate(root.liveWriteMBs)) : root.speedMsg
                     color: colors.alpha(colors.foreground, 0.8)
                     font.family: "FiraCode Nerd Font"
                     font.pixelSize: 10
@@ -653,7 +653,7 @@ FloatingWindow {
                 }
             }
 
-            // speedometer
+            // speedometer: live during tests (dd streams 1/sec, file is 1GB so the sweep is visible)
             Canvas {
                 id: speedo
                 Layout.fillWidth: true
@@ -670,9 +670,9 @@ FloatingWindow {
                     ctx.clearRect(0, 0, W, H)
                     var cx = W / 2, cy = H - 10
                     var R = Math.min(W / 2 - 30, H - 24)
-                    var maxV = Math.max(600, root.readMBs * 1.2, root.writeMBs * 1.2)
                     var dw = root.speedBusy ? root.liveWriteMBs : root.writeMBs
                     var dr = root.speedBusy ? root.liveReadMBs : root.readMBs
+                    var maxV = Math.max(600, dr * 1.2, dw * 1.2)
                     ctx.beginPath()
                     ctx.arc(cx, cy, R, Math.PI, 0)
                     ctx.strokeStyle = colors.alpha(colors.outline, 0.25)

@@ -1,0 +1,2 @@
+#!/bin/sh
+ANDROID_ROOT=/system ANDROID_DATA=/data CLASSPATH=/data/local/tmp/clip.jar exec app_process /system/bin Clip "$@"

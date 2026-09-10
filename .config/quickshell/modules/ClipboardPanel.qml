@@ -41,7 +41,7 @@ PanelWindow {
 
     property int navIndex: 0
     property bool allowHover: false
-    onOpenChanged: { if(open){ filter=""; filterField.text=""; navIndex = 0; allowHover = false; Qt.callLater(function(){ filterField.forceActiveFocus() }) ; refresh() } }
+    onOpenChanged: { if(open){ slide.y = 20; slideIn.restart(); filter=""; filterField.text=""; navIndex = 0; allowHover = false; Qt.callLater(function(){ filterField.forceActiveFocus() }) ; refresh() } }
     onFilterChanged: navIndex = 0
     onEntriesChanged: navIndex = 0
 
@@ -93,7 +93,6 @@ PanelWindow {
         Keys.onEscapePressed: root.open=false
         transform: Translate { id: slide }
         Component.onCompleted: slide.y=20
-        onVisibleChanged: if(visible){ slide.y=20; slideIn.restart(); filterField.forceActiveFocus() }
         ParallelAnimation {
             id: slideIn
             NumberAnimation { target: slide; property: "y"; from:20; to:0; duration:250; easing.type: Easing.OutCubic }

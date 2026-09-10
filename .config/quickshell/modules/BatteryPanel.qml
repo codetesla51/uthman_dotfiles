@@ -111,6 +111,9 @@ PanelWindow {
     focusable: true
     IpcHandler { target: "battery"; function toggle(): void { root.open = !root.open } }
 
+    // see WifiPanel: card.onVisibleChanged never fires on window toggle.
+    onOpenChanged: if (root.open) { slide.x = card.width + 8; slideIn.restart() }
+
     Rectangle {
         anchors.fill: parent
         color: colors.alpha(colors.background, root.open?0.25:0)
@@ -131,7 +134,6 @@ PanelWindow {
         Keys.onEscapePressed: root.open=false
         transform: Translate { id: slide }
         Component.onCompleted: slide.x=width+8
-        onVisibleChanged: { if(visible){ slide.x=width+8; slideIn.restart() } }
         ParallelAnimation { id: slideIn; NumberAnimation { target: slide; property: "x"; from: card.width+8; to:0; duration: 250; easing.type: Easing.OutCubic } }
 
         ColumnLayout {

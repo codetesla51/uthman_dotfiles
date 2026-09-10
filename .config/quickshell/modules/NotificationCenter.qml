@@ -26,6 +26,9 @@ Item {
     function togglePanel() { panelOpen = !panelOpen }
     function toggleDnd() { dnd = !dnd }
 
+    // see WifiPanel: drawer.onVisibleChanged never fires on window toggle.
+    onPanelOpenChanged: if (panelOpen) { drawerSlide.x = drawer.width + 8; slideIn.restart() }
+
     function addToArchive(n) {
         let acts = []
         let alist = n.actions || []
@@ -163,12 +166,6 @@ Item {
 
             transform: Translate { id: drawerSlide }
             Component.onCompleted: drawerSlide.x = width + 8
-            onVisibleChanged: {
-                if (visible) {
-                    drawerSlide.x = width + 8
-                    slideIn.restart()
-                }
-            }
 
             ParallelAnimation {
                 id: slideIn

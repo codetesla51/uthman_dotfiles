@@ -10,7 +10,8 @@ DIR=~/Videos/Recordings
 mkdir -p "$DIR"
 FILE="$DIR/rec-$(date +%Y%m%d-%H%M%S).mp4"
 if command -v gpu-screen-recorder >/dev/null; then
-  setsid gpu-screen-recorder -w eDP-1 -a default_output -o "$FILE" >/dev/null 2>&1 < /dev/null &
+  # -ac aac: opus (the default) in .mp4 is rejected by Twitter/Instagram/WhatsApp upload pipelines
+  setsid gpu-screen-recorder -w eDP-1 -a default_output -ac aac -o "$FILE" >/dev/null 2>&1 < /dev/null &
   notify-send -u normal 'Recording started' 'SUPER+R again to stop' 2>/dev/null
 elif command -v wf-recorder >/dev/null; then
   setsid wf-recorder -f "$FILE" >/dev/null 2>&1 < /dev/null &

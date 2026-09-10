@@ -18,7 +18,7 @@ PanelWindow {
     focusable: true
     IpcHandler { target: "keybinds"; function toggle(): void { root.open = !root.open } }
 
-    onOpenChanged: if(open){ filter=""; searchField.text=""; searchField.forceActiveFocus() }
+    onOpenChanged: if(open){ slide.y = 20; slideIn.restart(); filter=""; searchField.text=""; searchField.forceActiveFocus() }
 
     property var binds: [
         {key:"SUPER + Return", desc:"Terminal", cat:"Apps", disp:"exec", arg:"uwsm-app -- ghostty"},
@@ -135,7 +135,6 @@ PanelWindow {
         Keys.onUpPressed: { list.currentIndex = Math.max(list.currentIndex-1, 0); list.positionViewAtIndex(list.currentIndex, ListView.Contain) }
         transform: Translate { id: slide }
         Component.onCompleted: slide.y=20
-        onVisibleChanged: if(visible){ slide.y=20; slideIn.restart() }
         ParallelAnimation {
             id: slideIn
             NumberAnimation { target: slide; property: "y"; from:20; to:0; duration:260; easing.type: Easing.OutCubic }

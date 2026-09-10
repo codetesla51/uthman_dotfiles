@@ -58,7 +58,8 @@ PanelWindow {
     Timer { id: applyTimer; interval: 900; onTriggered: root.applying = false }
 
 
-    onOpenChanged: if(open) refresh()
+    // see WifiPanel: card.onVisibleChanged never fires on window toggle.
+    onOpenChanged: if(open){ slide.y = 20; slideIn.restart(); refresh() }
     onWallsChanged: {
         // sync currentIndex to currentWall
         for(var i=0;i<walls.length;i++) if(walls[i].path===currentWall) { currentIndex=i; return }
@@ -136,7 +137,6 @@ PanelWindow {
         Keys.onEnterPressed: root.setWall(walls[currentIndex].path)
         transform: Translate { id: slide }
         Component.onCompleted: slide.y=20
-        onVisibleChanged: if(visible){ slide.y=20; slideIn.restart() }
         ParallelAnimation {
             id: slideIn
             NumberAnimation { target: slide; property: "y"; from:20; to:0; duration:260; easing.type: Easing.OutCubic }

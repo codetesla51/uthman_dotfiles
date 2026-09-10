@@ -103,6 +103,14 @@ PanelWindow {
         function toggle(): void { root.open = !root.open }
     }
 
+    // entrance animation lives here, not on the card: the card's own `visible`
+    // never changes when this window toggles, so card.onVisibleChanged never fires
+    // and the first open after a reload left the card parked off-screen.
+    onOpenChanged: {
+        if (root.open) { slide.x = card.width + 8; slideIn.restart() }
+        else { root.connectingSsid = ""; root.errorText = "" }
+    }
+
     Timer {
         id: scanTimeout
         interval: 4000
@@ -159,15 +167,6 @@ PanelWindow {
 
         transform: Translate { id: slide }
         Component.onCompleted: slide.x = width + 8
-        onVisibleChanged: {
-            if (visible) {
-                slide.x = width + 8
-                slideIn.restart()
-            } else {
-                root.connectingSsid = ""
-                root.errorText = ""
-            }
-        }
         ParallelAnimation {
             id: slideIn
             NumberAnimation { target: slide; property: "x"; from: card.width + 8; to: 0; duration: 250; easing.type: Easing.OutCubic }

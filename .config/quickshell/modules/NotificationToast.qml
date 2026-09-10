@@ -85,7 +85,7 @@ Rectangle {
             Text {
                 text: root.alive ? notification.appName : ""
                 color: colors.alpha(colors.outline, 0.9)
-                font.family: "FiraCode Nerd Font"
+                font.family: colors.fontSans
                 font.pixelSize: 10
                 Layout.fillWidth: true
                 elide: Text.ElideRight
@@ -99,7 +99,7 @@ Rectangle {
                     anchors.centerIn: parent
                     text: "󰅖"
                     color: closeMouse.containsMouse ? colors.foreground : colors.alpha(colors.outline, 0.7)
-                    font.family: "FiraCode Nerd Font"
+                    font.family: colors.fontSans
                     font.pixelSize: 12
                 }
 
@@ -134,7 +134,7 @@ Rectangle {
                 Text {
                     text: root.alive ? (notification.summary || "").replace(/<[^>]*>/g, "").substring(0, 120) : ""
                     color: colors.foreground
-                    font.family: "FiraCode Nerd Font"
+                    font.family: colors.fontSans
                     font.pixelSize: 12
                     font.weight: Font.Bold
                     Layout.fillWidth: true
@@ -147,7 +147,7 @@ Rectangle {
                     visible: root.alive && notification.body !== ""
                     text: root.alive ? (notification.body || "").replace(/<[^>]*>/g, "").substring(0, 200) : ""
                     color: colors.on_surface
-                    font.family: "FiraCode Nerd Font"
+                    font.family: colors.fontSans
                     font.pixelSize: 11
                     font.letterSpacing: 0.3
                     Layout.fillWidth: true
@@ -184,7 +184,7 @@ Rectangle {
                         anchors.centerIn: parent
                         text: tAct.modelData.text || ""
                         color: colors.foreground
-                        font.family: "FiraCode Nerd Font"
+                        font.family: colors.fontSans
                         font.pixelSize: 10
                         font.weight: Font.DemiBold
                     }
@@ -211,7 +211,7 @@ Rectangle {
                 width: 68; height: 22; radius: 11
                 color: saveMa.containsMouse ? colors.alpha(colors.primary,0.18) : colors.alpha(colors.surfaceVariant,0.35)
                 border.width: 1; border.color: colors.alpha(colors.outline,0.2)
-                Text { anchors.centerIn: parent; text: "Save"; color: colors.foreground; font.family:"FiraCode Nerd Font"; font.pixelSize: 10 }
+                Text { anchors.centerIn: parent; text: "Save"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 10 }
                 MouseArea {
                     id: saveMa; anchors.fill: parent; hoverEnabled:true
                     onClicked: {

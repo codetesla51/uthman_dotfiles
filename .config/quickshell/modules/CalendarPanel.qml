@@ -142,7 +142,7 @@ PanelWindow {
                         horizontalAlignment: Text.AlignHCenter
                         text: Qt.formatDate(root.currentMonth, "MMMM yyyy")
                         color: colors.secondary
-                        font.family: "FiraCode Nerd Font"
+                        font.family: colors.fontSans
                         font.pixelSize: 15
                         font.weight: Font.ExtraBold
                     }
@@ -156,7 +156,7 @@ PanelWindow {
                         width: 56; height: 26; radius: 13
                         color: todayMa.containsMouse ? colors.alpha(colors.primary,0.15) : colors.alpha(colors.surface,0.5)
                         border.width:1; border.color: colors.alpha(colors.primary,0.3)
-                        Text { anchors.centerIn: parent; text: "Today"; color: colors.primary; font.family:"FiraCode Nerd Font"; font.pixelSize: 9; font.weight: Font.DemiBold }
+                        Text { anchors.centerIn: parent; text: "Today"; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.DemiBold }
                         MouseArea { id: todayMa; anchors.fill: parent; hoverEnabled:true; onClicked: { root.currentMonth=new Date(new Date().getFullYear(), new Date().getMonth(),1); root.selectedDate=new Date() } }
                     }
                 }
@@ -173,7 +173,7 @@ PanelWindow {
                         horizontalAlignment: Text.AlignHCenter
                         text: modelData
                         color: colors.tertiary
-                        font.family: "FiraCode Nerd Font"
+                        font.family: colors.fontSans
                         font.pixelSize: 9
                         font.weight: Font.Bold
                         font.letterSpacing: 0.5
@@ -217,7 +217,7 @@ PanelWindow {
                             Text {
                                 text: d.getDate()
                                 color: isSelected ? colors.background : isCurrentMonth ? colors.foreground : colors.alpha(colors.outline,0.4)
-                                font.family: "FiraCode Nerd Font"
+                                font.family: colors.fontSans
                                 font.pixelSize: 11
                                 font.weight: isSelected||isToday ? Font.DemiBold : Font.Medium
                                 Layout.alignment: Qt.AlignHCenter
@@ -255,7 +255,7 @@ PanelWindow {
                 Text {
                     text: "Reminders — " + Qt.formatDate(root.selectedDate, "dd MMM")
                     color: colors.secondary
-                    font.family: "FiraCode Nerd Font"
+                    font.family: colors.fontSans
                     font.pixelSize: 10
                     font.weight: Font.DemiBold
                     Layout.fillWidth: true
@@ -264,7 +264,7 @@ PanelWindow {
                     visible: root.reminders.filter(function(r){return r.date===fmtDate(root.selectedDate)}).length>0
                     text: root.reminders.filter(function(r){return r.date===fmtDate(root.selectedDate)}).length + ""
                     color: colors.tertiary
-                    font.family: "FiraCode Nerd Font"
+                    font.family: colors.fontSans
                     font.pixelSize: 9
                 }
             }
@@ -336,7 +336,7 @@ PanelWindow {
                             Text {
                                 text: root.pomodoroMode ? (root.pomodoroIsBreak ? "BREAK" : "FOCUS") + " · " + (root.pomodoroCycles+1) : "TIMER"
                                 color: root.pomodoroMode ? colors.primary : colors.alpha(colors.outline,0.7)
-                                font.family: "FiraCode Nerd Font"
+                                font.family: colors.fontSans
                                 font.pixelSize: 9
                                 font.weight: Font.Bold
                                 font.letterSpacing: 1.4
@@ -346,7 +346,7 @@ PanelWindow {
                             Text {
                                 text: root.timerTotal>0 ? Math.round((1-root.timerSeconds/root.timerTotal)*100)+"%" : "0%"
                                 color: colors.alpha(colors.foreground,0.7)
-                                font.family: "FiraCode Nerd Font"
+                                font.family: colors.fontSans
                                 font.pixelSize: 10
                                 font.weight: Font.Bold
                             }
@@ -359,7 +359,7 @@ PanelWindow {
                         Text {
                             text: fmtTime(root.timerSeconds)
                             color: colors.foreground
-                            font.family: "FiraCode Nerd Font"
+                            font.family: colors.fontSans
                             font.pixelSize: 28
                             font.weight: Font.ExtraBold
                             font.letterSpacing: 1
@@ -373,13 +373,13 @@ PanelWindow {
                             Rectangle {
                                 width: 68; height: 28; radius: 8
                                 color: root.timerRunning ? colors.alpha(colors.error,0.9) : colors.primary
-                                Text { anchors.centerIn: parent; text: root.timerRunning?"PAUSE":"START"; color: root.timerRunning?colors.background:colors.background; font.family:"FiraCode Nerd Font"; font.pixelSize:10; font.weight:Font.ExtraBold }
+                                Text { anchors.centerIn: parent; text: root.timerRunning?"PAUSE":"START"; color: root.timerRunning?colors.background:colors.background; font.family: colors.fontSans; font.pixelSize:10; font.weight:Font.ExtraBold }
                                 MouseArea { anchors.fill: parent; onClicked: root.timerRunning=!root.timerRunning }
                             }
                             Rectangle {
                                 width: 48; height: 28; radius: 8
                                 color: colors.alpha(colors.surface,0.5)
-                                Text { anchors.centerIn: parent; text: "RESET"; color: colors.foreground; font.family:"FiraCode Nerd Font"; font.pixelSize:9; font.weight:Font.Bold }
+                                Text { anchors.centerIn: parent; text: "RESET"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize:9; font.weight:Font.Bold }
                                 MouseArea { anchors.fill: parent; onClicked: { root.timerRunning=false; root.timerSeconds=root.timerTotal>0?root.timerTotal: (root.pomodoroMode?root.pomodoroWork:0) } }
                             }
                         }
@@ -407,7 +407,7 @@ PanelWindow {
                             Text {
                                 text: modelData.text
                                 color: colors.foreground
-                                font.family: "FiraCode Nerd Font"
+                                font.family: colors.fontSans
                                 font.pixelSize: 10
                                 elide: Text.ElideRight
                                 Layout.fillWidth: true
@@ -415,7 +415,7 @@ PanelWindow {
                             Text {
                                 text: "󰅖"
                                 color: delMa.containsMouse ? colors.error : colors.alpha(colors.outline,0.6)
-                                font.family: "FiraCode Nerd Font"
+                                font.family: colors.fontSans
                                 font.pixelSize: 11
                                 MouseArea { id: delMa; anchors.fill: parent; hoverEnabled:true; onClicked: root.delReminder(modelData.id) }
                             }
@@ -426,7 +426,7 @@ PanelWindow {
                     visible: root.reminders.filter(function(r){return r.date===fmtDate(root.selectedDate)}).length===0
                     text: "No reminders"
                     color: colors.alpha(colors.outline,0.5)
-                    font.family: "FiraCode Nerd Font"
+                    font.family: colors.fontSans
                     font.pixelSize: 9
                     Layout.alignment: Qt.AlignHCenter
                 }
@@ -446,7 +446,7 @@ PanelWindow {
                     placeholderText: "●  Add reminder…"
                     placeholderTextColor: colors.alpha(colors.primary,0.6)
                     color: colors.foreground
-                    font.family: "FiraCode Nerd Font"
+                    font.family: colors.fontSans
                     font.pixelSize: 11
                     background: Rectangle {
                         radius: 10
@@ -460,7 +460,7 @@ PanelWindow {
                 Rectangle {
                     width: 60; height: 32; radius: 10
                     color: remInput.text.trim().length>0 ? colors.alpha(colors.primary,0.2) : colors.alpha(colors.surfaceVariant,0.3)
-                    Text { anchors.centerIn: parent; text: "Add"; color: remInput.text.trim().length>0?colors.primary:colors.alpha(colors.outline,0.5); font.family:"FiraCode Nerd Font"; font.pixelSize:10; font.weight: Font.DemiBold }
+                    Text { anchors.centerIn: parent; text: "Add"; color: remInput.text.trim().length>0?colors.primary:colors.alpha(colors.outline,0.5); font.family: colors.fontSans; font.pixelSize:10; font.weight: Font.DemiBold }
                     MouseArea { anchors.fill: parent; onClicked: { root.addReminder(fmtDate(root.selectedDate), remInput.text); remInput.text="" } }
                 }
             }

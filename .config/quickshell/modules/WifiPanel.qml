@@ -20,10 +20,14 @@ PanelWindow {
 
     // speed test state
     property bool speedTesting: false
-    property real speedMbps: 0        // raw measured
+    property real speedMbps: 0        // raw measured (download)
     property real shownMbps: 0        // eased display counter
     property var stSamples: []        // instantaneous samples for the live chart
     property real stProgress: 0       // 0..1 through the download
+    property int stPhase: 0           // 0 idle, 1 downloading, 2 uploading, 3 done
+    property real ulMbps: 0           // measured upload Mbps
+    property real shownUl: 0
+    property string stUpOutText: ""
 
     readonly property var wifiDev: {
         var devs = Networking.devices.values
@@ -188,7 +192,7 @@ PanelWindow {
                 Text {
                     text: "󰤡  Wi-Fi"
                     color: colors.primary
-                    font.family: "FiraCode Nerd Font"
+                    font.family: colors.fontSans
                     font.pixelSize: 14
                     font.weight: Font.ExtraBold
                     Layout.fillWidth: true
@@ -204,7 +208,7 @@ PanelWindow {
                         anchors.centerIn: parent
                         text: root.wifiDev && root.wifiDev.wifiEnabled ? "󰤯" : "󰖪"
                         color: root.wifiDev && root.wifiDev.wifiEnabled ? colors.primary : colors.alpha(colors.outline, 0.7)
-                        font.family: "FiraCode Nerd Font"
+                        font.family: colors.fontSans
                         font.pixelSize: 13
                     }
                     MouseArea {
@@ -220,7 +224,7 @@ PanelWindow {
                     Text {
                         anchors.centerIn: parent
                         text: ""
-                        font.family: "FiraCode Nerd Font"
+                        font.family: colors.fontSans
                         font.pixelSize: 13
                         color: scanMouse.containsMouse || scanAnim.running ? colors.primary : colors.alpha(colors.outline, 0.9)
 
@@ -252,7 +256,7 @@ PanelWindow {
                         anchors.centerIn: parent
                         text: "󰅖"
                         color: closeBtn.containsMouse ? colors.foreground : colors.alpha(colors.outline, 0.9)
-                        font.family: "FiraCode Nerd Font"
+                        font.family: colors.fontSans
                         font.pixelSize: 12
                     }
                     MouseArea {
@@ -288,14 +292,14 @@ PanelWindow {
                             id: connGlyph
                             text: root.strengthGlyph(root.connectedNet ? root.connectedNet.signalStrength : 0)
                             color: colors.primary
-                            font.family: "FiraCode Nerd Font"
+                            font.family: colors.fontSans
                             font.pixelSize: 15
                         }
 
                         Text {
                             text: ((root.connectedNet || {}).name ?? "").trim()
                             color: colors.foreground
-                            font.family: "FiraCode Nerd Font"
+                            font.family: colors.fontSans
                             font.pixelSize: 12
                             font.weight: Font.DemiBold
                             Layout.fillWidth: true
@@ -305,7 +309,7 @@ PanelWindow {
                         Text {
                             text: "signal " + ((root.connectedNet || {}).signalStrength ?? 0) + "%"
                             color: colors.alpha(colors.outline, 0.7)
-                            font.family: "FiraCode Nerd Font"
+                            font.family: colors.fontSans
                             font.pixelSize: 9
                         }
                     }
@@ -332,14 +336,14 @@ PanelWindow {
                                 Text {
                                     text: "󰰡"
                                     color: dcMouse.containsMouse ? colors.error : colors.alpha(colors.foreground, 0.75)
-                                    font.family: "FiraCode Nerd Font"
+                                    font.family: colors.fontSans
                                     font.pixelSize: 10
                                     anchors.verticalCenter: parent.verticalCenter
                                 }
                                 Text {
                                     text: "Disconnect"
                                     color: dcMouse.containsMouse ? colors.error : colors.alpha(colors.foreground, 0.75)
-                                    font.family: "FiraCode Nerd Font"
+                                    font.family: colors.fontSans
                                     font.pixelSize: 9
                                     font.weight: Font.DemiBold
                                     anchors.verticalCenter: parent.verticalCenter
@@ -360,7 +364,7 @@ PanelWindow {
                         Layout.leftMargin: connGlyph.width + 8
                         text: root.wifiDev && root.wifiDev.address !== "" ? root.wifiDev.address : "no address"
                         color: colors.alpha(colors.outline, 0.7)
-                        font.family: "FiraCode Nerd Font"
+                        font.family: colors.fontSans
                         font.pixelSize: 9
                         elide: Text.ElideRight
                         Layout.fillWidth: true
@@ -449,34 +453,32 @@ PanelWindow {
                             anchors.centerIn: parent
                             spacing: 2
 
-                            Row {
+                            RowLayout {
                                 Layout.alignment: Qt.AlignHCenter
-                                spacing: 5
+                                spacing: 6
 
-                                Text {
-                                    text: "󰇚"
-                                    color: colors.primary
-                                    font.family: "FiraCode Nerd Font"
-                                    font.pixelSize: 12
-                                    anchors.verticalCenter: parent.verticalCenter
+                                Rectangle {
+                                    width: 22; height: 22; radius: 11
+                                    color: colors.alpha(colors.primary, 0.15)
+                                    border.width: 1; border.color: colors.alpha(colors.primary, 0.3)
+                                    Text { anchors.centerIn: parent; text: "󰇚"; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 10 }
                                 }
                                 Text {
                                     text: rate.fmt(rate.rxKbs)
                                     color: colors.foreground
-                                    font.family: "FiraCode Nerd Font"
-                                    font.pixelSize: 12
-                                    font.weight: Font.DemiBold
-                                    anchors.verticalCenter: parent.verticalCenter
+                                    font.family: colors.fontSans
+                                    font.pixelSize: 14
+                                    font.weight: Font.ExtraBold
                                 }
                             }
 
                             Text {
                                 text: "DOWNLOAD"
                                 color: colors.alpha(colors.outline, 0.55)
-                                font.family: "FiraCode Nerd Font"
+                                font.family: colors.fontSans
                                 font.pixelSize: 7
                                 font.weight: Font.Bold
-                                font.letterSpacing: 1.5
+                                font.letterSpacing: 1.3
                                 Layout.alignment: Qt.AlignHCenter
                             }
                         }
@@ -493,34 +495,32 @@ PanelWindow {
                             anchors.centerIn: parent
                             spacing: 2
 
-                            Row {
+                            RowLayout {
                                 Layout.alignment: Qt.AlignHCenter
-                                spacing: 5
+                                spacing: 6
 
-                                Text {
-                                    text: "󰕒"
-                                    color: colors.secondary
-                                    font.family: "FiraCode Nerd Font"
-                                    font.pixelSize: 12
-                                    anchors.verticalCenter: parent.verticalCenter
+                                Rectangle {
+                                    width: 22; height: 22; radius: 11
+                                    color: colors.alpha(colors.secondary, 0.15)
+                                    border.width: 1; border.color: colors.alpha(colors.secondary, 0.3)
+                                    Text { anchors.centerIn: parent; text: "󰕒"; color: colors.secondary; font.family: colors.fontSans; font.pixelSize: 10 }
                                 }
                                 Text {
                                     text: rate.fmt(rate.txKbs)
                                     color: colors.foreground
-                                    font.family: "FiraCode Nerd Font"
-                                    font.pixelSize: 12
-                                    font.weight: Font.DemiBold
-                                    anchors.verticalCenter: parent.verticalCenter
+                                    font.family: colors.fontSans
+                                    font.pixelSize: 14
+                                    font.weight: Font.ExtraBold
                                 }
                             }
 
                             Text {
                                 text: "UPLOAD"
                                 color: colors.alpha(colors.outline, 0.55)
-                                font.family: "FiraCode Nerd Font"
+                                font.family: colors.fontSans
                                 font.pixelSize: 7
                                 font.weight: Font.Bold
-                                font.letterSpacing: 1.5
+                                font.letterSpacing: 1.3
                                 Layout.alignment: Qt.AlignHCenter
                             }
                         }
@@ -534,7 +534,7 @@ PanelWindow {
                 horizontalAlignment: Text.AlignHCenter
                 text: "󰇚 " + rate.fmtTotal(rate.totalRxMb) + "   \u00B7   󰕒 " + rate.fmtTotal(rate.totalTxMb)
                 color: colors.alpha(colors.outline, 0.6)
-                font.family: "FiraCode Nerd Font"
+                font.family: colors.fontSans
                 font.pixelSize: 9
                 font.letterSpacing: 0.5
             }
@@ -555,7 +555,7 @@ PanelWindow {
                     anchors.margins: 8
                     text: root.errorText
                     color: colors.error
-                    font.family: "FiraCode Nerd Font"
+                    font.family: colors.fontSans
                     font.pixelSize: 10
                     wrapMode: Text.WrapAnywhere
                 }
@@ -571,7 +571,7 @@ PanelWindow {
                 placeholderText: "Search networks…  (S)"
                 placeholderTextColor: colors.alpha(colors.outline,0.5)
                 color: colors.foreground
-                font.family: "FiraCode Nerd Font"
+                font.family: colors.fontSans
                 font.pixelSize: 11
                 background: Rectangle {
                     radius: 10
@@ -586,10 +586,11 @@ PanelWindow {
             Text {
                 text: "NETWORKS (" + root.filteredNets.length + "/" + root.nets.length + ")"
                 color: colors.alpha(colors.outline, 0.6)
-                font.family: "FiraCode Nerd Font"
-                font.pixelSize: 9
-                font.letterSpacing: 1.5
+                font.family: colors.fontSans
+                font.pixelSize: 7
+                font.letterSpacing: 1.3
                 font.weight: Font.Bold
+                Layout.alignment: Qt.AlignVCenter
             }
 
             // ══════════ network list ══════════
@@ -654,14 +655,14 @@ PanelWindow {
                                 color: modelData.connected ? colors.primary
                                      : hovered ? colors.foreground
                                      : colors.alpha(colors.foreground, 0.75)
-                                font.family: "FiraCode Nerd Font"
+                                font.family: colors.fontSans
                                 font.pixelSize: 14
                             }
 
                             Text {
                                 text: modelData.name.trim() === "" ? "(hidden network)" : modelData.name.trim()
                                 color: modelData.connected ? colors.primary : colors.foreground
-                                font.family: "FiraCode Nerd Font"
+                                font.family: colors.fontSans
                                 font.pixelSize: 11
                                 font.weight: modelData.connected ? Font.DemiBold : Font.Medium
                                 Layout.fillWidth: true
@@ -680,7 +681,7 @@ PanelWindow {
                                     anchors.centerIn: parent
                                     text: "saved"
                                     color: colors.alpha(colors.outline, 0.7)
-                                    font.family: "FiraCode Nerd Font"
+                                    font.family: colors.fontSans
                                     font.pixelSize: 8
                                 }
                             }
@@ -694,7 +695,7 @@ PanelWindow {
                                     anchors.centerIn: parent
                                     text: "󰆴"
                                     color: fgMouse.containsMouse ? colors.error : colors.alpha(colors.outline, 0.65)
-                                    font.family: "FiraCode Nerd Font"
+                                    font.family: colors.fontSans
                                     font.pixelSize: 11
                                 }
                                 MouseArea {
@@ -709,7 +710,7 @@ PanelWindow {
                                 visible: modelData.security !== undefined && modelData.security !== WifiSecurityType.None
                                 text: ""
                                 color: colors.alpha(colors.outline, 0.65)
-                                font.family: "FiraCode Nerd Font"
+                                font.family: colors.fontSans
                                 font.pixelSize: 10
                             }
 
@@ -717,7 +718,7 @@ PanelWindow {
                                 visible: modelData.connected
                                 text: ""
                                 color: colors.primary
-                                font.family: "FiraCode Nerd Font"
+                                font.family: colors.fontSans
                                 font.pixelSize: 11
                             }
                         }
@@ -737,7 +738,7 @@ PanelWindow {
                                 topPadding: 8
                                 bottomPadding: 8
                                 echoMode: TextInput.Password
-                                font.family: "FiraCode Nerd Font"
+                                font.family: colors.fontSans
                                 font.pixelSize: 12
                                 color: colors.foreground
                                 placeholderText: "Enter WiFi password…"
@@ -761,7 +762,7 @@ PanelWindow {
                                     anchors.centerIn: parent
                                     text: "Join"
                                     color: pwField.text.length >= 8 ? colors.background : colors.alpha(colors.outline,0.6)
-                                    font.family: "FiraCode Nerd Font"
+                                    font.family: colors.fontSans
                                     font.pixelSize: 11
                                     font.weight: Font.Bold
                                 }
@@ -783,7 +784,7 @@ PanelWindow {
                             visible: isConnecting
                             text: "connecting…"
                             color: colors.alpha(colors.primary, 0.9)
-                            font.family: "FiraCode Nerd Font"
+                            font.family: colors.fontSans
                             font.pixelSize: 9
                             SequentialAnimation on opacity {
                                 running: isConnecting
@@ -825,7 +826,7 @@ PanelWindow {
                 elide: Text.ElideRight
                 text: "↑↓ select · C connect · D disconnect · S scan · F forget"
                 color: colors.alpha(colors.outline, 0.5)
-                font.family: "FiraCode Nerd Font"
+                font.family: colors.fontSans
                 font.pixelSize: 8
                 font.letterSpacing: 0.3
             }
@@ -839,7 +840,7 @@ PanelWindow {
             id: stDock
             anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
             anchors.leftMargin: 14; anchors.rightMargin: 14; anchors.topMargin: 14; anchors.bottomMargin: 28
-            height: stDockCol.implicitHeight + 20
+            height: 130                       // FIXED budget — dock never resizes, list above never jumps
             radius: 12
             color: colors.alpha(colors.surface, 0.55)
             border.width: 1
@@ -871,7 +872,7 @@ PanelWindow {
                                 anchors.verticalCenter: parent.verticalCenter
                                 text: ""
                                 color: colors.primary
-                                font.family: "FiraCode Nerd Font"
+                                font.family: colors.fontSans
                                 font.pixelSize: 12
                                 RotationAnimation on rotation {
                                     running: root.speedTesting
@@ -884,7 +885,7 @@ PanelWindow {
                                 anchors.verticalCenter: parent.verticalCenter
                                 text: root.speedTesting ? "testing" : "󰓄  Speed test"
                                 color: colors.primary
-                                font.family: "FiraCode Nerd Font"
+                                font.family: colors.fontSans
                                 font.pixelSize: 10
                                 font.weight: Font.DemiBold
                             }
@@ -906,14 +907,14 @@ PanelWindow {
                         horizontalAlignment: Text.AlignRight
                         text: root.shownMbps > 0 ? root.shownMbps.toFixed(1) : "0.0"
                         color: colors.foreground
-                        font.family: "FiraCode Nerd Font"
+                        font.family: colors.fontSans
                         font.pixelSize: 22
                         font.weight: Font.ExtraBold
                     }
                     Text {
                         text: "Mbps"
                         color: colors.primary
-                        font.family: "FiraCode Nerd Font"
+                        font.family: colors.fontSans
                         font.pixelSize: 10
                         font.weight: Font.Bold
                         Layout.alignment: Qt.AlignBottom
@@ -923,14 +924,12 @@ PanelWindow {
                 // live zig-zag of instantaneous throughput while testing
                 Rectangle {
                     Layout.fillWidth: true
-                    height: root.speedTesting || root.stSamples.length > 1 ? 46 : 0
+                    height: 46                       // fixed — shows live samples while testing, last run idle
                     radius: 10
                     clip: true
                     color: colors.alpha(colors.surface, 0.35)
                     border.width: 1
                     border.color: colors.alpha(colors.outline, 0.12)
-
-                    Behavior on height { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
 
                     Canvas {
                         id: stChart
@@ -945,6 +944,15 @@ PanelWindow {
                         onPaint: {
                             var ctx = getContext("2d")
                             ctx.reset()
+
+                            // faint baseline + mid guide so the box reads as a chart even when empty
+                            ctx.strokeStyle = colors.alpha(colors.outline, 0.12)
+                            ctx.lineWidth = 1
+                            ctx.beginPath()
+                            ctx.moveTo(0, height - 1); ctx.lineTo(width, height - 1)
+                            ctx.moveTo(0, height / 2); ctx.lineTo(width, height / 2)
+                            ctx.stroke()
+
                             var h = root.stSamples
                             if (h.length < 2) return
 
@@ -974,6 +982,14 @@ PanelWindow {
                             ctx.stroke()
                         }
                     }
+                    Text {
+                        anchors.centerIn: parent
+                        visible: !root.speedTesting && root.stSamples.length < 2
+                        text: "throughput trace appears while testing"
+                        color: colors.alpha(colors.outline, 0.5)
+                        font.family: colors.fontSans
+                        font.pixelSize: 8
+                    }
                 }
 
                 // download progress hairline
@@ -993,66 +1009,150 @@ PanelWindow {
                         Behavior on width { NumberAnimation { duration: 200 } }
                     }
                 }
+
+                // status line: live phase while testing, last result when idle
+                Text {
+                    Layout.fillWidth: true
+                    horizontalAlignment: Text.AlignHCenter
+                    text: root.stPhase === 1 ? "testing download…"
+                          : root.stPhase === 2 ? "testing upload…"
+                          : root.stPhase === 3 ? (root.shownUl > 0 ? "down " + root.shownMbps.toFixed(1) + " · up " + root.shownUl.toFixed(1) + " Mbps"
+                                                                  : "down " + root.shownMbps.toFixed(1) + " Mbps · up n/a")
+                          : "ready — press speed test"
+                    color: root.stPhase === 3 ? colors.secondary : colors.alpha(colors.outline, 0.6)
+                    font.family: colors.fontSans
+                    font.pixelSize: 9
+                    font.weight: Font.Bold
+                }
             }
         }
     }
 
-    // ── pure-QML download speed test (Cloudflare endpoint, no external programs) ──
+    // ── download + upload speed test (curl everywhere — QML XHR buffered the
+    // whole response so the counter froze; curl streams to a file we poll, so
+    // live progress + a real number even on slow links) ──
+    property real stRunStart: 0
+    property real stDlGot: 0
+
     function runSpeedTest() {
         if (speedTesting) return
         speedTesting = true
         speedMbps = 0
         shownMbps = 0
+        ulMbps = 0
+        shownUl = 0
         stSamples = []
         stProgress = 0
+        stDlGot = 0
         _lastBytes = 0
         _lastStamp = 0
+        stPhase = 1
+        stRunStart = new Date().getTime()
 
-        var xhr = new XMLHttpRequest()
-        var start = new Date().getTime()
-        var poll = Qt.createQmlObject("import QtQuick; Timer {}", root, "stPoll")
-        poll.interval = 200; poll.repeat = true
+        stDlProc.running = true
+        stDlPoll.restart()
+        stTimeout.restart()
+    }
 
-        poll.onTriggered.connect(function() {
-            if (xhr.readyState === 3) {
-                var got = xhr.responseText.length
-                root.stProgress = got / 25000000
-                var secs = (new Date().getTime() - start) / 1000
-                if (secs > 0.2) {
+    function finishDownload() {
+        if (root.stPhase !== 1) return   // idempotent
+        speedTesting = false
+        stDlPoll.stop()
+        stTimeout.stop()
+        var secs = (new Date().getTime() - stRunStart) / 1000
+        if (secs > 0.5 && root.stDlGot > 0) speedMbps = (root.stDlGot * 8) / secs / 1000000
+        else speedMbps = 0
+        shownMbps = speedMbps
+        stProgress = Math.min(1, root.stDlGot / 5000000)
+        root.stPhase = 2
+        root.stUpProc.running = true   // upload phase
+    }
+
+    Process {
+        id: stDlProc
+        command: ["sh", "-c", "rm -f /tmp/.qs-dl.bin; curl -s --max-time 20 -o /tmp/.qs-dl.bin 'https://speed.cloudflare.com/__down?bytes=5000000' 2>/dev/null"]
+        onExited: function (code) {
+            if (root.stPhase === 1) root.finishDownload()
+        }
+    }
+    Timer {
+        id: stDlPoll
+        interval: 200
+        repeat: true
+        onTriggered: {
+            if (!root.speedTesting) { stop(); return }
+            stSizeProc.command = ["stat", "-c", "%s", "/tmp/.qs-dl.bin"]
+            stSizeProc.running = true
+        }
+    }
+    Process {
+        id: stSizeProc
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: {
+                if (!root.speedTesting) return
+                var got = parseInt(text.trim()) || 0
+                if (got <= 0) return
+                root.stDlGot = got
+                root.stProgress = got / 5000000
+                var now = new Date().getTime()
+                var secs = (now - root.stRunStart) / 1000
+                if (secs > 0.5) {
                     // instantaneous rate over the last window (not cumulative avg)
-                    var prevBytes = root.stSamples.length ? root._lastBytes : 0
-                    var dt = new Date().getTime() - root._lastStamp
-                    if (root._lastStamp && dt > 0) {
-                        var inst = ((got - prevBytes) * 8) / (dt / 1000) / 1000000
+                    var dt = now - root._lastStamp
+                    if (root._lastStamp && dt > 0 && got > root._lastBytes) {
+                        var inst = ((got - root._lastBytes) * 8) / (dt / 1000) / 1000000
                         var arr = root.stSamples.slice()
                         arr.push(inst)
                         if (arr.length > 60) arr.shift()
                         root.stSamples = arr
                     }
                     root._lastBytes = got
-                    root._lastStamp = new Date().getTime()
+                    root._lastStamp = now
                     speedMbps = (got * 8) / secs / 1000000
                     shownMbps += (speedMbps - shownMbps) * 0.35
                 } else {
                     root._lastBytes = got
-                    root._lastStamp = new Date().getTime()
+                    root._lastStamp = now
                 }
             }
-        })
+        }
+    }
+    Timer {
+        id: stTimeout
+        interval: 26000
+        onTriggered: {
+            // never leave the panel stuck testing on a dead/slow link
+            if (root.stPhase === 1) root.finishDownload()
+        }
+    }
 
-        xhr.onreadystatechange = function() {
-            if (xhr.readyState === 4) {
-                poll.stop(); poll.destroy()
-                var secs = (new Date().getTime() - start) / 1000
-                var bytes = xhr.responseText.length
-                if (secs > 0.2 && bytes > 0) speedMbps = (bytes * 8) / secs / 1000000
-                else speedMbps = 0
-                shownMbps = speedMbps
-                stProgress = 1
-                speedTesting = false
+    // upload phase: 8MB POST to Cloudflare. Best-effort — some networks/ISPs
+    // throttle or block the endpoint; on failure we show download only (honest n/a).
+    Process {
+        id: stUpProc
+        command: ["sh", "-c", "dd if=/dev/zero of=/tmp/.qs-upload bs=1M count=8 2>/dev/null; curl -s -o /dev/null --max-time 12 -H 'Expect:' -w '%{http_code}|%{speed_upload}' --data-binary @/tmp/.qs-upload https://speed.cloudflare.com/__up 2>/dev/null; rm -f /tmp/.qs-upload"]
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: root.stUpOutText = text.trim()
+        }
+        onExited: function (code) {
+            root.speedTesting = false
+            var parts = root.stUpOutText.split("|")
+            var http = parseInt(parts[0]) || 0
+            var up = parseInt(parts[1]) || 0
+            if (code === 0 && http === 200 && up > 0) {
+                root.ulMbps = up * 8 / 1000000
+                root.shownUl = root.ulMbps
+                root.stPhase = 3
+            } else if (root.stPhase === 2) {
+                // upload blocked/throttled — keep the download result, mark up as n/a
+                root.ulMbps = -1
+                root.shownUl = -1
+                root.stPhase = 3
+            } else {
+                root.stPhase = 0
             }
         }
-        xhr.open("GET", "https://speed.cloudflare.com/__down?bytes=25000000", true)
-        xhr.send()
     }
 }

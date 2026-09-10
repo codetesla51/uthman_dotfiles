@@ -32,7 +32,7 @@ Rules of the house (from AGENTS.md / memory.md):
 | MediaOsd.qml | volume/brightness/mic OSD overlay | `media` (`volup/voldown/volmute/micmute/briup/bridown/brimax/brimin`) | Fn-row keys (XF86) | replaced omarchy swayosd; binds in bindings.conf |
 | PluginMenu.qml | pick-and-open grid for **extras/plugins only** | `plugins` | `SUPER ALT P` → `controlcenter` now | native modules excluded, use `plugins` ipc directly |
 | ScreenTime.qml | usage tracker: GitHub heatmap, top apps ranked, week bars, login count | `screentime` | `SUPER ALT T` | samples focused window every 10s → SQLite; gap >4h = new login |
-| PhoneLink.qml | KDE Connect wrapper: send files, clipboard sync, device status | `phonelink` | `SUPER ALT K` | needs kdeconnect-cli + paired phone |
+| PhoneLink.qml | ADB file sender: drop-to-phone, pull browser, queue, progress | `phonelink` | `SUPER ALT K` | wireless ADB, one-time cable tcpip; no app on phone |
 | Bar pills (ArchLogo, Memory, Cpu, Network, Temp, Tray, DndIndicator, ScriptIndicator) | status pills | — | — | ScriptIndicator runs scripts/update.sh + idle.sh |
 
 ## Unwired / dormant

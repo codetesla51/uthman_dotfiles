@@ -33,7 +33,7 @@ Item {
             anchors.centerIn: parent
             text: root.altFormat ? root.extended : root.time
             color: colors.primary
-            font.family: "FiraCode Nerd Font"
+            font.family: colors.fontSans
             font.pixelSize: 13
             font.weight: Font.ExtraBold
             font.letterSpacing: root.hovered ? 2 : 1.2

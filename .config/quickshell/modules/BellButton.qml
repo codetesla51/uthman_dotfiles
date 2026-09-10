@@ -30,7 +30,7 @@ Item {
             color: root.panelOpen ? colors.primary
                  : root.historyCount > 0 ? colors.foreground
                  : colors.alpha(colors.outline, 0.9)
-            font.family: "FiraCode Nerd Font"
+            font.family: colors.fontSans
             font.pixelSize: 13
         }
 
@@ -48,7 +48,7 @@ Item {
                 anchors.centerIn: parent
                 text: root.historyCount > 99 ? "99" : root.historyCount
                 color: colors.background
-                font.family: "FiraCode Nerd Font"
+                font.family: colors.fontSans
                 font.pixelSize: 8
                 font.weight: Font.Bold
             }

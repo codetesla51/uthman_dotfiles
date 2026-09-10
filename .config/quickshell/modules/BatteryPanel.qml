@@ -144,12 +144,12 @@ PanelWindow {
             RowLayout {
                 Layout.fillWidth: true
                 spacing: 10
-                Text { text: "Battery"; color: colors.foreground; font.family:"FiraCode Nerd Font"; font.pixelSize: 14; font.weight: Font.ExtraBold; Layout.fillWidth:true }
-                Text { text: root.stateStr; color: root.charging?colors.secondary:colors.alpha(colors.outline,0.7); font.family:"FiraCode Nerd Font"; font.pixelSize: 9; font.weight: Font.Bold }
+                Text { text: "Battery"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 14; font.weight: Font.ExtraBold; Layout.fillWidth:true }
+                Text { text: root.stateStr; color: root.charging?colors.secondary:colors.alpha(colors.outline,0.7); font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold }
                 Rectangle {
                     width: 26; height: 26; radius: 13
                     color: closeMa.containsMouse?colors.alpha(colors.surfaceVariant,0.4):"transparent"
-                    Text { anchors.centerIn: parent; text: "󰅖"; color: closeMa.containsMouse?colors.foreground:colors.alpha(colors.outline,0.7); font.family:"FiraCode Nerd Font"; font.pixelSize: 12 }
+                    Text { anchors.centerIn: parent; text: "󰅖"; color: closeMa.containsMouse?colors.foreground:colors.alpha(colors.outline,0.7); font.family: colors.fontSans; font.pixelSize: 12 }
                     MouseArea { id: closeMa; anchors.fill: parent; hoverEnabled:true; onClicked: root.open=false }
                 }
             }
@@ -176,8 +176,8 @@ PanelWindow {
                     ColumnLayout {
                         anchors.centerIn: parent
                         spacing: 0
-                        Text { text: root.pct+"%"; color: colors.foreground; font.family:"FiraCode Nerd Font"; font.pixelSize: 20; font.weight: Font.ExtraBold; Layout.alignment: Qt.AlignHCenter }
-                        Text { text: root.charging?"charging":""+(root.full?"full":""); color: colors.secondary; font.family:"FiraCode Nerd Font"; font.pixelSize: 9; Layout.alignment: Qt.AlignHCenter }
+                        Text { text: root.pct+"%"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 20; font.weight: Font.ExtraBold; Layout.alignment: Qt.AlignHCenter }
+                        Text { text: root.charging?"charging":""+(root.full?"full":""); color: colors.secondary; font.family: colors.fontSans; font.pixelSize: 9; Layout.alignment: Qt.AlignHCenter }
                     }
                 }
                 ColumnLayout {
@@ -187,20 +187,20 @@ PanelWindow {
                         columns: 2
                         columnSpacing: 12; rowSpacing: 6
                         Layout.fillWidth: true
-                        Text { text: "Health"; color: colors.alpha(colors.outline,0.6); font.family:"FiraCode Nerd Font"; font.pixelSize: 9 }
-                        Text { text: dev ? (dev.healthSupported ? Math.round(dev.healthPercentage)+"%" : "100%") : "—"; color: colors.foreground; font.family:"FiraCode Nerd Font"; font.pixelSize: 10; font.weight: Font.DemiBold; Layout.fillWidth: true; horizontalAlignment: Text.AlignRight }
-                        Text { text: "Capacity"; color: colors.alpha(colors.outline,0.6); font.family:"FiraCode Nerd Font"; font.pixelSize: 9 }
-                        Text { text: dev ? (dev.energy.toFixed(1)+" / "+dev.energyCapacity.toFixed(1)+" Wh") : "—"; color: colors.foreground; font.family:"FiraCode Nerd Font"; font.pixelSize: 10; Layout.fillWidth: true; horizontalAlignment: Text.AlignRight }
-                        Text { text: "Rate"; color: colors.alpha(colors.outline,0.6); font.family:"FiraCode Nerd Font"; font.pixelSize: 9 }
-                        Text { text: dev ? (dev.changeRate.toFixed(1)+" W") : "—"; color: colors.foreground; font.family:"FiraCode Nerd Font"; font.pixelSize: 10; Layout.fillWidth: true; horizontalAlignment: Text.AlignRight }
-                        Text { text: "Voltage"; color: colors.alpha(colors.outline,0.6); font.family:"FiraCode Nerd Font"; font.pixelSize: 9 }
-                        Text { text: dev ? (dev.energy>0 ? (dev.energy/dev.percentage*100).toFixed(1)+" V" : "—") : "—"; color: colors.foreground; font.family:"FiraCode Nerd Font"; font.pixelSize: 10; Layout.fillWidth: true; horizontalAlignment: Text.AlignRight }
+                        Text { text: "Health"; color: colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 9 }
+                        Text { text: dev ? (dev.healthSupported ? Math.round(dev.healthPercentage)+"%" : "100%") : "—"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 10; font.weight: Font.DemiBold; Layout.fillWidth: true; horizontalAlignment: Text.AlignRight }
+                        Text { text: "Capacity"; color: colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 9 }
+                        Text { text: dev ? (dev.energy.toFixed(1)+" / "+dev.energyCapacity.toFixed(1)+" Wh") : "—"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 10; Layout.fillWidth: true; horizontalAlignment: Text.AlignRight }
+                        Text { text: "Rate"; color: colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 9 }
+                        Text { text: dev ? (dev.changeRate.toFixed(1)+" W") : "—"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 10; Layout.fillWidth: true; horizontalAlignment: Text.AlignRight }
+                        Text { text: "Voltage"; color: colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 9 }
+                        Text { text: dev ? (dev.energy>0 ? (dev.energy/dev.percentage*100).toFixed(1)+" V" : "—") : "—"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 10; Layout.fillWidth: true; horizontalAlignment: Text.AlignRight }
                     }
                     RowLayout {
                         Layout.fillWidth: true
                         spacing: 6
-                        Text { text: "Remaining"; color: colors.alpha(colors.outline,0.6); font.family:"FiraCode Nerd Font"; font.pixelSize: 9; Layout.fillWidth: true }
-                        Text { text: root.timeStr; color: colors.primary; font.family:"FiraCode Nerd Font"; font.pixelSize: 11; font.weight: Font.Bold; Layout.alignment: Qt.AlignRight; horizontalAlignment: Text.AlignRight }
+                        Text { text: "Remaining"; color: colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 9; Layout.fillWidth: true }
+                        Text { text: root.timeStr; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.Bold; Layout.alignment: Qt.AlignRight; horizontalAlignment: Text.AlignRight }
                     }
                 }
             }
@@ -234,11 +234,11 @@ PanelWindow {
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: 8
-                    Text { text: "PERFORMANCE"; color: colors.alpha(colors.outline,0.6); font.family:"FiraCode Nerd Font"; font.pixelSize: 9; font.weight: Font.Bold; font.letterSpacing: 1.2; Layout.fillWidth: true }
-                    Text { text: "Current: "+root.curProfile; color: root.curProfile==="unknown" ? colors.alpha(colors.outline,0.6) : colors.primary; font.family:"FiraCode Nerd Font"; font.pixelSize: 9; font.weight: Font.Bold; font.capitalization: Font.Capitalize }
+                    Text { text: "PERFORMANCE"; color: colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold; font.letterSpacing: 1.2; Layout.fillWidth: true }
+                    Text { text: "Current: "+root.curProfile; color: root.curProfile==="unknown" ? colors.alpha(colors.outline,0.6) : colors.primary; font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold; font.capitalization: Font.Capitalize }
                     RowLayout {
                         spacing: 4
-                        Text { text: "Auto"; color: root.autoSwitch ? colors.primary : colors.alpha(colors.outline,0.6); font.family:"FiraCode Nerd Font"; font.pixelSize: 9; font.weight: Font.Bold }
+                        Text { text: "Auto"; color: root.autoSwitch ? colors.primary : colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold }
                         Switch {
                             checked: root.autoSwitch
                             onToggled: root.autoSwitch = checked
@@ -263,8 +263,8 @@ PanelWindow {
                             ColumnLayout {
                                 anchors.centerIn: parent
                                 spacing: 2
-                                Text { text: modelData.icon; color: root.curProfile===modelData.id ? colors.primary : colors.alpha(colors.outline,0.7); font.family:"FiraCode Nerd Font"; font.pixelSize: 14; Layout.alignment: Qt.AlignHCenter }
-                                Text { text: modelData.label; color: root.curProfile===modelData.id ? colors.primary : colors.foreground; font.family:"FiraCode Nerd Font"; font.pixelSize: 9; font.weight: Font.DemiBold; Layout.alignment: Qt.AlignHCenter }
+                                Text { text: modelData.icon; color: root.curProfile===modelData.id ? colors.primary : colors.alpha(colors.outline,0.7); font.family: colors.fontSans; font.pixelSize: 14; Layout.alignment: Qt.AlignHCenter }
+                                Text { text: modelData.label; color: root.curProfile===modelData.id ? colors.primary : colors.foreground; font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.DemiBold; Layout.alignment: Qt.AlignHCenter }
                             }
                             MouseArea { anchors.fill: parent; enabled: !disabled; onClicked: root.setProfile(modelData.id, true) }
                         }
@@ -274,7 +274,7 @@ PanelWindow {
                     visible: root.curProfile==="unknown"
                     text: "power-profiles-daemon not running"
                     color: colors.alpha(colors.outline,0.5)
-                    font.family:"FiraCode Nerd Font"; font.pixelSize: 8
+                    font.family: colors.fontSans; font.pixelSize: 8
                     Layout.alignment: Qt.AlignHCenter
                 }
             }

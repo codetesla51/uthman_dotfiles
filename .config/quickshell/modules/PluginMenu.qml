@@ -86,7 +86,7 @@ PanelWindow {
             Text {
                 text: "PLUGINS"
                 color: colors.primary
-                font.family: "FiraCode Nerd Font"
+                font.family: colors.fontSans
                 font.pixelSize: 13
                 font.weight: Font.ExtraBold
                 font.letterSpacing: 2
@@ -102,7 +102,7 @@ PanelWindow {
                 placeholderText: " type to filter…"
                 placeholderTextColor: colors.alpha(colors.outline, 0.6)
                 color: colors.foreground
-                font.family: "FiraCode Nerd Font"
+                font.family: colors.fontSans
                 font.pixelSize: 11
                 background: Rectangle {
                     radius: 10
@@ -158,7 +158,7 @@ PanelWindow {
                                         anchors.centerIn: parent
                                         text: modelData.name.charAt(0)
                                         color: root.accents(index)
-                                        font.family: "FiraCode Nerd Font"
+                                        font.family: colors.fontSans
                                         font.pixelSize: 13
                                         font.weight: Font.ExtraBold
                                     }
@@ -166,7 +166,7 @@ PanelWindow {
                                 Text {
                                     text: modelData.name
                                     color: colors.foreground
-                                    font.family: "FiraCode Nerd Font"
+                                    font.family: colors.fontSans
                                     font.pixelSize: 10
                                     font.weight: Font.DemiBold
                                     Layout.alignment: Qt.AlignHCenter
@@ -189,7 +189,7 @@ PanelWindow {
                         visible: grid.count === 0
                         text: root.plugins.length === 0 ? "no plugins installed yet" : "no match"
                         color: colors.alpha(colors.outline, 0.5)
-                        font.family: "FiraCode Nerd Font"
+                        font.family: colors.fontSans
                         font.pixelSize: 10
                     }
                 }

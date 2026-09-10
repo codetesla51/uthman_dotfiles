@@ -76,16 +76,16 @@ FloatingWindow {
                     anchors.fill: parent
                     anchors.leftMargin: 14; anchors.rightMargin: 14
                     spacing: 12
-                    Text { text: "◉ SYSTEM MONITOR"; color: colors.primary; font.family: "FiraCode Nerd Font"; font.pixelSize: 14; font.weight: Font.ExtraBold; font.letterSpacing: 1.2 }
+                    Text { text: "◉ SYSTEM MONITOR"; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 14; font.weight: Font.ExtraBold; font.letterSpacing: 1.2 }
                     Item { Layout.fillWidth: true }
                     ColumnLayout {
                         spacing: 1
                         Layout.alignment: Qt.AlignVCenter
-                        Text { text: "CPU  "+root.cpuUsage+"%"; color: colors.secondary; font.family:"FiraCode Nerd Font"; font.pixelSize: 10; font.weight: Font.Bold; horizontalAlignment: Text.AlignRight; Layout.alignment: Qt.AlignRight }
-                        Text { text: "RAM  "+Math.round(root.memPct)+"%"; color: colors.tertiary; font.family:"FiraCode Nerd Font"; font.pixelSize: 10; font.weight: Font.Bold; horizontalAlignment: Text.AlignRight; Layout.alignment: Qt.AlignRight }
+                        Text { text: "CPU  "+root.cpuUsage+"%"; color: colors.secondary; font.family: colors.fontSans; font.pixelSize: 10; font.weight: Font.Bold; horizontalAlignment: Text.AlignRight; Layout.alignment: Qt.AlignRight }
+                        Text { text: "RAM  "+Math.round(root.memPct)+"%"; color: colors.tertiary; font.family: colors.fontSans; font.pixelSize: 10; font.weight: Font.Bold; horizontalAlignment: Text.AlignRight; Layout.alignment: Qt.AlignRight }
                     }
                     Rectangle { width: 1; height: 28; color: colors.alpha(colors.outline,0.15) }
-                    Text { text: root.memUsed.toFixed(1)+"G / "+root.memTotal.toFixed(1)+"G"; color: colors.alpha(colors.outline,0.7); font.family:"FiraCode Nerd Font"; font.pixelSize: 9; Layout.alignment: Qt.AlignVCenter }
+                    Text { text: root.memUsed.toFixed(1)+"G / "+root.memTotal.toFixed(1)+"G"; color: colors.alpha(colors.outline,0.7); font.family: colors.fontSans; font.pixelSize: 9; Layout.alignment: Qt.AlignVCenter }
                 }
 
             }
@@ -107,8 +107,8 @@ FloatingWindow {
                         spacing: 6
                         RowLayout {
                             Layout.fillWidth: true
-                            Text { text: "CPU"; color: colors.secondary; font.family:"FiraCode Nerd Font"; font.pixelSize: 10; font.weight: Font.ExtraBold; font.letterSpacing: 1.4; Layout.fillWidth: true }
-                            Text { text: root.cpuUsage+"%"; color: colors.foreground; font.family:"FiraCode Nerd Font"; font.pixelSize: 20; font.weight: Font.ExtraBold }
+                            Text { text: "CPU"; color: colors.secondary; font.family: colors.fontSans; font.pixelSize: 10; font.weight: Font.ExtraBold; font.letterSpacing: 1.4; Layout.fillWidth: true }
+                            Text { text: root.cpuUsage+"%"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 20; font.weight: Font.ExtraBold }
                         }
                         // per-core — circular, go all in
                         RowLayout {
@@ -139,8 +139,8 @@ FloatingWindow {
                                     ColumnLayout {
                                         anchors.centerIn: parent
                                         spacing: 0
-                                        Text { text: modelData+"%"; color: colors.secondary; font.family:"FiraCode Nerd Font"; font.pixelSize: 9; font.weight: Font.ExtraBold; Layout.alignment: Qt.AlignHCenter }
-                                        Text { text: "C"+index; color: colors.alpha(colors.outline,0.6); font.family:"FiraCode Nerd Font"; font.pixelSize: 7; Layout.alignment: Qt.AlignHCenter }
+                                        Text { text: modelData+"%"; color: colors.secondary; font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.ExtraBold; Layout.alignment: Qt.AlignHCenter }
+                                        Text { text: "C"+index; color: colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 7; Layout.alignment: Qt.AlignHCenter }
                                     }
                                 }
                             }
@@ -176,10 +176,10 @@ FloatingWindow {
                         spacing: 6
                         RowLayout {
                             Layout.fillWidth: true
-                            Text { text: "MEMORY"; color: colors.tertiary; font.family:"FiraCode Nerd Font"; font.pixelSize: 10; font.weight: Font.ExtraBold; font.letterSpacing: 1.4; Layout.fillWidth: true }
-                            Text { text: root.memUsed.toFixed(1)+" / "+root.memTotal.toFixed(1)+" GB"; color: colors.foreground; font.family:"FiraCode Nerd Font"; font.pixelSize: 11; font.weight: Font.Bold }
+                            Text { text: "MEMORY"; color: colors.tertiary; font.family: colors.fontSans; font.pixelSize: 10; font.weight: Font.ExtraBold; font.letterSpacing: 1.4; Layout.fillWidth: true }
+                            Text { text: root.memUsed.toFixed(1)+" / "+root.memTotal.toFixed(1)+" GB"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.Bold }
                         }
-                        Text { text: Math.round(root.memPct)+"% used"; color: colors.alpha(colors.outline,0.7); font.family:"FiraCode Nerd Font"; font.pixelSize: 9 }
+                        Text { text: Math.round(root.memPct)+"% used"; color: colors.alpha(colors.outline,0.7); font.family: colors.fontSans; font.pixelSize: 9 }
                         Canvas {
                                 antialiasing: true
                                 
@@ -214,9 +214,9 @@ FloatingWindow {
                         anchors.fill: parent
                         anchors.margins: 12
                         spacing: 6
-                        Text { text: "NETWORK"; color: colors.primary; font.family:"FiraCode Nerd Font"; font.pixelSize: 10; font.weight: Font.ExtraBold; font.letterSpacing: 1.4 }
+                        Text { text: "NETWORK"; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 10; font.weight: Font.ExtraBold; font.letterSpacing: 1.4 }
                         NetRate { id: netRate }
-                        Text { text: "↓ "+netRate.fmt(netRate.rxKbs)+"   ↑ "+netRate.fmt(netRate.txKbs); color: colors.foreground; font.family:"FiraCode Nerd Font"; font.pixelSize: 11; font.weight: Font.Bold }
+                        Text { text: "↓ "+netRate.fmt(netRate.rxKbs)+"   ↑ "+netRate.fmt(netRate.txKbs); color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.Bold }
                         Canvas {
                                 antialiasing: true
                                 
@@ -233,7 +233,7 @@ FloatingWindow {
                             }
                             Connections { target: netRate; function onRxHistoryChanged(){ netCanvas.requestPaint() } }
                         }
-                        Text { text: "total ↓ "+netRate.fmtTotal(netRate.totalRxMb)+"  ↑ "+netRate.fmtTotal(netRate.totalTxMb); color: colors.alpha(colors.outline,0.6); font.family:"FiraCode Nerd Font"; font.pixelSize: 8 }
+                        Text { text: "total ↓ "+netRate.fmtTotal(netRate.totalRxMb)+"  ↑ "+netRate.fmtTotal(netRate.totalTxMb); color: colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 8 }
                     }
                 }
             }
@@ -253,7 +253,7 @@ FloatingWindow {
                     placeholderText: "  Filter processes…"
                     placeholderTextColor: colors.alpha(colors.outline,0.5)
                     color: colors.foreground
-                    font.family: "FiraCode Nerd Font"
+                    font.family: colors.fontSans
                     font.pixelSize: 12
                     background: Rectangle {
                         radius: 12
@@ -271,11 +271,11 @@ FloatingWindow {
                         width: 52; height: 28; radius: 8
                         color: root.sortBy===modelData.k ? colors.alpha(colors.primary,0.25) : colors.alpha(colors.surface,0.6)
                         border.width:1; border.color: root.sortBy===modelData.k ? colors.alpha(colors.primary,0.4) : colors.alpha(colors.outline,0.12)
-                        Text { anchors.centerIn: parent; text: modelData.l; color: root.sortBy===modelData.k?colors.primary:colors.alpha(colors.outline,0.8); font.family:"FiraCode Nerd Font"; font.pixelSize: 9; font.weight: Font.Bold }
+                        Text { anchors.centerIn: parent; text: modelData.l; color: root.sortBy===modelData.k?colors.primary:colors.alpha(colors.outline,0.8); font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold }
                         MouseArea { anchors.fill: parent; onClicked: root.sortBy = modelData.k }
                     }
                 }
-                Text { text: root.filteredProcesses.length+" / "+root.processes.length; color: colors.alpha(colors.outline,0.6); font.family:"FiraCode Nerd Font"; font.pixelSize: 9; Layout.preferredWidth: 60; horizontalAlignment: Text.AlignRight }
+                Text { text: root.filteredProcesses.length+" / "+root.processes.length; color: colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 9; Layout.preferredWidth: 60; horizontalAlignment: Text.AlignRight }
                 Rectangle {
                     width: 28; height: 28; radius: 8
                     color: refreshMa.containsMouse?colors.alpha(colors.primary,0.15):"transparent"
@@ -287,7 +287,7 @@ FloatingWindow {
             RowLayout {
                 Layout.fillWidth: true
                 spacing: 6
-                Text { text: "TOP RAM EATERS"; color: colors.tertiary; font.family:"FiraCode Nerd Font"; font.pixelSize: 8; font.weight: Font.Bold; font.letterSpacing: 0.8 }
+                Text { text: "TOP RAM EATERS"; color: colors.tertiary; font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold; font.letterSpacing: 0.8 }
                 Repeater {
                     model: [10,20,40,0]
                     delegate: Rectangle {
@@ -295,7 +295,7 @@ FloatingWindow {
                         width: 44; height: 22; radius: 7
                         color: root.topN===modelData ? colors.alpha(colors.primary,0.22) : colors.alpha(colors.surface,0.6)
                         border.width:1; border.color: root.topN===modelData ? colors.alpha(colors.primary,0.4) : colors.alpha(colors.outline,0.12)
-                        Text { anchors.centerIn: parent; text: modelData===0?"All":modelData; color: root.topN===modelData?colors.primary:colors.alpha(colors.outline,0.8); font.family:"FiraCode Nerd Font"; font.pixelSize: 9; font.weight: Font.Bold }
+                        Text { anchors.centerIn: parent; text: modelData===0?"All":modelData; color: root.topN===modelData?colors.primary:colors.alpha(colors.outline,0.8); font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold }
                         MouseArea { anchors.fill: parent; onClicked: root.topN = modelData }
                     }
                 }
@@ -306,10 +306,10 @@ FloatingWindow {
             RowLayout {
                 Layout.fillWidth: true
                 spacing: 8
-                Text { text: "PID"; color: colors.alpha(colors.outline,0.6); font.family:"FiraCode Nerd Font"; font.pixelSize: 8; font.weight: Font.Bold; Layout.preferredWidth: 70 }
-                Text { text: "COMMAND"; color: colors.alpha(colors.outline,0.6); font.family:"FiraCode Nerd Font"; font.pixelSize: 8; font.weight: Font.Bold; Layout.fillWidth: true }
-                Text { text: "CPU%"; color: colors.alpha(colors.outline,0.6); font.family:"FiraCode Nerd Font"; font.pixelSize: 8; font.weight: Font.Bold; Layout.preferredWidth: 60; horizontalAlignment: Text.AlignRight }
-                Text { text: "MEM%"; color: colors.alpha(colors.outline,0.6); font.family:"FiraCode Nerd Font"; font.pixelSize: 8; font.weight: Font.Bold; Layout.preferredWidth: 60; horizontalAlignment: Text.AlignRight }
+                Text { text: "PID"; color: colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold; Layout.preferredWidth: 70 }
+                Text { text: "COMMAND"; color: colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold; Layout.fillWidth: true }
+                Text { text: "CPU%"; color: colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold; Layout.preferredWidth: 60; horizontalAlignment: Text.AlignRight }
+                Text { text: "MEM%"; color: colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold; Layout.preferredWidth: 60; horizontalAlignment: Text.AlignRight }
 
             }
 
@@ -333,10 +333,10 @@ FloatingWindow {
                         anchors.fill: parent
                         anchors.leftMargin: 10; anchors.rightMargin: 8
                         spacing: 8
-                        Text { text: modelData.pid; color: colors.alpha(colors.outline,0.7); font.family:"FiraCode Nerd Font"; font.pixelSize: 9; Layout.preferredWidth: 60 }
-                        Text { text: modelData.name; color: colors.foreground; font.family:"FiraCode Nerd Font"; font.pixelSize: 10; elide: Text.ElideRight; Layout.fillWidth: true }
-                        Rectangle { width: 48; height: 14; radius: 7; color: colors.alpha(colors.secondary, parseFloat(modelData.cpu)/100*0.35+0.08); Text { anchors.centerIn: parent; text: modelData.cpu+"%"; color: colors.secondary; font.family:"FiraCode Nerd Font"; font.pixelSize: 8; font.weight: Font.Bold } }
-                        Rectangle { width: 48; height: 14; radius: 7; color: colors.alpha(colors.tertiary, parseFloat(modelData.mem)/100*0.35+0.08); Text { anchors.centerIn: parent; text: modelData.mem+"%"; color: colors.tertiary; font.family:"FiraCode Nerd Font"; font.pixelSize: 8; font.weight: Font.Bold } }
+                        Text { text: modelData.pid; color: colors.alpha(colors.outline,0.7); font.family: colors.fontSans; font.pixelSize: 9; Layout.preferredWidth: 60 }
+                        Text { text: modelData.name; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 10; elide: Text.ElideRight; Layout.fillWidth: true }
+                        Rectangle { width: 48; height: 14; radius: 7; color: colors.alpha(colors.secondary, parseFloat(modelData.cpu)/100*0.35+0.08); Text { anchors.centerIn: parent; text: modelData.cpu+"%"; color: colors.secondary; font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold } }
+                        Rectangle { width: 48; height: 14; radius: 7; color: colors.alpha(colors.tertiary, parseFloat(modelData.mem)/100*0.35+0.08); Text { anchors.centerIn: parent; text: modelData.mem+"%"; color: colors.tertiary; font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold } }
                     }
                     MouseArea { id: maProc; anchors.fill: parent; hoverEnabled:true }
                 }

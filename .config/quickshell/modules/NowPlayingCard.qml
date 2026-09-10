@@ -102,7 +102,7 @@ PanelWindow {
                 Layout.fillWidth: true
                 text: root.hasPlayer ? (player.trackTitle || "Unknown") : ""
                 color: "white"
-                font.family: "FiraCode Nerd Font"
+                font.family: colors.fontSans
                 font.pixelSize: 13
                 font.weight: Font.Bold
                 elide: Text.ElideRight
@@ -116,7 +116,7 @@ PanelWindow {
                     return (a && a.length > 0 ? a : "Unknown artist") + "  ·  " + (root.isPlaying ? "Playing" : "Paused")
                 }
                 color: Qt.rgba(1, 1, 1, 0.65)
-                font.family: "FiraCode Nerd Font"
+                font.family: colors.fontSans
                 font.pixelSize: 10
                 elide: Text.ElideRight
             }

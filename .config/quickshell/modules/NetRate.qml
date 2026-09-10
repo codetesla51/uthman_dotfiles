@@ -9,6 +9,7 @@ Item {
     property real rxKbs: 0   // download KB/s
     property real txKbs: 0   // upload KB/s
     property var rxHistory: []   // last N samples for sparklines
+    property var txHistory: []   // last N samples for sparklines
     readonly property int historyLen: 40
     property real totalRxMb: 0   // cumulative since boot
     property real totalTxMb: 0
@@ -55,6 +56,11 @@ Item {
             h.push(root.rxKbs)
             if (h.length > root.historyLen) h.shift()
             root.rxHistory = h
+
+            var th = root.txHistory.slice()
+            th.push(root.txKbs)
+            if (th.length > root.historyLen) th.shift()
+            root.txHistory = th
         }
     }
 

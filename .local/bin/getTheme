@@ -70,6 +70,7 @@ timeout 5 swaync-client --reload-css 2>/dev/null &
 pkill -SIGUSR1 mako 2>/dev/null &
 pkill -SIGUSR2 -x ghostty 2>/dev/null & true
 gen-zed-theme 2>/dev/null & true
+syncLimusicTheme 2>/dev/null & true
 
 # Live-update Cavasik colors (matugen already regenerated ~/.config/cavasik/colors.rgb)
 dbus-send --session --type=method_call --dest="io.github.TheWisker.Cavasik" \

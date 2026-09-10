@@ -26,7 +26,7 @@ Item {
             anchors.centerIn: parent
             text: ""
             color: colors.primary
-            font.family: "FiraCode Nerd Font"
+            font.family: colors.fontSans
             font.pixelSize: 16
         }
 

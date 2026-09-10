@@ -32,6 +32,7 @@ PanelWindow {
     property bool purSketchy: false
     property bool purNsfw: false
     property string sorting: "toplist"
+    property var tags: []              // active search tags (AND-matched with free query)
     property int page: 1
     property int lastPage: 1
     property bool loading: false
@@ -46,6 +47,7 @@ PanelWindow {
     property var selected: ({})
     property int selCount: 0
     property int previewIdx: -1         // -1 = no preview
+    property var pvTags: []             // tags of the previewed wall (fetched per open)
     property var localFiles: []
     property bool scanningLocal: false
     readonly property string sortParam: sorting === "latest" ? "date_added" : sorting
@@ -167,7 +169,9 @@ PanelWindow {
 
     // ── search ──
     function apiUrl(pg, fallback){
-        var u = "https://wallhaven.cc/api/v1/search?q=" + encodeURIComponent(root.query)
+        var terms = root.tags.slice()
+        if(root.query.trim() !== "") terms.push(root.query.trim())
+        var u = "https://wallhaven.cc/api/v1/search?q=" + encodeURIComponent(terms.join(" "))
         u += "&categories=" + root.catParam + "&purity=" + root.purParam
         u += "&sorting=" + root.sortParam + "&order=desc&page=" + pg
         if(!fallback) u += "&resolutions=" + root.resolution
@@ -201,6 +205,22 @@ PanelWindow {
         stdout: StdioCollector {
             waitForEnd: true
             onStreamFinished: root.applyResults(text)
+        }
+    }
+    // ── per-wall meta: tags for the preview overlay ──
+    Process {
+        id: wallProc
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: {
+                var d = null
+                try { d = JSON.parse(text) } catch(e) {}
+                var t = []
+                if(d && d.data && d.data.tags){
+                    for(var i=0;i<d.data.tags.length;i++) t.push(d.data.tags[i].name)
+                }
+                root.pvTags = t
+            }
         }
     }
     function applyResults(text){
@@ -390,6 +410,25 @@ PanelWindow {
             }
         }
     }
+    function openPreview(i){
+        root.previewIdx = i
+        root.pvTags = []
+        if(i < 0) return
+        var w = root.wAt(i)
+        if(w){
+            wallProc.command = ["sh","-c","curl -sS -m 15 -H 'User-Agent: wallshelf/1.0' 'https://wallhaven.cc/api/v1/w/"+w.id.replace(/'/g,"'\\''")+"' 2>/dev/null"]
+            wallProc.running = true
+        }
+    }
+    function addTags(str){
+        var t = root.tags.slice()
+        var parts = str.split(",")
+        for(var i=0;i<parts.length;i++){
+            var n = parts[i].trim().replace(/^#/, "").toLowerCase()
+            if(n && t.indexOf(n) === -1) t.push(n)
+        }
+        if(t.length !== root.tags.length){ root.tags = t; root.search(true) }
+    }
     function toggleSelect(w){
         if(!w) return
         var s = Object.assign({}, root.selected)
@@ -437,7 +476,7 @@ PanelWindow {
             else if(e.key === Qt.Key_Right){ grid.moveCurrentIndexRight(); e.accepted = true }
             else if(e.key === Qt.Key_Up){ grid.moveCurrentIndexUp(); e.accepted = true }
             else if(e.key === Qt.Key_Down){ grid.moveCurrentIndexDown(); e.accepted = true }
-            else if(e.key === Qt.Key_Return || e.key === Qt.Key_Enter){ root.previewIdx = grid.currentIndex; e.accepted = true }
+            else if(e.key === Qt.Key_Return || e.key === Qt.Key_Enter){ root.openPreview(grid.currentIndex); e.accepted = true }
         }
 
         ColumnLayout {
@@ -448,12 +487,19 @@ PanelWindow {
             // header: tabs + search + loader + close
             RowLayout {
                 Layout.fillWidth: true; spacing: 10
-                Text { text: "WALLSHELF"; color: colors.primary; font.family: "FiraCode Nerd Font"; font.pixelSize: 13; font.weight: Font.Bold; font.letterSpacing: 1 }
+                Text { text: "WALLSHELF"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 13; font.weight: Font.ExtraBold; font.letterSpacing: 1.3; Layout.alignment: Qt.AlignVCenter }
+                Rectangle {
+                    Layout.preferredWidth: 28; Layout.preferredHeight: 28; radius: 14
+                    color: colors.alpha(colors.primary, 0.15)
+                    border.width: 1; border.color: colors.alpha(colors.primary, 0.3)
+                    Text { anchors.centerIn: parent; text: "▦"; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 13 }
+                    Layout.alignment: Qt.AlignVCenter
+                }
                 Repeater { model: [{k:"browse",t:"Browse"},{k:"downloaded",t:"Downloaded"}]
                     Rectangle { width: 104; height: 30; radius: 15
-                        color: root.tab === modelData.k ? colors.alpha(colors.primary, 0.25) : colors.alpha(colors.surface, 0.5)
-                        border.width: 1; border.color: colors.alpha(colors.outline, 0.12)
-                        Text { anchors.centerIn: parent; text: modelData.t; color: colors.foreground; font.family: "FiraCode Nerd Font"; font.pixelSize: 9; font.weight: Font.Bold }
+                        color: root.tab === modelData.k ? colors.alpha(colors.primary, 0.2) : colors.alpha(colors.surface, 0.5)
+                        border.width: 1; border.color: root.tab === modelData.k ? colors.alpha(colors.primary, 0.45) : colors.alpha(colors.outline, 0.12)
+                        Text { anchors.centerIn: parent; text: modelData.t; color: root.tab === modelData.k ? colors.primary : colors.foreground; font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold; font.letterSpacing: 0.5 }
                         MouseArea { anchors.fill: parent; hoverEnabled: true; onClicked: { root.tab = modelData.k; if(root.tab === "downloaded") root.refreshLocal() } }
                     }
                 }
@@ -462,8 +508,8 @@ PanelWindow {
                     color: colors.alpha(colors.surface, 0.85)
                     border.width: 1; border.color: qField.activeFocus ? colors.alpha(colors.primary, 0.5) : colors.alpha(colors.outline, 0.14)
                     RowLayout { anchors.fill: parent; anchors.leftMargin: 10; anchors.rightMargin: 8; spacing: 6
-                        Text { text: ""; color: colors.alpha(colors.outline, 0.6); font.family: "FiraCode Nerd Font"; font.pixelSize: 11 }
-                        TextField { id: qField; Layout.fillWidth: true; placeholderText: "Search Wallhaven…  (v/s select • d download • t delete)"; placeholderTextColor: colors.alpha(colors.outline, 0.45); color: colors.foreground; font.family: "FiraCode Nerd Font"; font.pixelSize: 10; background: null; selectByMouse: true; onAccepted: { root.query = text.trim(); root.search(true) } }
+                        Text { text: "󰍉"; color: colors.alpha(colors.outline, 0.6); font.family: colors.fontSans; font.pixelSize: 11 }
+                        TextField { id: qField; Layout.fillWidth: true; placeholderText: "Search Wallhaven…  (v/s select • d download • t delete)"; placeholderTextColor: colors.alpha(colors.outline, 0.45); color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 10; background: null; selectByMouse: true; onAccepted: { root.query = text.trim(); root.search(true) } }
                     }
                 }
                 // loader (font-independent spinning bar)
@@ -484,7 +530,7 @@ PanelWindow {
                     visible: root.selCount > 0; width: 150; height: 34; radius: 9
                     color: bulkMa.containsMouse ? colors.alpha(colors.primary, 0.3) : colors.alpha(colors.primary, 0.18)
                     border.width: 1; border.color: colors.alpha(colors.primary, 0.4)
-                    Text { anchors.centerIn: parent; text: "↓ " + root.selCount + " selected"; color: colors.primary; font.family: "FiraCode Nerd Font"; font.pixelSize: 9; font.weight: Font.ExtraBold }
+                    Text { anchors.centerIn: parent; text: "↓ " + root.selCount + " selected"; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.ExtraBold }
                     MouseArea { id: bulkMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.downloadBulk() }
                 }
             }
@@ -492,8 +538,8 @@ PanelWindow {
             // applied-query echo (tags visibly applied) + counts
             Text {
                 visible: root.tab === "browse"
-                text: (root.query !== "" ? "\"" + root.query + "\"  •  " : "") + resultModel.count + " walls" + (root.page > 1 || root.lastPage > 1 ? "  •  page " + root.page + "/" + root.lastPage : "") + "  •  " + root.resolution
-                color: colors.alpha(colors.outline, 0.65); font.family: "FiraCode Nerd Font"; font.pixelSize: 8
+                text: (root.tags.length ? "TAGS: " + root.tags.join(" + ") + "  •  " : "") + (root.query !== "" ? "q: \"" + root.query + "\"  •  " : "") + resultModel.count + " walls" + (root.page > 1 || root.lastPage > 1 ? "  •  page " + root.page + "/" + root.lastPage : "") + "  •  " + root.resolution
+                color: colors.alpha(colors.outline, 0.65); font.family: colors.fontSans; font.pixelSize: 8
             }
 
             // filter row
@@ -503,18 +549,18 @@ PanelWindow {
                 Repeater { model: [{k:"g",t:"General"},{k:"a",t:"Anime"},{k:"p",t:"People"}]
                     Rectangle { width: 74; height: 26; radius: 13
                         property bool on: modelData.k === "g" ? root.catGeneral : (modelData.k === "a" ? root.catAnime : root.catPeople)
-                        color: on ? colors.alpha(colors.primary, 0.25) : colors.alpha(colors.surface, 0.5)
-                        border.width: 1; border.color: colors.alpha(colors.outline, 0.12)
-                        Text { anchors.centerIn: parent; text: modelData.t; color: colors.foreground; font.family: "FiraCode Nerd Font"; font.pixelSize: 8; font.weight: Font.Bold }
+                        color: on ? colors.alpha(colors.primary, 0.2) : colors.alpha(colors.surface, 0.5)
+                        border.width: 1; border.color: on ? colors.alpha(colors.primary, 0.45) : colors.alpha(colors.outline, 0.12)
+                        Text { anchors.centerIn: parent; text: modelData.t; color: on ? colors.primary : colors.foreground; font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold; font.letterSpacing: 0.5 }
                         MouseArea { anchors.fill: parent; hoverEnabled: true; onClicked: { if(modelData.k === "g") root.catGeneral = !root.catGeneral; else if(modelData.k === "a") root.catAnime = !root.catAnime; else root.catPeople = !root.catPeople; root.search(true) } }
                     }
                 }
                 Repeater { model: [{k:"s",t:"SFW"},{k:"k",t:"Sketchy"},{k:"n",t:"NSFW"}]
                     Rectangle { width: 64; height: 26; radius: 13
                         property bool on: modelData.k === "s" ? true : (modelData.k === "k" ? root.purSketchy : root.purNsfw)
-                        color: on ? colors.alpha(colors.tertiary, 0.25) : colors.alpha(colors.surface, 0.5)
-                        border.width: 1; border.color: colors.alpha(colors.outline, 0.12)
-                        Text { anchors.centerIn: parent; text: modelData.t; color: (modelData.k !== "s" && root.apiKey === "") ? colors.alpha(colors.outline, 0.45) : colors.foreground; font.family: "FiraCode Nerd Font"; font.pixelSize: 8; font.weight: Font.Bold }
+                        color: on ? colors.alpha(colors.tertiary, 0.2) : colors.alpha(colors.surface, 0.5)
+                        border.width: 1; border.color: on ? colors.alpha(colors.tertiary, 0.45) : colors.alpha(colors.outline, 0.12)
+                        Text { anchors.centerIn: parent; text: modelData.t; color: (modelData.k !== "s" && root.apiKey === "") ? colors.alpha(colors.outline, 0.45) : (on ? colors.tertiary : colors.foreground); font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold; font.letterSpacing: 0.5 }
                         MouseArea { anchors.fill: parent; hoverEnabled: true; onClicked: {
                             if(modelData.k === "s") return
                             if(root.apiKey === ""){ root.errorMsg = "Sketchy/NSFW need an API key (see wallshelf.json)"; return }
@@ -525,15 +571,44 @@ PanelWindow {
                 }
                 Repeater { model: [{k:"toplist",t:"Top"},{k:"latest",t:"New"},{k:"random",t:"Random"},{k:"views",t:"Views"}]
                     Rectangle { width: 62; height: 26; radius: 13
-                        color: root.sorting === modelData.k ? colors.alpha(colors.primary, 0.25) : colors.alpha(colors.surface, 0.5)
-                        border.width: 1; border.color: colors.alpha(colors.outline, 0.12)
-                        Text { anchors.centerIn: parent; text: modelData.t; color: colors.foreground; font.family: "FiraCode Nerd Font"; font.pixelSize: 8; font.weight: Font.Bold }
+                        color: root.sorting === modelData.k ? colors.alpha(colors.primary, 0.2) : colors.alpha(colors.surface, 0.5)
+                        border.width: 1; border.color: root.sorting === modelData.k ? colors.alpha(colors.primary, 0.45) : colors.alpha(colors.outline, 0.12)
+                        Text { anchors.centerIn: parent; text: modelData.t; color: root.sorting === modelData.k ? colors.primary : colors.foreground; font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold; font.letterSpacing: 0.5 }
                         MouseArea { anchors.fill: parent; hoverEnabled: true; onClicked: { root.sorting = modelData.k; root.search(true) } }
                     }
                 }
             }
 
-            Text { visible: root.errorMsg !== ""; text: root.errorMsg; color: colors.error; font.family: "FiraCode Nerd Font"; font.pixelSize: 9; Layout.alignment: Qt.AlignHCenter }
+            // ── tags: first-class chips + input (AND-matched with free query) ──
+            RowLayout {
+                visible: root.tab === "browse"
+                Layout.fillWidth: true; spacing: 6
+                Text { text: "TAGS"; color: colors.alpha(colors.outline, 0.55); font.family: colors.fontSans; font.pixelSize: 7; font.weight: Font.Bold; font.letterSpacing: 1.3; Layout.alignment: Qt.AlignVCenter }
+                RowLayout {
+                    Layout.fillWidth: true; spacing: 6; clip: true
+                    Repeater { model: root.tags
+                        Rectangle { height: 22; radius: 11; color: colors.alpha(colors.tertiary, 0.15); border.width: 1; border.color: colors.alpha(colors.tertiary, 0.35)
+                            RowLayout { anchors.fill: parent; anchors.leftMargin: 8; anchors.rightMargin: 5; spacing: 5
+                                Text { text: "#" + modelData; color: colors.tertiary; font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold }
+                                Text { text: "✕"; color: colors.alpha(colors.tertiary, 0.8); font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold
+                                    MouseArea { anchors.fill: parent; hoverEnabled: true; onClicked: { var t = root.tags.slice(); t.splice(index, 1); root.tags = t; root.search(true) } } }
+                            }
+                        }
+                    }
+                }
+                Rectangle {
+                    Layout.preferredWidth: 210; height: 26; radius: 13
+                    color: colors.alpha(colors.surface, 0.85)
+                    border.width: 1; border.color: tagField.activeFocus ? colors.alpha(colors.tertiary, 0.5) : colors.alpha(colors.outline, 0.14)
+                    RowLayout { anchors.fill: parent; anchors.leftMargin: 10; anchors.rightMargin: 6; spacing: 6
+                        Text { text: "󰍉"; color: colors.alpha(colors.tertiary, 0.7); font.family: colors.fontSans; font.pixelSize: 10 }
+                        TextField { id: tagField; Layout.fillWidth: true; placeholderText: "add tags (comma sep)"; placeholderTextColor: colors.alpha(colors.outline, 0.45); color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 9; background: null; selectByMouse: true
+                            onAccepted: { root.addTags(text); text = "" } }
+                    }
+                }
+            }
+
+            Text { visible: root.errorMsg !== ""; text: root.errorMsg; color: colors.error; font.family: colors.fontSans; font.pixelSize: 9; Layout.alignment: Qt.AlignHCenter }
 
             // ── browse grid ──
             GridView {
@@ -570,14 +645,14 @@ PanelWindow {
                         anchors.left: parent.left; anchors.bottom: parent.bottom; anchors.margins: 7
                         width: resText.implicitWidth + 12; height: 18; radius: 9
                         color: colors.alpha(colors.background, 0.78)
-                        Text { id: resText; anchors.centerIn: parent; text: wres; color: colors.foreground; font.family: "FiraCode Nerd Font"; font.pixelSize: 7; font.weight: Font.Bold }
+                        Text { id: resText; anchors.centerIn: parent; text: wres; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 7; font.weight: Font.Bold }
                     }
                     Rectangle {
                         anchors.right: parent.right; anchors.top: parent.top; anchors.margins: 7
                         width: 22; height: 22; radius: 11
                         visible: !!root.downloaded[wid]
                         color: colors.alpha(colors.primary, 0.9)
-                        Text { anchors.centerIn: parent; text: "✓"; color: colors.alpha(colors.background, 1); font.family: "FiraCode Nerd Font"; font.pixelSize: 11; font.weight: Font.ExtraBold }
+                        Text { anchors.centerIn: parent; text: "✓"; color: colors.alpha(colors.background, 1); font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.ExtraBold }
                     }
                     // selected checkbox (top-left) + progress overlay
                     Rectangle {
@@ -586,7 +661,7 @@ PanelWindow {
                         color: root.selected[wid] ? colors.alpha(colors.primary, 0.9) : colors.alpha(colors.background, 0.6)
                         border.width: 1; border.color: colors.alpha(colors.primary, 0.6)
                         visible: root.selected[wid] || thumbMa.containsMouse
-                        Text { anchors.centerIn: parent; text: "✓"; visible: root.selected[wid]; color: colors.alpha(colors.background, 1); font.family: "FiraCode Nerd Font"; font.pixelSize: 11; font.weight: Font.ExtraBold }
+                        Text { anchors.centerIn: parent; text: "✓"; visible: root.selected[wid]; color: colors.alpha(colors.background, 1); font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.ExtraBold }
                         MouseArea { anchors.fill: parent; onClicked: root.toggleSelect({id: wid}) }
                     }
                     Rectangle {
@@ -600,7 +675,7 @@ PanelWindow {
                             width: Math.max(0, (parent.width - 6) * ((root.dlState[wid] || {}).pct || 0) / 100)
                             color: colors.alpha(colors.primary, 0.7)
                         }
-                        Text { anchors.centerIn: parent; text: ((root.dlState[wid] || {}).status === "queued") ? "queued" : (Math.round(((root.dlState[wid] || {}).pct || 0)) + "%  ↓"); color: colors.foreground; font.family: "FiraCode Nerd Font"; font.pixelSize: 8; font.weight: Font.Bold }
+                        Text { anchors.centerIn: parent; text: ((root.dlState[wid] || {}).status === "queued") ? "queued" : (Math.round(((root.dlState[wid] || {}).pct || 0)) + "%  ↓"); color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold }
                     }
                     MouseArea {
                         id: thumbMa; anchors.fill: parent; hoverEnabled: true
@@ -635,7 +710,7 @@ PanelWindow {
                         anchors.left: parent.left; anchors.bottom: parent.bottom; anchors.margins: 7
                         width: Math.min(sizeText.implicitWidth + 12, parent.width - 14); height: 18; radius: 9
                         color: colors.alpha(colors.background, 0.78)
-                        Text { id: sizeText; anchors.centerIn: parent; text: modelData.name + "  •  " + modelData.size + "K"; color: colors.foreground; font.family: "FiraCode Nerd Font"; font.pixelSize: 7; elide: Text.ElideRight; width: parent.width - 12; horizontalAlignment: Text.AlignHCenter }
+                        Text { id: sizeText; anchors.centerIn: parent; text: modelData.name + "  •  " + modelData.size + "K"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 7; elide: Text.ElideRight; width: parent.width - 12; horizontalAlignment: Text.AlignHCenter }
                     }
                     MouseArea {
                         id: localMa; anchors.fill: parent; hoverEnabled: true
@@ -646,10 +721,10 @@ PanelWindow {
             Text {
                 visible: root.tab === "downloaded"
                 text: root.scanningLocal ? "Scanning…" : (root.localFiles.length + " files  •  t deletes hovered (via keyboard: focus + t)")
-                color: colors.alpha(colors.outline, 0.55); font.family: "FiraCode Nerd Font"; font.pixelSize: 8; Layout.alignment: Qt.AlignHCenter
+                color: colors.alpha(colors.outline, 0.55); font.family: colors.fontSans; font.pixelSize: 8; Layout.alignment: Qt.AlignHCenter
             }
 
-            Text { visible: root.tab === "browse"; text: "arrows move • v/s select • d download • t delete • enter preview"; color: colors.alpha(colors.outline, 0.45); font.family: "FiraCode Nerd Font"; font.pixelSize: 7; Layout.alignment: Qt.AlignHCenter }
+            Text { visible: root.tab === "browse"; text: "arrows move · v/s select · d download · t delete · enter preview · click tags to search"; color: colors.alpha(colors.outline, 0.45); font.family: colors.fontSans; font.pixelSize: 7; Layout.alignment: Qt.AlignHCenter }
         }
 
         // ── preview overlay ──
@@ -661,10 +736,10 @@ PanelWindow {
                 anchors.fill: parent; anchors.margins: 18; spacing: 10
                 RowLayout {
                     Layout.fillWidth: true; spacing: 10
-                    Text { text: (root.previewIdx + 1) + " / " + resultModel.count; color: colors.alpha(colors.outline, 0.7); font.family: "FiraCode Nerd Font"; font.pixelSize: 9 }
-                    Text { Layout.fillWidth: true; horizontalAlignment: Text.AlignCenter; elide: Text.ElideMiddle; text: root.previewIdx !== -1 && root.wAt(root.previewIdx) ? (root.wAt(root.previewIdx).res + "  •  " + root.wAt(root.previewIdx).id) : ""; color: colors.foreground; font.family: "FiraCode Nerd Font"; font.pixelSize: 10; font.weight: Font.Bold }
+                    Text { text: (root.previewIdx + 1) + " / " + resultModel.count; color: colors.alpha(colors.outline, 0.7); font.family: colors.fontSans; font.pixelSize: 9 }
+                    Text { Layout.fillWidth: true; horizontalAlignment: Text.AlignCenter; elide: Text.ElideMiddle; text: root.previewIdx !== -1 && root.wAt(root.previewIdx) ? (root.wAt(root.previewIdx).res + "  •  " + root.wAt(root.previewIdx).id) : ""; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 10; font.weight: Font.Bold }
                     Rectangle { width: 30; height: 30; radius: 15; color: pvCloseMa.containsMouse ? colors.alpha(colors.error, 0.18) : colors.alpha(colors.surface, 0.6); border.width: 1; border.color: colors.alpha(colors.outline, 0.15)
-                        Text { anchors.centerIn: parent; text: "✕"; color: colors.foreground; font.family: "FiraCode Nerd Font"; font.pixelSize: 12; font.weight: Font.Bold }
+                        Text { anchors.centerIn: parent; text: "✕"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 12; font.weight: Font.Bold }
                         MouseArea { id: pvCloseMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.previewIdx = -1 } }
                 }
                 Image {
@@ -675,12 +750,32 @@ PanelWindow {
                     cache: false
                 }
                 RowLayout {
+                    visible: root.pvTags.length > 0
+                    Layout.fillWidth: true; spacing: 6; Layout.preferredHeight: 22
+                    Text { text: "TAGS:"; color: colors.alpha(colors.outline, 0.6); font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold; font.letterSpacing: 1; Layout.alignment: Qt.AlignVCenter }
+                    ListView {
+                        Layout.fillWidth: true; Layout.preferredHeight: 22; spacing: 6; orientation: ListView.Horizontal; clip: true
+                        model: root.pvTags
+                        delegate: Rectangle { implicitWidth: tagText.implicitWidth + 16; height: 22; radius: 11
+                            color: pvTagMa.containsMouse ? colors.alpha(colors.tertiary, 0.28) : colors.alpha(colors.tertiary, 0.15)
+                            border.width: 1; border.color: colors.alpha(colors.tertiary, 0.35)
+                            Text { id: tagText; anchors.centerIn: parent; text: "#" + modelData; color: colors.tertiary; font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold }
+                            MouseArea { id: pvTagMa; anchors.fill: parent; hoverEnabled: true; onClicked: {
+                                var t = root.tags.slice(); t.push(modelData)
+                                root.tags = t
+                                root.previewIdx = -1
+                                root.search(true)
+                            } }
+                        }
+                    }
+                }
+                RowLayout {
                     Layout.fillWidth: true; spacing: 10; Layout.alignment: Qt.AlignHCenter
                     Rectangle { width: 150; height: 36; radius: 10; color: pvDlMa.containsMouse ? colors.alpha(colors.primary, 0.32) : colors.alpha(colors.primary, 0.2); border.width: 1; border.color: colors.alpha(colors.primary, 0.5)
-                        Text { anchors.centerIn: parent; text: "↓ Download"; color: colors.primary; font.family: "FiraCode Nerd Font"; font.pixelSize: 10; font.weight: Font.ExtraBold }
+                        Text { anchors.centerIn: parent; text: "↓ Download"; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 10; font.weight: Font.ExtraBold }
                         MouseArea { id: pvDlMa; anchors.fill: parent; hoverEnabled: true; onClicked: { var w = root.wAt(root.previewIdx); if(w) root.downloadOne(w) } } }
                     Rectangle { width: 130; height: 36; radius: 10; color: pvDelMa.containsMouse ? colors.alpha(colors.error, 0.2) : colors.alpha(colors.surface, 0.6); border.width: 1; border.color: colors.alpha(colors.outline, 0.15)
-                        Text { anchors.centerIn: parent; text: "Delete"; color: colors.error; font.family: "FiraCode Nerd Font"; font.pixelSize: 10; font.weight: Font.Bold }
+                        Text { anchors.centerIn: parent; text: "Delete"; color: colors.error; font.family: colors.fontSans; font.pixelSize: 10; font.weight: Font.Bold }
                         MouseArea { id: pvDelMa; anchors.fill: parent; hoverEnabled: true; onClicked: { var w = root.wAt(root.previewIdx); if(w){ root.removeWall(w); root.previewIdx = -1 } } } }
                 }
             }

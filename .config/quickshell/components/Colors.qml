@@ -26,6 +26,11 @@ Item {
     readonly property real pillBorder: 0.15
     readonly property real pillBorderHover: 0.45
 
+    // Single font knob — swap here to re-font every module.
+    readonly property string fontSans: "FiraCode Nerd Font"
+
+    readonly property string fontHeading: "FiraCode Nerd Font"
+
     function apply(css) {
         var re = /@define-color\s+(\w+)\s+(#[0-9a-fA-F]{6})\s*;/g
         var m

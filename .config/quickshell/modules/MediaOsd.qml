@@ -106,7 +106,7 @@ PanelWindow {
                           ? (root.off ? chr_micoff : chr_mic)
                         : (root.value <= 20 ? chr_night : chr_sun)
                 color: root.off ? colors.error : colors.primary
-                font.family: "FiraCode Nerd Font"
+                font.family: colors.fontSans
                 font.pixelSize: 20
                 Behavior on color { ColorAnimation { duration: 200 } }
             }
@@ -122,7 +122,7 @@ PanelWindow {
                         : root.mode === "mic" ? (root.off ? "MIC MUTED" : "MICROPHONE")
                         : "BRIGHTNESS"
                     color: root.off ? colors.error : colors.foreground
-                    font.family: "FiraCode Nerd Font"
+                    font.family: colors.fontSans
                     font.pixelSize: 10
                     font.weight: Font.Bold
                     font.letterSpacing: 1.5

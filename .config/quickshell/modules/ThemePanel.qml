@@ -158,12 +158,12 @@ PanelWindow {
                 Layout.fillWidth: true
                 spacing: 10
                 Item { Layout.fillWidth: true }
-                Text { visible: root.applying; text: "Applying…"; color: colors.primary; font.family:"FiraCode Nerd Font"; font.pixelSize: 9; font.weight: Font.Bold }
+                Text { visible: root.applying; text: "Applying…"; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold }
                 Rectangle {
                     visible: root.applying
                     width: 14; height: 14; radius: 7
                     color: "transparent"
-                    Text { anchors.centerIn: parent; text: ""; color: colors.primary; font.family:"FiraCode Nerd Font"; font.pixelSize: 10; RotationAnimation on rotation { running: root.applying; loops: Animation.Infinite; from:0; to:360; duration:700 } }
+                    Text { anchors.centerIn: parent; text: ""; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 10; RotationAnimation on rotation { running: root.applying; loops: Animation.Infinite; from:0; to:360; duration:700 } }
                 }
                 Item { Layout.fillWidth: true }
             }
@@ -303,7 +303,7 @@ PanelWindow {
                         anchors.centerIn: parent
                         text: walls.length>0 ? walls[currentIndex].name : ""
                         color: colors.foreground
-                        font.family:"FiraCode Nerd Font"; font.pixelSize: 9
+                        font.family: colors.fontSans; font.pixelSize: 9
                         elide: Text.ElideMiddle
                     }
                 }
@@ -332,7 +332,7 @@ PanelWindow {
                 Text {
                     text: "scroll or ←→ to rotate the ring  •  enter applies  •  esc closes"
                     color: colors.alpha(colors.outline,0.5)
-                    font.family:"FiraCode Nerd Font"; font.pixelSize: 9
+                    font.family: colors.fontSans; font.pixelSize: 9
                     Layout.fillWidth: true
                 }
 

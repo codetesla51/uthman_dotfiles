@@ -62,7 +62,7 @@ PanelWindow {
             Text {
                 text: "Power"
                 color: colors.foreground
-                font.family: "FiraCode Nerd Font"
+                font.family: colors.fontSans
                 font.pixelSize: 15
                 font.weight: Font.ExtraBold
                 Layout.alignment: Qt.AlignHCenter
@@ -107,7 +107,7 @@ PanelWindow {
                             Text {
                                 text: modelData.icon
                                 color: modelData.label === "Shutdown" && hovered ? colors.error : colors.foreground
-                                font.family: "FiraCode Nerd Font"
+                                font.family: colors.fontSans
                                 font.pixelSize: 22
                                 Layout.alignment: Qt.AlignHCenter
                             }
@@ -115,7 +115,7 @@ PanelWindow {
                             Text {
                                 text: modelData.label
                                 color: hovered ? colors.foreground : colors.alpha(colors.outline, 0.9)
-                                font.family: "FiraCode Nerd Font"
+                                font.family: colors.fontSans
                                 font.pixelSize: 11
                                 font.weight: Font.DemiBold
                                 Layout.alignment: Qt.AlignHCenter

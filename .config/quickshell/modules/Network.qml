@@ -46,7 +46,7 @@ Item {
             color: root.disconnected ? colors.error
                  : root.hovered ? colors.foreground
                  : colors.primary
-            font.family: "FiraCode Nerd Font"
+            font.family: colors.fontSans
             font.pixelSize: 11
             font.weight: Font.DemiBold
             font.letterSpacing: 0.3

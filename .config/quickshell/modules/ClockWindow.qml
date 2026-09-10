@@ -49,7 +49,7 @@ FloatingWindow {
                 Text {
                     text: "TIME"
                     color: colors.alpha(colors.outline, 0.65)
-                    font.family: "FiraCode Nerd Font"
+                    font.family: colors.fontSans
                     font.pixelSize: 9
                     font.weight: Font.Bold
                     font.letterSpacing: 1.5
@@ -67,7 +67,7 @@ FloatingWindow {
                         anchors.centerIn: parent
                         text: Qt.formatDateTime(root.now, "ddd dd MMM")
                         color: colors.alpha(colors.foreground, 0.85)
-                        font.family: "FiraCode Nerd Font"
+                        font.family: colors.fontSans
                         font.pixelSize: 10
                         font.weight: Font.Medium
                     }
@@ -84,7 +84,7 @@ FloatingWindow {
                 Text {
                     text: root.hhmm
                     color: colors.primary
-                    font.family: "FiraCode Nerd Font"
+                    font.family: colors.fontSans
                     font.pixelSize: 52
                     font.weight: Font.ExtraBold
                     font.letterSpacing: 2
@@ -96,7 +96,7 @@ FloatingWindow {
                     Text {
                         text: root.ss
                         color: colors.tertiary
-                        font.family: "FiraCode Nerd Font"
+                        font.family: colors.fontSans
                         font.pixelSize: 16
                         font.weight: Font.Bold
                     }
@@ -110,7 +110,7 @@ FloatingWindow {
                 Layout.alignment: Qt.AlignHCenter
                 text: Qt.formatDateTime(root.now, "dddd dd MMMM yyyy") + "  ·  W" + Qt.formatDateTime(root.now, "ww")
                 color: colors.alpha(colors.foreground, 0.65)
-                font.family: "FiraCode Nerd Font"
+                font.family: colors.fontSans
                 font.pixelSize: 10
                 font.weight: Font.Medium
             }

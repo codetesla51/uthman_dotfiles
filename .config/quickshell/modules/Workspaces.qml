@@ -92,7 +92,7 @@ Item {
                              : btn.hovered ? colors.foreground
                              : btn.isEmpty ? colors.alpha(colors.outline, 0.35)
                              : colors.alpha(colors.outline, 0.7)
-                        font.family: "FiraCode Nerd Font"
+                        font.family: colors.fontSans
                         font.pixelSize: btn.isEmpty && !btn.isActive ? 9 : 13
                         font.weight: Font.Bold
                         Behavior on color { ColorAnimation { duration: 250 } }

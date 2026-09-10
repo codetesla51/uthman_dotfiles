@@ -36,10 +36,8 @@ FloatingWindow {
     property string installLog: ""
     property string installMode: "" // "install" or "remove" or "update"
     property string lastChecked: ""
-    property string sudoPass: ""
-    property bool showPassDialog: false
+    property string sudoPass: "" // cached after PassPrompt result, cleared after 5 min
     property string pendingAction: "" // "install" | "remove" | "update" | "updateAll"
-    property string passError: ""
     property var sizeMap: ({}) // name -> "15.7 MiB"
     property string totalQueuedSizeStr: {
         var total=0
@@ -394,10 +392,18 @@ FloatingWindow {
 
     function needPass(action){
         if(sudoPass!=="") return false
-        // check if sudo timestamp is still valid (sudo -n true)
-        // we do a quick check via process, but for now just ask if empty
-        pendingAction=action; showPassDialog=true; passError=""
+        if(pendingAction!=="") return true // already asking via PassPrompt
+        pendingAction=action
+        var label=(action==="install")?"install packages":(action==="remove")?"remove packages":(action==="updateAll")?"update all packages":"update packages"
+        passAskProc.command=["sh","-c","quickshell -p $HOME/.config/quickshell ipc call passprompt ask 'PkgManager — sudo needed to "+label+"' >/dev/null 2>&1"]
+        passAskProc.running=true
         return true
+    }
+    function dispatchPass(a){
+        if(a==="install") root.startInstall()
+        else if(a==="remove") root.startRemove()
+        else if(a==="update") root.startUpdate(false)
+        else if(a==="updateAll") root.startUpdate(true)
     }
     function startInstall() {
         if(needPass("install")) return
@@ -426,12 +432,7 @@ FloatingWindow {
         installProc.command=["sh","-c", cmd]
         installProc.running=true
     }
-    function submitPass(){
-        if(passField.text.trim()===""){ passError="Enter password"; return }
-        var esc = passField.text.replace(/'/g, "'\\''")
-        passVerifyProc.command=["sh","-c","printf '%s\\n' '"+esc+"' | sudo -S true 2>&1; echo EXIT:$?"]
-        passVerifyProc.running=true
-    }
+
 
     // ---- Processes ----
     Process {
@@ -531,32 +532,48 @@ FloatingWindow {
             }
         }
     }
+    // sudo password via the dedicated PassPrompt module — ask() then poll st() like ~/.local/bin/askpass
     Process {
-        id: passVerifyProc
+        id: passAskProc
         running: false
+        onExited: function(code){
+            if(code!==0 && root.pendingAction!==""){ root.pendingAction=""; return }
+            if(root.pendingAction!=="") passPoll.restart()
+        }
+    }
+    Timer { id: passPoll; interval: 250; repeat: true; onTriggered: passStProc.running=true }
+    Process {
+        id: passStProc
+        running: false
+        command: ["sh","-c","quickshell -p $HOME/.config/quickshell ipc call passprompt st 2>/dev/null | tr -d '\" '"]
         stdout: StdioCollector {
             waitForEnd: true
             onStreamFinished: {
-                var ok = text.indexOf("EXIT:0") !== -1
-                if(ok){
-                    root.sudoPass = passField.text
-                    root.showPassDialog = false
-                    root.passError = ""
-                    // clear field
-                    passField.text = ""
-                    // dispatch pending
-                    var a = root.pendingAction
-                    root.pendingAction = ""
-                    if(a==="install") root.startInstall()
-                    else if(a==="remove") root.startRemove()
-                    else if(a==="update") root.startUpdate(false)
-                    else if(a==="updateAll") root.startUpdate(true)
-                    // auto-clear after 5 min
+                var st=text.trim()
+                if(st==="done"){
+                    passPoll.stop()
+                    passResProc.running=true
+                } else if(st==="cancelled" || st==="idle"){
+                    passPoll.stop()
+                    root.pendingAction=""
+                }
+            }
+        }
+    }
+    Process {
+        id: passResProc
+        running: false
+        command: ["sh","-c","quickshell -p $HOME/.config/quickshell ipc call passprompt result 2>/dev/null | sed 's/^\"//; s/\"$//'"]
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: {
+                var a=root.pendingAction
+                root.pendingAction=""
+                var p=text.trim()
+                if(a!=="" && p!==""){
+                    root.sudoPass=p
                     passClearTimer.restart()
-                } else {
-                    root.passError = "Wrong password, try again"
-                    passField.text = ""
-                    passField.forceActiveFocus()
+                    root.dispatchPass(a)
                 }
             }
         }
@@ -569,12 +586,19 @@ FloatingWindow {
             splitMarker: "\n"
             onRead: function(line){
                 root.installLog += line + "\n"
-                // parse progress: "( 1/5)" or "(1/5)"
+                // progress sync: transaction steps "( 1/5)" AND pacman/yay download bars "NN%" — keep the bar monotonic so downloads visibly move it
                 var m=line.match(/\(\s*(\d+)\s*\/\s*(\d+)\s*\)/)
                 if(m){
                     var cur=parseInt(m[1]); var tot=parseInt(m[2])
-                    if(tot>0) root.installPct = cur/tot
-                } else if(line.indexOf("checking")!==-1) { if(root.installPct<0.15) root.installPct=0.15 }
+                    if(tot>0 && cur/tot>root.installPct) root.installPct = cur/tot
+                } else {
+                    var pm=line.match(/(\d{1,3})(?:\.\d+)?\s*%/)
+                    if(pm){
+                        var pct=parseInt(pm[1])/100
+                        if(pct>root.installPct && pct<1) root.installPct=pct
+                    }
+                }
+                if(line.indexOf("checking")!==-1) { if(root.installPct<0.15) root.installPct=0.15 }
                 else if(line.indexOf("resolving")!==-1) { if(root.installPct<0.10) root.installPct=0.10 }
                 // auto scroll: handled via Flickable contentY binding in log view
                 if(root.installLog.length>8000) root.installLog = root.installLog.slice(-8000)
@@ -640,7 +664,7 @@ FloatingWindow {
                 Text {
                     text: "󰏖  PACKAGE MANAGER"
                     color: colors.primary
-                    font.family: "FiraCode Nerd Font"
+                    font.family: colors.fontSans
                     font.pixelSize: 13
                     font.weight: Font.ExtraBold
                     font.letterSpacing: 1.1
@@ -657,20 +681,20 @@ FloatingWindow {
                         anchors.centerIn: parent
                         text: root.selectedList.length + " queued"
                         color: colors.primary
-                        font.family:"FiraCode Nerd Font"; font.pixelSize: 9; font.weight: Font.Bold
+                        font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold
                     }
                 }
                 Item { Layout.fillWidth: true }
                 Text {
                     text: root.installedAll.length + " installed  •  " + root.updatesList.length + " updates"
                     color: colors.alpha(colors.outline, 0.65)
-                    font.family:"FiraCode Nerd Font"; font.pixelSize: 9
+                    font.family: colors.fontSans; font.pixelSize: 9
                 }
                 Rectangle {
                     width: 28; height: 28; radius: 14
                     color: closeMa.containsMouse ? colors.alpha(colors.surfaceVariant, 0.6) : colors.alpha(colors.surface, 0.6)
                     border.width:1; border.color: colors.alpha(colors.outline, 0.15)
-                    Text { anchors.centerIn: parent; text: "󰅖"; color: colors.foreground; font.family:"FiraCode Nerd Font"; font.pixelSize: 12 }
+                    Text { anchors.centerIn: parent; text: "󰅖"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 12 }
                     MouseArea { id: closeMa; anchors.fill: parent; hoverEnabled:true; onClicked: root.open=false }
                 }
             }
@@ -704,7 +728,7 @@ FloatingWindow {
                             Text {
                                 text: modelData.l
                                 color: root.tab===index ? colors.primary : colors.foreground
-                                font.family:"FiraCode Nerd Font"
+                                font.family: colors.fontSans
                                 font.pixelSize: 11
                                 font.weight: root.tab===index ? Font.ExtraBold : Font.Bold
                             }
@@ -712,7 +736,7 @@ FloatingWindow {
                                 visible: modelData.c>0
                                 width: cnt.implicitWidth+10; height: 18; radius: 9
                                 color: root.tab===index ? colors.alpha(colors.primary, 0.25) : colors.alpha(colors.surfaceVariant, 0.5)
-                                Text { id: cnt; anchors.centerIn: parent; text: modelData.c; color: root.tab===index?colors.primary:colors.alpha(colors.outline,0.9); font.family:"FiraCode Nerd Font"; font.pixelSize: 9; font.weight: Font.Bold }
+                                Text { id: cnt; anchors.centerIn: parent; text: modelData.c; color: root.tab===index?colors.primary:colors.alpha(colors.outline,0.9); font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold }
                             }
                         }
                         MouseArea { id: ma; anchors.fill: parent; hoverEnabled:true; onClicked: root.tab=index }
@@ -744,14 +768,14 @@ FloatingWindow {
                             anchors.fill: parent
                             anchors.leftMargin: 14; anchors.rightMargin: 10
                             spacing: 10
-                            Text { text: ""; color: colors.alpha(colors.outline,0.7); font.family:"FiraCode Nerd Font"; font.pixelSize: 14 }
+                            Text { text: ""; color: colors.alpha(colors.outline,0.7); font.family: colors.fontSans; font.pixelSize: 14 }
                             TextField {
                                 id: searchField
                                 Layout.fillWidth: true
                                 placeholderText: "Search pacman + AUR…  (e.g. firefox, neovim)"
                                 placeholderTextColor: colors.alpha(colors.outline, 0.45)
                                 color: colors.foreground
-                                font.family:"FiraCode Nerd Font"; font.pixelSize: 12
+                                font.family: colors.fontSans; font.pixelSize: 12
                                 background: null
                                 selectByMouse: true
                                 onTextChanged: { root.query=text; searchDebounce.restart() }
@@ -767,14 +791,14 @@ FloatingWindow {
                                 visible: root.searching
                                 text: ""
                                 color: colors.primary
-                                font.family:"FiraCode Nerd Font"; font.pixelSize: 12
+                                font.family: colors.fontSans; font.pixelSize: 12
                                 RotationAnimation on rotation { running: root.searching; loops: Animation.Infinite; from:0; to:360; duration: 700 }
                             }
                             Text {
                                 visible: !root.searching && searchField.text!==""
                                 text: "󰅖"
                                 color: clearMa.containsMouse?colors.foreground:colors.alpha(colors.outline,0.6)
-                                font.family:"FiraCode Nerd Font"; font.pixelSize: 14
+                                font.family: colors.fontSans; font.pixelSize: 14
                                 MouseArea { id: clearMa; anchors.fill: parent; hoverEnabled:true; onClicked: {searchField.text=""; root.query=""; root.searchResults=[]} }
                             }
                         }
@@ -782,8 +806,8 @@ FloatingWindow {
                     RowLayout {
                         Layout.fillWidth: true
                         spacing: 8
-                        Text { text: root.searching ? "Searching…" : root.query.trim()==="" ? "Type to search official repos + AUR" : root.searchResults.length+" results  •  click checkbox to queue"; color: colors.alpha(colors.outline,0.6); font.family:"FiraCode Nerd Font"; font.pixelSize: 9; Layout.fillWidth:true; elide: Text.ElideRight }
-                        Text { visible: root.selectedList.length>0; text: root.selectedList.length+" queued → Queue tab"; color: colors.primary; font.family:"FiraCode Nerd Font"; font.pixelSize: 9; font.weight: Font.Bold }
+                        Text { text: root.searching ? "Searching…" : root.query.trim()==="" ? "Type to search official repos + AUR" : root.searchResults.length+" results  •  click checkbox to queue"; color: colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 9; Layout.fillWidth:true; elide: Text.ElideRight }
+                        Text { visible: root.selectedList.length>0; text: root.selectedList.length+" queued → Queue tab"; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold }
                     }
 
                     // results list — arrow keys + mouse
@@ -816,7 +840,7 @@ FloatingWindow {
                                     Layout.preferredWidth: 22; Layout.preferredHeight: 22; radius: 6
                                     color: modelData.name && root.isSelected(modelData.name) ? colors.primary : "transparent"
                                     border.width:1; border.color: modelData.name && root.isSelected(modelData.name) ? colors.primary : colors.alpha(colors.outline, 0.35)
-                                    Text { anchors.centerIn: parent; visible: modelData.name && root.isSelected(modelData.name); text: ""; color: colors.background; font.family:"FiraCode Nerd Font"; font.pixelSize: 10; font.weight: Font.Bold }
+                                    Text { anchors.centerIn: parent; visible: modelData.name && root.isSelected(modelData.name); text: ""; color: colors.background; font.family: colors.fontSans; font.pixelSize: 10; font.weight: Font.Bold }
                                     MouseArea { anchors.fill: parent; onClicked: root.toggleSelect(modelData) }
                                 }
                                 ColumnLayout {
@@ -825,29 +849,29 @@ FloatingWindow {
                                     RowLayout {
                                         Layout.fillWidth: true
                                         spacing: 8
-                                        Text { text: modelData.name; color: colors.foreground; font.family:"FiraCode Nerd Font"; font.pixelSize: 11; font.weight: Font.Bold; elide: Text.ElideRight; Layout.fillWidth: false }
-                                        Text { text: modelData.version; color: colors.alpha(colors.outline, 0.7); font.family:"FiraCode Nerd Font"; font.pixelSize: 9 }
+                                        Text { text: modelData.name; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.Bold; elide: Text.ElideRight; Layout.fillWidth: false }
+                                        Text { text: modelData.version; color: colors.alpha(colors.outline, 0.7); font.family: colors.fontSans; font.pixelSize: 9 }
                                         Rectangle {
                                             visible: (sizeMap[modelData.name]||"")!==""
                                             Layout.preferredWidth: sTxt.implicitWidth+10; Layout.preferredHeight: 18; radius: 9
                                             color: colors.alpha(colors.outline,0.10)
-                                            Text { id: sTxt; anchors.centerIn: parent; text: sizeMap[modelData.name]||""; color: colors.alpha(colors.outline,0.75); font.family:"FiraCode Nerd Font"; font.pixelSize: 8 }
+                                            Text { id: sTxt; anchors.centerIn: parent; text: sizeMap[modelData.name]||""; color: colors.alpha(colors.outline,0.75); font.family: colors.fontSans; font.pixelSize: 8 }
                                         }
                                         Rectangle {
                                             Layout.preferredWidth: srcTxt.implicitWidth+10; Layout.preferredHeight: 18; radius: 9
                                             color: modelData.source==="AUR" ? colors.alpha(colors.tertiary, 0.18) : colors.alpha(colors.secondary, 0.18)
                                             border.width:1; border.color: modelData.source==="AUR" ? colors.alpha(colors.tertiary, 0.35) : colors.alpha(colors.secondary, 0.35)
-                                            Text { id: srcTxt; anchors.centerIn: parent; text: modelData.source==="AUR" ? "AUR" : modelData.repo; color: modelData.source==="AUR"?colors.tertiary:colors.secondary; font.family:"FiraCode Nerd Font"; font.pixelSize: 8; font.weight: Font.Bold }
+                                            Text { id: srcTxt; anchors.centerIn: parent; text: modelData.source==="AUR" ? "AUR" : modelData.repo; color: modelData.source==="AUR"?colors.tertiary:colors.secondary; font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold }
                                         }
                                         Rectangle {
                                             visible: modelData.installed
                                             width: instTxt.implicitWidth+10; height: 18; radius: 9
                                             color: colors.alpha(colors.primary, 0.15)
-                                            Text { id: instTxt; anchors.centerIn: parent; text: "installed"; color: colors.primary; font.family:"FiraCode Nerd Font"; font.pixelSize: 8; font.weight: Font.Bold }
+                                            Text { id: instTxt; anchors.centerIn: parent; text: "installed"; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold }
                                         }
                                         Item { Layout.fillWidth: true }
                                     }
-                                    Text { text: modelData.desc || "—"; color: colors.alpha(colors.foreground, 0.72); font.family:"FiraCode Nerd Font"; font.pixelSize: 9; elide: Text.ElideRight; Layout.fillWidth: true; maximumLineCount: 2; wrapMode: Text.Wrap }
+                                    Text { text: modelData.desc || "—"; color: colors.alpha(colors.foreground, 0.72); font.family: colors.fontSans; font.pixelSize: 9; elide: Text.ElideRight; Layout.fillWidth: true; maximumLineCount: 2; wrapMode: Text.Wrap }
                                 }
                             }
                             MouseArea { id: maS; anchors.fill: parent; hoverEnabled:true; onEntered: if(root.allowHover) root.searchNav=index; onPositionChanged: if(!root.allowHover) root.allowHover=true; onClicked: root.toggleSelect(modelData) }
@@ -856,13 +880,13 @@ FloatingWindow {
                             anchors.centerIn: parent
                             visible: !root.searching && root.searchResults.length===0 && root.query.trim()!==""
                             text: "No results"
-                            color: colors.alpha(colors.outline,0.5); font.family:"FiraCode Nerd Font"; font.pixelSize: 11
+                            color: colors.alpha(colors.outline,0.5); font.family: colors.fontSans; font.pixelSize: 11
                         }
                         Text {
                             anchors.centerIn: parent
                             visible: !root.searching && root.searchResults.length===0 && root.query.trim()===""
                             text: "Try  “ghostty”  •  “zed”  •  “firefox”"
-                            color: colors.alpha(colors.outline,0.4); font.family:"FiraCode Nerd Font"; font.pixelSize: 10
+                            color: colors.alpha(colors.outline,0.4); font.family: colors.fontSans; font.pixelSize: 10
                         }
                     }
                 }
@@ -873,13 +897,13 @@ FloatingWindow {
                     RowLayout {
                         Layout.fillWidth: true
                         spacing: 8
-                        Text { text: root.selectedList.length===0 ? "No packages queued" : root.selectedList.length+" package"+(root.selectedList.length>1?"s":"")+" queued" + (totalQueuedSizeStr? " · "+totalQueuedSizeStr : ""); color: colors.foreground; font.family:"FiraCode Nerd Font"; font.pixelSize: 11; font.weight: Font.Bold; Layout.fillWidth:true }
+                        Text { text: root.selectedList.length===0 ? "No packages queued" : root.selectedList.length+" package"+(root.selectedList.length>1?"s":"")+" queued" + (totalQueuedSizeStr? " · "+totalQueuedSizeStr : ""); color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.Bold; Layout.fillWidth:true }
                         Rectangle {
                             visible: root.selectedList.length>0 && !root.installing
                             width: clearQTxt.implicitWidth+14; height: 28; radius: 9
                             color: clearQMa.containsMouse?colors.alpha(colors.surfaceVariant,0.6):colors.alpha(colors.surface,0.6)
                             border.width:1; border.color: colors.alpha(colors.outline,0.15)
-                            Text { id: clearQTxt; anchors.centerIn: parent; text: "Clear"; color: colors.alpha(colors.outline,0.9); font.family:"FiraCode Nerd Font"; font.pixelSize: 9; font.weight: Font.Bold }
+                            Text { id: clearQTxt; anchors.centerIn: parent; text: "Clear"; color: colors.alpha(colors.outline,0.9); font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold }
                             MouseArea { id: clearQMa; anchors.fill: parent; hoverEnabled:true; onClicked: root.clearQueue() }
                         }
                     }
@@ -906,17 +930,17 @@ FloatingWindow {
                                 anchors.leftMargin: 12; anchors.rightMargin: 10
                                 spacing: 10
                                 Rectangle { width: 8; height: 8; radius:4; color: modelData.source==="AUR"?colors.tertiary:colors.secondary }
-                                Text { text: modelData.name; color: colors.foreground; font.family:"FiraCode Nerd Font"; font.pixelSize: 11; font.weight: Font.Bold; Layout.fillWidth: true; elide: Text.ElideRight }
-                                Text { text: modelData.version; color: colors.alpha(colors.outline,0.65); font.family:"FiraCode Nerd Font"; font.pixelSize: 9 }
+                                Text { text: modelData.name; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.Bold; Layout.fillWidth: true; elide: Text.ElideRight }
+                                Text { text: modelData.version; color: colors.alpha(colors.outline,0.65); font.family: colors.fontSans; font.pixelSize: 9 }
                                 Rectangle {
                                     width: 44; height: 22; radius: 8
                                     color: modelData.source==="AUR"?colors.alpha(colors.tertiary,0.18):colors.alpha(colors.secondary,0.18)
-                                    Text { anchors.centerIn: parent; text: modelData.source==="AUR"?"AUR":modelData.repo; color: modelData.source==="AUR"?colors.tertiary:colors.secondary; font.family:"FiraCode Nerd Font"; font.pixelSize: 8; font.weight: Font.Bold }
+                                    Text { anchors.centerIn: parent; text: modelData.source==="AUR"?"AUR":modelData.repo; color: modelData.source==="AUR"?colors.tertiary:colors.secondary; font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold }
                                 }
                                 Rectangle {
                                     width: 26; height: 26; radius: 8
                                     color: rmMa.containsMouse?colors.alpha(colors.error,0.15):"transparent"
-                                    Text { anchors.centerIn: parent; text: "󰅖"; color: rmMa.containsMouse?colors.error:colors.alpha(colors.outline,0.6); font.family:"FiraCode Nerd Font"; font.pixelSize: 12 }
+                                    Text { anchors.centerIn: parent; text: "󰅖"; color: rmMa.containsMouse?colors.error:colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 12 }
                                     MouseArea { id: rmMa; anchors.fill: parent; hoverEnabled:true; onClicked: root.removeSelected(modelData.name) }
                                 }
                             }
@@ -926,7 +950,7 @@ FloatingWindow {
                         visible: !root.installing && root.selectedList.length===0
                         Layout.alignment: Qt.AlignHCenter
                         text: "Queue packages from Search → they appear here"
-                        color: colors.alpha(colors.outline,0.5); font.family:"FiraCode Nerd Font"; font.pixelSize: 10
+                        color: colors.alpha(colors.outline,0.5); font.family: colors.fontSans; font.pixelSize: 10
                     }
 
                     // install progress area — nice bar + log (not raw scrollback only)
@@ -952,8 +976,8 @@ FloatingWindow {
                         }
                         RowLayout {
                             Layout.fillWidth: true
-                            Text { text: root.installMode==="install" ? "Installing…" : root.installMode==="remove" ? "Removing…" : "Updating…"; color: colors.primary; font.family:"FiraCode Nerd Font"; font.pixelSize: 10; font.weight: Font.Bold; Layout.fillWidth:true }
-                            Text { text: Math.round(root.installPct*100)+"%"; color: colors.foreground; font.family:"FiraCode Nerd Font"; font.pixelSize: 10; font.weight: Font.Bold }
+                            Text { text: root.installMode==="install" ? "Installing…" : root.installMode==="remove" ? "Removing…" : "Updating…"; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 10; font.weight: Font.Bold; Layout.fillWidth:true }
+                            Text { text: Math.round(root.installPct*100)+"%"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 10; font.weight: Font.Bold }
                         }
                         // live log — scrollable, monospaced, not raw fullscreen dump
                         Rectangle {
@@ -979,7 +1003,7 @@ FloatingWindow {
                                     width: logFlick.width
                                     text: root.installLog || "Waiting for output…"
                                     color: colors.alpha(colors.foreground, 0.85)
-                                    font.family: "FiraCode Nerd Font"
+                                    font.family: colors.fontSans
                                     font.pixelSize: 9
                                     wrapMode: Text.Wrap
                                     textFormat: Text.PlainText
@@ -993,7 +1017,7 @@ FloatingWindow {
                                 visible: !installProc.running
                                 width: 90; height: 28; radius: 9
                                 color: colors.alpha(colors.surface,0.6); border.width:1; border.color: colors.alpha(colors.outline,0.15)
-                                Text { anchors.centerIn: parent; text: "Close"; color: colors.foreground; font.family:"FiraCode Nerd Font"; font.pixelSize: 9; font.weight: Font.Bold }
+                                Text { anchors.centerIn: parent; text: "Close"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold }
                                 MouseArea { anchors.fill: parent; onClicked: {root.installing=false; root.installPct=0; root.installLog=""} }
                             }
                         }
@@ -1013,16 +1037,16 @@ FloatingWindow {
                         RowLayout {
                             anchors.centerIn: parent
                             spacing: 8
-                            Text { text: "󰄠"; color: root.selectedList.length===0?colors.alpha(colors.outline,0.6):colors.primary; font.family:"FiraCode Nerd Font"; font.pixelSize: 14 }
-                            Text { text: "Install  ("+root.selectedList.length+")"; color: root.selectedList.length===0?colors.alpha(colors.outline,0.6):colors.primary; font.family:"FiraCode Nerd Font"; font.pixelSize: 12; font.weight: Font.ExtraBold }
-                            Text { visible: root.selectedList.length>0; text: "— pacman for repo, yay for AUR"; color: colors.alpha(colors.outline,0.6); font.family:"FiraCode Nerd Font"; font.pixelSize: 8 }
+                            Text { text: "󰄠"; color: root.selectedList.length===0?colors.alpha(colors.outline,0.6):colors.primary; font.family: colors.fontSans; font.pixelSize: 14 }
+                            Text { text: "Install  ("+root.selectedList.length+")"; color: root.selectedList.length===0?colors.alpha(colors.outline,0.6):colors.primary; font.family: colors.fontSans; font.pixelSize: 12; font.weight: Font.ExtraBold }
+                            Text { visible: root.selectedList.length>0; text: "— pacman for repo, yay for AUR"; color: colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 8 }
                         }
                         MouseArea { id: installMa; anchors.fill: parent; hoverEnabled:true; enabled: root.selectedList.length>0; onClicked: root.startInstall() }
                     }
                     Text {
                         visible: !root.installing && root.selectedList.length>0
-                        text: "Will run: pacman for official, yay for AUR  •  polkit dialog may appear for pacman"
-                        color: colors.alpha(colors.outline,0.5); font.family:"FiraCode Nerd Font"; font.pixelSize: 8; Layout.alignment: Qt.AlignHCenter
+                        text: "Will run: pacman for official, yay for AUR  •  sudo prompt pops via PassPrompt (cached 5 min)"
+                        color: colors.alpha(colors.outline,0.5); font.family: colors.fontSans; font.pixelSize: 8; Layout.alignment: Qt.AlignHCenter
                     }
                 }
 
@@ -1042,14 +1066,14 @@ FloatingWindow {
                                 anchors.fill: parent
                                 anchors.leftMargin: 10; anchors.rightMargin: 10
                                 spacing: 8
-                                Text { text: ""; color: colors.alpha(colors.outline,0.6); font.family:"FiraCode Nerd Font"; font.pixelSize: 12 }
+                                Text { text: ""; color: colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 12 }
                                 TextField {
                                     id: instField
                                     Layout.fillWidth: true
                                     placeholderText: "Filter installed…"
                                     placeholderTextColor: colors.alpha(colors.outline,0.45)
                                     color: colors.foreground
-                                    font.family:"FiraCode Nerd Font"; font.pixelSize: 11
+                                    font.family: colors.fontSans; font.pixelSize: 11
                                     background: null
                                     onTextChanged: root.instQuery=text
                                     Keys.onPressed: function(e){
@@ -1059,14 +1083,14 @@ FloatingWindow {
                                         else if(e.key===Qt.Key_Escape){ root.open=false; e.accepted=true }
                                     }
                                 }
-                                Text { visible: instField.text!==""; text: "󰅖"; color: colors.alpha(colors.outline,0.6); font.family:"FiraCode Nerd Font"; font.pixelSize: 12; MouseArea { anchors.fill: parent; onClicked: instField.text="" } }
+                                Text { visible: instField.text!==""; text: "󰅖"; color: colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 12; MouseArea { anchors.fill: parent; onClicked: instField.text="" } }
                             }
                         }
                         Rectangle {
                             width: 28; height: 28; radius: 9
                             color: refreshInstMa.containsMouse?colors.alpha(colors.primary,0.12):colors.alpha(colors.surface,0.6)
                             border.width:1; border.color: colors.alpha(colors.outline,0.12)
-                            Text { anchors.centerIn: parent; text: ""; color: colors.primary; font.family:"FiraCode Nerd Font"; font.pixelSize: 12 }
+                            Text { anchors.centerIn: parent; text: ""; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 12 }
                             MouseArea { id: refreshInstMa; anchors.fill: parent; hoverEnabled:true; onClicked: root.refreshInstalled() }
                         }
                     }
@@ -1080,13 +1104,13 @@ FloatingWindow {
                                 width: 78; height: 26; radius: 9
                                 color: root.instFilter===modelData.k ? colors.alpha(colors.primary,0.20) : maF.containsMouse?colors.alpha(colors.surfaceVariant,0.4):colors.alpha(colors.surface,0.55)
                                 border.width:1; border.color: root.instFilter===modelData.k ? colors.alpha(colors.primary,0.45) : colors.alpha(colors.outline,0.12)
-                                Text { anchors.centerIn: parent; text: modelData.l; color: root.instFilter===modelData.k?colors.primary:colors.alpha(colors.foreground,0.8); font.family:"FiraCode Nerd Font"; font.pixelSize: 9; font.weight: Font.Bold }
+                                Text { anchors.centerIn: parent; text: modelData.l; color: root.instFilter===modelData.k?colors.primary:colors.alpha(colors.foreground,0.8); font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold }
                                 MouseArea { id: maF; anchors.fill: parent; hoverEnabled:true; onClicked: root.instFilter=modelData.k }
                             }
                         }
                         Item { Layout.fillWidth: true }
-                        Text { text: root.installedFiltered.length+" / "+root.installedAll.length; color: colors.alpha(colors.outline,0.6); font.family:"FiraCode Nerd Font"; font.pixelSize: 9 }
-                        Text { visible: root.uninstallCount>0; text: "•  "+root.uninstallCount+" selected"; color: colors.error; font.family:"FiraCode Nerd Font"; font.pixelSize: 9; font.weight: Font.Bold }
+                        Text { text: root.installedFiltered.length+" / "+root.installedAll.length; color: colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 9 }
+                        Text { visible: root.uninstallCount>0; text: "•  "+root.uninstallCount+" selected"; color: colors.error; font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold }
                     }
 
                     // uninstall progress reuse same area when installing remove
@@ -1108,7 +1132,7 @@ FloatingWindow {
                                 contentHeight: rmLog.implicitHeight; clip:true; boundsBehavior: Flickable.StopAtBounds
                                 ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
                                 onContentHeightChanged: if(contentHeight>height) contentY = Math.max(0, contentHeight-height)
-                                Text { id: rmLog; width: parent.width; text: root.installLog; color: colors.foreground; font.family:"FiraCode Nerd Font"; font.pixelSize: 9; wrapMode: Text.Wrap }
+                                Text { id: rmLog; width: parent.width; text: root.installLog; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 9; wrapMode: Text.Wrap }
                             }
                         }
                     }
@@ -1140,15 +1164,15 @@ FloatingWindow {
                                     width: 22; height: 22; radius: 6
                                     color: modelData.name && root.isUninstallSelected(modelData.name) ? colors.error : "transparent"
                                     border.width:1; border.color: modelData.name && root.isUninstallSelected(modelData.name) ? colors.error : colors.alpha(colors.outline,0.35)
-                                    Text { anchors.centerIn: parent; visible: modelData.name && root.isUninstallSelected(modelData.name); text: ""; color: "white"; font.family:"FiraCode Nerd Font"; font.pixelSize: 9; font.weight: Font.Bold }
+                                    Text { anchors.centerIn: parent; visible: modelData.name && root.isUninstallSelected(modelData.name); text: ""; color: "white"; font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold }
                                     MouseArea { anchors.fill: parent; onClicked: root.toggleUninstall(modelData) }
                                 }
-                                Text { text: modelData.name; color: colors.foreground; font.family:"FiraCode Nerd Font"; font.pixelSize: 11; font.weight: Font.Medium; Layout.fillWidth: true; elide: Text.ElideRight }
-                                Text { text: modelData.version; color: colors.alpha(colors.outline,0.65); font.family:"FiraCode Nerd Font"; font.pixelSize: 9; elide: Text.ElideRight }
+                                Text { text: modelData.name; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.Medium; Layout.fillWidth: true; elide: Text.ElideRight }
+                                Text { text: modelData.version; color: colors.alpha(colors.outline,0.65); font.family: colors.fontSans; font.pixelSize: 9; elide: Text.ElideRight }
                                 Rectangle {
                                     width: 52; height: 18; radius: 9
                                     color: modelData.source==="AUR"?colors.alpha(colors.tertiary,0.15):colors.alpha(colors.secondary,0.15)
-                                    Text { anchors.centerIn: parent; text: modelData.source==="AUR"?"AUR":"official"; color: modelData.source==="AUR"?colors.tertiary:colors.secondary; font.family:"FiraCode Nerd Font"; font.pixelSize: 8; font.weight: Font.Bold }
+                                    Text { anchors.centerIn: parent; text: modelData.source==="AUR"?"AUR":"official"; color: modelData.source==="AUR"?colors.tertiary:colors.secondary; font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold }
                                 }
                             }
                             MouseArea { id: maI; anchors.fill: parent; hoverEnabled:true; onEntered: if(root.allowHover) root.instNav=index; onPositionChanged: if(!root.allowHover) root.allowHover=true; onClicked: root.toggleUninstall(modelData) }
@@ -1167,12 +1191,12 @@ FloatingWindow {
                         RowLayout {
                             anchors.centerIn: parent
                             spacing: 8
-                            Text { text: "󰆴"; color: root.uninstallCount===0?colors.alpha(colors.outline,0.6):colors.error; font.family:"FiraCode Nerd Font"; font.pixelSize: 13 }
-                            Text { text: "Remove selected  ("+root.uninstallCount+")"; color: root.uninstallCount===0?colors.alpha(colors.outline,0.6):colors.error; font.family:"FiraCode Nerd Font"; font.pixelSize: 11; font.weight: Font.ExtraBold }
+                            Text { text: "󰆴"; color: root.uninstallCount===0?colors.alpha(colors.outline,0.6):colors.error; font.family: colors.fontSans; font.pixelSize: 13 }
+                            Text { text: "Remove selected  ("+root.uninstallCount+")"; color: root.uninstallCount===0?colors.alpha(colors.outline,0.6):colors.error; font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.ExtraBold }
                         }
                         MouseArea { id: rmAllMa; anchors.fill: parent; hoverEnabled:true; enabled: root.uninstallCount>0; onClicked: root.startRemove() }
                     }
-                    Text { visible: !(root.installing && root.installMode==="remove"); text: "Batch remove — runs:  pkexec pacman -Rns"; color: colors.alpha(colors.outline,0.45); font.family:"FiraCode Nerd Font"; font.pixelSize: 8; Layout.alignment: Qt.AlignHCenter }
+                    Text { visible: !(root.installing && root.installMode==="remove"); text: "Batch remove — runs:  pkexec pacman -Rns"; color: colors.alpha(colors.outline,0.45); font.family: colors.fontSans; font.pixelSize: 8; Layout.alignment: Qt.AlignHCenter }
                 }
 
                 // TAB 3: UPDATES
@@ -1181,13 +1205,13 @@ FloatingWindow {
                     RowLayout {
                         Layout.fillWidth: true
                         spacing: 8
-                        Text { text: root.updatesList.length===0 ? "Up to date" : root.updatesList.length+" update"+(root.updatesList.length>1?"s":"")+" available"; color: root.updatesList.length===0?colors.alpha(colors.outline,0.7):colors.primary; font.family:"FiraCode Nerd Font"; font.pixelSize: 11; font.weight: Font.Bold; Layout.fillWidth:true }
-                        Text { text: root.lastChecked ? "checked "+root.lastChecked : ""; color: colors.alpha(colors.outline,0.5); font.family:"FiraCode Nerd Font"; font.pixelSize: 8 }
+                        Text { text: root.updatesList.length===0 ? "Up to date" : root.updatesList.length+" update"+(root.updatesList.length>1?"s":"")+" available"; color: root.updatesList.length===0?colors.alpha(colors.outline,0.7):colors.primary; font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.Bold; Layout.fillWidth:true }
+                        Text { text: root.lastChecked ? "checked "+root.lastChecked : ""; color: colors.alpha(colors.outline,0.5); font.family: colors.fontSans; font.pixelSize: 8 }
                         Rectangle {
                             width: 68; height: 26; radius: 9
                             color: updRefreshMa.containsMouse?colors.alpha(colors.primary,0.15):colors.alpha(colors.surface,0.6)
                             border.width:1; border.color: colors.alpha(colors.outline,0.12)
-                            Text { anchors.centerIn: parent; text: "Refresh"; color: colors.primary; font.family:"FiraCode Nerd Font"; font.pixelSize: 9; font.weight: Font.Bold }
+                            Text { anchors.centerIn: parent; text: "Refresh"; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold }
                             MouseArea { id: updRefreshMa; anchors.fill: parent; hoverEnabled:true; onClicked: root.refreshUpdates() }
                         }
                     }
@@ -1212,7 +1236,7 @@ FloatingWindow {
                                 boundsBehavior: Flickable.StopAtBounds
                                 ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
                                 onContentHeightChanged: if(contentHeight>height) contentY=Math.max(0,contentHeight-height)
-                                Text { id: updLog; width: parent.width; text: root.installLog; color: colors.foreground; font.family:"FiraCode Nerd Font"; font.pixelSize: 9; wrapMode: Text.Wrap }
+                                Text { id: updLog; width: parent.width; text: root.installLog; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 9; wrapMode: Text.Wrap }
                             }
                         }
                     }
@@ -1244,19 +1268,19 @@ FloatingWindow {
                                     width: 22; height: 22; radius: 6
                                     color: modelData.name && root.isUpdateSelected(modelData.name) ? colors.primary : "transparent"
                                     border.width:1; border.color: modelData.name && root.isUpdateSelected(modelData.name) ? colors.primary : colors.alpha(colors.outline,0.35)
-                                    Text { anchors.centerIn: parent; visible: modelData.name && root.isUpdateSelected(modelData.name); text: ""; color: colors.background; font.family:"FiraCode Nerd Font"; font.pixelSize: 9; font.weight: Font.Bold }
+                                    Text { anchors.centerIn: parent; visible: modelData.name && root.isUpdateSelected(modelData.name); text: ""; color: colors.background; font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold }
                                     MouseArea { anchors.fill: parent; onClicked: root.toggleUpdate(modelData) }
                                 }
                                 ColumnLayout {
                                     Layout.fillWidth: true
                                     spacing: 1
-                                    Text { text: modelData.name; color: colors.foreground; font.family:"FiraCode Nerd Font"; font.pixelSize: 11; font.weight: Font.Bold }
-                                    Text { text: modelData.oldVer + "  →  " + modelData.newVer; color: colors.alpha(colors.outline,0.7); font.family:"FiraCode Nerd Font"; font.pixelSize: 9 }
+                                    Text { text: modelData.name; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.Bold }
+                                    Text { text: modelData.oldVer + "  →  " + modelData.newVer; color: colors.alpha(colors.outline,0.7); font.family: colors.fontSans; font.pixelSize: 9 }
                                 }
                                 Rectangle {
                                     width: 52; height: 18; radius: 9
                                     color: modelData.source==="AUR"?colors.alpha(colors.tertiary,0.15):colors.alpha(colors.secondary,0.15)
-                                    Text { anchors.centerIn: parent; text: modelData.source==="AUR"?"AUR":"official"; color: modelData.source==="AUR"?colors.tertiary:colors.secondary; font.family:"FiraCode Nerd Font"; font.pixelSize: 8; font.weight: Font.Bold }
+                                    Text { anchors.centerIn: parent; text: modelData.source==="AUR"?"AUR":"official"; color: modelData.source==="AUR"?colors.tertiary:colors.secondary; font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold }
                                 }
                             }
                             MouseArea { id: maU; anchors.fill: parent; hoverEnabled:true; onEntered: if(root.allowHover) root.updNav=index; onPositionChanged: if(!root.allowHover) root.allowHover=true; onClicked: root.toggleUpdate(modelData) }
@@ -1265,7 +1289,7 @@ FloatingWindow {
                             anchors.centerIn: parent
                             visible: root.updatesList.length===0 && !(root.installing && root.installMode==="update")
                             text: "No updates — you're current"
-                            color: colors.alpha(colors.outline,0.5); font.family:"FiraCode Nerd Font"; font.pixelSize: 11
+                            color: colors.alpha(colors.outline,0.5); font.family: colors.fontSans; font.pixelSize: 11
                         }
                     }
 
@@ -1281,7 +1305,7 @@ FloatingWindow {
                             border.width:1; border.color: root.updateSelectedCount===0?colors.alpha(colors.outline,0.12):colors.alpha(colors.primary,0.4)
                             enabled: root.updateSelectedCount>0
                             opacity: root.updateSelectedCount===0?0.55:1
-                            Text { anchors.centerIn: parent; text: "Update selected ("+root.updateSelectedCount+")"; color: root.updateSelectedCount===0?colors.alpha(colors.outline,0.6):colors.primary; font.family:"FiraCode Nerd Font"; font.pixelSize: 10; font.weight: Font.Bold }
+                            Text { anchors.centerIn: parent; text: "Update selected ("+root.updateSelectedCount+")"; color: root.updateSelectedCount===0?colors.alpha(colors.outline,0.6):colors.primary; font.family: colors.fontSans; font.pixelSize: 10; font.weight: Font.Bold }
                             MouseArea { id: selMa; anchors.fill: parent; hoverEnabled:true; enabled: root.updateSelectedCount>0; onClicked: root.startUpdate(false) }
                         }
                         Rectangle {
@@ -1292,11 +1316,11 @@ FloatingWindow {
                             border.width:1; border.color: root.updatesList.length===0?colors.alpha(colors.outline,0.12):colors.alpha(colors.primary,0.5)
                             enabled: root.updatesList.length>0
                             opacity: root.updatesList.length===0?0.55:1
-                            Text { anchors.centerIn: parent; text: "Update all"; color: root.updatesList.length===0?colors.alpha(colors.outline,0.6):colors.primary; font.family:"FiraCode Nerd Font"; font.pixelSize: 10; font.weight: Font.ExtraBold }
+                            Text { anchors.centerIn: parent; text: "Update all"; color: root.updatesList.length===0?colors.alpha(colors.outline,0.6):colors.primary; font.family: colors.fontSans; font.pixelSize: 10; font.weight: Font.ExtraBold }
                             MouseArea { id: allMa; anchors.fill: parent; hoverEnabled:true; enabled: root.updatesList.length>0; onClicked: root.startUpdate(true) }
                         }
                     }
-                    Text { visible: !(root.installing && root.installMode==="update"); text: "Select packages or update all  •  pacman for repo, yay for AUR"; color: colors.alpha(colors.outline,0.45); font.family:"FiraCode Nerd Font"; font.pixelSize: 8; Layout.alignment: Qt.AlignHCenter }
+                    Text { visible: !(root.installing && root.installMode==="update"); text: "Select packages or update all  •  pacman for repo, yay for AUR"; color: colors.alpha(colors.outline,0.45); font.family: colors.fontSans; font.pixelSize: 8; Layout.alignment: Qt.AlignHCenter }
                 }
             }
 
@@ -1304,72 +1328,12 @@ FloatingWindow {
             Text {
                 text: "↑↓ navigate  •  Space/Enter toggle  •  Esc closes  •  Hyprland window — drag & float"
                 color: colors.alpha(colors.outline, 0.42)
-                font.family:"FiraCode Nerd Font"; font.pixelSize: 8
+                font.family: colors.fontSans; font.pixelSize: 8
                 Layout.alignment: Qt.AlignHCenter
             }
 
 
             }
 
-            // password dialog — glass, in-app, caches for 5 min so you don't retype each tab
-            Rectangle {
-                visible: root.showPassDialog
-                anchors.fill: parent
-                color: colors.alpha(colors.background, 0.72)
-                radius: 16
-                border.width: 1; border.color: colors.alpha(colors.primary, 0.18)
-                // block clicks behind
-                MouseArea { anchors.fill: parent; onClicked: {} }
-                ColumnLayout {
-                    anchors.centerIn: parent
-                    width: parent.width*0.74
-                    spacing: 14
-                    Text { text: "  Authentication required"; color: colors.primary; font.family:"FiraCode Nerd Font"; font.pixelSize: 12; font.weight: Font.Bold; Layout.alignment: Qt.AlignHCenter }
-                    Text { text: "Enter sudo password — cached for 5 min, used for pacman / yay across Install / Remove / Updates"; color: colors.alpha(colors.outline,0.7); font.family:"FiraCode Nerd Font"; font.pixelSize: 8; wrapMode: Text.Wrap; Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter }
-                    Rectangle {
-                        Layout.fillWidth: true; height: 42; radius: 10
-                        color: colors.alpha(colors.surface, 0.85)
-                        border.width: 1; border.color: passField.activeFocus ? colors.alpha(colors.primary,0.5) : (root.passError ? colors.alpha(colors.error,0.6) : colors.alpha(colors.outline,0.14))
-                        RowLayout {
-                            anchors.fill: parent; anchors.leftMargin: 12; anchors.rightMargin: 10; spacing: 8
-                            Text { text: ""; color: colors.alpha(colors.outline,0.6); font.family:"FiraCode Nerd Font"; font.pixelSize: 12 }
-                            TextField {
-                                id: passField
-                                Layout.fillWidth: true
-                                placeholderText: "sudo password"
-                                placeholderTextColor: colors.alpha(colors.outline,0.45)
-                                color: colors.foreground
-                                font.family:"FiraCode Nerd Font"; font.pixelSize: 11
-                                echoMode: TextInput.Password
-                                background: null
-                                selectByMouse: true
-                                onAccepted: root.submitPass()
-                                Keys.onEscapePressed: root.showPassDialog=false
-                            }
-                            Text { visible: passField.text!==""; text: "✕"; color: colors.alpha(colors.outline,0.6); font.family:"FiraCode Nerd Font"; font.pixelSize: 12; MouseArea { anchors.fill: parent; onClicked: passField.text="" } }
-                        }
-                    }
-                    Text { visible: root.passError!==""; text: root.passError; color: colors.error; font.family:"FiraCode Nerd Font"; font.pixelSize: 9; Layout.alignment: Qt.AlignHCenter }
-                    RowLayout {
-                        Layout.fillWidth: true; spacing: 10
-                        Rectangle {
-                            Layout.fillWidth: true; height: 36; radius: 9
-                            color: cancelMa.containsMouse?colors.alpha(colors.surfaceVariant,0.5):colors.alpha(colors.surface,0.6)
-                            border.width:1; border.color: colors.alpha(colors.outline,0.12)
-                            Text { anchors.centerIn: parent; text: "Cancel"; color: colors.foreground; font.family:"FiraCode Nerd Font"; font.pixelSize: 10; font.weight: Font.Bold }
-                            MouseArea { id: cancelMa; anchors.fill: parent; hoverEnabled:true; onClicked: root.showPassDialog=false }
-                        }
-                        Rectangle {
-                            Layout.fillWidth: true; height: 36; radius: 9
-                            color: passField.text.trim()==="" ? colors.alpha(colors.surfaceVariant,0.35) : okMa.containsMouse?colors.alpha(colors.primary,0.32):colors.alpha(colors.primary,0.22)
-                            border.width:1; border.color: passField.text.trim()==="" ? colors.alpha(colors.outline,0.12) : colors.alpha(colors.primary,0.5)
-                            enabled: passField.text.trim()!==""
-                            Text { anchors.centerIn: parent; text: "Unlock"; color: passField.text.trim()===""?colors.alpha(colors.outline,0.6):colors.primary; font.family:"FiraCode Nerd Font"; font.pixelSize: 10; font.weight: Font.ExtraBold }
-                            MouseArea { id: okMa; anchors.fill: parent; hoverEnabled:true; enabled: passField.text.trim()!==""; onClicked: root.submitPass() }
-                        }
-                    }
-                    Text { text: "Password is cached in memory only, cleared on close or after 5 min"; color: colors.alpha(colors.outline,0.45); font.family:"FiraCode Nerd Font"; font.pixelSize: 7; Layout.alignment: Qt.AlignHCenter }
-                }
-        }
     }
 }

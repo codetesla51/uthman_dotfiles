@@ -41,7 +41,7 @@ Item {
             color: colors.alpha(colors.surface, 0.5)
             border.width: 1
             border.color: colors.alpha(colors.outline, 0.15)
-            Text { anchors.centerIn: parent; text: ""; color: colors.primary; font.family: "FiraCode Nerd Font"; font.pixelSize: 11 }
+            Text { anchors.centerIn: parent; text: ""; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 11 }
         }
 
         // -- title over artist, two tight lines --
@@ -51,7 +51,7 @@ Item {
             Text {
                 text: root.hasPlayer ? (player.trackTitle || "Unknown") : "Nothing playing"
                 color: root.hasPlayer ? colors.foreground : colors.alpha(colors.foreground, 0.45)
-                font.family: "FiraCode Nerd Font"
+                font.family: colors.fontSans
                 font.pixelSize: 10
                 font.weight: Font.Bold
                 font.italic: !root.hasPlayer
@@ -66,7 +66,7 @@ Item {
                     return a && a.length > 0 ? a : "Unknown artist"
                 }
                 color: colors.alpha(colors.foreground, 0.55)
-                font.family: "FiraCode Nerd Font"
+                font.family: colors.fontSans
                 font.pixelSize: 8
                 font.weight: Font.Medium
                 elide: Text.ElideRight
@@ -113,7 +113,7 @@ Item {
                 color: prevMa.containsMouse ? colors.alpha(colors.primary, 0.15) : "transparent"
                 scale: prevMa.containsMouse ? 1.12 : 1
                 Behavior on scale { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
-                Text { anchors.centerIn: parent; text: "󰒮"; color: colors.foreground; font.family: "FiraCode Nerd Font"; font.pixelSize: 10 }
+                Text { anchors.centerIn: parent; text: "󰒮"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 10 }
                 MouseArea { id: prevMa; anchors.fill: parent; hoverEnabled: true; onClicked: if(root.hasPlayer && root.player.canGoPrevious) root.player.previous() }
             }
             Rectangle {
@@ -123,7 +123,7 @@ Item {
                 border.color: playMa.containsMouse ? colors.primary : colors.alpha(colors.primary, 0.35)
                 scale: playMa.containsMouse ? 1.1 : 1
                 Behavior on scale { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
-                Text { anchors.centerIn: parent; text: root.isPlaying ? "󰏤" : "󰐊"; color: playMa.containsMouse ? colors.background : colors.primary; font.family: "FiraCode Nerd Font"; font.pixelSize: 10 }
+                Text { anchors.centerIn: parent; text: root.isPlaying ? "󰏤" : "󰐊"; color: playMa.containsMouse ? colors.background : colors.primary; font.family: colors.fontSans; font.pixelSize: 10 }
                 MouseArea { id: playMa; anchors.fill: parent; hoverEnabled: true; onClicked: if(root.hasPlayer && root.player.canTogglePlaying) root.player.togglePlaying() }
             }
             Rectangle {
@@ -131,7 +131,7 @@ Item {
                 color: nextMa.containsMouse ? colors.alpha(colors.primary, 0.15) : "transparent"
                 scale: nextMa.containsMouse ? 1.12 : 1
                 Behavior on scale { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
-                Text { anchors.centerIn: parent; text: "󰒭"; color: colors.foreground; font.family: "FiraCode Nerd Font"; font.pixelSize: 10 }
+                Text { anchors.centerIn: parent; text: "󰒭"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 10 }
                 MouseArea { id: nextMa; anchors.fill: parent; hoverEnabled: true; onClicked: if(root.hasPlayer && root.player.canGoNext) root.player.next() }
             }
         }

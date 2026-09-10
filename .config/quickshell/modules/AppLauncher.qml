@@ -164,7 +164,7 @@ PanelWindow {
                     Text {
                         text: ""
                         color: colors.alpha(colors.outline, 0.8)
-                        font.family: "FiraCode Nerd Font"
+                        font.family: colors.fontSans
                         font.pixelSize: 14
                     }
 
@@ -174,7 +174,7 @@ PanelWindow {
                         placeholderText: "Search apps…"
                         placeholderTextColor: colors.alpha(colors.outline, 0.5)
                         color: colors.foreground
-                        font.family: "FiraCode Nerd Font"
+                        font.family: colors.fontSans
                         font.pixelSize: 13
                         background: null
                         selectByMouse: true
@@ -195,7 +195,7 @@ PanelWindow {
                         visible: search.text !== ""
                         text: "󰅖"
                         color: clearMouse.containsMouse ? colors.foreground : colors.alpha(colors.outline, 0.6)
-                        font.family: "FiraCode Nerd Font"
+                        font.family: colors.fontSans
                         font.pixelSize: 13
                         MouseArea { id: clearMouse; anchors.fill: parent; hoverEnabled: true; onClicked: search.text = "" }
                     }
@@ -206,7 +206,7 @@ PanelWindow {
                 visible: search.text.trim() === "" && Object.keys(usageMap).length > 0
                 text: "RECENT"
                 color: colors.alpha(colors.outline, 0.55)
-                font.family: "FiraCode Nerd Font"
+                font.family: colors.fontSans
                 font.pixelSize: 8
                 font.letterSpacing: 1.5
                 font.weight: Font.Bold
@@ -284,7 +284,7 @@ PanelWindow {
                                 visible: appIcon.status !== Image.Ready
                                 text: modelData.name ? modelData.name.charAt(0).toUpperCase() : "?"
                                 color: colors.primary
-                                font.family: "FiraCode Nerd Font"
+                                font.family: colors.fontSans
                                 font.pixelSize: 13
                                 font.weight: Font.ExtraBold
                             }
@@ -296,7 +296,7 @@ PanelWindow {
                             Text {
                                 text: modelData.name
                                 color: colors.foreground
-                                font.family: "FiraCode Nerd Font"
+                                font.family: colors.fontSans
                                 font.pixelSize: 12
                                 font.weight: Font.DemiBold
                                 elide: Text.ElideRight
@@ -305,7 +305,7 @@ PanelWindow {
                             Text {
                                 text: modelData.genericName || modelData.comment || modelData.id
                                 color: colors.alpha(colors.outline, 0.7)
-                                font.family: "FiraCode Nerd Font"
+                                font.family: colors.fontSans
                                 font.pixelSize: 9
                                 elide: Text.ElideRight
                                 Layout.fillWidth: true
@@ -330,7 +330,7 @@ PanelWindow {
                 visible: root.filtered.length === 0
                 text: "No results"
                 color: colors.alpha(colors.outline, 0.6)
-                font.family: "FiraCode Nerd Font"
+                font.family: colors.fontSans
                 font.pixelSize: 11
                 Layout.alignment: Qt.AlignHCenter
                 Layout.topMargin: 16
@@ -341,7 +341,7 @@ PanelWindow {
             Text {
                 text: "↑↓ navigate  •  ↵ launch  •  esc close"
                 color: colors.alpha(colors.outline, 0.45)
-                font.family: "FiraCode Nerd Font"
+                font.family: colors.fontSans
                 font.pixelSize: 8
                 Layout.alignment: Qt.AlignHCenter
                 Layout.topMargin: 2

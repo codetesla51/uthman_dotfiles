@@ -72,7 +72,7 @@ Item {
             anchors.centerIn: parent
             text: root.text
             color: root.activeColor
-            font.family: "FiraCode Nerd Font"
+            font.family: colors.fontSans
             font.pixelSize: 13
         }
 

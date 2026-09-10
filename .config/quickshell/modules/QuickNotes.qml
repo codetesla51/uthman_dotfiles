@@ -132,7 +132,7 @@ PanelWindow {
                     Text {
                         text: "󰎚 ideas"
                         color: colors.foreground
-                        font.family: "FiraCode Nerd Font"
+                        font.family: colors.fontSans
                         font.pixelSize: 13
                         font.weight: Font.ExtraBold
                         font.letterSpacing: 0.5
@@ -149,7 +149,7 @@ PanelWindow {
                             anchors.centerIn: parent
                             text: notes.length+""
                             color: colors.primary
-                            font.family: "FiraCode Nerd Font"
+                            font.family: colors.fontSans
                             font.pixelSize: 10
                             font.weight: Font.Bold
                         }
@@ -159,14 +159,14 @@ PanelWindow {
                     Text {
                         text: "drag header to move"
                         color: colors.alpha(colors.outline, 0.45)
-                        font.family: "FiraCode Nerd Font"
+                        font.family: colors.fontSans
                         font.pixelSize: 8
                         visible: !dragArea.drag.active
                     }
                     Rectangle {
                         width: 28; height: 28; radius: 14
                         color: closeMa.containsMouse ? colors.alpha(colors.error, 0.12) : "transparent"
-                        Text { anchors.centerIn: parent; text: "󰅖"; color: closeMa.containsMouse?colors.error:colors.alpha(colors.outline,0.7); font.family:"FiraCode Nerd Font"; font.pixelSize:13 }
+                        Text { anchors.centerIn: parent; text: "󰅖"; color: closeMa.containsMouse?colors.error:colors.alpha(colors.outline,0.7); font.family: colors.fontSans; font.pixelSize:13 }
                         MouseArea { id: closeMa; anchors.fill: parent; hoverEnabled:true; onClicked: root.open=false }
                     }
                 }
@@ -191,7 +191,7 @@ PanelWindow {
                 placeholderText: "Search ideas…"
                 placeholderTextColor: colors.alpha(colors.outline,0.5)
                 color: colors.foreground
-                font.family: "FiraCode Nerd Font"; font.pixelSize: 11
+                font.family: colors.fontSans; font.pixelSize: 11
                 background: Rectangle {
                     radius: 10
                     color: colors.alpha(colors.surface,0.7)
@@ -240,21 +240,21 @@ PanelWindow {
                             Text {
                                 text: modelData.title || "(no title)"
                                 color: colors.foreground
-                                font.family: "FiraCode Nerd Font"; font.pixelSize: 11; font.weight: Font.DemiBold
+                                font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.DemiBold
                                 elide: Text.ElideRight; Layout.fillWidth: true
                                 maximumLineCount: 1
                             }
                             Text {
                                 text: root.timeAgo(modelData.created)
                                 color: colors.alpha(colors.outline,0.55)
-                                font.family: "FiraCode Nerd Font"; font.pixelSize: 8
+                                font.family: colors.fontSans; font.pixelSize: 8
                             }
                         }
                         Text {
                             visible: modelData.body && modelData.body.length>0
                             text: modelData.body
                             color: colors.alpha(colors.foreground,0.75)
-                            font.family: "FiraCode Nerd Font"; font.pixelSize: 10
+                            font.family: colors.fontSans; font.pixelSize: 10
                             wrapMode: Text.WrapAtWordBoundaryOrAnywhere
                             maximumLineCount: 3
                             elide: Text.ElideRight
@@ -270,13 +270,13 @@ PanelWindow {
                         Rectangle {
                             width: 24; height: 24; radius: 12
                             color: pinMa.containsMouse?colors.alpha(colors.primary,0.2):colors.alpha(colors.surfaceVariant,0.3)
-                            Text { anchors.centerIn: parent; text: modelData.pinned ? "" : ""; color: modelData.pinned?colors.primary:colors.alpha(colors.outline,0.7); font.family:"FiraCode Nerd Font"; font.pixelSize:10; rotation: modelData.pinned?0:45 }
+                            Text { anchors.centerIn: parent; text: modelData.pinned ? "" : ""; color: modelData.pinned?colors.primary:colors.alpha(colors.outline,0.7); font.family: colors.fontSans; font.pixelSize:10; rotation: modelData.pinned?0:45 }
                             MouseArea { id: pinMa; anchors.fill: parent; hoverEnabled:true; onClicked: root.togglePin(modelData.id, !modelData.pinned) }
                         }
                         Rectangle {
                             width: 24; height: 24; radius: 12
                             color: editMa.containsMouse?colors.alpha(colors.primary,0.15):colors.alpha(colors.surfaceVariant,0.3)
-                            Text { anchors.centerIn: parent; text: "󰉁"; color: colors.alpha(colors.outline,0.8); font.family:"FiraCode Nerd Font"; font.pixelSize:10 }
+                            Text { anchors.centerIn: parent; text: "󰉁"; color: colors.alpha(colors.outline,0.8); font.family: colors.fontSans; font.pixelSize:10 }
                             MouseArea { id: editMa; anchors.fill: parent; hoverEnabled:true; onClicked: {
                                 root.editId = modelData.id; titleField.text = modelData.title; bodyField.text = modelData.body; titleField.forceActiveFocus()
                             } }
@@ -284,7 +284,7 @@ PanelWindow {
                         Rectangle {
                             width: 24; height: 24; radius: 12
                             color: trashMa.containsMouse?colors.alpha(colors.error,0.18):colors.alpha(colors.surfaceVariant,0.3)
-                            Text { anchors.centerIn: parent; text: "󰆴"; color: trashMa.containsMouse?colors.error:colors.alpha(colors.outline,0.7); font.family:"FiraCode Nerd Font"; font.pixelSize:10 }
+                            Text { anchors.centerIn: parent; text: "󰆴"; color: trashMa.containsMouse?colors.error:colors.alpha(colors.outline,0.7); font.family: colors.fontSans; font.pixelSize:10 }
                             MouseArea { id: trashMa; anchors.fill: parent; hoverEnabled:true; onClicked: root.deleteNote(modelData.id) }
                         }
                     }
@@ -302,7 +302,7 @@ PanelWindow {
                 visible: root.filtered.length===0
                 text: searchQuery==="" ? "No ideas yet — capture one below" : "No matches"
                 color: colors.alpha(colors.outline,0.55)
-                font.family: "FiraCode Nerd Font"; font.pixelSize: 10
+                font.family: colors.fontSans; font.pixelSize: 10
                 Layout.alignment: Qt.AlignHCenter
             }
 
@@ -324,7 +324,7 @@ PanelWindow {
                         placeholderText: "Title (idea in one line)…"
                         placeholderTextColor: colors.alpha(colors.outline,0.5)
                         color: colors.foreground
-                        font.family:"FiraCode Nerd Font"; font.pixelSize: 11; font.weight: Font.DemiBold
+                        font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.DemiBold
                         background: Rectangle {
                             radius: 10
                             color: colors.alpha(colors.surface,0.7)
@@ -337,7 +337,7 @@ PanelWindow {
                         width: 60; height: 36; radius: 10
                         color: cancelMa.containsMouse?colors.alpha(colors.surfaceVariant,0.4):"transparent"
                         border.width: 1; border.color: colors.alpha(colors.outline,0.15)
-                        Text { anchors.centerIn: parent; text: "Cancel"; color: colors.alpha(colors.foreground,0.8); font.family:"FiraCode Nerd Font"; font.pixelSize:9; font.weight: Font.Bold }
+                        Text { anchors.centerIn: parent; text: "Cancel"; color: colors.alpha(colors.foreground,0.8); font.family: colors.fontSans; font.pixelSize:9; font.weight: Font.Bold }
                         MouseArea { id: cancelMa; anchors.fill: parent; hoverEnabled:true; onClicked: { root.editId=""; titleField.text=""; bodyField.text="" } }
                     }
                 }
@@ -348,7 +348,7 @@ PanelWindow {
                     placeholderText: "Details… (optional)"
                     placeholderTextColor: colors.alpha(colors.outline,0.5)
                     color: colors.foreground
-                    font.family:"FiraCode Nerd Font"; font.pixelSize: 10
+                    font.family: colors.fontSans; font.pixelSize: 10
                     wrapMode: TextArea.Wrap
                     background: Rectangle {
                         radius: 10
@@ -366,7 +366,7 @@ PanelWindow {
                         anchors.centerIn: parent
                         text: root.editId!=="" ? "Save changes" : "Add idea  ↵"
                         color: (titleField.text.trim()!=="" || bodyField.text.trim()!=="") ? colors.background : colors.alpha(colors.outline,0.7)
-                        font.family:"FiraCode Nerd Font"; font.pixelSize: 10; font.weight: Font.Bold; font.letterSpacing: 0.5
+                        font.family: colors.fontSans; font.pixelSize: 10; font.weight: Font.Bold; font.letterSpacing: 0.5
                     }
                     MouseArea {
                         anchors.fill: parent
@@ -384,7 +384,7 @@ PanelWindow {
             Text {
                 text: "↵ save  •  esc close  •  drag header to move  •  double-click note to edit"
                 color: colors.alpha(colors.outline,0.4)
-                font.family:"FiraCode Nerd Font"; font.pixelSize: 7; font.letterSpacing: 0.3
+                font.family: colors.fontSans; font.pixelSize: 7; font.letterSpacing: 0.3
                 Layout.alignment: Qt.AlignHCenter
             }
         }

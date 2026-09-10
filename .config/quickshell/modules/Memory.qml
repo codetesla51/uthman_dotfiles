@@ -59,7 +59,7 @@ Item {
             anchors.centerIn: parent
             text: "󰍛 " + root.pct + "%"
             color: root.hovered ? colors.foreground : colors.tertiary
-            font.family: "FiraCode Nerd Font"
+            font.family: colors.fontSans
             font.pixelSize: 11
             font.weight: Font.DemiBold
             font.letterSpacing: 0.3

@@ -11,9 +11,7 @@ import QtQuick.Controls
 FloatingWindow {
     id: root
 
-    // Fallback palette so colors.* reads never throw during startup:
-    // the external `colors` assignment can land after our bindings first
-    // evaluate, and one throw aborts setup of the whole shell (no bar, no IPC).
+    // Fallback palette
     QtObject {
         id: fallback
         property color background: "#17130f"
@@ -66,20 +64,14 @@ FloatingWindow {
     // --- self-test ---
     property bool selfBusy: false
     property string selfMsg: ""
-    // --- RAM ---
-    property real memTotalGb: 0
-    property real memUsedGb: 0
-    property int memPct: 0
-    property var memHist: []
-    property string swapTxt: ""
-    property bool ramBusy: false
-    property string ramMsg: ""
+    property string note: ""
 
-    title: "Hardware Health"
-    implicitWidth: 600
-    implicitHeight: 640
-    minimumSize: Qt.size(540, 500)
-    maximumSize: Qt.size(720, 740)
+    title: "HW " + Math.round(liveWriteMBs) + "/" + Math.round(liveReadMBs)
+    IpcHandler { target: "dbg"; function go(): void { root.runSpeed() } }
+    implicitWidth: 640
+    implicitHeight: 540
+    minimumSize: Qt.size(580, 480)
+    maximumSize: Qt.size(760, 700)
     color: "transparent"
     visible: root.open
     IpcHandler { target: "drives"; function toggle(): void { root.open = !root.open } }
@@ -215,7 +207,8 @@ FloatingWindow {
         repeat: true
         onTriggered: root.refreshSmart()
     }
-    // ===== full SMART via sudo + your askpass glass prompt =====
+
+    // ===== full SMART via sudo =====
     function runFullScan() {
         if (root.scanBusy || root.devName === "") return
         root.scanBusy = true
@@ -262,6 +255,7 @@ FloatingWindow {
             }
         }
     }
+
     // ===== throughput: /sys/block/<dev>/stat, 1s poll while open =====
     Timer {
         interval: 1000
@@ -273,8 +267,6 @@ FloatingWindow {
                 statView.path = ""
                 statView.path = "/sys/block/" + root.devName + "/stat"
             }
-            memView.path = ""
-            memView.path = "/proc/meminfo"
         }
     }
     FileView {
@@ -289,39 +281,15 @@ FloatingWindow {
                 root.writeKBs = (ws - root.lastWSectors) * 512 / 1024
                 var rh = root.rHist.slice()
                 rh.push(root.readKBs)
-                if (rh.length > 40) rh.shift()
+                if (rh.length > 50) rh.shift()
                 root.rHist = rh
                 var wh = root.wHist.slice()
                 wh.push(root.writeKBs)
-                if (wh.length > 40) wh.shift()
+                if (wh.length > 50) wh.shift()
                 root.wHist = wh
             }
             root.lastRSectors = rs
             root.lastWSectors = ws
-        }
-    }
-    FileView {
-        id: memView
-        path: "/proc/meminfo"
-        printErrors: false
-        onLoaded: {
-            var t = text()
-            var grab = function (k) {
-                var m = t.match(new RegExp(k + ":\\s+(\\d+)"))
-                return m ? parseFloat(m[1]) : 0
-            }
-            var tot = grab("MemTotal"), av = grab("MemAvailable")
-            if (tot > 0) {
-                root.memTotalGb = tot / 1048576
-                root.memUsedGb = (tot - av) / 1048576
-                root.memPct = Math.round(100 * (tot - av) / tot)
-                var h = root.memHist.slice()
-                h.push(root.memPct)
-                if (h.length > 40) h.shift()
-                root.memHist = h
-            }
-            var st = grab("SwapTotal"), sf = grab("SwapFree")
-            root.swapTxt = st > 0 ? "swap " + root.fmtGb((st - sf) * 1024) + " / " + root.fmtGb(st * 1024) : "no swap"
         }
     }
     Timer {
@@ -338,7 +306,7 @@ FloatingWindow {
         }
     }
 
-    // ===== speed test: 256MB direct-IO write + read in $HOME =====
+    // ===== speed test: 1GB direct-IO write + read in $HOME =====
     function runSpeed() {
         if (root.speedBusy) return
         root.speedBusy = true
@@ -353,14 +321,17 @@ FloatingWindow {
         writeProc.command = ["sh", "-c", "dd if=/dev/zero of=" + q(f) + " bs=1M count=1024 oflag=direct status=progress"]
         writeProc.running = true
     }
-    // write phase streams dd status=progress on stderr; the gauge paints live
     Process {
         id: writeProc
         stderr: StdioCollector {
+            id: speedErr
             waitForEnd: false
             onTextChanged: {
-                var m = text.match(/([0-9.]+)\s+([GM])B\/s[^\r\n]*$/)
-                if (m) root.liveWriteMBs = parseFloat(m[1]) * (m[2] === "G" ? 1024 : 1)
+                var hits = text.match(/([0-9.]+)\s+([GM])B\/s/g)
+                if (hits && hits.length > 0) {
+                    var last = hits[hits.length - 1].split(" ")[0]
+                    root.liveWriteMBs = parseFloat(last) * (hits[hits.length - 1].indexOf("GB/s") !== -1 ? 1024 : 1)
+                }
             }
         }
         onExited: function (code) {
@@ -377,10 +348,14 @@ FloatingWindow {
     Process {
         id: readProc
         stderr: StdioCollector {
+            id: readErr
             waitForEnd: false
             onTextChanged: {
-                var m2 = text.match(/([0-9.]+)\s+([GM])B\/s[^\r\n]*$/)
-                if (m2) root.liveReadMBs = parseFloat(m2[1]) * (m2[2] === "G" ? 1024 : 1)
+                var hits = text.match(/([0-9.]+)\s+([GM])B\/s/g)
+                if (hits && hits.length > 0) {
+                    var last = hits[hits.length - 1].split(" ")[0]
+                    root.liveReadMBs = parseFloat(last) * (hits[hits.length - 1].indexOf("GB/s") !== -1 ? 1024 : 1)
+                }
             }
         }
         onExited: function (rcode) {
@@ -395,269 +370,248 @@ FloatingWindow {
         }
     }
 
-    // ===== RAM test: 512MB pattern test, ~15s =====
-    function runRamTest() {
-        if (root.ramBusy) return
-        root.ramBusy = true
-        root.ramMsg = "testing 256MB…"
-        var script = Quickshell.env("HOME") + "/dotfiles/.config/quickshell/scripts/ram-test.py"
-        ramProc.command = ["nice", "-n", "19", "python3", script, "256"]
-        ramProc.running = true
-    }
-    Process {
-        id: ramProc
-        stdout: StdioCollector {
-            waitForEnd: true
-            onStreamFinished: {
-                root.ramBusy = false
-                var m = text.match(/RAMTEST\s+(PASS|FAIL)[^\n]*/)
-                root.ramMsg = m ? m[0].replace("RAMTEST ", "").toLowerCase() : "test failed"
-            }
-        }
-    }
     // ================= UI =================
     Rectangle {
         id: card
         anchors.fill: parent
-        radius: 20
-        color: colors.alpha(colors.background, 0.74)
+        radius: 22
+        color: colors.alpha(colors.background, 0.78)
         border.width: 1
-        border.color: colors.alpha(colors.outline, 0.18)
-        scale: root.open ? 1 : 0.96
+        border.color: colors.alpha(colors.outline, 0.15)
+        clip: true
+        scale: root.open ? 1 : 0.94
         opacity: root.open ? 1 : 0
-        Behavior on scale { NumberAnimation { duration: 240; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] } }
-        Behavior on opacity { NumberAnimation { duration: 200; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] } }
+        Behavior on scale { NumberAnimation { duration: 280; easing.type: Easing.Bezier; easing.bezierCurve: [0.22, 0.68, 0, 1.08] } }
+        Behavior on opacity { NumberAnimation { duration: 220; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] } }
+
+        // subtle top glow
+        Rectangle {
+            anchors.top: parent.top; anchors.left: parent.left; anchors.right: parent.right
+            height: 1
+            color: colors.alpha(colors.primary, 0.12)
+        }
 
         ColumnLayout {
             anchors.fill: parent
-            anchors.margins: 14
-            spacing: 8
+            anchors.margins: 16
+            anchors.topMargin: 14
+            anchors.bottomMargin: 14
+            spacing: 10
 
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: 8
-                Text { text: "HARDWARE HEALTH"; color: colors.alpha(colors.outline, 0.65); font.family: "FiraCode Nerd Font"; font.pixelSize: 9; font.weight: Font.Bold; font.letterSpacing: 1.5; Layout.fillWidth: true }
-                Text {
-                    text: root.scanBusy ? "scanning…" : "full scan"
-                    color: scanMa.containsMouse ? colors.primary : colors.alpha(colors.outline, 0.6)
-                    font.family: "FiraCode Nerd Font"
-                    font.pixelSize: 8
-                    font.weight: Font.Bold
-                    MouseArea { id: scanMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.runFullScan() }
-                }
-                Text {
-                    text: "re-check"
-                    color: reMa.containsMouse ? colors.primary : colors.alpha(colors.outline, 0.6)
-                    font.family: "FiraCode Nerd Font"
-                    font.pixelSize: 8
-                    font.weight: Font.Bold
-                    MouseArea { id: reMa; anchors.fill: parent; hoverEnabled: true; onClicked: { root.refreshStatic(); root.refreshSmart() } }
-                }
-                Rectangle {
-                    width: 24; height: 24; radius: 12
-                    color: closeMa.containsMouse ? colors.alpha(colors.surfaceVariant, 0.4) : "transparent"
-                    Text { anchors.centerIn: parent; text: "×"; color: closeMa.containsMouse ? colors.foreground : colors.alpha(colors.outline, 0.7); font.family: "FiraCode Nerd Font"; font.pixelSize: 12; font.weight: Font.Bold }
-                    MouseArea { id: closeMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.open = false }
-                }
-            }
-
+            // warning / scan result
             Text {
                 visible: root.noteText !== ""
                 Layout.fillWidth: true
                 horizontalAlignment: Text.AlignHCenter
                 text: root.noteText
                 color: root.failing ? colors.error : colors.secondary
-                font.family: "FiraCode Nerd Font"
-                font.pixelSize: 9
-                font.weight: Font.Bold
+                font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold
                 elide: Text.ElideRight
             }
 
-            // health banner
+            // ── Health Banner ──
             Rectangle {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 64
-                radius: 12
-                color: colors.alpha(colors.surface, 0.4)
+                Layout.preferredHeight: 72
+                radius: 14
+                color: colors.alpha(colors.surface, 0.45)
                 border.width: 1
-                border.color: root.failing ? colors.alpha(colors.error, 0.4) : colors.alpha(colors.outline, 0.12)
+                border.color: root.failing ? colors.alpha(colors.error, 0.35) : colors.alpha(colors.outline, 0.1)
+                Rectangle {
+                    visible: root.failing
+                    anchors.fill: parent; radius: parent.radius
+                    color: "transparent"
+                    border.width: 2
+                    border.color: colors.alpha(colors.error, 0.2)
+                }
                 RowLayout {
                     anchors.fill: parent
-                    anchors.leftMargin: 12
-                    anchors.rightMargin: 12
-                    spacing: 10
+                    anchors.leftMargin: 16; anchors.rightMargin: 16
+                    spacing: 16
                     ColumnLayout {
-                        spacing: 2
+                        spacing: 3
                         Layout.fillWidth: true
-                        Text {
-                            text: !root.smartOk ? "…" : root.failing ? "FAILING" : "GOOD"
-                            color: !root.smartOk ? colors.alpha(colors.outline, 0.6) : root.failing ? colors.error : colors.secondary
-                            font.family: "FiraCode Nerd Font"
-                            font.pixelSize: 17
-                            font.weight: Font.ExtraBold
+                        RowLayout { spacing: 6
+                            Text {
+                                text: !root.smartOk ? "NO DATA" : root.failing ? "FAILING" : "HEALTHY"
+                                color: !root.smartOk ? colors.alpha(colors.outline, 0.6) : root.failing ? colors.error : colors.secondary
+                                font.family: colors.fontSans; font.pixelSize: 16; font.weight: Font.ExtraBold
+                            }
                         }
                         Text {
-                            text: root.model !== "" ? root.model + " · " + root.sizeStr : "reading…"
-                            color: colors.alpha(colors.outline, 0.6)
-                            font.family: "FiraCode Nerd Font"
-                            font.pixelSize: 9
-                            elide: Text.ElideRight
-                            Layout.fillWidth: true
+                            text: root.model !== "" ? root.model + "  ·  " + root.sizeStr : "detecting drive…"
+                            color: colors.alpha(colors.outline, 0.55)
+                            font.family: colors.fontSans; font.pixelSize: 9
+                            elide: Text.ElideRight; Layout.fillWidth: true
                         }
                     }
-                    ColumnLayout {
-                        spacing: 2
-                        Text { text: "TEMP"; color: colors.alpha(colors.outline, 0.55); font.family: "FiraCode Nerd Font"; font.pixelSize: 8; font.weight: Font.Bold; Layout.alignment: Qt.AlignHCenter }
-                        Text { text: root.hasTemp ? Math.round(root.tempC) + "°" : "—"; color: colors.foreground; font.family: "FiraCode Nerd Font"; font.pixelSize: 13; font.weight: Font.ExtraBold; Layout.alignment: Qt.AlignHCenter }
-                    }
-                    ColumnLayout {
-                        spacing: 2
-                        Text { text: "ON TIME"; color: colors.alpha(colors.outline, 0.55); font.family: "FiraCode Nerd Font"; font.pixelSize: 8; font.weight: Font.Bold; Layout.alignment: Qt.AlignHCenter }
-                        Text { text: root.hasHours ? root.fmtHours(root.powerHours) : "—"; color: colors.foreground; font.family: "FiraCode Nerd Font"; font.pixelSize: 13; font.weight: Font.ExtraBold; Layout.alignment: Qt.AlignHCenter }
-                    }
-                    ColumnLayout {
-                        spacing: 2
-                        Text { text: "SELF-TEST"; color: colors.alpha(colors.outline, 0.55); font.family: "FiraCode Nerd Font"; font.pixelSize: 8; font.weight: Font.Bold; Layout.alignment: Qt.AlignHCenter }
-                        Text { text: root.selftest !== "" ? root.selftest : "—"; color: root.selftest === "success" ? colors.secondary : colors.foreground; font.family: "FiraCode Nerd Font"; font.pixelSize: 13; font.weight: Font.ExtraBold; Layout.alignment: Qt.AlignHCenter }
+                    Row { spacing: 16; Layout.alignment: Qt.AlignVCenter
+                        Column { spacing: 2
+                            Text { text: "TEMP"; color: colors.alpha(colors.outline, 0.5); font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold; anchors.horizontalCenter: parent.horizontalCenter }
+                            Text { text: root.hasTemp ? Math.round(root.tempC) + "°C" : "—"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 14; font.weight: Font.ExtraBold; anchors.horizontalCenter: parent.horizontalCenter }
+                        }
+                        Column { spacing: 2
+                            Text { text: "UPTIME"; color: colors.alpha(colors.outline, 0.5); font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold; anchors.horizontalCenter: parent.horizontalCenter }
+                            Text { text: root.hasHours ? root.fmtHours(root.powerHours) : "—"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 14; font.weight: Font.ExtraBold; anchors.horizontalCenter: parent.horizontalCenter }
+                        }
+                        Column { spacing: 2
+                            Text { text: "SELF-TEST"; color: colors.alpha(colors.outline, 0.5); font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold; anchors.horizontalCenter: parent.horizontalCenter }
+                            Text { text: root.selftest !== "" ? root.selftest : "—"; color: root.selftest === "success" ? colors.secondary : colors.foreground; font.family: colors.fontSans; font.pixelSize: 14; font.weight: Font.ExtraBold; anchors.horizontalCenter: parent.horizontalCenter }
+                        }
                     }
                 }
             }
 
-            // space
-            Text { text: "SPACE"; color: colors.alpha(colors.outline, 0.65); font.family: "FiraCode Nerd Font"; font.pixelSize: 9; font.weight: Font.Bold; font.letterSpacing: 1.5 }
+            // ── Disk Space ──
+            RowLayout {
+                Layout.fillWidth: true
+                Text { text: "STORAGE"; color: colors.alpha(colors.outline, 0.6); font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold; font.letterSpacing: 2; Layout.fillWidth: true }
+            }
             Repeater {
                 model: root.parts
                 delegate: RowLayout {
                     required property var modelData
-                    Layout.fillWidth: true
-                    spacing: 8
-                    Text { text: modelData.mp; color: colors.alpha(colors.foreground, 0.8); font.family: "FiraCode Nerd Font"; font.pixelSize: 10; Layout.preferredWidth: 52; elide: Text.ElideRight }
+                    Layout.fillWidth: true; spacing: 10
+                    Text { text: modelData.mp; color: colors.alpha(colors.foreground, 0.7); font.family: colors.fontSans; font.pixelSize: 9; Layout.preferredWidth: 50; elide: Text.ElideRight }
                     Rectangle {
-                        Layout.fillWidth: true
-                        height: 6
-                        radius: 3
-                        color: colors.alpha(colors.surfaceVariant, 0.5)
+                        Layout.fillWidth: true; height: 8; radius: 4
+                        color: colors.alpha(colors.surfaceVariant, 0.4)
                         Rectangle {
                             width: parent.width * Math.min(100, modelData.pct) / 100
-                            height: parent.height
-                            radius: 3
+                            height: parent.height; radius: 4
                             color: modelData.pct > 90 ? colors.error : colors.primary
+                            Behavior on width { NumberAnimation { duration: 400; easing.type: Easing.OutCubic } }
                         }
                     }
-                    Text { text: modelData.usedGb + " / " + modelData.totalGb; color: colors.alpha(colors.outline, 0.65); font.family: "FiraCode Nerd Font"; font.pixelSize: 9 }
+                    Text { text: modelData.pct + "%"; color: modelData.pct > 90 ? colors.error : colors.alpha(colors.outline, 0.6); font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold; Layout.preferredWidth: 30; horizontalAlignment: Text.AlignRight }
+                    Text { text: modelData.usedGb + " / " + modelData.totalGb; color: colors.alpha(colors.outline, 0.5); font.family: colors.fontSans; font.pixelSize: 8 }
                 }
             }
 
-            // throughput
-            RowLayout {
+            // ── Throughput Graph ──
+            Rectangle {
                 Layout.fillWidth: true
-                Text { text: "THROUGHPUT"; color: colors.alpha(colors.outline, 0.65); font.family: "FiraCode Nerd Font"; font.pixelSize: 9; font.weight: Font.Bold; font.letterSpacing: 1.5; Layout.fillWidth: true }
-                Text { text: "↓ " + root.fmtRate(root.readKBs) + "   ↑ " + root.fmtRate(root.writeKBs); color: colors.alpha(colors.foreground, 0.75); font.family: "FiraCode Nerd Font"; font.pixelSize: 9 }
-            }
-            Canvas {
-                id: ioChart
-                Layout.fillWidth: true
-                Layout.preferredHeight: 80
-                Connections {
-                    target: root
-                    function onRHistChanged() { ioChart.requestPaint() }
-                }
-                onPaint: {
-                    var ctx = getContext("2d")
-                    var W = width, H = height
-                    ctx.clearRect(0, 0, W, H)
-                    var all = root.rHist.concat(root.wHist)
-                    var maxV = 1
-                    for (var i = 0; i < all.length; i++) {
-                        if (all[i] > maxV) maxV = all[i]
+                Layout.preferredHeight: 110
+                radius: 12
+                color: colors.alpha(colors.surface, 0.35)
+                border.width: 1
+                border.color: colors.alpha(colors.outline, 0.08)
+                ColumnLayout {
+                    anchors.fill: parent; anchors.margins: 10; spacing: 4
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Text { text: "THROUGHPUT"; color: colors.alpha(colors.outline, 0.6); font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold; font.letterSpacing: 1; Layout.fillWidth: true }
+                        Text { text: "↓ " + root.fmtRate(root.readKBs) + "   ↑ " + root.fmtRate(root.writeKBs); color: colors.alpha(colors.foreground, 0.7); font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold }
                     }
-                    var draw = function (hist, style) {
-                        if (hist.length < 2) return
-                        ctx.beginPath()
-                        for (var j = 0; j < hist.length; j++) {
-                            var x = W - (hist.length - 1 - j) * (W / 39)
-                            var y = H - 4 - (hist[j] / maxV) * (H - 10)
-                            if (j === 0) ctx.moveTo(x, y)
-                            else ctx.lineTo(x, y)
+                    Canvas {
+                        id: ioChart
+                        Layout.fillWidth: true; Layout.fillHeight: true
+                        antialiasing: true
+                        Connections { target: root; function onRHistChanged() { ioChart.requestPaint() } }
+                        onPaint: {
+                            var ctx = getContext("2d")
+                            var W = width, H = height
+                            ctx.clearRect(0, 0, W, H)
+                            var all = root.rHist.concat(root.wHist)
+                            var maxV = 1
+                            for (var i = 0; i < all.length; i++) { if (all[i] > maxV) maxV = all[i] }
+                            maxV = Math.max(maxV * 1.15, 10)
+                            // grid
+                            ctx.strokeStyle = colors.alpha(colors.outline, 0.06)
+                            ctx.lineWidth = 0.5
+                            for (var g = 0; g < 4; g++) {
+                                var gy = H - (g / 3) * H
+                                ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(W, gy); ctx.stroke()
+                            }
+                            var drawSmooth = function (hist, strokeColor, fillColor) {
+                                if (hist.length < 2) return
+                                var n = hist.length
+                                var pts = []
+                                for (var j = 0; j < n; j++) {
+                                    pts.push({ x: (j / (n - 1)) * W, y: H - (hist[j] / maxV) * (H - 4) })
+                                }
+                                ctx.beginPath()
+                                ctx.moveTo(pts[0].x, H)
+                                ctx.lineTo(pts[0].x, pts[0].y)
+                                for (var k = 1; k < pts.length; k++) {
+                                    var cpx = (pts[k - 1].x + pts[k].x) / 2
+                                    ctx.bezierCurveTo(cpx, pts[k - 1].y, cpx, pts[k].y, pts[k].x, pts[k].y)
+                                }
+                                ctx.lineTo(pts[pts.length - 1].x, H)
+                                ctx.closePath()
+                                var grad = ctx.createLinearGradient(0, 0, 0, H)
+                                grad.addColorStop(0, fillColor)
+                                grad.addColorStop(1, "transparent")
+                                ctx.fillStyle = grad
+                                ctx.fill()
+                                ctx.beginPath()
+                                ctx.moveTo(pts[0].x, pts[0].y)
+                                for (var l = 1; l < pts.length; l++) {
+                                    var cpx2 = (pts[l - 1].x + pts[l].x) / 2
+                                    ctx.bezierCurveTo(cpx2, pts[l - 1].y, cpx2, pts[l].y, pts[l].x, pts[l].y)
+                                }
+                                ctx.strokeStyle = strokeColor
+                                ctx.lineWidth = 1.8
+                                ctx.lineJoin = "round"
+                                ctx.stroke()
+                            }
+                            drawSmooth(root.rHist, colors.secondary, colors.alpha(colors.secondary, 0.12))
+                            drawSmooth(root.wHist, colors.primary, colors.alpha(colors.primary, 0.12))
                         }
-                        ctx.strokeStyle = style
-                        ctx.lineWidth = 1.5
-                        ctx.stroke()
                     }
-                    draw(root.rHist, colors.secondary)
-                    draw(root.wHist, colors.primary)
                 }
             }
 
-            // speed test
+            // ── Speed Test Button + Result ──
             RowLayout {
-                Layout.fillWidth: true
-                spacing: 10
+                Layout.fillWidth: true; spacing: 10
                 Rectangle {
-                    height: 26
-                    width: speedLabel.implicitWidth + 20
-                    radius: 13
-                    color: root.speedBusy ? colors.alpha(colors.surfaceVariant, 0.4) : speedMa.containsMouse ? colors.alpha(colors.primary, 0.22) : colors.alpha(colors.primary, 0.10)
-                    border.width: 1
-                    border.color: colors.alpha(colors.primary, 0.35)
+                    width: 104; height: 28; radius: 14
+                    color: root.speedBusy ? colors.alpha(colors.surfaceVariant, 0.4) : speedMa.containsMouse ? colors.alpha(colors.primary, 0.2) : colors.alpha(colors.primary, 0.08)
+                    border.width: 1; border.color: colors.alpha(colors.primary, 0.3)
+                    Behavior on color { ColorAnimation { duration: 200 } }
                     Text {
-                        id: speedLabel
                         anchors.centerIn: parent
-                        text: root.speedBusy ? "testing…" : "run speed test"
-                        color: colors.primary
-                        font.family: "FiraCode Nerd Font"
-                        font.pixelSize: 9
-                        font.weight: Font.Bold
+                        text: root.speedBusy ? "testing…" : "speed test"
+                        color: colors.primary; font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold
                     }
                     MouseArea { id: speedMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.runSpeed() }
                 }
                 Text {
                     text: root.speedBusy ? ("↓ " + root.fmtRate(root.liveReadMBs) + "   ↑ " + root.fmtRate(root.liveWriteMBs)) : root.speedMsg
-                    color: colors.alpha(colors.foreground, 0.8)
-                    font.family: "FiraCode Nerd Font"
-                    font.pixelSize: 10
-                    elide: Text.ElideRight
-                    Layout.fillWidth: true
+                    color: colors.alpha(colors.foreground, 0.8); font.family: colors.fontSans; font.pixelSize: 10
+                    elide: Text.ElideRight; Layout.fillWidth: true
                 }
             }
 
-            // self-test
+            // ── Self-Test Button + Result ──
             RowLayout {
-                Layout.fillWidth: true
-                spacing: 10
+                Layout.fillWidth: true; spacing: 10
                 Rectangle {
-                    height: 26
-                    width: selfLabel.implicitWidth + 20
-                    radius: 13
-                    color: root.selfBusy ? colors.alpha(colors.surfaceVariant, 0.4) : selfMa.containsMouse ? colors.alpha(colors.primary, 0.22) : colors.alpha(colors.primary, 0.10)
-                    border.width: 1
-                    border.color: colors.alpha(colors.primary, 0.35)
+                    width: 104; height: 28; radius: 14
+                    color: root.selfBusy ? colors.alpha(colors.surfaceVariant, 0.4) : selfMa.containsMouse ? colors.alpha(colors.tertiary, 0.2) : colors.alpha(colors.tertiary, 0.08)
+                    border.width: 1; border.color: colors.alpha(colors.tertiary, 0.3)
+                    Behavior on color { ColorAnimation { duration: 200 } }
                     Text {
-                        id: selfLabel
                         anchors.centerIn: parent
-                        text: root.selfBusy ? "testing…" : "run self-test"
-                        color: colors.primary
-                        font.family: "FiraCode Nerd Font"
-                        font.pixelSize: 9
-                        font.weight: Font.Bold
+                        text: root.selfBusy ? "testing…" : "self-test"
+                        color: colors.tertiary; font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold
                     }
                     MouseArea { id: selfMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.runSelftest() }
                 }
                 Text {
                     text: root.selfMsg
-                    color: colors.alpha(colors.foreground, 0.8)
-                    font.family: "FiraCode Nerd Font"
-                    font.pixelSize: 10
-                    elide: Text.ElideRight
-                    Layout.fillWidth: true
+                    color: colors.alpha(colors.foreground, 0.8); font.family: colors.fontSans; font.pixelSize: 10
+                    elide: Text.ElideRight; Layout.fillWidth: true
                 }
             }
 
-            // speedometer: live during tests (dd streams 1/sec, file is 1GB so the sweep is visible)
+            // ── Speedometer ──
             Canvas {
                 id: speedo
                 Layout.fillWidth: true
-                Layout.preferredHeight: 90
+                Layout.preferredHeight: 100
+                antialiasing: true
                 Connections {
                     target: root
                     function onReadMBsChanged() { speedo.requestPaint() }
@@ -668,147 +622,74 @@ FloatingWindow {
                     var ctx = getContext("2d")
                     var W = width, H = height
                     ctx.clearRect(0, 0, W, H)
-                    var cx = W / 2, cy = H - 10
-                    var R = Math.min(W / 2 - 30, H - 24)
+                    var cx = W / 2, cy = H - 8
+                    var R = Math.min(W / 2 - 40, H - 20)
                     var dw = root.speedBusy ? root.liveWriteMBs : root.writeMBs
                     var dr = root.speedBusy ? root.liveReadMBs : root.readMBs
                     var maxV = Math.max(600, dr * 1.2, dw * 1.2)
+                    // background arc
                     ctx.beginPath()
                     ctx.arc(cx, cy, R, Math.PI, 0)
-                    ctx.strokeStyle = colors.alpha(colors.outline, 0.25)
-                    ctx.lineWidth = 6
+                    ctx.strokeStyle = colors.alpha(colors.outline, 0.12)
+                    ctx.lineWidth = 8
+                    ctx.lineCap = "round"
                     ctx.stroke()
-                    ctx.font = "8px 'FiraCode Nerd Font', monospace"
-                    ctx.textAlign = "center"
+                    // ticks
                     for (var i = 0; i <= 6; i++) {
                         var a = Math.PI - i / 6 * Math.PI
-                        var x1 = cx + Math.cos(a) * (R - 8), y1 = cy + Math.sin(a) * (R - 8)
+                        var inner = i % 2 === 0 ? R - 14 : R - 10
+                        var x1 = cx + Math.cos(a) * inner, y1 = cy + Math.sin(a) * inner
                         var x2 = cx + Math.cos(a) * R, y2 = cy + Math.sin(a) * R
                         ctx.beginPath()
-                        ctx.moveTo(x1, y1)
-                        ctx.lineTo(x2, y2)
-                        ctx.strokeStyle = colors.alpha(colors.outline, 0.4)
-                        ctx.lineWidth = 1
+                        ctx.moveTo(x1, y1); ctx.lineTo(x2, y2)
+                        ctx.strokeStyle = colors.alpha(colors.outline, i % 2 === 0 ? 0.3 : 0.15)
+                        ctx.lineWidth = i % 2 === 0 ? 1.2 : 0.6
                         ctx.stroke()
-                        ctx.fillStyle = colors.alpha(colors.outline, 0.55)
-                        ctx.fillText(Math.round(maxV * i / 6), cx + Math.cos(a) * (R + 11), cy + Math.sin(a) * (R + 11) + 3)
+                        if (i % 2 === 0) {
+                            ctx.font = "7px 'FiraCode Nerd Font', monospace"
+                            ctx.textAlign = "center"
+                            ctx.fillStyle = colors.alpha(colors.outline, 0.45)
+                            ctx.fillText(Math.round(maxV * i / 6), cx + Math.cos(a) * (R + 14), cy + Math.sin(a) * (R + 14) + 3)
+                        }
                     }
-                    var needle = function (v, style, len) {
-                        var na = Math.PI - Math.min(1, v / maxV) * Math.PI
+                    // colored arcs
+                    var drawArc = function (v, color, width) {
+                        if (v <= 0) return
+                        var endA = Math.PI - Math.min(1, v / maxV) * Math.PI
                         ctx.beginPath()
-                        ctx.moveTo(cx, cy)
-                        ctx.lineTo(cx + Math.cos(na) * R * len, cy + Math.sin(na) * R * len)
-                        ctx.strokeStyle = style
-                        ctx.lineWidth = 2
+                        ctx.arc(cx, cy, R - 3, Math.PI, endA)
+                        ctx.strokeStyle = color
+                        ctx.lineWidth = width
+                        ctx.lineCap = "round"
                         ctx.stroke()
                     }
-                    needle(dw, colors.primary, 0.92)
-                    needle(dr, colors.secondary, 0.78)
-                    ctx.beginPath()
-                    ctx.arc(cx, cy, 3, 0, 2 * Math.PI)
-                    ctx.fillStyle = colors.foreground
-                    ctx.fill()
+                    drawArc(dw, colors.primary, 5)
+                    drawArc(dr, colors.secondary, 3)
+                    // value
                     var peak = Math.max(dw, dr)
                     if (peak <= 0) {
-                        ctx.fillStyle = colors.alpha(colors.outline, 0.5)
+                        ctx.fillStyle = colors.alpha(colors.outline, 0.4)
                         ctx.font = "9px 'FiraCode Nerd Font', monospace"
                         ctx.textAlign = "center"
-                        ctx.fillText("run a speed test", cx, cy - 16)
+                        ctx.fillText("run a speed test", cx, cy - 20)
                     } else {
                         ctx.fillStyle = colors.foreground
-                        ctx.font = "bold 17px 'FiraCode Nerd Font', monospace"
+                        ctx.font = "bold 20px 'FiraCode Nerd Font', monospace"
                         ctx.textAlign = "center"
-                        ctx.fillText(Math.round(peak), cx, cy - 20)
+                        ctx.fillText(Math.round(peak), cx, cy - 22)
                         ctx.font = "8px 'FiraCode Nerd Font', monospace"
-                        ctx.fillStyle = colors.alpha(colors.outline, 0.6)
-                        ctx.fillText("MB/s", cx, cy - 8)
+                        ctx.fillStyle = colors.alpha(colors.outline, 0.5)
+                        ctx.fillText("MB/s", cx, cy - 10)
                     }
+                    // legend
                     ctx.textAlign = "left"
                     ctx.fillStyle = colors.primary
-                    ctx.fillText("— write", 4, H - 6)
+                    ctx.font = "8px 'FiraCode Nerd Font', monospace"
+                    ctx.fillText("— write " + Math.round(dw), 6, H - 4)
                     ctx.fillStyle = colors.secondary
-                    ctx.fillText("— read", 52, H - 6)
+                    ctx.fillText("— read " + Math.round(dr), 6 + ctx.measureText("— write " + Math.round(dw)).width + 16, H - 4)
                 }
             }
-
-            // RAM
-            Text { text: "MEMORY"; color: colors.alpha(colors.outline, 0.65); font.family: "FiraCode Nerd Font"; font.pixelSize: 9; font.weight: Font.Bold; font.letterSpacing: 1.5 }
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: 8
-                Text { text: root.memTotalGb > 0 ? root.memUsedGb.toFixed(1) + " / " + root.memTotalGb.toFixed(1) + "G" : "…"; color: colors.alpha(colors.foreground, 0.8); font.family: "FiraCode Nerd Font"; font.pixelSize: 10; Layout.preferredWidth: 118 }
-                Rectangle {
-                    Layout.fillWidth: true
-                    height: 6
-                    radius: 3
-                    color: colors.alpha(colors.surfaceVariant, 0.5)
-                    Rectangle {
-                        width: parent.width * Math.min(100, root.memPct) / 100
-                        height: parent.height
-                        radius: 3
-                        color: root.memPct > 90 ? colors.error : colors.tertiary
-                    }
-                }
-                Text { text: root.memPct + "%"; color: colors.alpha(colors.outline, 0.65); font.family: "FiraCode Nerd Font"; font.pixelSize: 9 }
-                Text { text: root.swapTxt; color: colors.alpha(colors.outline, 0.5); font.family: "FiraCode Nerd Font"; font.pixelSize: 8 }
-            }
-            Canvas {
-                id: memChart
-                Layout.fillWidth: true
-                Layout.preferredHeight: 60
-                Connections {
-                    target: root
-                    function onMemHistChanged() { memChart.requestPaint() }
-                }
-                onPaint: {
-                    var mctx = getContext("2d")
-                    var MW = width, MH = height
-                    mctx.clearRect(0, 0, MW, MH)
-                    if (root.memHist.length < 2) return
-                    mctx.beginPath()
-                    for (var mi = 0; mi < root.memHist.length; mi++) {
-                        var mx = MW - (root.memHist.length - 1 - mi) * (MW / 39)
-                        var my = MH - 4 - (root.memHist[mi] / 100) * (MH - 10)
-                        if (mi === 0) mctx.moveTo(mx, my)
-                        else mctx.lineTo(mx, my)
-                    }
-                    mctx.strokeStyle = colors.tertiary
-                    mctx.lineWidth = 1.5
-                    mctx.stroke()
-                }
-            }
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: 10
-                Rectangle {
-                    height: 26
-                    width: ramLabel.implicitWidth + 20
-                    radius: 13
-                    color: root.ramBusy ? colors.alpha(colors.surfaceVariant, 0.4) : ramMa.containsMouse ? colors.alpha(colors.primary, 0.22) : colors.alpha(colors.primary, 0.10)
-                    border.width: 1
-                    border.color: colors.alpha(colors.primary, 0.35)
-                    Text {
-                        id: ramLabel
-                        anchors.centerIn: parent
-                        text: root.ramBusy ? "testing…" : "run ram test"
-                        color: colors.primary
-                        font.family: "FiraCode Nerd Font"
-                        font.pixelSize: 9
-                        font.weight: Font.Bold
-                    }
-                    MouseArea { id: ramMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.runRamTest() }
-                }
-                Text {
-                    text: root.ramMsg
-                    color: colors.alpha(colors.foreground, 0.8)
-                    font.family: "FiraCode Nerd Font"
-                    font.pixelSize: 10
-                    elide: Text.ElideRight
-                    Layout.fillWidth: true
-                }
-            }
-
-            Item { Layout.fillHeight: true }
         }
 
         Keys.onEscapePressed: root.open = false

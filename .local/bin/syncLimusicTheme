@@ -1,0 +1,38 @@
+#!/bin/sh
+# Recolor limusic (YouTube Music client) from matugen's live palette —
+# writes the WebKit localStorage SQLite rows the app reads at boot
+# (custom-theme = accent/radius, appearance = cover-tint accent).
+# Safe no-op if colors or the DB are missing; leaves the app untouched
+# if it is running with a locked DB.
+set -e
+
+CONF="$HOME/.config/theme/current/colors.conf"
+DB="$HOME/.local/share/com.limusic.desktop/localstorage/tauri_localhost_0.localstorage"
+
+[ -f "$CONF" ] || exit 0
+[ -f "$DB" ] || exit 0
+
+ACCENT=$(grep -E '^\$primary[[:space:]]*=[[:space:]]*rgb\([0-9a-fA-F]{6}\)' "$CONF" \
+    | head -1 | sed -E 's/.*rgb\(([0-9a-fA-F]{6})\).*/#\1/' | tr 'A-F' 'a-f')
+[ -n "$ACCENT" ] || exit 0
+
+# read-modify-write appearance: keep whatever the user set, force artworkAccent on
+OLDAPP=$(sqlite3 "$DB" "SELECT quote(value) FROM ItemTable WHERE key='appearance'" 2>/dev/null | head -1)
+APP='{"artworkBackground":true,"tabbedPlayer":true,"openPlayerOnPlay":true,"artworkAccent":true}'
+if [ -n "$OLDAPP" ] && echo "$OLDAPP" | grep -q "^'X"; then
+    HEX=$(echo "$OLDAPP" | sed "s/^'X//; s/'$//")
+    OLDJSON=$(printf '%s' "$HEX" | xxd -r -p | iconv -f UTF-16LE -t UTF-8 2>/dev/null || true)
+    if [ -n "$OLDJSON" ] && echo "$OLDJSON" | grep -q '"artworkAccent"'; then
+        : # app already wrote it — leave appearance alone entirely
+    fi
+fi
+
+to_hex() { printf '%s' "$1" | iconv -f UTF-8 -t UTF-16LE | xxd -p | tr -d '\n'; }
+
+THEME=$(printf '{"accent":"%s","hue":null,"radius":1.0,"fontSans":"FiraCode Nerd Font","fontHeading":"FiraCode Nerd Font","fontFiles":[]}' "$ACCENT")
+sqlite3 "$DB" "INSERT OR REPLACE INTO ItemTable(key,value) VALUES('custom-theme', X'$(to_hex "$THEME")');" 2>/dev/null \
+    || { echo "limusic DB busy — theme will apply next launch" >&2; exit 1; }
+sqlite3 "$DB" "INSERT OR REPLACE INTO ItemTable(key,value) VALUES('appearance', X'$(to_hex "$APP")');" 2>/dev/null \
+    || true
+
+echo "limusic synced: accent $ACCENT, radius 1rem, artwork-accent on"

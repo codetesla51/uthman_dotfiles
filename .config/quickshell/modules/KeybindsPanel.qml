@@ -151,12 +151,12 @@ PanelWindow {
             RowLayout {
                 Layout.fillWidth: true
                 spacing: 10
-                Text { text: "Keybindings"; color: colors.foreground; font.family:"FiraCode Nerd Font"; font.pixelSize: 14; font.weight: Font.ExtraBold; Layout.fillWidth:true }
-                Text { text: filtered.length+" / "+binds.length; color: colors.alpha(colors.outline,0.6); font.family:"FiraCode Nerd Font"; font.pixelSize: 9 }
+                Text { text: "Keybindings"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 14; font.weight: Font.ExtraBold; Layout.fillWidth:true }
+                Text { text: filtered.length+" / "+binds.length; color: colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 9 }
                 Rectangle {
                     width: 28; height: 28; radius: 14
                     color: closeMa.containsMouse?colors.alpha(colors.error,0.12):"transparent"
-                    Text { anchors.centerIn: parent; text: "󰅖"; color: closeMa.containsMouse?colors.error:colors.alpha(colors.outline,0.7); font.family:"FiraCode Nerd Font"; font.pixelSize: 13 }
+                    Text { anchors.centerIn: parent; text: "󰅖"; color: closeMa.containsMouse?colors.error:colors.alpha(colors.outline,0.7); font.family: colors.fontSans; font.pixelSize: 13 }
                     MouseArea { id: closeMa; anchors.fill: parent; hoverEnabled:true; onClicked: root.open=false }
                 }
             }
@@ -169,7 +169,7 @@ PanelWindow {
                 placeholderText: "Search keybindings… (try 'window' or 'super')"
                 placeholderTextColor: colors.alpha(colors.outline,0.5)
                 color: colors.foreground
-                font.family:"FiraCode Nerd Font"; font.pixelSize: 11
+                font.family: colors.fontSans; font.pixelSize: 11
                 background: Rectangle {
                     radius: 10
                     color: colors.alpha(colors.surface,0.8)
@@ -214,7 +214,7 @@ PanelWindow {
                                 anchors.centerIn: parent
                                 text: modelData.key
                                 color: colors.primary
-                                font.family:"FiraCode Nerd Font"; font.pixelSize: 9; font.weight: Font.Bold
+                                font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold
                             }
                         }
                         ColumnLayout {
@@ -223,14 +223,14 @@ PanelWindow {
                             Text {
                                 text: modelData.desc
                                 color: colors.foreground
-                                font.family:"FiraCode Nerd Font"; font.pixelSize: 11; font.weight: Font.DemiBold
+                                font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.DemiBold
                                 elide: Text.ElideRight
                                 Layout.fillWidth: true
                             }
                             Text {
                                 text: modelData.cat
                                 color: colors.alpha(colors.outline,0.6)
-                                font.family:"FiraCode Nerd Font"; font.pixelSize: 8
+                                font.family: colors.fontSans; font.pixelSize: 8
                                 elide: Text.ElideRight
                                 Layout.fillWidth: true
                             }
@@ -248,7 +248,7 @@ PanelWindow {
                 visible: root.filtered.length===0
                 text: "No matches"
                 color: colors.alpha(colors.outline,0.6)
-                font.family:"FiraCode Nerd Font"; font.pixelSize: 11
+                font.family: colors.fontSans; font.pixelSize: 11
                 Layout.alignment: Qt.AlignHCenter
             }
         }

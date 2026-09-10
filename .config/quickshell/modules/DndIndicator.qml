@@ -35,7 +35,7 @@ Item {
             anchors.centerIn: parent
             text: root.dnd ? "󰂛" : "󰂚"
             color: colors.error
-            font.family: "FiraCode Nerd Font"
+            font.family: colors.fontSans
             font.pixelSize: 13
 
             Behavior on color { ColorAnimation { duration: 300 } }

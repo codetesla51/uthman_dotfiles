@@ -120,7 +120,7 @@ Item {
                     anchors.centerIn: parent
                     text: root.idleText
                     color: colors.tertiary
-                    font.family: "FiraCode Nerd Font"
+                    font.family: colors.fontSans
                     font.pixelSize: 13
                     opacity: idleMa.containsMouse ? 1 : 0.92
                     Behavior on opacity { NumberAnimation { duration: 120 } }
@@ -152,7 +152,7 @@ Item {
                     anchors.centerIn: parent
                     text: "󰂛"
                     color: colors.error
-                    font.family: "FiraCode Nerd Font"
+                    font.family: colors.fontSans
                     font.pixelSize: 13
                     opacity: dndMa.containsMouse ? 1 : 0.92
                 }
@@ -182,7 +182,7 @@ Item {
                     anchors.centerIn: parent
                     text: root.recText
                     color: colors.error
-                    font.family: "FiraCode Nerd Font"
+                    font.family: colors.fontSans
                     font.pixelSize: 13
                     opacity: recMa.containsMouse ? 1 : 0.92
                 }

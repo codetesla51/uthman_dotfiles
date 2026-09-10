@@ -130,7 +130,7 @@ PanelWindow {
         anchors.centerIn: parent
         width: Math.min(parent.width*0.92, 900)
         height: Math.min(parent.height*0.88, 700)
-        radius: 18
+        radius: 16
         color: colors.alpha(colors.surface, 0.72)
         border.width: 1
         border.color: colors.alpha(colors.primary, 0.14)
@@ -153,7 +153,15 @@ PanelWindow {
             RowLayout {
                 Layout.fillWidth: true
                 spacing: 10
-                Text { text: "  PDF LIBRARY"; color: colors.primary; font.family:"FiraCode Nerd Font"; font.pixelSize: 12; font.weight: Font.Bold; font.letterSpacing: 0.8 }
+                // title chip + label (Amber Bento)
+                Rectangle {
+                    Layout.preferredWidth: 26; Layout.preferredHeight: 26; radius: 13
+                    color: colors.alpha(colors.primary, 0.15)
+                    border.width: 1; border.color: colors.alpha(colors.primary, 0.3)
+                    Text { anchors.centerIn: parent; text: "󰇁"; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 12 }
+                    Layout.alignment: Qt.AlignVCenter
+                }
+                Text { text: "PDF LIBRARY"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 12; font.weight: Font.ExtraBold; font.letterSpacing: 1.3; Layout.alignment: Qt.AlignVCenter }
                 // open field + button (type path, opens in Zathura)
                 Rectangle {
                     Layout.preferredWidth: 260; height: 32; radius: 8
@@ -166,7 +174,7 @@ PanelWindow {
                             Layout.fillWidth: true
                             placeholderText: "/path/to/file.pdf"
                             placeholderTextColor: colors.alpha(colors.outline,0.45)
-                            color: colors.foreground; font.family:"FiraCode Nerd Font"; font.pixelSize: 9
+                            color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 9
                             background: null
                             selectByMouse: true
                             onAccepted: root.openWith(text.trim())
@@ -174,7 +182,7 @@ PanelWindow {
                         Rectangle {
                             width: 46; height: 22; radius: 6
                             color: openMa.containsMouse ? colors.alpha(colors.primary,0.22) : colors.alpha(colors.primary,0.14)
-                            Text { anchors.centerIn: parent; text: "Open"; color: colors.primary; font.family:"FiraCode Nerd Font"; font.pixelSize: 8; font.weight: Font.Bold }
+                            Text { anchors.centerIn: parent; text: "Open"; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold }
                             MouseArea { id: openMa; anchors.fill: parent; hoverEnabled:true; onClicked: root.openWith(pathField.text.trim()) }
                         }
                     }
@@ -191,12 +199,13 @@ PanelWindow {
                     color: colors.alpha(colors.surface, 0.85)
                     border.width: 1; border.color: libSearch.activeFocus ? colors.alpha(colors.primary,0.5) : colors.alpha(colors.outline,0.14)
                     RowLayout { anchors.fill: parent; anchors.leftMargin: 10; anchors.rightMargin: 8; spacing: 6
-                        Text { text: ""; color: colors.alpha(colors.outline,0.6); font.family:"FiraCode Nerd Font"; font.pixelSize: 11 }
-                        TextField { id: libSearch; Layout.fillWidth: true; placeholderText: "Search library…"; placeholderTextColor: colors.alpha(colors.outline,0.45); color: colors.foreground; font.family:"FiraCode Nerd Font"; font.pixelSize: 10; background: null; selectByMouse: true; onTextChanged: root.libQuery = text }
+                        Text { text: "󰍉"; color: colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 11 }
+                        TextField { id: libSearch; Layout.fillWidth: true; placeholderText: "Search library…"; placeholderTextColor: colors.alpha(colors.outline,0.45); color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 10; background: null; selectByMouse: true; onTextChanged: root.libQuery = text }
                     }
                 }
                 Rectangle { width: 70; height: 34; radius: 9; color: rescanMa.containsMouse?colors.alpha(colors.primary,0.22):colors.alpha(colors.primary,0.12); border.width:1; border.color: colors.alpha(colors.primary,0.3)
-                    Text { anchors.centerIn: parent; text: root.scanning ? "…" : "⟳"; color: colors.primary; font.family:"FiraCode Nerd Font"; font.pixelSize: 11; font.weight: Font.Bold }
+                    Text { anchors.centerIn: parent; text: root.scanning ? "…" : "⟳"; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.Bold
+                        RotationAnimation on rotation { running: root.scanning; loops: Animation.Infinite; from: 0; to: 360; duration: 700 } }
                     MouseArea { id: rescanMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.libRescan() } }
             }
             // chips: ★ filter + sorts
@@ -204,13 +213,13 @@ PanelWindow {
                 Layout.fillWidth: true; spacing: 6
                 Repeater { model: [{k:"all",t:"All"},{k:"fav",t:"★"},{k:"recent",t:"Recent"},{k:"reads",t:"Most read"},{k:"az",t:"A–Z"}]
                     Rectangle { width: 72; height: 26; radius: 13
-                        color: (modelData.k==="fav" ? root.libFavOnly : (modelData.k==="all" ? (!root.libFavOnly && root.libSort==="recent") : root.libSort===modelData.k)) ? colors.alpha(colors.primary,0.25) : (chipMa.containsMouse?colors.alpha(colors.surfaceVariant,0.5):colors.alpha(colors.surface,0.5))
-                        border.width: 1; border.color: colors.alpha(colors.outline,0.12)
-                        Text { anchors.centerIn: parent; text: modelData.t; color: colors.foreground; font.family:"FiraCode Nerd Font"; font.pixelSize: 8; font.weight: Font.Bold }
+                        color: (modelData.k==="fav" ? root.libFavOnly : (modelData.k==="all" ? (!root.libFavOnly && root.libSort==="recent") : root.libSort===modelData.k)) ? colors.alpha(colors.primary,0.2) : (chipMa.containsMouse?colors.alpha(colors.surfaceVariant,0.5):colors.alpha(colors.surface,0.5))
+                        border.width: 1; border.color: (modelData.k==="fav" ? root.libFavOnly : (modelData.k==="all" ? (!root.libFavOnly && root.libSort==="recent") : root.libSort===modelData.k)) ? colors.alpha(colors.primary,0.45) : colors.alpha(colors.outline,0.12)
+                        Text { anchors.centerIn: parent; text: modelData.t; color: (modelData.k==="fav" ? root.libFavOnly : (modelData.k==="all" ? (!root.libFavOnly && root.libSort==="recent") : root.libSort===modelData.k)) ? colors.primary : colors.foreground; font.family: colors.fontSans; font.pixelSize: 7; font.weight: Font.Bold; font.letterSpacing: 0.6 }
                         MouseArea { id: chipMa; anchors.fill: parent; hoverEnabled: true; onClicked: { if(modelData.k==="fav") root.libFavOnly=!root.libFavOnly; else if(modelData.k!=="all") root.libSort=modelData.k; else { root.libFavOnly=false; root.libSort="recent" } } }
                     }
                 }
-                Text { Layout.fillWidth: true; horizontalAlignment: Text.AlignRight; text: root.scanning ? "Scanning…" : (root.library.length+" pdfs"); color: colors.alpha(colors.outline,0.55); font.family:"FiraCode Nerd Font"; font.pixelSize: 8 }
+                Text { Layout.fillWidth: true; horizontalAlignment: Text.AlignRight; text: root.scanning ? "Scanning…" : (root.library.length+" pdfs"); color: colors.alpha(colors.outline,0.55); font.family: colors.fontSans; font.pixelSize: 8 }
             }
             // rows — click opens in Zathura
             ListView {
@@ -225,16 +234,34 @@ PanelWindow {
                     color: rowMa.containsMouse ? colors.alpha(colors.primary,0.12) : colors.alpha(colors.surface,0.45)
                     border.width: 1; border.color: colors.alpha(colors.outline,0.10)
                     RowLayout { anchors.fill: parent; anchors.leftMargin: 10; anchors.rightMargin: 10; spacing: 8
-                        Text { text: modelData.fav ? "★" : "☆"; color: modelData.fav ? colors.primary : colors.alpha(colors.outline,0.5); font.family:"FiraCode Nerd Font"; font.pixelSize: 13
+                        Text { text: modelData.fav ? "★" : "☆"; color: modelData.fav ? colors.primary : colors.alpha(colors.outline,0.5); font.family: colors.fontSans; font.pixelSize: 13
                             MouseArea { anchors.fill: parent; onClicked: root.toggleFav(modelData.path) } }
                         ColumnLayout { Layout.fillWidth: true; spacing: 1
-                            Text { text: modelData.title; color: colors.foreground; font.family:"FiraCode Nerd Font"; font.pixelSize: 10; font.weight: Font.Bold; elide: Text.ElideRight; Layout.fillWidth: true }
-                            Text { text: (modelData.folder||"") + ((modelData.reads||0)>0 ? "  •  "+modelData.reads+"× read" : ""); color: colors.alpha(colors.outline,0.6); font.family:"FiraCode Nerd Font"; font.pixelSize: 8; elide: Text.ElideRight; Layout.fillWidth: true }
+                            Text { text: modelData.title; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 10; font.weight: Font.ExtraBold; elide: Text.ElideRight; Layout.fillWidth: true }
+                            Text { text: (modelData.folder||"") + ((modelData.reads||0)>0 ? "  •  "+modelData.reads+"× read" : ""); color: colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 8; elide: Text.ElideRight; Layout.fillWidth: true }
                         }
-                        Text { text: "open in Zathura →"; color: colors.alpha(colors.primary,0.7); font.family:"FiraCode Nerd Font"; font.pixelSize: 8 }
+                        Text { text: "open in Zathura →"; color: colors.alpha(colors.primary,0.7); font.family: colors.fontSans; font.pixelSize: 8 }
                     }
                     MouseArea { id: rowMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.openWith(modelData.path) }
                 }
+                Text {
+                    visible: root.libReady && root.libRows().length === 0
+                    anchors.centerIn: parent
+                    text: root.scanning ? "scanning for pdfs…" : "no pdfs found in home dir"
+                    color: colors.alpha(colors.outline, 0.5)
+                    font.family: colors.fontSans
+                    font.pixelSize: 9
+                }
+            }
+            // keyboard hints
+            Text {
+                Layout.fillWidth: true
+                horizontalAlignment: Text.AlignHCenter
+                text: "↑↓ browse · ↵ open · F favourite · Esc close"
+                color: colors.alpha(colors.outline, 0.5)
+                font.family: colors.fontSans
+                font.pixelSize: 8
+                font.letterSpacing: 0.3
             }
         }
     }

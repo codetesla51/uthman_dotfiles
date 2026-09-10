@@ -64,21 +64,21 @@ PanelWindow {
             anchors.fill: parent
             anchors.margins: 20
             spacing: 12
-            Text { text: "  Authentication required"; color: colors.primary; font.family: "FiraCode Nerd Font"; font.pixelSize: 12; font.weight: Font.Bold; Layout.alignment: Qt.AlignHCenter }
-            Text { text: root.prompt; color: colors.alpha(colors.outline, 0.7); font.family: "FiraCode Nerd Font"; font.pixelSize: 8; wrapMode: Text.Wrap; Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter }
+            Text { text: "  Authentication required"; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 12; font.weight: Font.Bold; Layout.alignment: Qt.AlignHCenter }
+            Text { text: root.prompt; color: colors.alpha(colors.outline, 0.7); font.family: colors.fontSans; font.pixelSize: 8; wrapMode: Text.Wrap; Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter }
             Rectangle {
                 Layout.fillWidth: true; height: 42; radius: 10
                 color: colors.alpha(colors.surface, 0.85)
                 border.width: 1; border.color: passField.activeFocus ? colors.alpha(colors.primary, 0.5) : (root.errorMsg ? colors.alpha(colors.error, 0.6) : colors.alpha(colors.outline, 0.14))
                 RowLayout {
                     anchors.fill: parent; anchors.leftMargin: 12; anchors.rightMargin: 10; spacing: 8
-                    Text { text: ""; color: colors.alpha(colors.outline, 0.6); font.family: "FiraCode Nerd Font"; font.pixelSize: 12 }
+                    Text { text: ""; color: colors.alpha(colors.outline, 0.6); font.family: colors.fontSans; font.pixelSize: 12 }
                     TextField {
                         id: passField
                         Layout.fillWidth: true
                         placeholderText: "sudo password"
                         placeholderTextColor: colors.alpha(colors.outline, 0.45)
-                        color: colors.foreground; font.family: "FiraCode Nerd Font"; font.pixelSize: 11
+                        color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 11
                         echoMode: TextInput.Password
                         background: null
                         selectByMouse: true
@@ -86,21 +86,21 @@ PanelWindow {
                     }
                 }
             }
-            Text { visible: root.errorMsg !== ""; text: root.errorMsg; color: colors.error; font.family: "FiraCode Nerd Font"; font.pixelSize: 9; Layout.alignment: Qt.AlignHCenter }
+            Text { visible: root.errorMsg !== ""; text: root.errorMsg; color: colors.error; font.family: colors.fontSans; font.pixelSize: 9; Layout.alignment: Qt.AlignHCenter }
             RowLayout {
                 Layout.fillWidth: true; spacing: 10
                 Rectangle {
                     Layout.fillWidth: true; height: 36; radius: 9
                     color: cancelMa.containsMouse ? colors.alpha(colors.surfaceVariant, 0.5) : colors.alpha(colors.surface, 0.6)
                     border.width: 1; border.color: colors.alpha(colors.outline, 0.12)
-                    Text { anchors.centerIn: parent; text: "Cancel"; color: colors.foreground; font.family: "FiraCode Nerd Font"; font.pixelSize: 10; font.weight: Font.Bold }
+                    Text { anchors.centerIn: parent; text: "Cancel"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 10; font.weight: Font.Bold }
                     MouseArea { id: cancelMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.cancel() }
                 }
                 Rectangle {
                     Layout.fillWidth: true; height: 36; radius: 9
                     color: passField.text.trim() === "" ? colors.alpha(colors.surfaceVariant, 0.35) : okMa.containsMouse ? colors.alpha(colors.primary, 0.32) : colors.alpha(colors.primary, 0.22)
                     border.width: 1; border.color: passField.text.trim() === "" ? colors.alpha(colors.outline, 0.12) : colors.alpha(colors.primary, 0.5)
-                    Text { anchors.centerIn: parent; text: "Unlock"; color: passField.text.trim() === "" ? colors.alpha(colors.outline, 0.6) : colors.primary; font.family: "FiraCode Nerd Font"; font.pixelSize: 10; font.weight: Font.ExtraBold }
+                    Text { anchors.centerIn: parent; text: "Unlock"; color: passField.text.trim() === "" ? colors.alpha(colors.outline, 0.6) : colors.primary; font.family: colors.fontSans; font.pixelSize: 10; font.weight: Font.ExtraBold }
                     MouseArea { id: okMa; anchors.fill: parent; hoverEnabled: true; enabled: passField.text.trim() !== ""; onClicked: root.submit() }
                 }
             }

@@ -19,7 +19,7 @@ FloatingWindow {
     color: "transparent"
     visible: root.open
 
-    IpcHandler { target: "fastfetch"; function toggle(): void { root.open = !root.open } }
+        IpcHandler { target: "fastfetch"; function toggle(): void { root.open = !root.open } }
 
     // ---------- verified Nerd Font glyphs (AGENTS section 2) ----------
     readonly property var glyphs: ({
@@ -80,7 +80,7 @@ FloatingWindow {
                 Text {
                     text: root.glyphs.arch + "  uthman@" + (root.host !== "" ? root.host : "arch")
                     color: colors.primary
-                    font.family: "FiraCode Nerd Font"
+                    font.family: colors.fontSans
                     font.pixelSize: 15
                     font.weight: Font.ExtraBold
                 }
@@ -97,8 +97,8 @@ FloatingWindow {
                         id: upRow
                         anchors.centerIn: parent
                         spacing: 5
-                        Text { text: root.glyphs.clock; color: colors.tertiary; font.family: "FiraCode Nerd Font"; font.pixelSize: 10; anchors.verticalCenter: parent.verticalCenter }
-                        Text { text: root.uptime; color: colors.alpha(colors.foreground, 0.8); font.family: "FiraCode Nerd Font"; font.pixelSize: 9; font.weight: Font.Medium; anchors.verticalCenter: parent.verticalCenter }
+                        Text { text: root.glyphs.clock; color: colors.tertiary; font.family: colors.fontSans; font.pixelSize: 10; anchors.verticalCenter: parent.verticalCenter }
+                        Text { text: root.uptime; color: colors.alpha(colors.foreground, 0.8); font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Medium; anchors.verticalCenter: parent.verticalCenter }
                     }
                 }
             }
@@ -141,7 +141,7 @@ FloatingWindow {
                     Text {
                         text: "SYSTEM"
                         color: colors.alpha(colors.outline, 0.65)
-                        font.family: "FiraCode Nerd Font"
+                        font.family: colors.fontSans
                         font.pixelSize: 9
                         font.weight: Font.Bold
                         font.letterSpacing: 1.5
@@ -160,9 +160,9 @@ FloatingWindow {
                             required property var modelData
                             Layout.fillWidth: true
                             spacing: 8
-                            Text { text: modelData.i; color: root.accents[index % 3]; font.family: "FiraCode Nerd Font"; font.pixelSize: 12 }
-                            Text { text: modelData.l; color: colors.alpha(colors.outline, 0.8); font.family: "FiraCode Nerd Font"; font.pixelSize: 9; font.weight: Font.Bold; font.letterSpacing: 1.2; Layout.preferredWidth: 62 }
-                            Text { text: modelData.v; color: colors.foreground; font.family: "FiraCode Nerd Font"; font.pixelSize: 11; font.weight: Font.Medium; elide: Text.ElideRight; Layout.fillWidth: true }
+                            Text { text: modelData.i; color: root.accents[index % 3]; font.family: colors.fontSans; font.pixelSize: 12 }
+                            Text { text: modelData.l; color: colors.alpha(colors.outline, 0.8); font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold; font.letterSpacing: 1.2; Layout.preferredWidth: 62 }
+                            Text { text: modelData.v; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.Medium; elide: Text.ElideRight; Layout.fillWidth: true }
                         }
                     }
 

@@ -266,6 +266,7 @@ FloatingWindow {
                 root.pushHistory(row.name, "sent")
                 root.notify("Sent to " + root.deviceName, row.name)
                 root.say("Sent " + row.name)
+                root.scanMedia("/sdcard/Download/" + row.name)
             } else {
                 var err = (pushErr.text.trim().split("\n").pop() || "push failed").slice(0, 90)
                 root.setRow(i, { active: false, error: err })
@@ -307,15 +308,30 @@ FloatingWindow {
         root.recentFiles = arr
     }
 
+    // ── media scan: adb push bypasses MediaStore, so a freshly pushed file is
+    // invisible in Recents/Photos/Downloads until the scanner notices it.
+    // Fire the per-file MEDIA_SCANNER broadcast right after each push succeeds.
+    Process {
+        id: scanProc
+    }
+    function scanMedia(remotePath) {
+        var uri = "file://" + encodeURIComponent(remotePath).replace(/%2F/g, "/")
+        scanProc.command = ["adb", "-s", root.deviceId, "shell",
+            "am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d " + uri]
+        scanProc.running = true
+    }
+
     Process {
         id: clipSetProc
         stdout: StdioCollector {
             waitForEnd: true
             onStreamFinished: {
                 var t = text
-                if (t.indexOf("CLIP_SET_OK") !== -1) root.say("On your phone's clipboard")
-                else if (t.indexOf("CLIP_EMPTY") !== -1) root.say("Clipboard is empty (or not text)")
+                if (t.indexOf("CLIP_IMG_OK") !== -1) root.say("Image on your phone — saved in Download")
+                else if (t.indexOf("CLIP_SET_OK") !== -1) root.say("On your phone's clipboard")
+                else if (t.indexOf("CLIP_EMPTY") !== -1) root.say("Clipboard is empty (or not text/image)")
                 else if (t.indexOf("CLIP_TOOLONG") !== -1) root.say("Too long for direct set (100KB max)")
+                else if (t.indexOf("CLIP_FAIL") !== -1) root.say("Image push failed — screen on and unlocked?")
                 else root.say("Couldn't set it — screen on and unlocked?")
             }
         }
@@ -333,7 +349,14 @@ FloatingWindow {
         var clipFile = home + "/.cache/phonelink-clipboard.txt"
         var jarDir = home + "/dotfiles/.config/quickshell/scripts/adb-clip"
         clipSetProc.command = ["sh", "-c",
-            "D=" + q(root.deviceId) + "; F=" + q(clipFile) + "; J=" + q(jarDir) + "; " +
+            "D=" + q(root.deviceId) + "; F=" + q(clipFile) + "; J=" + q(jarDir) + "; I=/tmp/.qs-phonelink-img.png; " +
+            "case \"$(wl-paste --list-types 2>/dev/null)\" in *image*) " +
+            "wl-paste -t image/png > \"$I\" 2>/dev/null; " +
+            "if [ ! -s \"$I\" ]; then echo CLIP_EMPTY; exit 0; fi; " +
+            "TS=$(date +%H%M%S); " +
+            "adb -s \"$D\" push \"$I\" \"/sdcard/Download/clipboard-$TS.png\" >/dev/null 2>&1 && " +
+            "{ adb -s \"$D\" shell am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d \"file:///sdcard/Download/clipboard-$TS.png\" >/dev/null 2>&1; echo CLIP_IMG_OK; } || echo CLIP_FAIL;; " +
+            "*) " +
             "wl-paste -t text/plain --no-newline > \"$F\" 2>/dev/null || { echo CLIP_EMPTY; exit 0; }; " +
             "n=$(wc -c < \"$F\"); " +
             "if [ \"$n\" -eq 0 ]; then echo CLIP_EMPTY; exit 0; fi; " +
@@ -341,7 +364,8 @@ FloatingWindow {
             "adb -s \"$D\" shell 'test -x /data/local/tmp/clip' >/dev/null 2>&1 || " +
             "{ adb -s \"$D\" push \"$J/clip.jar\" \"$J/clip\" /data/local/tmp >/dev/null 2>&1 && " +
             "adb -s \"$D\" shell chmod 755 /data/local/tmp/clip >/dev/null 2>&1; }; " +
-            "adb -s \"$D\" shell 'T=$(cat); /data/local/tmp/clip \"$T\"' < \"$F\" >/dev/null 2>&1 && echo CLIP_SET_OK || echo CLIP_SET_FAIL"]
+            "adb -s \"$D\" shell 'T=$(cat); /data/local/tmp/clip \"$T\"' < \"$F\" >/dev/null 2>&1 && echo CLIP_SET_OK || echo CLIP_SET_FAIL;; " +
+            "esac"]
         clipSetProc.running = true
     }
     function clearFinished() {
@@ -538,7 +562,7 @@ FloatingWindow {
                 horizontalAlignment: Text.AlignHCenter
                 text: root.statusMsg
                 color: colors.secondary
-                font.family: "FiraCode Nerd Font"
+                font.family: colors.fontSans
                 font.pixelSize: 9
                 elide: Text.ElideRight
             }
@@ -546,13 +570,14 @@ FloatingWindow {
             // ---- SEND: drop zone tile ----
             RowLayout {
                 Layout.fillWidth: true
-                Text { text: "SEND TO PHONE"; color: colors.alpha(colors.outline, 0.65); font.family: "FiraCode Nerd Font"; font.pixelSize: 9; font.weight: Font.Bold; font.letterSpacing: 1.5; Layout.fillWidth: true }
+                Text { text: "SEND TO PHONE"; color: colors.alpha(colors.outline, 0.65); font.family: colors.fontSans; font.pixelSize: 7; font.weight: Font.Bold; font.letterSpacing: 1.3; Layout.fillWidth: true; Layout.alignment: Qt.AlignVCenter }
                 Text {
-                    text: "clipboard"
+                    text: "clipboard · text/img"
                     color: clipMa.containsMouse ? colors.primary : colors.alpha(colors.outline, 0.6)
-                    font.family: "FiraCode Nerd Font"
+                    font.family: colors.fontSans
                     font.pixelSize: 8
                     font.weight: Font.Bold
+                    Layout.alignment: Qt.AlignVCenter
                     MouseArea { id: clipMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.sendClipboard() }
                 }
             }
@@ -561,7 +586,7 @@ FloatingWindow {
                 id: dropTile
                 Layout.fillWidth: true
                 Layout.preferredHeight: 120
-                radius: 12
+                radius: 14
                 color: dropArea.containsMouse ? colors.alpha(colors.primary, 0.12) : colors.alpha(colors.surfaceVariant, 0.25)
                 border.width: 1
                 border.color: dropArea.containsMouse ? colors.alpha(colors.primary, 0.5) : colors.alpha(colors.outline, 0.1)
@@ -574,10 +599,10 @@ FloatingWindow {
                     anchors.centerIn: parent
                     spacing: 10
                     Text {
-                        text: ""
+                        text: "󰈔"
                         color: dropArea.containsMouse ? colors.primary : colors.alpha(colors.primary, 0.75)
-                        font.family: "FiraCode Nerd Font"
-                        font.pixelSize: 28
+                        font.family: colors.fontSans
+                        font.pixelSize: 30
                         scale: dropArea.containsMouse ? 1.12 : 1
                         Behavior on scale { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
                         Behavior on color { ColorAnimation { duration: 180 } }
@@ -587,7 +612,7 @@ FloatingWindow {
                         Text {
                             text: "Drop files here"
                             color: dropArea.containsMouse ? colors.primary : colors.foreground
-                            font.family: "FiraCode Nerd Font"
+                            font.family: colors.fontSans
                             font.pixelSize: 12
                             font.weight: Font.ExtraBold
                             Layout.alignment: Qt.AlignHCenter
@@ -595,7 +620,7 @@ FloatingWindow {
                         Text {
                             text: root.connected ? "lands in Download" : "no phone connected"
                             color: colors.alpha(colors.outline, 0.6)
-                            font.family: "FiraCode Nerd Font"
+                            font.family: colors.fontSans
                             font.pixelSize: 8
                             Layout.alignment: Qt.AlignHCenter
                         }
@@ -620,11 +645,11 @@ FloatingWindow {
                 spacing: 4
                 RowLayout {
                     Layout.fillWidth: true
-                    Text { text: "QUEUE (" + root.queue.length + ")"; color: colors.alpha(colors.outline, 0.65); font.family: "FiraCode Nerd Font"; font.pixelSize: 9; font.weight: Font.Bold; font.letterSpacing: 1.5; Layout.fillWidth: true }
+                    Text { text: "QUEUE (" + root.queue.length + ")"; color: colors.alpha(colors.outline, 0.65); font.family: colors.fontSans; font.pixelSize: 7; font.weight: Font.Bold; font.letterSpacing: 1.3; Layout.fillWidth: true; Layout.alignment: Qt.AlignVCenter }
                     Text {
                         text: "clear done"
                         color: clearMa.containsMouse ? colors.primary : colors.alpha(colors.outline, 0.6)
-                        font.family: "FiraCode Nerd Font"
+                        font.family: colors.fontSans
                         font.pixelSize: 8
                         font.weight: Font.Bold
                         MouseArea { id: clearMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.clearFinished() }
@@ -651,13 +676,13 @@ FloatingWindow {
                             Text {
                                 text: modelData.error !== "" ? "󰅖" : modelData.done ? "" : "󰇚"
                                 color: modelData.error !== "" ? colors.error : modelData.done ? colors.secondary : colors.primary
-                                font.family: "FiraCode Nerd Font"
+                                font.family: colors.fontSans
                                 font.pixelSize: 10
                             }
                             Text {
                                 text: modelData.error !== "" ? modelData.error : modelData.name
                                 color: modelData.error !== "" ? colors.error : colors.foreground
-                                font.family: "FiraCode Nerd Font"
+                                font.family: colors.fontSans
                                 font.pixelSize: 10
                                 elide: Text.ElideRight
                                 Layout.fillWidth: true
@@ -666,7 +691,7 @@ FloatingWindow {
                                 visible: modelData.active && modelData.total > 0
                                 text: Math.round(100 * modelData.sent / Math.max(1, modelData.total)) + "%"
                                 color: colors.primary
-                                font.family: "FiraCode Nerd Font"
+                                font.family: colors.fontSans
                                 font.pixelSize: 9
                                 font.weight: Font.Bold
                             }
@@ -674,7 +699,7 @@ FloatingWindow {
                                 visible: modelData.error !== ""
                                 text: "retry"
                                 color: retryMa.containsMouse ? colors.primary : colors.alpha(colors.primary, 0.75)
-                                font.family: "FiraCode Nerd Font"
+                                font.family: colors.fontSans
                                 font.pixelSize: 9
                                 font.weight: Font.Bold
                                 MouseArea { id: retryMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.retryRow(index) }
@@ -683,7 +708,7 @@ FloatingWindow {
                                 visible: modelData.done || modelData.error !== ""
                                 text: ""
                                 color: xMa.containsMouse ? colors.error : colors.alpha(colors.outline, 0.55)
-                                font.family: "FiraCode Nerd Font"
+                                font.family: colors.fontSans
                                 font.pixelSize: 10
                                 font.weight: Font.Bold
                                 MouseArea { id: xMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.removeRow(index) }
@@ -710,11 +735,11 @@ FloatingWindow {
             // ---- PULL: phone browser ----
             RowLayout {
                 Layout.fillWidth: true
-                Text { text: "ON THE PHONE (" + root.remoteRows.length + ")"; color: colors.alpha(colors.outline, 0.65); font.family: "FiraCode Nerd Font"; font.pixelSize: 9; font.weight: Font.Bold; font.letterSpacing: 1.5; Layout.fillWidth: true }
+                Text { text: "ON THE PHONE (" + root.remoteRows.length + ")"; color: colors.alpha(colors.outline, 0.65); font.family: colors.fontSans; font.pixelSize: 7; font.weight: Font.Bold; font.letterSpacing: 1.3; Layout.fillWidth: true; Layout.alignment: Qt.AlignVCenter }
                 Text {
                     text: root.remoteDir.replace("/sdcard", "phone")
                     color: colors.alpha(colors.outline, 0.55)
-                    font.family: "FiraCode Nerd Font"
+                    font.family: colors.fontSans
                     font.pixelSize: 8
                     elide: Text.ElideLeft
                     Layout.maximumWidth: 120
@@ -722,7 +747,7 @@ FloatingWindow {
                 Text {
                     text: "s sel · p pull · y yank · c clip"
                     color: colors.alpha(colors.outline, 0.5)
-                    font.family: "FiraCode Nerd Font"
+                    font.family: colors.fontSans
                     font.pixelSize: 8
                 }
             }
@@ -740,7 +765,7 @@ FloatingWindow {
                     anchors.centerIn: parent
                     text: "connect a phone to browse it"
                     color: colors.alpha(colors.outline, 0.45)
-                    font.family: "FiraCode Nerd Font"
+                    font.family: colors.fontSans
                     font.pixelSize: 9
                 }
                 ListView {
@@ -772,13 +797,13 @@ FloatingWindow {
                             Text {
                                 text: modelData.isDir ? "󰉋" : ""
                                 color: modelData.isDir ? colors.primary : colors.alpha(colors.foreground, 0.7)
-                                font.family: "FiraCode Nerd Font"
+                                font.family: colors.fontSans
                                 font.pixelSize: 11
                             }
                             Text {
                                 text: modelData.name
                                 color: root.selected.indexOf(modelData.name) >= 0 ? colors.primary : colors.foreground
-                                font.family: "FiraCode Nerd Font"
+                                font.family: colors.fontSans
                                 font.pixelSize: 10
                                 elide: Text.ElideRight
                                 Layout.fillWidth: true
@@ -825,7 +850,7 @@ FloatingWindow {
                             anchors.verticalCenter: parent.verticalCenter
                             text: "‹ up"
                             color: colors.primary
-                            font.family: "FiraCode Nerd Font"
+                            font.family: colors.fontSans
                             font.pixelSize: 10
                             font.weight: Font.Bold
                         }

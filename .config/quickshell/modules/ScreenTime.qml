@@ -153,7 +153,7 @@ FloatingWindow {
                 Text {
                     text: "UTHMAN HABIT"
                     color: colors.primary
-                    font.family: "FiraCode Nerd Font"
+                    font.family: colors.fontSans
                     font.pixelSize: 11
                     font.weight: Font.ExtraBold
                     font.letterSpacing: 1.4
@@ -162,7 +162,7 @@ FloatingWindow {
                 Rectangle {
                     width: 26; height: 26; radius: 13
                     color: closeMa.containsMouse?colors.alpha(colors.surfaceVariant,0.4):"transparent"
-                    Text { anchors.centerIn: parent; text: "󰅖"; color: closeMa.containsMouse?colors.foreground:colors.alpha(colors.outline,0.7); font.family:"FiraCode Nerd Font"; font.pixelSize: 12 }
+                    Text { anchors.centerIn: parent; text: "󰅖"; color: closeMa.containsMouse?colors.foreground:colors.alpha(colors.outline,0.7); font.family: colors.fontSans; font.pixelSize: 12 }
                     MouseArea { id: closeMa; anchors.fill: parent; hoverEnabled:true; onClicked: root.open=false }
                 }
             }
@@ -193,7 +193,7 @@ FloatingWindow {
             RowLayout {
                 Layout.fillWidth: true
                 spacing: 6
-                Text { text: "Less"; color: colors.alpha(colors.outline,0.5); font.family:"FiraCode Nerd Font"; font.pixelSize: 8 }
+                Text { text: "Less"; color: colors.alpha(colors.outline,0.5); font.family: colors.fontSans; font.pixelSize: 8 }
                 Row {
                     spacing: 3
                     Repeater {
@@ -201,9 +201,9 @@ FloatingWindow {
                         Rectangle { width: 11; height: 11; radius: 2; color: root.heatColor(modelData, false) }
                     }
                 }
-                Text { text: "More"; color: colors.alpha(colors.outline,0.5); font.family:"FiraCode Nerd Font"; font.pixelSize: 8 }
+                Text { text: "More"; color: colors.alpha(colors.outline,0.5); font.family: colors.fontSans; font.pixelSize: 8 }
                 Item { Layout.fillWidth: true }
-                Text { text: "Total " + root.fmtDur(root.totalSecs); color: colors.alpha(colors.outline,0.6); font.family:"FiraCode Nerd Font"; font.pixelSize: 9; font.weight: Font.Medium }
+                Text { text: "Total " + root.fmtDur(root.totalSecs); color: colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Medium }
             }
 
             Rectangle { Layout.fillWidth: true; height: 1; color: colors.alpha(colors.outline, 0.10) }
@@ -211,7 +211,7 @@ FloatingWindow {
             Text {
                 text: "LAST 7 DAYS"
                 color: colors.alpha(colors.outline, 0.55)
-                font.family: "FiraCode Nerd Font"
+                font.family: colors.fontSans
                 font.pixelSize: 8
                 font.weight: Font.Bold
                 font.letterSpacing: 1.2
@@ -238,7 +238,7 @@ FloatingWindow {
                             Text {
                                 text: modelData.display
                                 color: modelData.isToday ? colors.primary : colors.foreground
-                                font.family: "FiraCode Nerd Font"
+                                font.family: colors.fontSans
                                 font.pixelSize: 11
                                 font.weight: modelData.isToday ? Font.Bold : Font.Medium
                                 Layout.fillWidth: true
@@ -246,13 +246,13 @@ FloatingWindow {
                             Text {
                                 text: modelData.isToday ? "today" : ""
                                 color: colors.alpha(colors.primary, 0.7)
-                                font.family:"FiraCode Nerd Font"; font.pixelSize: 8; font.weight: Font.Bold
+                                font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold
                                 visible: modelData.isToday
                             }
                             Text {
                                 text: root.fmtDur(modelData.secs)
                                 color: modelData.secs > 0 ? colors.foreground : colors.alpha(colors.outline, 0.55)
-                                font.family:"FiraCode Nerd Font"; font.pixelSize: 10
+                                font.family: colors.fontSans; font.pixelSize: 10
                                 font.weight: modelData.secs > 0 ? Font.DemiBold : Font.Normal
                             }
                         }

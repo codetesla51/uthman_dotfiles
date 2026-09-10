@@ -185,7 +185,7 @@ Item {
                     Text {
                         text: "Notifications"
                         color: colors.foreground
-                        font.family: "FiraCode Nerd Font"
+                        font.family: colors.fontSans
                         font.pixelSize: 13
                         font.weight: Font.ExtraBold
                         Layout.fillWidth: true
@@ -203,7 +203,7 @@ Item {
                             anchors.centerIn: parent
                             text: root.historyCount
                             color: colors.primary
-                            font.family: "FiraCode Nerd Font"
+                            font.family: colors.fontSans
                             font.pixelSize: 10
                             font.weight: Font.Bold
                         }
@@ -225,7 +225,7 @@ Item {
                             anchors.centerIn: parent
                             text: (root.dnd ? "󰂛" : "󰂚") + " DND"
                             color: root.dnd ? colors.error : colors.alpha(colors.outline, 0.9)
-                            font.family: "FiraCode Nerd Font"
+                            font.family: colors.fontSans
                             font.pixelSize: 10
                         }
 
@@ -245,7 +245,7 @@ Item {
                             anchors.centerIn: parent
                             text: "󰩹"
                             color: clearMouse.containsMouse ? colors.error : colors.alpha(colors.outline, 0.9)
-                            font.family: "FiraCode Nerd Font"
+                            font.family: colors.fontSans
                             font.pixelSize: 12
                         }
 
@@ -265,7 +265,7 @@ Item {
                             anchors.centerIn: parent
                             text: "󰅖"
                             color: closePanelMouse.containsMouse ? colors.foreground : colors.alpha(colors.outline, 0.9)
-                            font.family: "FiraCode Nerd Font"
+                            font.family: colors.fontSans
                             font.pixelSize: 12
                         }
 
@@ -339,7 +339,7 @@ Item {
                                             anchors.centerIn: parent
                                             text: modelData.appName ? modelData.appName.charAt(0).toUpperCase() : "?"
                                             color: colors.primary
-                                            font.family: "FiraCode Nerd Font"
+                                            font.family: colors.fontSans
                                             font.pixelSize: 13
                                             font.weight: Font.Bold
                                         }
@@ -356,7 +356,7 @@ Item {
                                             Text {
                                                 text: modelData.summary
                                                 color: colors.foreground
-                                                font.family: "FiraCode Nerd Font"
+                                                font.family: colors.fontSans
                                                 font.pixelSize: 11
                                                 font.weight: Font.DemiBold
                                                 Layout.fillWidth: true
@@ -366,7 +366,7 @@ Item {
                                             Text {
                                                 text: (modelData.appName ? modelData.appName : "") + (modelData.appName ? " · " : "") + modelData.time
                                                 color: colors.alpha(colors.outline, 0.55)
-                                                font.family: "FiraCode Nerd Font"
+                                                font.family: colors.fontSans
                                                 font.pixelSize: 9
                                             }
                                         }
@@ -377,7 +377,7 @@ Item {
                                             visible: modelData.body !== ""
                                             text: modelData.body
                                             color: colors.on_surface
-                                            font.family: "FiraCode Nerd Font"
+                                            font.family: colors.fontSans
                                             font.pixelSize: 10
                                             Layout.fillWidth: true
                                             wrapMode: Text.WordWrap
@@ -409,7 +409,7 @@ Item {
                                                         anchors.centerIn: parent
                                                         text: actChip.modelData.label
                                                         color: colors.primary
-                                                        font.family: "FiraCode Nerd Font"
+                                                        font.family: colors.fontSans
                                                         font.pixelSize: 9
                                                         font.weight: Font.Bold
                                                     }
@@ -441,7 +441,7 @@ Item {
                                             anchors.centerIn: parent
                                             text: "󰅖"
                                             color: rowCloseMouse.containsMouse ? colors.foreground : colors.alpha(colors.outline, 0.7)
-                                            font.family: "FiraCode Nerd Font"
+                                            font.family: colors.fontSans
                                             font.pixelSize: 11
                                         }
 
@@ -475,7 +475,7 @@ Item {
                                 Text {
                                     text: "󰂛"
                                     color: colors.alpha(colors.outline, 0.35)
-                                    font.family: "FiraCode Nerd Font"
+                                    font.family: colors.fontSans
                                     font.pixelSize: 32
                                     Layout.alignment: Qt.AlignHCenter
                                 }
@@ -483,7 +483,7 @@ Item {
                                 Text {
                                     text: "No notifications"
                                     color: colors.alpha(colors.outline, 0.6)
-                                    font.family: "FiraCode Nerd Font"
+                                    font.family: colors.fontSans
                                     font.pixelSize: 11
                                     Layout.alignment: Qt.AlignHCenter
                                 }

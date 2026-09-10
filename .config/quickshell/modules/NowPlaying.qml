@@ -5,6 +5,7 @@ import QtQuick.Layouts
 
 // NowPlaying - flat cluster inside the center trapezium (separated by | in Bar.qml):
 // rounded art / two-line title+artist / live visualizer / circular transport buttons.
+// Color backdrop: dominant hue from album art, applied as a soft pill glow.
 Item {
     id: root
     property var colors
@@ -12,9 +13,64 @@ Item {
     property var player: Mpris.players.values.find(function(p){ return p.isPlaying }) || Mpris.players.values[0] || null
     readonly property bool hasPlayer: player !== null
     readonly property bool isPlaying: hasPlayer && player.playbackState === MprisPlaybackState.Playing
+    readonly property string artUrl: hasPlayer ? (player.trackArtUrl || "") : ""
+    property color trackColor: colors.primary
 
     implicitWidth: row.implicitWidth + 8
     implicitHeight: 30
+
+    // extract dominant color from album art (1x1 canvas sample)
+    Canvas {
+        id: artCanvas
+        width: 1; height: 1
+        visible: false
+        property string pendingUrl: ""
+        onImageLoaded: {
+            var ctx = getContext("2d")
+            ctx.drawImage(pendingUrl, 0, 0, 1, 1)
+            requestPaint()
+        }
+        onPaint: {
+            var ctx = getContext("2d")
+            var px = ctx.getImageData(0, 0, 1, 1).data
+            var r = px[0] / 255, g = px[1] / 255, b = px[2] / 255
+            // boost saturation slightly so the tint reads as a color, not mud
+            var max = Math.max(r, g, b), min = Math.min(r, g, b)
+            var avg = (r + g + b) / 3
+            var boost = 1.35
+            var nr = avg + (r - avg) * boost, ng = avg + (g - avg) * boost, nb = avg + (b - avg) * boost
+            root.trackColor = Qt.rgba(
+                Math.min(1, Math.max(0, nr)),
+                Math.min(1, Math.max(0, ng)),
+                Math.min(1, Math.max(0, nb)), 1)
+        }
+    }
+    Image {
+        id: artExtractor
+        width: 32; height: 32
+        visible: false
+        asynchronous: true
+        fillMode: Image.PreserveAspectCrop
+        source: root.artUrl
+        onStatusChanged: {
+            if (status === Image.Ready) {
+                artCanvas.pendingUrl = source
+                artCanvas.loadImage(source)
+            }
+        }
+    }
+
+    // pill backdrop tinted by track color
+    Rectangle {
+        anchors.fill: row
+        anchors.leftMargin: -6; anchors.rightMargin: -6
+        anchors.topMargin: -4; anchors.bottomMargin: -4
+        radius: 14
+        color: root.hasPlayer ? colors.alpha(root.trackColor, 0.12) : "transparent"
+        border.width: 1
+        border.color: root.hasPlayer ? colors.alpha(root.trackColor, 0.18) : "transparent"
+        Behavior on color { ColorAnimation { duration: 400; easing.type: Easing.OutCubic } }
+    }
 
     RowLayout {
         id: row

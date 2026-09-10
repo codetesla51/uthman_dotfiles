@@ -22,7 +22,7 @@ PanelWindow {
         { name: "Quick Notes",   desc: "idea capture · draggable",    target: "notes" },
         { name: "Screen Time",   desc: "usage heatmaps · app ranks",  target: "screentime" },
         { name: "Phone Link",    desc: "send & pull files over ADB", target: "phonelink" },
-        { name: "Drive Health",  desc: "SMART status · speed test", target: "drives" }
+        { name: "Drive Health",  desc: "SMART + RAM + speed test", target: "drives" }
     ]
 
     property string query: ""

@@ -43,7 +43,9 @@ FloatingWindow {
     property real powerHours: 0
     property bool hasHours: false
     property string selftest: ""
-    property string note: ""
+    property bool scanBusy: false
+    property string scanMsg: ""
+    readonly property string noteText: root.failing ? root.note : (root.scanMsg !== "" ? root.scanMsg : root.note)
     // --- space: [{mp, pct, usedGb, totalGb}] ---
     property var parts: []
     // --- throughput ---
@@ -58,12 +60,26 @@ FloatingWindow {
     property string speedMsg: ""
     property real writeMBs: 0
     property real readMBs: 0
+    property real liveWriteMBs: 0
+    property real liveReadMBs: 0
+    property string speedFile: ""
+    // --- self-test ---
+    property bool selfBusy: false
+    property string selfMsg: ""
+    // --- RAM ---
+    property real memTotalGb: 0
+    property real memUsedGb: 0
+    property int memPct: 0
+    property var memHist: []
+    property string swapTxt: ""
+    property bool ramBusy: false
+    property string ramMsg: ""
 
-    title: "Drive Health"
+    title: "Hardware Health"
     implicitWidth: 600
-    implicitHeight: 500
-    minimumSize: Qt.size(520, 440)
-    maximumSize: Qt.size(700, 600)
+    implicitHeight: 640
+    minimumSize: Qt.size(540, 500)
+    maximumSize: Qt.size(720, 740)
     color: "transparent"
     visible: root.open
     IpcHandler { target: "drives"; function toggle(): void { root.open = !root.open } }
@@ -160,11 +176,92 @@ FloatingWindow {
                 root.hasHours = s > 0
                 root.powerHours = root.hasHours ? s / 3600 : 0
                 root.selftest = p.length > 4 ? p[4] : ""
+                if (root.selfBusy && root.selftest !== "" && root.selftest !== "inprogress") {
+                    root.selfBusy = false
+                    root.selfMsg = "self-test: " + root.selftest
+                }
                 root.note = root.failing ? "DRIVE REPORTS FAILURE — back up now" : ""
             }
         }
     }
 
+    // ===== SMART self-test (short, ~2min, read-only) =====
+    function runSelftest() {
+        if (root.selfBusy) return
+        root.selfBusy = true
+        root.selfMsg = "self-test running…"
+        selfProc.command = ["sh", "-c",
+            "P=$(busctl --system call org.freedesktop.UDisks2 /org/freedesktop/UDisks2 org.freedesktop.DBus.ObjectManager GetManagedObjects 2>/dev/null | grep -oE '/org/freedesktop/UDisks2/drives/[A-Za-z0-9_]+' | head -1); " +
+            "if [ -z \"$P\" ]; then echo SELF_NONE; exit 0; fi; " +
+            "busctl --system call org.freedesktop.UDisks2 \"$P\" org.freedesktop.UDisks2.Drive.Ata SmartSelftestStart sa{sv} short 0 >/dev/null 2>&1 && echo SELF_STARTED || echo SELF_DENIED"]
+        selfProc.running = true
+    }
+    Process {
+        id: selfProc
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: {
+                var t = text
+                if (t.indexOf("SELF_STARTED") === -1) {
+                    root.selfBusy = false
+                    root.selfMsg = t.indexOf("SELF_NONE") !== -1 ? "no drive found" : "couldn't start self-test"
+                }
+            }
+        }
+    }
+    Timer {
+        interval: 10000
+        running: root.open && root.selfBusy
+        repeat: true
+        onTriggered: root.refreshSmart()
+    }
+    // ===== full SMART via sudo + your askpass glass prompt =====
+    function runFullScan() {
+        if (root.scanBusy || root.devName === "") return
+        root.scanBusy = true
+        root.scanMsg = "scanning…"
+        var home = Quickshell.env("HOME")
+        var q = function (s) { return "'" + String(s).replace(/'/g, "'\\''") + "'" }
+        fullProc.command = ["sh", "-c",
+            "SUDO_ASKPASS=" + q(home + "/.local/bin/askpass") + " sudo -A smartctl -a -j " + q("/dev/" + root.devName) + " 2>&1"]
+        fullProc.running = true
+    }
+    Process {
+        id: fullProc
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: {
+                root.scanBusy = false
+                var t = text
+                if (t.trim() === "") { root.scanMsg = "cancelled"; return }
+                try {
+                    var d = JSON.parse(t.slice(t.indexOf("{")))
+                    var attrs = (((d.ata_smart_attributes || {}).table) || [])
+                    var wear = -1
+                    for (var i = 0; i < attrs.length; i++) {
+                        var aid = attrs[i].id
+                        if (aid === 177 || aid === 231 || aid === 232 || aid === 233 || aid === 202) {
+                            var av = parseFloat(attrs[i].value)
+                            if (av >= 0 && (wear < 0 || av < wear)) wear = av
+                        }
+                    }
+                    var errs = 0
+                    for (var j = 0; j < attrs.length; j++) {
+                        var jid = attrs[j].id
+                        if (jid === 5 || jid === 196 || jid === 197 || jid === 198) errs += parseFloat((attrs[j].raw || {}).value || 0)
+                    }
+                    var tp = (d.temperature || {}).current
+                    var bits = []
+                    bits.push(wear >= 0 ? ("life left " + wear + "%") : "no wear data")
+                    bits.push("errors " + errs)
+                    if (tp > 0) bits.push(Math.round(tp) + "°")
+                    root.scanMsg = bits.join(" · ")
+                } catch (e) {
+                    root.scanMsg = t.indexOf("sudo:") !== -1 ? "sudo failed" : "scan failed"
+                }
+            }
+        }
+    }
     // ===== throughput: /sys/block/<dev>/stat, 1s poll while open =====
     Timer {
         interval: 1000
@@ -176,6 +273,8 @@ FloatingWindow {
                 statView.path = ""
                 statView.path = "/sys/block/" + root.devName + "/stat"
             }
+            memView.path = ""
+            memView.path = "/proc/meminfo"
         }
     }
     FileView {
@@ -201,6 +300,30 @@ FloatingWindow {
             root.lastWSectors = ws
         }
     }
+    FileView {
+        id: memView
+        path: "/proc/meminfo"
+        printErrors: false
+        onLoaded: {
+            var t = text()
+            var grab = function (k) {
+                var m = t.match(new RegExp(k + ":\\s+(\\d+)"))
+                return m ? parseFloat(m[1]) : 0
+            }
+            var tot = grab("MemTotal"), av = grab("MemAvailable")
+            if (tot > 0) {
+                root.memTotalGb = tot / 1048576
+                root.memUsedGb = (tot - av) / 1048576
+                root.memPct = Math.round(100 * (tot - av) / tot)
+                var h = root.memHist.slice()
+                h.push(root.memPct)
+                if (h.length > 40) h.shift()
+                root.memHist = h
+            }
+            var st = grab("SwapTotal"), sf = grab("SwapFree")
+            root.swapTxt = st > 0 ? "swap " + root.fmtGb((st - sf) * 1024) + " / " + root.fmtGb(st * 1024) : "no swap"
+        }
+    }
     Timer {
         interval: 5000
         running: root.open
@@ -222,33 +345,76 @@ FloatingWindow {
         root.speedMsg = "testing…"
         root.writeMBs = 0
         root.readMBs = 0
+        root.liveWriteMBs = 0
+        root.liveReadMBs = 0
         var f = Quickshell.env("HOME") + "/.cache/drive-speed-test.tmp"
         var q = function (s) { return "'" + String(s).replace(/'/g, "'\\''") + "'" }
-        speedProc.command = ["sh", "-c",
-            "F=" + q(f) + "; " +
-            "W=$(dd if=/dev/zero of=\"$F\" bs=1M count=256 oflag=direct 2>&1 | grep -oE '[0-9.]+ [GM]B/s' | tail -1); " +
-            "R=$(dd if=\"$F\" of=/dev/null bs=1M iflag=direct 2>&1 | grep -oE '[0-9.]+ [GM]B/s' | tail -1); " +
-            "rm -f \"$F\"; echo \"SPEED $W / $R\""]
-        speedProc.running = true
+        root.speedFile = f
+        writeProc.command = ["sh", "-c", "dd if=/dev/zero of=" + q(f) + " bs=1M count=256 oflag=direct status=progress"]
+        writeProc.running = true
+    }
+    // write phase streams dd status=progress on stderr; the gauge paints live
+    Process {
+        id: writeProc
+        stderr: StdioCollector {
+            waitForEnd: false
+            onTextChanged: {
+                var m = text.match(/([0-9.]+)\s+([GM])B\/s[^\r\n]*$/)
+                if (m) root.liveWriteMBs = parseFloat(m[1]) * (m[2] === "G" ? 1024 : 1)
+            }
+        }
+        onExited: function (code) {
+            if (code === 0) {
+                var q2 = function (s) { return "'" + String(s).replace(/'/g, "'\\''") + "'" }
+                readProc.command = ["sh", "-c", "dd if=" + q2(root.speedFile) + " of=/dev/null bs=1M iflag=direct status=progress; rm -f " + q2(root.speedFile)]
+                readProc.running = true
+            } else {
+                root.speedBusy = false
+                root.speedMsg = "write test failed (disk full?)"
+            }
+        }
     }
     Process {
-        id: speedProc
-        stdout: StdioCollector {
-            waitForEnd: true
-            onStreamFinished: {
-                root.speedBusy = false
-                var m = text.match(/SPEED\s+([0-9.]+)\s+([GM])B\/s\s+\/\s+([0-9.]+)\s+([GM])B\/s/)
-                if (m) {
-                    root.writeMBs = parseFloat(m[1]) * (m[2] === "G" ? 1024 : 1)
-                    root.readMBs = parseFloat(m[3]) * (m[4] === "G" ? 1024 : 1)
-                    root.speedMsg = "write " + Math.round(root.writeMBs) + " MB/s · read " + Math.round(root.readMBs) + " MB/s"
-                } else {
-                    root.speedMsg = "test failed"
-                }
+        id: readProc
+        stderr: StdioCollector {
+            waitForEnd: false
+            onTextChanged: {
+                var m2 = text.match(/([0-9.]+)\s+([GM])B\/s[^\r\n]*$/)
+                if (m2) root.liveReadMBs = parseFloat(m2[1]) * (m2[2] === "G" ? 1024 : 1)
+            }
+        }
+        onExited: function (rcode) {
+            root.speedBusy = false
+            if (rcode === 0 && root.liveReadMBs > 0) {
+                root.writeMBs = root.liveWriteMBs
+                root.readMBs = root.liveReadMBs
+                root.speedMsg = "write " + Math.round(root.writeMBs) + " MB/s · read " + Math.round(root.readMBs) + " MB/s"
+            } else {
+                root.speedMsg = "test failed"
             }
         }
     }
 
+    // ===== RAM test: 512MB pattern test, ~15s =====
+    function runRamTest() {
+        if (root.ramBusy) return
+        root.ramBusy = true
+        root.ramMsg = "testing 256MB…"
+        var script = Quickshell.env("HOME") + "/dotfiles/.config/quickshell/scripts/ram-test.py"
+        ramProc.command = ["nice", "-n", "19", "python3", script, "256"]
+        ramProc.running = true
+    }
+    Process {
+        id: ramProc
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: {
+                root.ramBusy = false
+                var m = text.match(/RAMTEST\s+(PASS|FAIL)[^\n]*/)
+                root.ramMsg = m ? m[0].replace("RAMTEST ", "").toLowerCase() : "test failed"
+            }
+        }
+    }
     // ================= UI =================
     Rectangle {
         id: card
@@ -270,7 +436,15 @@ FloatingWindow {
             RowLayout {
                 Layout.fillWidth: true
                 spacing: 8
-                Text { text: "DRIVE HEALTH"; color: colors.alpha(colors.outline, 0.65); font.family: "FiraCode Nerd Font"; font.pixelSize: 9; font.weight: Font.Bold; font.letterSpacing: 1.5; Layout.fillWidth: true }
+                Text { text: "HARDWARE HEALTH"; color: colors.alpha(colors.outline, 0.65); font.family: "FiraCode Nerd Font"; font.pixelSize: 9; font.weight: Font.Bold; font.letterSpacing: 1.5; Layout.fillWidth: true }
+                Text {
+                    text: root.scanBusy ? "scanning…" : "full scan"
+                    color: scanMa.containsMouse ? colors.primary : colors.alpha(colors.outline, 0.6)
+                    font.family: "FiraCode Nerd Font"
+                    font.pixelSize: 8
+                    font.weight: Font.Bold
+                    MouseArea { id: scanMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.runFullScan() }
+                }
                 Text {
                     text: "re-check"
                     color: reMa.containsMouse ? colors.primary : colors.alpha(colors.outline, 0.6)
@@ -288,10 +462,10 @@ FloatingWindow {
             }
 
             Text {
-                visible: root.note !== ""
+                visible: root.noteText !== ""
                 Layout.fillWidth: true
                 horizontalAlignment: Text.AlignHCenter
-                text: root.note
+                text: root.noteText
                 color: root.failing ? colors.error : colors.secondary
                 font.family: "FiraCode Nerd Font"
                 font.pixelSize: 9
@@ -383,7 +557,7 @@ FloatingWindow {
             Canvas {
                 id: ioChart
                 Layout.fillWidth: true
-                Layout.preferredHeight: 90
+                Layout.preferredHeight: 80
                 Connections {
                     target: root
                     function onRHistChanged() { ioChart.requestPaint() }
@@ -439,6 +613,193 @@ FloatingWindow {
                 }
                 Text {
                     text: root.speedMsg
+                    color: colors.alpha(colors.foreground, 0.8)
+                    font.family: "FiraCode Nerd Font"
+                    font.pixelSize: 10
+                    elide: Text.ElideRight
+                    Layout.fillWidth: true
+                }
+            }
+
+            // self-test
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 10
+                Rectangle {
+                    height: 26
+                    width: selfLabel.implicitWidth + 20
+                    radius: 13
+                    color: root.selfBusy ? colors.alpha(colors.surfaceVariant, 0.4) : selfMa.containsMouse ? colors.alpha(colors.primary, 0.22) : colors.alpha(colors.primary, 0.10)
+                    border.width: 1
+                    border.color: colors.alpha(colors.primary, 0.35)
+                    Text {
+                        id: selfLabel
+                        anchors.centerIn: parent
+                        text: root.selfBusy ? "testing…" : "run self-test"
+                        color: colors.primary
+                        font.family: "FiraCode Nerd Font"
+                        font.pixelSize: 9
+                        font.weight: Font.Bold
+                    }
+                    MouseArea { id: selfMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.runSelftest() }
+                }
+                Text {
+                    text: root.selfMsg
+                    color: colors.alpha(colors.foreground, 0.8)
+                    font.family: "FiraCode Nerd Font"
+                    font.pixelSize: 10
+                    elide: Text.ElideRight
+                    Layout.fillWidth: true
+                }
+            }
+
+            // speedometer
+            Canvas {
+                id: speedo
+                Layout.fillWidth: true
+                Layout.preferredHeight: 90
+                Connections {
+                    target: root
+                    function onReadMBsChanged() { speedo.requestPaint() }
+                    function onLiveWriteMBsChanged() { speedo.requestPaint() }
+                    function onLiveReadMBsChanged() { speedo.requestPaint() }
+                }
+                onPaint: {
+                    var ctx = getContext("2d")
+                    var W = width, H = height
+                    ctx.clearRect(0, 0, W, H)
+                    var cx = W / 2, cy = H - 10
+                    var R = Math.min(W / 2 - 30, H - 24)
+                    var maxV = Math.max(600, root.readMBs * 1.2, root.writeMBs * 1.2)
+                    var dw = root.speedBusy ? root.liveWriteMBs : root.writeMBs
+                    var dr = root.speedBusy ? root.liveReadMBs : root.readMBs
+                    ctx.beginPath()
+                    ctx.arc(cx, cy, R, Math.PI, 0)
+                    ctx.strokeStyle = colors.alpha(colors.outline, 0.25)
+                    ctx.lineWidth = 6
+                    ctx.stroke()
+                    ctx.font = "8px 'FiraCode Nerd Font', monospace"
+                    ctx.textAlign = "center"
+                    for (var i = 0; i <= 6; i++) {
+                        var a = Math.PI - i / 6 * Math.PI
+                        var x1 = cx + Math.cos(a) * (R - 8), y1 = cy + Math.sin(a) * (R - 8)
+                        var x2 = cx + Math.cos(a) * R, y2 = cy + Math.sin(a) * R
+                        ctx.beginPath()
+                        ctx.moveTo(x1, y1)
+                        ctx.lineTo(x2, y2)
+                        ctx.strokeStyle = colors.alpha(colors.outline, 0.4)
+                        ctx.lineWidth = 1
+                        ctx.stroke()
+                        ctx.fillStyle = colors.alpha(colors.outline, 0.55)
+                        ctx.fillText(Math.round(maxV * i / 6), cx + Math.cos(a) * (R + 11), cy + Math.sin(a) * (R + 11) + 3)
+                    }
+                    var needle = function (v, style, len) {
+                        var na = Math.PI - Math.min(1, v / maxV) * Math.PI
+                        ctx.beginPath()
+                        ctx.moveTo(cx, cy)
+                        ctx.lineTo(cx + Math.cos(na) * R * len, cy + Math.sin(na) * R * len)
+                        ctx.strokeStyle = style
+                        ctx.lineWidth = 2
+                        ctx.stroke()
+                    }
+                    needle(dw, colors.primary, 0.92)
+                    needle(dr, colors.secondary, 0.78)
+                    ctx.beginPath()
+                    ctx.arc(cx, cy, 3, 0, 2 * Math.PI)
+                    ctx.fillStyle = colors.foreground
+                    ctx.fill()
+                    var peak = Math.max(dw, dr)
+                    if (peak <= 0) {
+                        ctx.fillStyle = colors.alpha(colors.outline, 0.5)
+                        ctx.font = "9px 'FiraCode Nerd Font', monospace"
+                        ctx.textAlign = "center"
+                        ctx.fillText("run a speed test", cx, cy - 16)
+                    } else {
+                        ctx.fillStyle = colors.foreground
+                        ctx.font = "bold 17px 'FiraCode Nerd Font', monospace"
+                        ctx.textAlign = "center"
+                        ctx.fillText(Math.round(peak), cx, cy - 20)
+                        ctx.font = "8px 'FiraCode Nerd Font', monospace"
+                        ctx.fillStyle = colors.alpha(colors.outline, 0.6)
+                        ctx.fillText("MB/s", cx, cy - 8)
+                    }
+                    ctx.textAlign = "left"
+                    ctx.fillStyle = colors.primary
+                    ctx.fillText("— write", 4, H - 6)
+                    ctx.fillStyle = colors.secondary
+                    ctx.fillText("— read", 52, H - 6)
+                }
+            }
+
+            // RAM
+            Text { text: "MEMORY"; color: colors.alpha(colors.outline, 0.65); font.family: "FiraCode Nerd Font"; font.pixelSize: 9; font.weight: Font.Bold; font.letterSpacing: 1.5 }
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 8
+                Text { text: root.memTotalGb > 0 ? root.memUsedGb.toFixed(1) + " / " + root.memTotalGb.toFixed(1) + "G" : "…"; color: colors.alpha(colors.foreground, 0.8); font.family: "FiraCode Nerd Font"; font.pixelSize: 10; Layout.preferredWidth: 118 }
+                Rectangle {
+                    Layout.fillWidth: true
+                    height: 6
+                    radius: 3
+                    color: colors.alpha(colors.surfaceVariant, 0.5)
+                    Rectangle {
+                        width: parent.width * Math.min(100, root.memPct) / 100
+                        height: parent.height
+                        radius: 3
+                        color: root.memPct > 90 ? colors.error : colors.tertiary
+                    }
+                }
+                Text { text: root.memPct + "%"; color: colors.alpha(colors.outline, 0.65); font.family: "FiraCode Nerd Font"; font.pixelSize: 9 }
+                Text { text: root.swapTxt; color: colors.alpha(colors.outline, 0.5); font.family: "FiraCode Nerd Font"; font.pixelSize: 8 }
+            }
+            Canvas {
+                id: memChart
+                Layout.fillWidth: true
+                Layout.preferredHeight: 60
+                Connections {
+                    target: root
+                    function onMemHistChanged() { memChart.requestPaint() }
+                }
+                onPaint: {
+                    var mctx = getContext("2d")
+                    var MW = width, MH = height
+                    mctx.clearRect(0, 0, MW, MH)
+                    if (root.memHist.length < 2) return
+                    mctx.beginPath()
+                    for (var mi = 0; mi < root.memHist.length; mi++) {
+                        var mx = MW - (root.memHist.length - 1 - mi) * (MW / 39)
+                        var my = MH - 4 - (root.memHist[mi] / 100) * (MH - 10)
+                        if (mi === 0) mctx.moveTo(mx, my)
+                        else mctx.lineTo(mx, my)
+                    }
+                    mctx.strokeStyle = colors.tertiary
+                    mctx.lineWidth = 1.5
+                    mctx.stroke()
+                }
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 10
+                Rectangle {
+                    height: 26
+                    width: ramLabel.implicitWidth + 20
+                    radius: 13
+                    color: root.ramBusy ? colors.alpha(colors.surfaceVariant, 0.4) : ramMa.containsMouse ? colors.alpha(colors.primary, 0.22) : colors.alpha(colors.primary, 0.10)
+                    border.width: 1
+                    border.color: colors.alpha(colors.primary, 0.35)
+                    Text {
+                        id: ramLabel
+                        anchors.centerIn: parent
+                        text: root.ramBusy ? "testing…" : "run ram test"
+                        color: colors.primary
+                        font.family: "FiraCode Nerd Font"
+                        font.pixelSize: 9
+                        font.weight: Font.Bold
+                    }
+                    MouseArea { id: ramMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.runRamTest() }
+                }
+                Text {
+                    text: root.ramMsg
                     color: colors.alpha(colors.foreground, 0.8)
                     font.family: "FiraCode Nerd Font"
                     font.pixelSize: 10

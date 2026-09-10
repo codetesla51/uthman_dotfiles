@@ -60,15 +60,13 @@ Item {
         }
     }
 
-    // pill backdrop tinted by track color
+    // pill backdrop tinted by track color — no border, no visible edges
     Rectangle {
         anchors.fill: row
         anchors.leftMargin: -6; anchors.rightMargin: -6
         anchors.topMargin: -4; anchors.bottomMargin: -4
-        radius: 14
-        color: root.hasPlayer ? colors.alpha(root.trackColor, 0.12) : "transparent"
-        border.width: 1
-        border.color: root.hasPlayer ? colors.alpha(root.trackColor, 0.18) : "transparent"
+        radius: 16
+        color: root.hasPlayer ? colors.alpha(root.trackColor, 0.09) : "transparent"
         Behavior on color { ColorAnimation { duration: 400; easing.type: Easing.OutCubic } }
     }
 

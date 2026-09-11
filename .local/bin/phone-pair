@@ -1,0 +1,32 @@
+#!/bin/bash
+# phone-pair — one-time wireless ADB pairing. Run once per phone.
+# On the phone: Settings > Developer options > Wireless debugging ON >
+# "Pair device with pairing code". Then run this and type what it shows.
+set -u
+command -v adb >/dev/null || { echo "phone-pair: adb not found (pacman -S android-tools)"; exit 1; }
+adb start-server >/dev/null 2>&1
+
+echo "On the phone, open the Wireless debugging pairing screen."
+printf 'Phone IP address: '; read -r ip
+printf 'Pairing port: '; read -r pairport
+printf 'Pairing code: '; read -r code
+[ -n "$ip" ] && [ -n "$pairport" ] && [ -n "$code" ] || { echo "phone-pair: need all three"; exit 1; }
+
+if ! adb pair "$ip:$pairport" "$code" 2>&1; then
+  echo "phone-pair: pairing failed — code expires fast, generate a fresh one and retry"
+  exit 1
+fi
+
+echo "Paired. Now read the main Wireless debugging screen (not the pairing one)."
+printf 'Connect address [ip:port]: '; read -r addr
+[ -n "$addr" ] || { echo "phone-pair: need the connect address"; exit 1; }
+
+if ! adb connect "$addr" 2>&1; then
+  echo "phone-pair: connect failed — same WiFi on both ends?"
+  exit 1
+fi
+
+mkdir -p ~/.config/phone-sender
+printf '%s\n' "$addr" > ~/.config/phone-sender/target
+adb devices
+echo "phone-pair: done. Future sends find the phone on their own."

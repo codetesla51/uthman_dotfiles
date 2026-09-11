@@ -41,6 +41,7 @@ PanelWindow {
     PluginMenu { id: pluginMenu; colors: palette }
     KeybindsPanel { id: keybindsPanel; colors: palette }
     DriveHealth { id: driveHealth; colors: palette }
+    WatchCatPanel { id: watchCat; colors: palette }
     MediaOsd { id: mediaOsd; colors: palette }
 
     CalendarPanel {
@@ -197,6 +198,10 @@ PanelWindow {
             Network {
                 colors: bar.colors
                 onOpenRequested: wifiPanel.open = !wifiPanel.open
+            }
+            WatchCat {
+                colors: bar.colors
+                onOpenRequested: watchCat.open = !watchCat.open
             }
             Battery { colors: bar.colors; onOpenRequested: batPanel.open = !batPanel.open }
         }

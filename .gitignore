@@ -14,3 +14,4 @@ memory.md
 
 # wallpapers live here but never get committed — no more pushing them
 wallpapers/
+__pycache__/

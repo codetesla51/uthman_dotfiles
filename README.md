@@ -123,7 +123,7 @@ ShellRoot {
 
 **Bar layout (shown in screenshot):** trapezium center island flush to top (`y=0 h=54`, 3-edge stroke), `05:42` clock, `NowPlaying` (art + 2-line title/artist + 5-bar visualizer + hover transport), right-side system pills (CPU/RAM/temp/network/battery). Left has Arch logo + workspace pills.
 
-**Modules** in `~/.config/quickshell/modules/`: `ArchLogo`, `Workspaces`, `Clock`/`ClockWindow`, `Cpu`/`Memory`/`NetRate`/`Temp`/`Battery`/`BatteryPanel`, `Network`/`WifiPanel`, `Tray`, `BellButton`/`NotificationCenter`/`NotificationToast`/`DndIndicator`, `NowPlaying`/`MediaOsd`, `SystemMonitor`, `FastFetchWindow`, `ThemePanel`, `AppLauncher`, `PowerMenu`, `PhoneLink`, `ScreenTime`, `ClipboardPanel`, `CalendarPanel`, `KeybindsPanel`, `LockScreen`, `ControlCenter`, `PkgManager`, `PdfViewer` (library), `PassPrompt`, `QuickNotes`, `PluginMenu`, `AudioVisualizer`, `ScriptIndicator`, `StatusPill`, etc.
+**Modules** in `~/.config/quickshell/modules/`: `ArchLogo`, `Workspaces`, `Clock`/`ClockWindow`, `Cpu`/`Memory`/`NetRate`/`Temp`/`Battery`/`BatteryPanel`, `Network`/`WifiPanel`, `Tray`, `BellButton`/`NotificationCenter`/`NotificationToast`/`DndIndicator`, `NowPlaying`/`MediaOsd`, `SystemMonitor`, `FastFetchWindow`, `ThemePanel`, `AppLauncher`, `PowerMenu`, `PhoneLink`, `ScreenTime`, `ClipboardPanel`, `CalendarPanel`, `KeybindsPanel`, `LockScreen`, `ControlCenter`, `PkgManager`, `PdfViewer` (library), `PassPrompt`, `QuickNotes`, `PluginMenu`, `AudioVisualizer`, `ScriptIndicator`, `StatusPill`, `WatchCat`/`WatchCatPanel`, etc.
 
 **Run:**
 
@@ -156,6 +156,26 @@ What it controls: live CPU/RAM/battery/network charts, theme + Ghostty font/opac
 
 > [!NOTE]
 > The panel writes to `~/dotfiles` first (stow-aware — symlinks respected), so every change is git-tracked.
+
+---
+
+## WatchCat
+
+Per-process hotspot data monitor for tethered laptops — tracks every byte against a daily 1 GB cap, *notify only* (never pauses or blocks traffic).
+
+```bash
+# 24/7 daemon: nethogs per-process rates -> sqlite DB + live.json
+# helper: sudo -n nethogs (no password prompt, /etc/sudoers.d/watchcat)
+systemctl --user enable --now watchcat.service
+
+# dashboard: regenerates ~/.local/share/watchcat/today.html
+python3 ~/.config/quickshell/scripts/watchcat-dash.py <out.html> 1024
+```
+
+- **Daemon** (`scripts/watchcat-daemon.py`): 12s chunks, per-proc down/up rates, "hot" alerts (>500 KB/s for >10s), warn at 500 MB and crit at 1 GB via `notify-send`; 7-day history pruned in `daemon.db`.
+- **Panel** (`WatchCatPanel.qml`): 700×380 viewer polling `live.json` — live rates, cap number-line, today's totals, top talkers.
+- **Dashboard** (`scripts/watchcat-dash.py` + static HTML, auto-reload 30s): 0→1 cap number line, down/up donut, readable per-day week table, stat strip, top-25 talkers. Colors follow the live matugen scheme (`colors.css`).
+- Sudo access is scoped via `/etc/sudoers.d/watchcat` — the rule allows only `nethogs` with no password.
 
 ---
 

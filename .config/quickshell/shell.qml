@@ -13,6 +13,7 @@ ShellRoot {
     AudioVisualizer { colors: barPalette }
     QuickNotes { colors: barPalette }
     PkgManager { colors: barPalette }
+    SnapperPanel { colors: barPalette }
     ControlCenter { colors: barPalette }
     PdfViewer { colors: barPalette }
     PassPrompt { colors: barPalette }

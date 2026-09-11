@@ -2,6 +2,7 @@ import Quickshell
 import Quickshell.Services.Mpris
 import QtQuick
 import QtQuick.Layouts
+import Qt5Compat.GraphicalEffects
 
 // NowPlaying - flat cluster inside the center trapezium (separated by | in Bar.qml):
 // rounded art / two-line title+artist / live visualizer / circular transport buttons.
@@ -63,8 +64,8 @@ Item {
     // pill backdrop tinted by track color — no border, no visible edges
     Rectangle {
         anchors.fill: row
-        anchors.leftMargin: -6; anchors.rightMargin: -6
-        anchors.topMargin: -4; anchors.bottomMargin: -4
+        anchors.leftMargin: -12; anchors.rightMargin: -12
+        anchors.topMargin: -8; anchors.bottomMargin: -4
         radius: 16
         color: root.hasPlayer ? colors.alpha(root.trackColor, 0.09) : "transparent"
         Behavior on color { ColorAnimation { duration: 400; easing.type: Easing.OutCubic } }
@@ -74,14 +75,19 @@ Item {
         id: row
         anchors.centerIn: parent
         spacing: 9
-        // -- album art: 26px, radius 8, hairline ring --
+        // -- album art: 26px, near-circular, hairline ring; mask rounds the corners
+        // (Rectangle.clip is unreliable for rounding — same OpacityMask trick as the card)
         Rectangle {
+            id: artFrame
             visible: root.hasPlayer && player.trackArtUrl !== ""
-            width: 26; height: 26; radius: 8
+            width: 26; height: 26; radius: 12
             color: colors.alpha(colors.surface, 0.5)
             border.width: 1
             border.color: colors.alpha(colors.outline, 0.15)
-            clip: true
+            layer.enabled: true
+            layer.effect: OpacityMask {
+                maskSource: Rectangle { width: artFrame.width; height: artFrame.height; radius: artFrame.radius }
+            }
             Image {
                 anchors.fill: parent
                 source: root.hasPlayer ? player.trackArtUrl : ""
@@ -91,7 +97,7 @@ Item {
         }
         Rectangle {
             visible: !root.hasPlayer || player.trackArtUrl === ""
-            width: 26; height: 26; radius: 8
+            width: 26; height: 26; radius: 12
             color: colors.alpha(colors.surface, 0.5)
             border.width: 1
             border.color: colors.alpha(colors.outline, 0.15)

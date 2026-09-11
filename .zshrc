@@ -73,3 +73,4 @@ eval "$(starship init zsh)"
 export LIBVA_DRIVER_NAME=iHD
 export PATH="$HOME/.cargo/bin:$PATH"
 [[ -f ~/azure.sh ]] && source ~/azure.sh
+alias snapper="sudo -A snapper"

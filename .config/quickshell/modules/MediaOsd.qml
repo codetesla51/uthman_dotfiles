@@ -150,11 +150,11 @@ PanelWindow {
     }
 
     // glyph constants — filled by scripts/gen-glyphs.py (verified codepoints)
-    readonly property string chr_mute: "󰝯"
+    readonly property string chr_mute: "󰖁"
     readonly property string chr_low: ""
-    readonly property string chr_high: "󰛨"
+    readonly property string chr_high: "󰕾"
     readonly property string chr_mic: ""
     readonly property string chr_micoff: ""
     readonly property string chr_sun: "󰖙"
-    readonly property string chr_night: "󰕯"
+    readonly property string chr_night: "󰖔"
 }

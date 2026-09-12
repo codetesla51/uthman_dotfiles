@@ -26,7 +26,7 @@ one-shot subcommands and polls on timers. Pairing/config: `~/phonelink/init.sh`.
   anything that isn't paste-now. The old adb-clip jar silently no-oped.
 - **Phone → PC** — share from any phone app (WhatsApp, gallery, files): the
   share sheet lists *PhoneRelay*, which stores the item in
-  `Download/PhoneLinkInbox/`, and an auto-delivery loop pulls every new
+  `/sdcard/PhoneLink/` (a top-level folder, not buried in Download), and an auto-delivery loop pulls every new
   file into `~/Downloads/` by itself (files already in Downloads with the
   same size are skipped; >250 MB stay in the browser). No clipboard read
   exists: foreground flash reads always return empty on this ROM even

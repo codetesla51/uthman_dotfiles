@@ -82,6 +82,9 @@ FloatingWindow {
 
     IpcHandler { target: "phonelink"; function toggle(): void { root.open = !root.open } }
 
+    // connect at bar startup so inbox/notif watchers run with the panel closed
+    Component.onCompleted: root.refreshDevices()
+
     function say(text) {
         root.statusMsg = text
         statusLife.restart()
@@ -566,8 +569,13 @@ FloatingWindow {
         root.pullTotal = 0
         root.pullGot = 0
         root.say("Pulling " + name + "…")
-        sizeRemoteProc.command = ["adb", "-s", root.deviceId, "shell", "stat", "-c", "%s", root.sq(root.remoteDir + "/" + name)]
-        sizeRemoteProc.running = true
+        // dirs have no meaningful single size — leave pullTotal 0 for the indeterminate bar
+        var isDir = false
+        for (var d = 0; d < root.remoteRows.length; d++)
+            if (root.remoteRows[d].name === name) { isDir = root.remoteRows[d].isDir; break }
+        if (!isDir)
+            sizeRemoteProc.command = ["adb", "-s", root.deviceId, "shell", "stat", "-c", "%s", root.sq(root.remoteDir + "/" + name)]
+        sizeRemoteProc.running = !isDir
         pullProc.command = [root.daemon, "pull", name, "--dir", root.remoteDir]
         pullProc.running = true
         pullProgress.restart()

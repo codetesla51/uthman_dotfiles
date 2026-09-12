@@ -31,7 +31,7 @@ objects that run `adb` on demand, and polls phone state on timers.
   refreshed on a 15 s timer while the panel is open.
 - **Notify forwarder** — every 4 s while a phone is paired it polls the
   notification shade and when a *new* notification appears from an
-  allowlisted app it pings the desktop with `notify-send` (title only), shown
+  allowlisted app it pings the desktop with `notify-send` (title + group-chat author, shown
   by quickshell's own NotificationCenter. The allowlist (`notifyApps` in
   PhoneLink.qml — package substring to app label) ships with WhatsApp,
   Telegram and SMS/messages entries and is trivial to extend. Works with

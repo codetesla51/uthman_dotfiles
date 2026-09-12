@@ -126,10 +126,6 @@ FloatingWindow {
         batteryProc.running = true
     }
 
-    // ── WhatsApp forwarder: poll the notification shade, ping the desktop on
-    // new messages. Works in DND too — DND silences the phone, it does not
-    // remove entries from the shade. The desktop ping goes through notify-send
-    // to quickshell's own NotificationCenter (owns org.freedesktop.Notifications).
     // ── notify forward: poll the notification shade, ping the desktop on new
     // entries from allowlisted apps. Works in DND too — DND silences the
     // phone, it does not remove entries from the shade. The desktop ping goes
@@ -157,10 +153,24 @@ FloatingWindow {
             if (!cur.title) { var t = line.match(/android\.title=String \(([^)]*)\)/); if (t) cur.title = t[1] }
         }
         flush()
+        for (var j = 0; j < fresh.length; j++) {
+            var rec = fresh[j]
+            // w4b embeds the author in group-chat titles:
+            // "Group (149 messages): ~ Jay"; 1:1 titles are the contact
+            // themselves, channels have no suffix at all
+            rec.sender = ""
+            if (rec.label === "WhatsApp" && rec.title) {
+                var sm = rec.title.match(/[:：]\s*~?\s*(.+)$/)
+                if (sm) {
+                    var tail = sm[1].trim().replace(/\)\s*$/, "").trim()
+                    if (tail && !/^\s*\d/.test(tail) && tail.length <= 30) rec.sender = tail
+                }
+            }
+        }
         if (!root.primed) {
             // first scan after connect: absorb what is already in the shade,
             // do not re-ping old notifications
-            for (var j = 0; j < fresh.length; j++) root.seenKeys.push(fresh[j].key)
+            for (var p = 0; p < fresh.length; p++) root.seenKeys.push(fresh[p].key)
             root.primed = true
             return
         }
@@ -169,7 +179,9 @@ FloatingWindow {
             if (root.seenKeys.indexOf(f.key) !== -1) continue
             root.seenKeys.push(f.key)
             if (root.seenKeys.length > 200) root.seenKeys.shift()
-            Quickshell.execDetached(["notify-send", "-a", f.label, f.title || "New " + f.label + " notification"])
+            Quickshell.execDetached(["notify-send", "-a", f.label,
+                f.title || "New " + f.label + " notification",
+                f.sender ? "from " + f.sender : ""])
         }
     }
 

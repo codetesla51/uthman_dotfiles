@@ -530,8 +530,10 @@ FloatingWindow {
         }
     }
     // C: PC clipboard straight into the phone's clipboard (paste-ready).
-    // Needs the tiny adb-clip helper on the phone — auto-deployed on first use,
-    // no app install. Falls back to a clear error, never silently to a file.
+    // Text goes through the PhoneRelay flash app; images push straight into
+    // Download. Caveat (verified): this ROM's clipboard watcher reaps clips
+    // set by the relay app within ~seconds of idle — paste right away. The
+    // old adb-clip jar silently no-oped entirely; this is strictly better.
     function sendClipboard() {
         if (!root.connected) {
             root.say("No phone connected — same WiFi as the laptop?")
@@ -540,9 +542,8 @@ FloatingWindow {
         var home = Quickshell.env("HOME")
         var q = function (s) { return "'" + String(s).replace(/'/g, "'\\''") + "'" }
         var clipFile = home + "/.cache/phonelink-clipboard.txt"
-        var jarDir = home + "/dotfiles/.config/quickshell/scripts/adb-clip"
         clipSetProc.command = ["sh", "-c",
-            "D=" + q(root.deviceId) + "; F=" + q(clipFile) + "; J=" + q(jarDir) + "; I=/tmp/.qs-phonelink-img.png; " +
+            "D=" + q(root.deviceId) + "; F=" + q(clipFile) + "; I=/tmp/.qs-phonelink-img.png; " +
             "case \"$(wl-paste --list-types 2>/dev/null)\" in *image*) " +
             "wl-paste -t image/png > \"$I\" 2>/dev/null; " +
             "if [ ! -s \"$I\" ]; then echo CLIP_EMPTY; exit 0; fi; " +
@@ -554,10 +555,11 @@ FloatingWindow {
             "n=$(wc -c < \"$F\"); " +
             "if [ \"$n\" -eq 0 ]; then echo CLIP_EMPTY; exit 0; fi; " +
             "if [ \"$n\" -gt 100000 ]; then echo CLIP_TOOLONG; exit 0; fi; " +
-            "adb -s \"$D\" shell 'test -x /data/local/tmp/clip' >/dev/null 2>&1 || " +
-            "{ adb -s \"$D\" push \"$J/clip.jar\" \"$J/clip\" /data/local/tmp >/dev/null 2>&1 && " +
-            "adb -s \"$D\" shell chmod 755 /data/local/tmp/clip >/dev/null 2>&1; }; " +
-            "adb -s \"$D\" shell 'T=$(cat); /data/local/tmp/clip \"$T\"' < \"$F\" >/dev/null 2>&1 && echo CLIP_SET_OK || echo CLIP_SET_FAIL;; " +
+            "P=com.uthman.phonelink; R=/sdcard/Android/data/$P/files; " +
+            "{ adb -s \"$D\" push \"$F\" \"$R/in.txt\" >/dev/null 2>&1 && " +
+            "adb -s \"$D\" shell \"am start -n $P/.PhoneRelayActivity --es mode write --es textfile $R/in.txt\" >/dev/null 2>&1 && " +
+            "sleep 1.5 && " +
+            "{ adb -s \"$D\" shell cat \"$R/ack.txt\" 2>/dev/null | grep -q OK && echo CLIP_SET_OK; } || echo CLIP_FAIL;; " +
             "esac"]
         clipSetProc.running = true
     }

@@ -17,8 +17,17 @@ objects that run `adb` on demand, and polls phone state on timers.
   `adb tcpip 5555`, then reconnect over wifi. No gateway/hotspot guessing:
   the phone is a device on the LAN, not the router.
 - **Send to phone** — drag files onto the drop tile; they are pushed via
-  `adb push` (paths are shell-quoted). `c` sends the clipboard
-  (via the adb-clip java helper).
+  `adb push` (paths are shell-quoted). `c` sends the PC clipboard text via
+  the bundled **PhoneRelay** flash app (`.config/quickshell/android-app/`,
+  `build.sh`, install once with `adb install`). The relay writes the clipboard while its invisible window flashes.
+  Caveat: this ROM's clipboard watcher reaps clips the relay sets within
+  ~seconds when idle — paste immediately, or use the share sheet for
+  anything that isn't paste-now. The old adb-clip jar silently no-oped.
+- **Phone → PC** — share from any phone app (WhatsApp, gallery, files): the
+  share sheet lists *PhoneRelay*, which stores the item in
+  `Download/PhoneLinkInbox/`, visible in the pull browser. No clipboard read
+  exists: foreground flash reads always return empty on this ROM even
+  with the READ_CLIPBOARD appop granted (verified with paste-proof controls).
 - **Screenshot** — `screencap` support exists (`shotPhone()`) but has no
   UI button since the snapshot chip was removed; re-add a chip or a `k`-key
   binding if wanted.

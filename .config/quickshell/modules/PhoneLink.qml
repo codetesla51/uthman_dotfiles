@@ -55,11 +55,24 @@ FloatingWindow {
     // --- history: [{name, dir, time}] ---
     property var recentFiles: []
 
+    // --- battery + shot ---
+    property int battery: -1
+    property bool charging: false
+    property string shotName: ""
+
+    // --- type-ahead find ---
+    property bool searching: false
+    property string searchBuf: ""
+
+    // --- whatsapp forward ---
+    property var waSeen: []        // notification keys already pinged
+    property bool waPrimed: false  // first scan after connect absorbs, no pings
+
     title: "PhoneLink"
-    implicitWidth: 400
-    implicitHeight: 520
-    minimumSize: Qt.size(360, 420)
-    maximumSize: Qt.size(460, 580)
+    width: 400
+    height: 520
+    minimumSize: Qt.size(360, 480)
+    maximumSize: Qt.size(460, 620)
     color: "transparent"
     visible: root.open
 
@@ -70,14 +83,100 @@ FloatingWindow {
         statusLife.restart()
     }
     Timer { id: statusLife; interval: 5000; onTriggered: root.statusMsg = "" }
+    Timer { id: searchTimer; interval: 1200; onTriggered: root.clearSearch() }
 
     function notify(title, body) {
         Quickshell.execDetached(["sh", "-c", "notify-send -u normal -i phone '" + String(title).replace(/'/g, "'\\''") + "' '" + String(body).replace(/'/g, "'\\''") + "'"])
     }
 
+    // shell-quote one argument so names with spaces/quotes survive `adb shell`
+    function sq(s) { return "'" + String(s).replace(/'/g, "'\\''") + "'" }
+
+    function clearSearch() {
+        root.searching = false
+        root.searchBuf = ""
+    }
+
+    // type-ahead: jump to the first entry whose name starts with the buffer
+    function findJump() {
+        var q = root.searchBuf.toLowerCase()
+        if (q === "") return
+        for (var i = 0; i < root.remoteRows.length; i++) {
+            if (String(root.remoteRows[i].name).toLowerCase().indexOf(q) === 0) {
+                remoteList.currentIndex = i
+                break
+            }
+        }
+    }
+
+    // battery: dumpsys battery is read-only with no path args — no quoting needed
+    function refreshBattery() {
+        if (!root.connected) return
+        batteryProc.command = ["adb", "-s", root.deviceId, "shell", "dumpsys", "battery"]
+        batteryProc.running = true
+    }
+
+    // ── WhatsApp forwarder: poll the notification shade, ping the desktop on
+    // new messages. Works in DND too — DND silences the phone, it does not
+    // remove entries from the shade. The desktop ping goes through notify-send
+    // to quickshell's own NotificationCenter (owns org.freedesktop.Notifications).
+    function scanWhats(dump) {
+        function flush() { if (cur && cur.key) fresh.push(cur); cur = null }
+        var lines = String(dump).split("\n")
+        var cur = null
+        var fresh = []
+        for (var i = 0; i < lines.length; i++) {
+            var line = lines[i]
+            var h = line.match(/NotificationRecord\([^:]*: pkg=([^\s]+)/)
+            if (h) {
+                flush()
+                if (h[1].indexOf("whatsapp") !== -1)
+                    cur = { key: (line.match(/key=([^:\s]+)/) || [])[1] || null, title: "" }
+                continue
+            }
+            if (!cur) continue
+            cur.key = cur.key || (line.match(/key=([^:\s]+)/) || [])[1] || null
+            if (!cur.title) { var t = line.match(/android\.title=String \(([^)]*)\)/); if (t) cur.title = t[1] }
+        }
+        flush()
+        if (!root.waPrimed) {
+            // first scan after connect: absorb what is already in the shade,
+            // do not re-ping old notifications
+            for (var j = 0; j < fresh.length; j++) root.waSeen.push(fresh[j].key)
+            root.waPrimed = true
+            return
+        }
+        for (var k = 0; k < fresh.length; k++) {
+            var f = fresh[k]
+            if (root.waSeen.indexOf(f.key) !== -1) continue
+            root.waSeen.push(f.key)
+            if (root.waSeen.length > 200) root.waSeen.shift()
+            Quickshell.execDetached(["notify-send", "-a", "WhatsApp", f.title || "New WhatsApp message"])
+        }
+    }
+
+    // phone screenshot -> ~/Pictures/PhoneLink
+    function shotPhone() {
+        if (!root.connected) {
+            root.say("No phone connected — same WiFi as the laptop?")
+            return
+        }
+        var shots = Quickshell.env("HOME") + "/Pictures/PhoneLink"
+        var d = new Date()
+        function p2(n) { return (n < 10 ? "0" : "") + n }
+        root.shotName = "phonelink-" + d.getFullYear() + p2(d.getMonth() + 1) + p2(d.getDate()) +
+            "-" + p2(d.getHours()) + p2(d.getMinutes()) + p2(d.getSeconds()) + ".png"
+        root.say("Snapping shot…")
+        shotProc.command = ["sh", "-c",
+            "mkdir -p " + root.sq(shots) + " && adb -s " + root.sq(root.deviceId) +
+            " exec-out screencap -p > " + root.sq(shots + "/" + root.shotName)]
+        shotProc.running = true
+    }
+
     // ================= discovery =================
-    // Remembered target, then the hotspot gateway — whichever answers first wins.
-    // mDNS is skipped on purpose: classic tcpip mode advertises nothing to discover.
+    // Remembered target first (~/.config/phone-sender/target); if that fails we
+    // say how to bootstrap over USB. No gateway guessing — the phone is a
+    // device on the LAN, not the hotspot router.
 
     FileView {
         id: rememberedFile
@@ -85,7 +184,7 @@ FloatingWindow {
         printErrors: false
         blockLoading: true
         onLoaded: root.remembered(text())
-        onLoadFailed: root.tryGateway()
+        onLoadFailed: root.say("No phone pair — USB cable once: adb tcpip 5555, then reconnect")
     }
     function connectTo(addr) {
         connectProc.command = ["adb", "connect", addr]
@@ -96,7 +195,7 @@ FloatingWindow {
         if (addr.length > 0) {
             root.connectTo(addr)
         } else {
-            root.tryGateway()
+            root.say("No phone pair — USB cable once: adb tcpip 5555, then reconnect")
         }
     }
 
@@ -104,9 +203,6 @@ FloatingWindow {
         if (root.busy) return
         root.busy = true
         listProc.running = true
-    }
-    function tryGateway() {
-        gatewayProc.running = true
     }
 
     Process {
@@ -117,19 +213,33 @@ FloatingWindow {
             onStreamFinished: {
                 root.busy = false
                 var lines = text.trim().split("\n")
+                var found = []
                 for (var i = 0; i < lines.length; i++) {
                     var m = lines[i].match(/^(\S+)\s+device\b/)
                     if (m) {
                         var mod = lines[i].match(/\bmodel:(\S+)/)
-                        root.deviceId = m[1]
-                        root.deviceName = mod ? mod[1].replace(/_/g, " ") : "Phone"
-                        if (!root.connected) {
-                            root.connected = true
-                            root.say("Connected to " + root.deviceName)
-                        }
-                        if (root.remoteRows.length === 0) root.listRemote()
-                        return
+                        found.push({ id: m[1], name: mod ? mod[1].replace(/_/g, " ") : "Phone" })
+                        continue
                     }
+                    if (!root.connected && lines[i].match(/^(\S+)\s+unauthorized/)) {
+                        root.say("Accept the RSA prompt on your phone (cable once)")
+                    }
+                }
+                if (found.length > 0) {
+                    // several devices can be visible (cable + wifi): prefer the paired one
+                    var pick = found[0]
+                    for (var j = 0; j < found.length; j++) {
+                        if (found[j].id === root.deviceId) pick = found[j]
+                    }
+                    root.deviceId = pick.id
+                    root.deviceName = pick.name
+                    if (!root.connected) {
+                        root.connected = true
+                        root.say("Connected to " + root.deviceName)
+                    }
+                    root.refreshBattery()
+                    if (root.remoteRows.length === 0) root.listRemote()
+                    return
                 }
                 // nothing attached: fall through to remembered/gateway connect
                 if (!root.connected) {
@@ -153,22 +263,6 @@ FloatingWindow {
     }
 
     Process {
-        id: gatewayProc
-        command: ["sh", "-c", "ip route show default 2>/dev/null | awk '{print $3; exit}'"]
-        stdout: StdioCollector {
-            waitForEnd: true
-            onStreamFinished: {
-                var gw = text.trim()
-                if (gw.length > 0) {
-                    root.connectTo(gw + ":5555")
-                } else {
-                    root.say("No network route — join the hotspot first")
-                }
-            }
-        }
-    }
-
-    Process {
         id: connectProc
         stdout: StdioCollector {
             waitForEnd: true
@@ -180,10 +274,32 @@ FloatingWindow {
                 }
             }
         }
+        onExited: function (code) {
+            if (code === 127) root.say("adb not installed — sudo pacman -S android-tools")
+        }
     }
 
-    Timer { interval: 15000; running: root.open; repeat: true; triggeredOnStart: false; onTriggered: root.refreshDevices() }
-    onOpenChanged: { if (open) { root.refreshDevices(); remoteList.focus = true } }
+    // ── WhatsApp watcher: poll the shade every 4s while a phone is paired
+    Process {
+        id: waProc
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: root.scanWhats(text)
+        }
+    }
+    Timer {
+        interval: 4000
+        running: root.connected
+        repeat: true
+        onTriggered: {
+            if (waProc.running) return
+            waProc.command = ["adb", "-s", root.deviceId, "shell", "dumpsys", "notification", "--noredact"]
+            waProc.running = true
+        }
+    }
+
+    Timer { interval: 15000; running: root.open; repeat: true; triggeredOnStart: false; onTriggered: { root.refreshDevices(); root.refreshBattery() } }
+    onOpenChanged: { if (open) { root.refreshDevices(); root.refreshBattery(); remoteList.focus = true } }
 
     // ================= send =================
     function queueFiles(paths) {
@@ -284,7 +400,7 @@ FloatingWindow {
             if (root.pushIndex < 0) { progressPoll.stop(); return }
             var row = root.queue[root.pushIndex]
             if (!row || row.total <= 0) return
-            progressProc.command = ["adb", "-s", root.deviceId, "shell", "stat", "-c", "%s", "/sdcard/Download/" + row.name]
+            progressProc.command = ["adb", "-s", root.deviceId, "shell", "stat", "-c", "%s", root.sq("/sdcard/Download/" + row.name)]
             progressProc.running = true
         }
     }
@@ -314,10 +430,34 @@ FloatingWindow {
     Process {
         id: scanProc
     }
+
+    Process {
+        id: batteryProc
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: {
+                var lv = text.match(/level:\s*(\d+)/)
+                var st = text.match(/status:\s*(\d+)/)
+                root.battery = lv ? parseInt(lv[1]) : -1
+                root.charging = st ? parseInt(st[1]) === 2 : false
+            }
+        }
+    }
+    Process {
+        id: shotProc
+        onExited: function (code) {
+            if (code === 0) {
+                root.notify("Phone shot", root.shotName)
+                root.say("Shot saved to Pictures/PhoneLink")
+            } else {
+                root.say("Shot failed — screen on and unlocked?")
+            }
+        }
+    }
     function scanMedia(remotePath) {
         var uri = "file://" + encodeURIComponent(remotePath).replace(/%2F/g, "/")
         scanProc.command = ["adb", "-s", root.deviceId, "shell",
-            "am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d " + uri]
+            "am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d " + root.sq(uri)]
         scanProc.running = true
     }
 
@@ -384,7 +524,7 @@ FloatingWindow {
     // ================= pull =================
     function listRemote() {
         if (!root.connected) return
-        lsProc.command = ["adb", "-s", root.deviceId, "shell", "ls", "-p", root.remoteDir]
+        lsProc.command = ["adb", "-s", root.deviceId, "shell", "ls", "-p", root.sq(root.remoteDir)]
         lsProc.running = true
     }
     Process {
@@ -410,12 +550,16 @@ FloatingWindow {
     }
 
     function pullFile(name) {
-        if (!root.connected || root.pullState !== "") return
+        if (!root.connected) return
+        if (root.pullState !== "") {
+            root.say("Busy — pulling " + root.pullState + "…")
+            return
+        }
         root.pullState = name
         root.pullTotal = 0
         root.pullGot = 0
         root.say("Pulling " + name + "…")
-        sizeRemoteProc.command = ["adb", "-s", root.deviceId, "shell", "stat", "-c", "%s", root.remoteDir + "/" + name]
+        sizeRemoteProc.command = ["adb", "-s", root.deviceId, "shell", "stat", "-c", "%s", root.sq(root.remoteDir + "/" + name)]
         sizeRemoteProc.running = true
         pullProc.command = ["adb", "-s", root.deviceId, "pull", root.remoteDir + "/" + name, Quickshell.env("HOME") + "/Downloads/"]
         pullProc.running = true
@@ -534,17 +678,41 @@ FloatingWindow {
         root.remoteRows = []
         remoteList.currentIndex = -1
         root.selected = []
+        root.clearSearch()
         root.listRemote()
     }
 
     // ================= UI =================
+    // bento glyph chip: circle, accent-tinted fill/border, nerd glyph (house style)
+    component GlyphChip: Rectangle {
+        required property string glyph
+        property var tapped: function() {}
+        property color accent: colors.primary
+        property int px: 26
+        implicitWidth: px
+        implicitHeight: px
+        radius: px / 2
+        color: colors.alpha(accent, 0.15)
+        border.width: 1
+        border.color: colors.alpha(accent, 0.3)
+        Text {
+            anchors.centerIn: parent
+            text: parent.glyph
+            color: chipHover.containsMouse ? colors.primary : parent.accent
+            font.family: colors.fontSans
+            font.pixelSize: 12
+        }
+        MouseArea { id: chipHover; anchors.fill: parent; hoverEnabled: true; onClicked: parent.tapped() }
+    }
+
     Rectangle {
         id: card
         anchors.fill: parent
-        radius: 20
-        color: colors.alpha(colors.background, 0.74)
+        radius: 16
+        clip: true
+        color: colors.alpha(colors.surface, 0.4)
         border.width: 1
-        border.color: colors.alpha(colors.outline, 0.18)
+        border.color: colors.alpha(colors.outline, 0.14)
         scale: root.open ? 1 : 0.96
         opacity: root.open ? 1 : 0
         Behavior on scale { NumberAnimation { duration: 240; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] } }
@@ -567,19 +735,36 @@ FloatingWindow {
                 elide: Text.ElideRight
             }
 
+            // device strip — battery + shot, only when a phone is reachable
+            RowLayout {
+                visible: root.connected
+                Layout.fillWidth: true
+                spacing: 6
+                Text {
+                    text: "󰪜 " + root.deviceName
+                    color: colors.primary
+                    font.family: colors.fontSans
+                    font.pixelSize: 10
+                    font.weight: Font.Bold
+                    elide: Text.ElideRight
+                    Layout.fillWidth: true
+                }
+                Text {
+                    visible: root.battery >= 0
+                    text: root.battery + "%"
+                    color: root.battery < 15 ? colors.error : colors.secondary
+                    font.family: colors.fontSans
+                    font.pixelSize: 10
+                    font.weight: Font.ExtraBold
+                    Layout.alignment: Qt.AlignVCenter
+                }
+                GlyphChip { glyph: "󰉏"; px: 22; accent: colors.primary; Layout.alignment: Qt.AlignVCenter; tapped: () => root.shotPhone() }
+            }
+
             // ---- SEND: drop zone tile ----
             RowLayout {
                 Layout.fillWidth: true
                 Text { text: "SEND TO PHONE"; color: colors.alpha(colors.outline, 0.65); font.family: colors.fontSans; font.pixelSize: 7; font.weight: Font.Bold; font.letterSpacing: 1.3; Layout.fillWidth: true; Layout.alignment: Qt.AlignVCenter }
-                Text {
-                    text: "clipboard · text/img"
-                    color: clipMa.containsMouse ? colors.primary : colors.alpha(colors.outline, 0.6)
-                    font.family: colors.fontSans
-                    font.pixelSize: 8
-                    font.weight: Font.Bold
-                    Layout.alignment: Qt.AlignVCenter
-                    MouseArea { id: clipMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.sendClipboard() }
-                }
             }
 
             Rectangle {
@@ -732,6 +917,57 @@ FloatingWindow {
                 }
             }
 
+            // ---- recent transfers ----
+            ColumnLayout {
+                visible: root.recentFiles.length > 0
+                Layout.fillWidth: true
+                spacing: 3
+                RowLayout {
+                    Layout.fillWidth: true
+                    Text { text: "RECENT"; color: colors.alpha(colors.outline, 0.65); font.family: colors.fontSans; font.pixelSize: 7; font.weight: Font.Bold; font.letterSpacing: 1.3; Layout.fillWidth: true; Layout.alignment: Qt.AlignVCenter }
+                    Text {
+                        text: root.recentFiles.length + " today"
+                        color: colors.alpha(colors.outline, 0.5)
+                        font.family: colors.fontSans
+                        font.pixelSize: 8
+                    }
+                }
+                ListView {
+                    id: recentList
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: Math.min(3, root.recentFiles.length) * 18
+                    clip: true
+                    spacing: 1
+                    model: root.recentFiles
+                    interactive: false
+                    delegate: RowLayout {
+                        required property var modelData
+                        width: recentList.width
+                        spacing: 6
+                        Text {
+                            text: modelData.dir === "sent" ? "→" : "←"
+                            color: modelData.dir === "sent" ? colors.primary : colors.tertiary
+                            font.family: colors.fontSans
+                            font.pixelSize: 10
+                        }
+                        Text {
+                            text: modelData.name
+                            color: colors.foreground
+                            font.family: colors.fontSans
+                            font.pixelSize: 10
+                            elide: Text.ElideRight
+                            Layout.fillWidth: true
+                        }
+                        Text {
+                            text: modelData.time
+                            color: colors.alpha(colors.outline, 0.6)
+                            font.family: colors.fontSans
+                            font.pixelSize: 8
+                        }
+                    }
+                }
+            }
+
             // ---- PULL: phone browser ----
             RowLayout {
                 Layout.fillWidth: true
@@ -745,10 +981,21 @@ FloatingWindow {
                     Layout.maximumWidth: 120
                 }
                 Text {
-                    text: "s sel · p pull · y yank · c clip"
-                    color: colors.alpha(colors.outline, 0.5)
+                    visible: root.searching
+                    text: "find: " + root.searchBuf + "▍"
+                    color: colors.primary
                     font.family: colors.fontSans
                     font.pixelSize: 8
+                    font.weight: Font.Bold
+                }
+                Text {
+                    visible: root.selected.length > 0 && !root.searching
+                    text: root.selected.length + " sel"
+                    color: selMa.containsMouse ? colors.primary : colors.tertiary
+                    font.family: colors.fontSans
+                    font.pixelSize: 8
+                    font.weight: Font.Bold
+                    MouseArea { id: selMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.pullSelection() }
                 }
             }
             Rectangle {
@@ -781,6 +1028,7 @@ FloatingWindow {
                     highlight: Rectangle { color: colors.alpha(colors.primary, 0.10); radius: 8 }
                     boundsBehavior: Flickable.StopAtBounds
                     ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+                    onCurrentIndexChanged: if (currentIndex >= 0) positionViewAtIndex(currentIndex, ListView.Contain)
                     delegate: Rectangle {
                         required property var modelData
                         required property int index
@@ -832,6 +1080,7 @@ FloatingWindow {
                             hoverEnabled: true
                             acceptedButtons: Qt.LeftButton
                             onClicked: {
+                                remoteList.currentIndex = index
                                 if (modelData.isDir) root.enterRemote(modelData.name)
                                 else root.toggleSelect(modelData.name)
                             }
@@ -859,15 +1108,54 @@ FloatingWindow {
                 }
             }
 
+            RowLayout {
+                visible: root.connected
+                Layout.fillWidth: true
+                Text {
+                    text: "j/k move · l open · p pull · s sel · y yank · c clip · g/G ends · h up · / find · esc close"
+                    color: colors.alpha(colors.outline, 0.4)
+                    font.family: colors.fontSans
+                    font.pixelSize: 7
+                    horizontalAlignment: Text.AlignHCenter
+                    elide: Text.ElideRight
+                    Layout.fillWidth: true
+                }
+            }
+
             Item { Layout.fillHeight: true }
         }
 
-        Keys.onEscapePressed: root.open = false
         Keys.onPressed: (e) => {
-            if (e.text === "p" || e.text === "P") {
-                root.pullSelection()
+            // type-ahead find: "/" arms, next chars jump, idle or esc disarms
+            if (root.searching || e.text === "/") {
                 e.accepted = true
-            } else if (e.key === Qt.Key_S) {
+                if (e.text === "/") {
+                    root.searching = true
+                    root.searchBuf = ""
+                } else if (e.key === Qt.Key_Backspace) {
+                    root.searchBuf = root.searchBuf.slice(0, -1)
+                    root.searchTimer.restart()
+                    root.findJump()
+                } else if (e.key === Qt.Key_Escape) {
+                    root.clearSearch()
+                } else if (e.key === Qt.Key_Return || e.key === Qt.Key_Enter) {
+                    var fi = remoteList.currentIndex
+                    if (fi >= 0 && fi < root.remoteRows.length) {
+                        var fr = root.remoteRows[fi]
+                        root.clearSearch()
+                        if (fr.isDir) root.enterRemote(fr.name)
+                        else root.pullFile(fr.name)
+                    }
+                } else if (e.text.length > 0 && e.text.charCodeAt(0) > 31) {
+                    root.searchBuf += e.text
+                    root.searchTimer.restart()
+                    root.findJump()
+                }
+                return
+            }
+            if (e.key === Qt.Key_Escape) { root.open = false; e.accepted = true; return }
+            if (e.text === "p" || e.text === "P") { root.pullSelection(); e.accepted = true; return }
+            if (e.key === Qt.Key_S) {
                 var si = remoteList.currentIndex
                 if (si < 0 && root.remoteRows.length > 0) si = 0
                 if (si >= 0 && si < root.remoteRows.length) {
@@ -875,7 +1163,9 @@ FloatingWindow {
                     if (si + 1 < root.remoteRows.length) remoteList.currentIndex = si + 1
                 }
                 e.accepted = true
-            } else if (e.key === Qt.Key_Y) {
+                return
+            }
+            if (e.key === Qt.Key_Y) {
                 var yi = remoteList.currentIndex
                 if (yi < 0 && root.remoteRows.length > 0) yi = 0
                 if (yi >= 0 && yi < root.remoteRows.length && !root.remoteRows[yi].isDir) {
@@ -883,29 +1173,49 @@ FloatingWindow {
                     root.pullFile(root.remoteRows[yi].name)
                 }
                 e.accepted = true
-            } else if (e.key === Qt.Key_C) {
-                root.sendClipboard()
+                return
+            }
+            if (e.key === Qt.Key_C) { root.sendClipboard(); e.accepted = true; return }
+            if (e.key === Qt.Key_J) {
+                var nj = root.remoteRows.length
+                if (nj > 0) remoteList.currentIndex = (remoteList.currentIndex + 1) % nj
                 e.accepted = true
-            } else if (e.key === Qt.Key_J) {
-                if (root.remoteRows.length > 0) remoteList.currentIndex = (remoteList.currentIndex + 1) % root.remoteRows.length
+                return
+            }
+            if (e.key === Qt.Key_K) {
+                var nk = root.remoteRows.length
+                if (nk > 0) remoteList.currentIndex = remoteList.currentIndex < 0 ? nk - 1 : (remoteList.currentIndex - 1 + nk) % nk
                 e.accepted = true
-            } else if (e.key === Qt.Key_K) {
-                if (root.remoteRows.length > 0) remoteList.currentIndex = (remoteList.currentIndex - 1 + root.remoteRows.length) % root.remoteRows.length
-                e.accepted = true
-            } else if (e.key === Qt.Key_L) {
+                return
+            }
+            if (e.key === Qt.Key_L) {
                 var li = remoteList.currentIndex
                 if (li >= 0 && li < root.remoteRows.length) {
                     if (root.remoteRows[li].isDir) root.enterRemote(root.remoteRows[li].name)
                     else root.pullFile(root.remoteRows[li].name)
                 }
                 e.accepted = true
-            } else if (e.key === Qt.Key_H) {
-                root.enterRemote("..")
+                return
+            }
+            if (e.key === Qt.Key_H) { root.enterRemote(".."); e.accepted = true; return }
+            if (e.key === Qt.Key_Home || e.text === "g") {
+                if (root.remoteRows.length > 0) remoteList.currentIndex = 0
                 e.accepted = true
-            } else if (e.key === Qt.Key_Return || e.key === Qt.Key_Enter) {
-                var r = remoteList.currentIndex
-                if (r >= 0 && r < root.remoteRows.length && root.remoteRows[r].isDir) root.enterRemote(root.remoteRows[r].name)
+                return
+            }
+            if (e.key === Qt.Key_End || e.text === "G") {
+                if (root.remoteRows.length > 0) remoteList.currentIndex = root.remoteRows.length - 1
                 e.accepted = true
+                return
+            }
+            if (e.key === Qt.Key_Return || e.key === Qt.Key_Enter) {
+                var ri = remoteList.currentIndex
+                if (ri >= 0 && ri < root.remoteRows.length) {
+                    if (root.remoteRows[ri].isDir) root.enterRemote(root.remoteRows[ri].name)
+                    else root.pullFile(root.remoteRows[ri].name)
+                }
+                e.accepted = true
+                return
             }
         }
         focus: root.open

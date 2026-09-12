@@ -17,7 +17,7 @@ import sqlite3
 import subprocess
 import sys
 import time
-from datetime import date
+from datetime import date, timedelta
 
 HOME = os.path.expanduser("~")
 DATA = os.path.join(HOME, ".local/share/watchcat")
@@ -135,7 +135,7 @@ def main():
     while True:
         day = date.today().isoformat()
         if day != today:
-            prune(c, day)
+            prune(c, (date.today() - timedelta(days=6)).isoformat())
             today = day
             today_total = 0.0
 

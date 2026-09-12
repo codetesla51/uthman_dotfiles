@@ -17,6 +17,7 @@ ShellRoot {
     PdfViewer { colors: barPalette }
     PassPrompt { colors: barPalette }
     Wallshelf { colors: barPalette }
+    WorkspaceViewer { colors: barPalette }
 
     Colors { id: barPalette }
 }

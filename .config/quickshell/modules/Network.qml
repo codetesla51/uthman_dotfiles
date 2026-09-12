@@ -22,7 +22,9 @@ Item {
     readonly property string essid: wifiNet ? (wifiNet.name ?? "").trim() : ""
     readonly property bool disconnected: !ethUp && essid === ""
 
-    implicitWidth: label.implicitWidth + 32
+    // cap pill width — long SSIDs elide instead of stretching the bar
+    readonly property int maxLabelW: 160
+    implicitWidth: Math.min(label.implicitWidth + 32, root.maxLabelW + 32)
     implicitHeight: 30
 
     Rectangle {
@@ -40,6 +42,9 @@ Item {
         Text {
             id: label
             anchors.centerIn: parent
+            width: Math.min(implicitWidth, root.maxLabelW)
+            elide: Text.ElideRight
+            horizontalAlignment: Text.AlignHCenter
             text: root.ethUp ? "󰈀 Ethernet"
                 : root.essid !== "" ? "󰖩 " + root.essid
                 : "󰖪 Off"

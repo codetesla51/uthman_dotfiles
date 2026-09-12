@@ -775,43 +775,92 @@ FloatingWindow {
             anchors.margins: 14
             spacing: 8
 
-            // status line
-            Text {
-                visible: root.statusMsg !== ""
+            // device card — phone identity + battery + actions (bento)
+            Rectangle {
                 Layout.fillWidth: true
-                horizontalAlignment: Text.AlignHCenter
-                text: root.statusMsg
-                color: colors.secondary
-                font.family: colors.fontSans
-                font.pixelSize: 9
-                elide: Text.ElideRight
-            }
-
-            // device strip — battery + shot + ring, only when a phone is reachable
-            RowLayout {
-                visible: root.connected
-                Layout.fillWidth: true
-                spacing: 6
-                Text {
-                    text: "󰪜 " + root.deviceName
-                    color: colors.primary
-                    font.family: colors.fontSans
-                    font.pixelSize: 10
-                    font.weight: Font.Bold
-                    elide: Text.ElideRight
-                    Layout.fillWidth: true
+                Layout.preferredHeight: 56
+                radius: 12
+                color: colors.alpha(colors.surfaceVariant, root.connected ? 0.30 : 0.16)
+                border.width: 1
+                border.color: colors.alpha(colors.outline, root.connected ? 0.14 : 0.10)
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: 10
+                    anchors.rightMargin: 8
+                    anchors.topMargin: 8
+                    anchors.bottomMargin: 8
+                    spacing: 8
+                    Rectangle {
+                        width: 40
+                        height: 40
+                        radius: 20
+                        color: colors.alpha(root.connected ? colors.primary : colors.outline, root.connected ? 0.15 : 0.08)
+                        border.width: 1
+                        border.color: colors.alpha(root.connected ? colors.primary : colors.outline, root.connected ? 0.30 : 0.14)
+                        Text {
+                            anchors.centerIn: parent
+                            text: "󰪜"
+                            color: root.connected ? colors.primary : colors.alpha(colors.outline, 0.6)
+                            font.family: colors.fontSans
+                            font.pixelSize: 18
+                        }
+                    }
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 1
+                        Text {
+                            text: root.connected ? root.deviceName : "No phone paired"
+                            color: root.connected ? colors.foreground : colors.alpha(colors.outline, 0.8)
+                            font.family: colors.fontSans
+                            font.pixelSize: 11
+                            font.weight: Font.Bold
+                            elide: Text.ElideRight
+                            Layout.fillWidth: true
+                        }
+                        Text {
+                            text: root.connected ? ("adb · " + root.deviceId) : "USB cable once: adb tcpip 5555"
+                            color: colors.alpha(colors.outline, 0.55)
+                            font.family: colors.fontSans
+                            font.pixelSize: 8
+                            elide: Text.ElideRight
+                            Layout.fillWidth: true
+                        }
+                    }
+                    // battery pill
+                    Rectangle {
+                        visible: root.connected && root.battery >= 0
+                        Layout.preferredWidth: 46
+                        Layout.fillHeight: true
+                        radius: 9
+                        color: root.battery < 15 ? colors.alpha(colors.error, 0.15) : colors.alpha(colors.tertiary, 0.12)
+                        border.width: 1
+                        border.color: root.battery < 15 ? colors.alpha(colors.error, 0.3) : colors.alpha(colors.tertiary, 0.25)
+                        Text {
+                            anchors.centerIn: parent
+                            text: root.battery + "%"
+                            color: root.battery < 15 ? colors.error : colors.tertiary
+                            font.family: colors.fontSans
+                            font.pixelSize: 10
+                            font.weight: Font.ExtraBold
+                        }
+                    }
+                    Rectangle {
+                        visible: root.connected && root.battery < 0
+                        Layout.preferredWidth: 46
+                        Layout.fillHeight: true
+                        radius: 9
+                        color: colors.alpha(colors.outline, 0.08)
+                        Text {
+                            anchors.centerIn: parent
+                            text: "…"
+                            color: colors.alpha(colors.outline, 0.6)
+                            font.family: colors.fontSans
+                            font.pixelSize: 10
+                        }
+                    }
+                    GlyphChip { visible: root.connected; glyph: "󰉏"; px: 30; accent: colors.primary; Layout.alignment: Qt.AlignVCenter; tapped: () => root.shotPhone() }
+                    GlyphChip { visible: root.connected; glyph: "󰳨"; px: 30; accent: colors.tertiary; Layout.alignment: Qt.AlignVCenter; tapped: () => root.ringPhone() }
                 }
-                Text {
-                    visible: root.battery >= 0
-                    text: root.battery + "%"
-                    color: root.battery < 15 ? colors.error : colors.secondary
-                    font.family: colors.fontSans
-                    font.pixelSize: 10
-                    font.weight: Font.ExtraBold
-                    Layout.alignment: Qt.AlignVCenter
-                }
-                GlyphChip { glyph: "󰉏"; px: 22; accent: colors.primary; Layout.alignment: Qt.AlignVCenter; tapped: () => root.shotPhone() }
-                GlyphChip { glyph: "󰳨"; px: 22; accent: colors.tertiary; Layout.alignment: Qt.AlignVCenter; tapped: () => root.ringPhone() }
             }
 
             // ---- SEND: drop zone tile ----
@@ -823,7 +872,7 @@ FloatingWindow {
             Rectangle {
                 id: dropTile
                 Layout.fillWidth: true
-                Layout.preferredHeight: 120
+                Layout.preferredHeight: 100
                 radius: 14
                 color: dropArea.containsMouse ? colors.alpha(colors.primary, 0.12) : colors.alpha(colors.surfaceVariant, 0.25)
                 border.width: 1
@@ -835,15 +884,24 @@ FloatingWindow {
 
                 RowLayout {
                     anchors.centerIn: parent
-                    spacing: 10
-                    Text {
-                        text: "󰈔"
-                        color: dropArea.containsMouse ? colors.primary : colors.alpha(colors.primary, 0.75)
-                        font.family: colors.fontSans
-                        font.pixelSize: 30
-                        scale: dropArea.containsMouse ? 1.12 : 1
-                        Behavior on scale { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
-                        Behavior on color { ColorAnimation { duration: 180 } }
+                    spacing: 12
+                    Rectangle {
+                        width: 44
+                        height: 44
+                        radius: 22
+                        color: colors.alpha(colors.primary, dropArea.containsMouse ? 0.22 : 0.12)
+                        border.width: 1
+                        border.color: colors.alpha(colors.primary, dropArea.containsMouse ? 0.5 : 0.22)
+                        Text {
+                            anchors.centerIn: parent
+                            text: "󰈔"
+                            color: dropArea.containsMouse ? colors.primary : colors.alpha(colors.primary, 0.8)
+                            font.family: colors.fontSans
+                            font.pixelSize: 22
+                            scale: dropArea.containsMouse ? 1.1 : 1
+                            Behavior on scale { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
+                            Behavior on color { ColorAnimation { duration: 180 } }
+                        }
                     }
                     ColumnLayout {
                         spacing: 2
@@ -896,7 +954,7 @@ FloatingWindow {
                 ListView {
                     id: queueList
                     Layout.fillWidth: true
-                    Layout.preferredHeight: Math.min(3 * 36, count * 36)
+                    Layout.preferredHeight: Math.min(2 * 36, count * 36)
                     clip: true
                     spacing: 4
                     model: root.queue
@@ -944,7 +1002,7 @@ FloatingWindow {
                             }
                             Text {
                                 visible: modelData.done || modelData.error !== ""
-                                text: ""
+                                text: "×"
                                 color: xMa.containsMouse ? colors.error : colors.alpha(colors.outline, 0.55)
                                 font.family: colors.fontSans
                                 font.pixelSize: 10
@@ -1003,8 +1061,9 @@ FloatingWindow {
             Rectangle {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 280
-                radius: 12
-                color: colors.alpha(colors.surface, 0.4)
+                Layout.minimumHeight: 120
+                radius: 14
+                color: colors.alpha(colors.surface, 0.35)
                 border.width: 1
                 border.color: colors.alpha(colors.outline, 0.12)
                 clip: true
@@ -1121,6 +1180,27 @@ FloatingWindow {
                     horizontalAlignment: Text.AlignHCenter
                     elide: Text.ElideRight
                     Layout.fillWidth: true
+                }
+            }
+
+            // status pill — transient messages, bottom-anchored
+            Rectangle {
+                visible: root.statusMsg !== ""
+                Layout.fillWidth: true
+                Layout.preferredHeight: 22
+                radius: 11
+                color: colors.alpha(colors.secondary, 0.12)
+                border.width: 1
+                border.color: colors.alpha(colors.secondary, 0.2)
+                Text {
+                    anchors.centerIn: parent
+                    text: root.statusMsg
+                    color: colors.secondary
+                    font.family: colors.fontSans
+                    font.pixelSize: 8
+                    elide: Text.ElideRight
+                    Layout.fillWidth: true
+                    horizontalAlignment: Text.AlignHCenter
                 }
             }
 

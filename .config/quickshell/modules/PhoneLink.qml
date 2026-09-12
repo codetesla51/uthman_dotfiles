@@ -264,7 +264,9 @@ FloatingWindow {
                     var m = lines[i].match(/^(\S+)\s+device\b/)
                     if (m) {
                         var mod = lines[i].match(/\bmodel:(\S+)/)
-                        found.push({ id: m[1], name: mod ? mod[1].replace(/_/g, " ") : "Phone" })
+                        var nm = mod ? mod[1].replace(/_/g, " ") : "Phone"
+                        if (nm.toLowerCase().indexOf("itel") === 0) nm = "Uthman"  // user prefers not seeing the brand
+                        found.push({ id: m[1], name: nm })
                         continue
                     }
                     if (!root.connected && lines[i].match(/^(\S+)\s+unauthorized/)) {
@@ -843,16 +845,10 @@ FloatingWindow {
             anchors.margins: 14
             spacing: 8
 
-            // device row — compact: name, battery, ring (no shot chip)
+            // device row — compact: name, battery, ring (no leading glyph, no shot chip)
             RowLayout {
                 Layout.fillWidth: true
                 spacing: 8
-                Text {
-                    text: "󰪜"
-                    color: root.connected ? colors.primary : colors.alpha(colors.outline, 0.6)
-                    font.family: colors.fontSans
-                    font.pixelSize: 11
-                }
                 Text {
                     text: root.connected ? root.deviceName : "No phone paired"
                     color: root.connected ? colors.foreground : colors.alpha(colors.outline, 0.8)
@@ -877,7 +873,7 @@ FloatingWindow {
                     font.family: colors.fontSans
                     font.pixelSize: 8
                 }
-                GlyphChip { visible: root.connected; glyph: "󰳨"; px: 20; accent: colors.tertiary; Layout.alignment: Qt.AlignVCenter; tapped: () => root.ringPhone() }
+                GlyphChip { visible: root.connected; glyph: "󰂚"; px: 20; accent: colors.tertiary; Layout.alignment: Qt.AlignVCenter; tapped: () => root.ringPhone() }
             }
 
             // ---- SEND: drop zone tile ----

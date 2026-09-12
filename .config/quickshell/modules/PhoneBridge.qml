@@ -5,11 +5,11 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
 
-// PhoneLink — wireless file sender over ADB. Thin client over the standalone
-// ~/phonelink backend (daemon CLI: devices, battery, clip, push, pull, ls,
+// PhoneBridge — wireless file sender over ADB. Thin client over the standalone
+// ~/phonebridge backend (daemon CLI: devices, battery, clip, push, pull, ls,
 // shot, ring, inbox-sync, notifs). No app on the phone, no cable after the
 // one-time `tcpip` bootstrap: drop files and they land in Download, browse
-// the phone and pull anything back. Toggle: ipc call phonelink (SUPER ALT K).
+// the phone and pull anything back. Toggle: ipc call phonebridge (SUPER ALT K).
 FloatingWindow {
     id: root
 
@@ -32,8 +32,9 @@ FloatingWindow {
     }
     property var colors: fallback
     property bool open: false
-    // standalone backend (~/phonelink repo): all adb orchestration lives there
-    property string daemon: Quickshell.env("HOME") + "/phonelink/phonelink"
+    // standalone backend (~/phonebridge repo): all adb orchestration lives there
+    property string daemon: Quickshell.env("HOME") + "/phonebridge/phonebridge"
+    property string pcDest: Quickshell.env("HOME") + "/PhoneBridge"
 
     // --- device state ---
     property string deviceId: ""        // "192.168.58.159:5555"
@@ -66,13 +67,13 @@ FloatingWindow {
     property string searchBuf: ""
 
     // --- notify forward allowlist lives in the daemon config ---
-    // (~/.config/phonelink/config.ini [notify]); the daemon filters + extracts
+    // (~/.config/phonebridge/config.ini [notify]); the daemon filters + extracts
     // senders, this client only pings.
     property var seenKeys: []        // notification keys already pinged
     property bool primed: false      // first scan after connect absorbs, no pings
     property int pollStart: 0        // ms epoch when the current dump started (stale-poll watchdog)
 
-    title: "PhoneLink"
+    title: "PhoneBridge"
     width: 400
     height: 520
     minimumSize: Qt.size(360, 480)
@@ -80,7 +81,7 @@ FloatingWindow {
     color: "transparent"
     visible: root.open
 
-    IpcHandler { target: "phonelink"; function toggle(): void { root.open = !root.open } }
+    IpcHandler { target: "phonebridge"; function toggle(): void { root.open = !root.open } }
 
     // connect at bar startup so inbox/notif watchers run with the panel closed
     Component.onCompleted: root.refreshDevices()
@@ -157,7 +158,7 @@ FloatingWindow {
         ringProc.running = true
     }
 
-    // phone screenshot -> ~/Pictures/PhoneLink (daemon names the file)
+    // phone screenshot -> ~/Pictures/PhoneBridge (daemon names the file)
     function shotPhone() {
         if (!root.connected) {
             root.say("No phone connected — same WiFi as the laptop?")
@@ -169,8 +170,8 @@ FloatingWindow {
     }
 
     // ================= discovery =================
-    // The daemon owns pairing state (~/.config/phonelink/config.ini, written
-    // by ~/phonelink/init.sh). If nothing is attached we ask it to connect
+    // The daemon owns pairing state (~/.config/phonebridge/config.ini, written
+    // by ~/phonebridge/init.sh). If nothing is attached we ask it to connect
     // to the remembered target; first-time Wi-Fi needs `adb tcpip 5555` once.
     function connectTo(addr) {
         connectProc.command = addr ? [root.daemon, "connect", addr] : [root.daemon, "connect"]
@@ -220,7 +221,7 @@ FloatingWindow {
         onExited: {
             if (root.busy) {
                 root.busy = false
-                if (!root.connected) root.say("No phone pair — run ~/phonelink/init.sh (cable once for tcpip 5555)")
+                if (!root.connected) root.say("No phone pair — run ~/phonebridge/init.sh (cable once for tcpip 5555)")
             }
         }
     }
@@ -457,7 +458,7 @@ FloatingWindow {
         onExited: function (code) {
             if (code === 0) {
                 root.notify("Phone shot", root.shotName)
-                root.say("Shot saved to Pictures/PhoneLink")
+                root.say("Shot saved to Pictures/PhoneBridge")
             } else {
                 root.say("Shot failed — screen on and unlocked?")
             }
@@ -494,7 +495,7 @@ FloatingWindow {
             "else wl-paste -t text/plain --no-newline > " + root.sq(root.clipFile) + " 2>/dev/null && echo CLIP_HAS_TEXT || echo CLIP_EMPTY; fi"]
         clipReadProc.running = true
     }
-    property string clipFile: Quickshell.env("HOME") + "/.cache/phonelink-clipboard.txt"
+    property string clipFile: Quickshell.env("HOME") + "/.cache/phonebridge-clipboard.txt"
     Process {
         id: clipReadProc
         stdout: StdioCollector {
@@ -576,7 +577,7 @@ FloatingWindow {
         if (!isDir)
             sizeRemoteProc.command = ["adb", "-s", root.deviceId, "shell", "stat", "-c", "%s", root.sq(root.remoteDir + "/" + name)]
         sizeRemoteProc.running = !isDir
-        pullProc.command = [root.daemon, "pull", name, "--dir", root.remoteDir]
+        pullProc.command = [root.daemon, "pull", name, "--dir", root.remoteDir, "--dest", root.pcDest]
         pullProc.running = true
         pullProgress.restart()
     }
@@ -627,7 +628,7 @@ FloatingWindow {
         repeat: true
         onTriggered: {
             if (root.pullState === "") { pullProgress.stop(); return }
-            sizeLocalProc.command = ["stat", "-c", "%s", Quickshell.env("HOME") + "/Downloads/" + root.pullState]
+            sizeLocalProc.command = ["stat", "-c", "%s", root.pcDest + "/" + root.pullState]
             sizeLocalProc.running = true
         }
     }
@@ -653,10 +654,10 @@ FloatingWindow {
             root.pullGot = 0
             if (code === 0) {
                 root.notify("Pulled from " + root.deviceName, name)
-                root.say("Pulled " + name + " to Downloads")
+                root.say("Pulled " + name + " to PhoneBridge")
                 if (root.yankAfterPull) {
                     root.yankAfterPull = false
-                    var f = Quickshell.env("HOME") + "/Downloads/" + name
+                    var f = root.pcDest + "/" + name
                     var q = "'" + f.replace(/'/g, "'\\''") + "'"
                     yankProc.command = ["sh", "-c", "if grep -Iq . " + q + "; then wl-copy < " + q + " && echo YANK_OK || echo YANK_FAIL; else echo NOTEXT; fi"]
                     yankProc.running = true

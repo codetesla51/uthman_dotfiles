@@ -1,33 +1,33 @@
-# PhoneLink — adb phone bridge
+# PhoneBridge — adb phone bridge
 
-`PhoneLink.qml` is a standalone `FloatingWindow` popup and a thin client over
-the `~/phonelink` backend (single-file Python CLI — all adb orchestration
+`PhoneBridge.qml` is a standalone `FloatingWindow` popup and a thin client over
+the `~/phonebridge` backend (single-file Python CLI — all adb orchestration
 lives there, so other UIs can build on the same commands). Toggle it with:
 
 ```bash
-quickshell -p ~/.config/quickshell ipc call phonelink toggle
+quickshell -p ~/.config/quickshell ipc call phonebridge toggle
 ```
 
-No background service of its own: the module shells out to `~/phonelink/phonelink`
-one-shot subcommands and polls on timers. Pairing/config: `~/phonelink/init.sh`.
+No background service of its own: the module shells out to `~/phonebridge/phonebridge`
+one-shot subcommands and polls on timers. Pairing/config: `~/phonebridge/init.sh`.
 
 ## What it does
 
 - **Pair / connect** — remembers the last device from
-  `~/.config/phonelink/config.ini ([phone] target)`. First-time pairing over USB:
+  `~/.config/phonebridge/config.ini ([phone] target)`. First-time pairing over USB:
   `adb tcpip 5555`, then reconnect over wifi. No gateway/hotspot guessing:
   the phone is a device on the LAN, not the router.
 - **Send to phone** — drag files onto the drop tile; they are pushed via
   `adb push` (paths are shell-quoted). `c` sends the PC clipboard text via
-  the bundled **PhoneRelay** flash app (`~/phonelink/android-app/`,
+  the bundled **PhoneBridge** flash app (`~/phonebridge/android-app/,
   `./init.sh` (builds + installs the APK, writes the config, smoke-tests)). The relay writes the clipboard while its invisible window flashes.
   Caveat: this ROM's clipboard watcher reaps clips the relay sets within
   ~seconds when idle — paste immediately, or use the share sheet for
   anything that isn't paste-now. The old adb-clip jar silently no-oped.
 - **Phone → PC** — share from any phone app (WhatsApp, gallery, files): the
-  share sheet lists *PhoneRelay*, which stores the item in
-  `/sdcard/PhoneLink/` (a top-level folder, not buried in Download), and an auto-delivery loop pulls every new
-  file into `~/Downloads/` by itself (files already in Downloads with the
+  share sheet lists *PhoneBridge*, which stores the item in
+  `/sdcard/PhoneBridge/` (a top-level folder, not buried in Download), and an auto-delivery loop pulls every new
+  file into `~/PhoneBridge/` by itself (files already in PhoneBridge with the
   same size are skipped; >250 MB stay in the browser). No clipboard read
   exists: foreground flash reads always return empty on this ROM even
   with the READ_CLIPBOARD appop granted (verified with paste-proof controls).
@@ -45,8 +45,7 @@ one-shot subcommands and polls on timers. Pairing/config: `~/phonelink/init.sh`.
 - **Notify forwarder** — every 4 s while a phone is paired it polls the
   notification shade and when a *new* notification appears from an
   allowlisted app it pings the desktop with `notify-send` (title + group-chat author, shown
-  by quickshell's own NotificationCenter. The allowlist (`notifyApps` in
-  PhoneLink.qml — package substring to app label) ships with WhatsApp,
+  by quickshell's own NotificationCenter. The allowlist (`[notify]` in `~/.config/phonebridge/config.ini` — package substring to app label) ships with WhatsApp,
   Telegram and SMS/messages entries and is trivial to extend. Works with
   phone DND on or off — DND silences the phone, it does not remove entries
   from the shade. The first scan after connecting absorbs whatever is
@@ -66,7 +65,7 @@ hung past 10 s so a flaky-wifi hiccup cannot wedge the loop.
 |-----|--------|
 | `j` / `k` | move down / up (k from no selection goes to the last row) |
 | `l` / `Enter` | open folder, or pull a file |
-| `p` | pull selected to ~/Downloads |
+| `p` | pull selected to ~/PhoneBridge |
 | `s` | toggle select (multi-select pull is incremental) |
 | `y` | copy path to clipboard |
 | `c` | send desktop clipboard to phone |

@@ -37,7 +37,7 @@ PanelWindow {
     FastFetchWindow { id: fastFetch; colors: palette }
     ClockWindow { id: clockWin; colors: palette }
     ScreenTime { id: screenTime; colors: palette }
-    PhoneLink { id: phoneLink; colors: palette }
+    PhoneBridge { id: phoneLink; colors: palette }
     PluginMenu { id: pluginMenu; colors: palette }
     KeybindsPanel { id: keybindsPanel; colors: palette }
     DriveHealth { id: driveHealth; colors: palette }

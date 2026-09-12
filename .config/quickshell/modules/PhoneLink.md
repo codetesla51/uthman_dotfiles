@@ -19,8 +19,9 @@ objects that run `adb` on demand, and polls phone state on timers.
 - **Send to phone** — drag files onto the drop tile; they are pushed via
   `adb push` (paths are shell-quoted). `c` sends the clipboard
   (via the adb-clip java helper).
-- **Screenshot** — camera chip on the device strip saves
-  `~/Pictures/PhoneLink/phonelink-<timestamp>.png` via `exec-out screencap`.
+- **Screenshot** — `screencap` support exists (`shotPhone()`) but has no
+  UI button since the snapshot chip was removed; re-add a chip or a `k`-key
+  binding if wanted.
 - **Ring my phone** — vibrating chip on the device strip: wakes the screen,
   maxes media volume, fires the ringtone-open intent and three hard vibration
   bursts. Volume + vibration are the proven carriers on this device (`media`

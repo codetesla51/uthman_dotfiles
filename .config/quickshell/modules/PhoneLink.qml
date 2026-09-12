@@ -775,92 +775,41 @@ FloatingWindow {
             anchors.margins: 14
             spacing: 8
 
-            // device card — phone identity + battery + actions (bento)
-            Rectangle {
+            // device row — compact: name, battery, ring (no shot chip)
+            RowLayout {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 56
-                radius: 12
-                color: colors.alpha(colors.surfaceVariant, root.connected ? 0.30 : 0.16)
-                border.width: 1
-                border.color: colors.alpha(colors.outline, root.connected ? 0.14 : 0.10)
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.leftMargin: 10
-                    anchors.rightMargin: 8
-                    anchors.topMargin: 8
-                    anchors.bottomMargin: 8
-                    spacing: 8
-                    Rectangle {
-                        width: 40
-                        height: 40
-                        radius: 20
-                        color: colors.alpha(root.connected ? colors.primary : colors.outline, root.connected ? 0.15 : 0.08)
-                        border.width: 1
-                        border.color: colors.alpha(root.connected ? colors.primary : colors.outline, root.connected ? 0.30 : 0.14)
-                        Text {
-                            anchors.centerIn: parent
-                            text: "󰪜"
-                            color: root.connected ? colors.primary : colors.alpha(colors.outline, 0.6)
-                            font.family: colors.fontSans
-                            font.pixelSize: 18
-                        }
-                    }
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: 1
-                        Text {
-                            text: root.connected ? root.deviceName : "No phone paired"
-                            color: root.connected ? colors.foreground : colors.alpha(colors.outline, 0.8)
-                            font.family: colors.fontSans
-                            font.pixelSize: 11
-                            font.weight: Font.Bold
-                            elide: Text.ElideRight
-                            Layout.fillWidth: true
-                        }
-                        Text {
-                            text: root.connected ? ("adb · " + root.deviceId) : "USB cable once: adb tcpip 5555"
-                            color: colors.alpha(colors.outline, 0.55)
-                            font.family: colors.fontSans
-                            font.pixelSize: 8
-                            elide: Text.ElideRight
-                            Layout.fillWidth: true
-                        }
-                    }
-                    // battery pill
-                    Rectangle {
-                        visible: root.connected && root.battery >= 0
-                        Layout.preferredWidth: 46
-                        Layout.fillHeight: true
-                        radius: 9
-                        color: root.battery < 15 ? colors.alpha(colors.error, 0.15) : colors.alpha(colors.tertiary, 0.12)
-                        border.width: 1
-                        border.color: root.battery < 15 ? colors.alpha(colors.error, 0.3) : colors.alpha(colors.tertiary, 0.25)
-                        Text {
-                            anchors.centerIn: parent
-                            text: root.battery + "%"
-                            color: root.battery < 15 ? colors.error : colors.tertiary
-                            font.family: colors.fontSans
-                            font.pixelSize: 10
-                            font.weight: Font.ExtraBold
-                        }
-                    }
-                    Rectangle {
-                        visible: root.connected && root.battery < 0
-                        Layout.preferredWidth: 46
-                        Layout.fillHeight: true
-                        radius: 9
-                        color: colors.alpha(colors.outline, 0.08)
-                        Text {
-                            anchors.centerIn: parent
-                            text: "…"
-                            color: colors.alpha(colors.outline, 0.6)
-                            font.family: colors.fontSans
-                            font.pixelSize: 10
-                        }
-                    }
-                    GlyphChip { visible: root.connected; glyph: "󰉏"; px: 30; accent: colors.primary; Layout.alignment: Qt.AlignVCenter; tapped: () => root.shotPhone() }
-                    GlyphChip { visible: root.connected; glyph: "󰳨"; px: 30; accent: colors.tertiary; Layout.alignment: Qt.AlignVCenter; tapped: () => root.ringPhone() }
+                spacing: 8
+                Text {
+                    text: "󰪜"
+                    color: root.connected ? colors.primary : colors.alpha(colors.outline, 0.6)
+                    font.family: colors.fontSans
+                    font.pixelSize: 11
                 }
+                Text {
+                    text: root.connected ? root.deviceName : "No phone paired"
+                    color: root.connected ? colors.foreground : colors.alpha(colors.outline, 0.8)
+                    font.family: colors.fontSans
+                    font.pixelSize: 10
+                    font.weight: Font.Bold
+                    elide: Text.ElideRight
+                    Layout.fillWidth: true
+                }
+                Text {
+                    visible: root.connected
+                    text: root.battery >= 0 ? (root.battery + "%") : "…"
+                    color: root.battery < 15 ? colors.error : colors.tertiary
+                    font.family: colors.fontSans
+                    font.pixelSize: 9
+                    font.weight: Font.ExtraBold
+                }
+                Text {
+                    visible: !root.connected
+                    text: "adb tcpip 5555 once"
+                    color: colors.alpha(colors.outline, 0.45)
+                    font.family: colors.fontSans
+                    font.pixelSize: 8
+                }
+                GlyphChip { visible: root.connected; glyph: "󰳨"; px: 20; accent: colors.tertiary; Layout.alignment: Qt.AlignVCenter; tapped: () => root.ringPhone() }
             }
 
             // ---- SEND: drop zone tile ----

@@ -15,3 +15,8 @@ memory.md
 # wallpapers live here but never get committed — no more pushing them
 wallpapers/
 __pycache__/
+plan.md
+# android relay build artifacts (keystore + apks rebuildable via build.sh)
+.config/quickshell/android-app/out/
+.config/quickshell/android-app/keystore.jks
+.config/quickshell/android-app/classes/

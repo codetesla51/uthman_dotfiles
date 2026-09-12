@@ -355,6 +355,42 @@ FloatingWindow {
         }
     }
 
+    // ── inbox auto-delivery: when the phone share-sheet writes new files into
+    // Download/PhoneLinkInbox, pull them to ~/Downloads automatically.
+    Process {
+        id: inboxListProc
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: root.scanInbox(text)
+        }
+    }
+    Process {
+        id: inboxPullProc
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: root.finishInboxPull(text)
+        }
+    }
+
+    Timer {
+        id: inboxTimer
+        interval: 5000
+        running: root.connected
+        repeat: true
+        onTriggered: {
+            // don't fight a manual browser pull
+            if (root.inboxBusy || root.pullState !== "" || root.pullQueue.length > 0) return
+            inboxListProc.command = ["sh", "-c",
+                "adb -s " + root.sq(root.deviceId) + " shell 'for f in /sdcard/Download/PhoneLinkInbox/*; do [ -f \"$f\" ] || continue; n=${f##*/}; printf \"%s\\t%s\\n\" \"$(stat -c %s \"$f\")\" \"$n\"; done' | " +
+                "while IFS=$'\\t' read -r s n; do " +
+                "[ -n \"$n\" ] || continue; " +
+                "pc=\"$HOME/Downloads/$n\"; " +
+                "[ -f \"$pc\" ] && [ \"$(stat -c %s \"$pc\")\" = \"$s\" ] && continue; " +
+                "printf \"%s\\t%s\\n\" \"$s\" \"$n\"; done"]
+            inboxListProc.running = true
+        }
+    }
+
     // one-shot runner for the ring sequence
     Process { id: ringProc }
 
@@ -563,9 +599,39 @@ FloatingWindow {
             "esac"]
         clipSetProc.running = true
     }
-    function clearFinished() {
-        root.queue = root.queue.filter(function (r) { return !r.done && r.error === "" })
+    // ── inbox auto-delivery state + handlers ───────────────────────────────
+    property string inboxBusy: ""     // file currently being pulled
+
+    function scanInbox(out) {
+        // input lines: "<size>\t<name>"; names may contain spaces
+        var lines = String(out).split("\n")
+        var t, size, name
+        for (var i = 0; i < lines.length; i++) {
+            t = lines[i].split("\t")
+            if (t.length < 2 || t[1] === "") continue
+            size = parseInt(t[0], 10)
+            name = t[1].trim()
+            if (name === root.inboxBusy || isNaN(size)) continue
+            if (size > 250 * 1024 * 1024) {
+                root.say("Inbox " + name + " too big (" + (size / 1048576).toFixed(0) + " MB) — pull via browser")
+                continue
+            }
+            root.inboxBusy = name
+            root.say("Phone → PC: " + name)
+            inboxPullProc.command = ["adb", "-s", root.deviceId, "pull",
+                "/sdcard/Download/PhoneLinkInbox/" + name, Quickshell.env("HOME") + "/Downloads/"]
+            inboxPullProc.running = true
+            return  // one at a time; next tick picks up the rest
+        }
     }
+
+    function finishInboxPull(out) {
+        var name = root.inboxBusy
+        root.inboxBusy = ""
+        if (name !== "" && String(out).indexOf("1 file pulled") === -1)
+            root.say("Inbox pull failed — " + name)
+    }
+
     function removeRow(i) {
         var q = root.queue.slice()
         if (i >= 0 && i < q.length) q.splice(i, 1)

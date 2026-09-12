@@ -75,9 +75,9 @@ FloatingWindow {
 
     title: "PhoneBridge"
     width: 400
-    height: 520
-    minimumSize: Qt.size(360, 480)
-    maximumSize: Qt.size(460, 620)
+    height: 460
+    minimumSize: Qt.size(360, 400)
+    maximumSize: Qt.size(460, 520)
     color: "transparent"
     visible: root.open
 

@@ -558,8 +558,8 @@ FloatingWindow {
             "P=com.uthman.phonelink; R=/sdcard/Android/data/$P/files; " +
             "{ adb -s \"$D\" push \"$F\" \"$R/in.txt\" >/dev/null 2>&1 && " +
             "adb -s \"$D\" shell \"am start -n $P/.PhoneRelayActivity --es mode write --es textfile $R/in.txt\" >/dev/null 2>&1 && " +
-            "sleep 1.5 && " +
-            "{ adb -s \"$D\" shell cat \"$R/ack.txt\" 2>/dev/null | grep -q OK && echo CLIP_SET_OK; } || echo CLIP_FAIL;; " +
+            "sleep 1.5 && adb -s \"$D\" shell cat \"$R/ack.txt\" 2>/dev/null | grep -q OK; } " +
+            "&& echo CLIP_SET_OK || echo CLIP_FAIL;; " +
             "esac"]
         clipSetProc.running = true
     }

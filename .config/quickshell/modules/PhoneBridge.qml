@@ -490,6 +490,7 @@ FloatingWindow {
             root.say("No phone connected — same WiFi as the laptop?")
             return
         }
+        root.say("Sending clipboard…")
         clipReadProc.command = ["sh", "-c",
             "if wl-paste --list-types 2>/dev/null | grep -q image; then echo CLIP_HAS_IMAGE; " +
             "else wl-paste -t text/plain --no-newline > " + root.sq(root.clipFile) + " 2>/dev/null && echo CLIP_HAS_TEXT || echo CLIP_EMPTY; fi"]
@@ -503,6 +504,7 @@ FloatingWindow {
             onStreamFinished: {
                 var t = text.trim()
                 if (t.indexOf("CLIP_HAS_IMAGE") !== -1) {
+                    root.say("Sending image…")
                     var d = new Date()
                     function p2(n) { return (n < 10 ? "0" : "") + n }
                     var ip = "/tmp/clipboard-" + p2(d.getHours()) + p2(d.getMinutes()) + p2(d.getSeconds()) + ".png"

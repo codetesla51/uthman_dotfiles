@@ -64,9 +64,19 @@ FloatingWindow {
     property bool searching: false
     property string searchBuf: ""
 
-    // --- whatsapp forward ---
-    property var waSeen: []        // notification keys already pinged
-    property bool waPrimed: false  // first scan after connect absorbs, no pings
+    // --- notify forward allowlist ---
+    // package substring -> desktop app label; anything matching gets a toast
+    property var notifyApps: [
+        { pkg: "whatsapp", name: "WhatsApp" },
+        { pkg: "telegram", name: "Telegram" },
+        { pkg: "messages", name: "Messages" },
+        { pkg: "messaging", name: "SMS" },
+        { pkg: "sms", name: "SMS" },
+        { pkg: "mms", name: "SMS" }
+    ]
+    property var seenKeys: []        // notification keys already pinged
+    property bool primed: false      // first scan after connect absorbs, no pings
+    property int pollStart: 0        // ms epoch when the current dump started (stale-poll watchdog)
 
     title: "PhoneLink"
     width: 400
@@ -120,7 +130,12 @@ FloatingWindow {
     // new messages. Works in DND too — DND silences the phone, it does not
     // remove entries from the shade. The desktop ping goes through notify-send
     // to quickshell's own NotificationCenter (owns org.freedesktop.Notifications).
-    function scanWhats(dump) {
+    // ── notify forward: poll the notification shade, ping the desktop on new
+    // entries from allowlisted apps. Works in DND too — DND silences the
+    // phone, it does not remove entries from the shade. The desktop ping goes
+    // through notify-send to quickshell's own NotificationCenter (owns
+    // org.freedesktop.Notifications).
+    function scanNotifs(dump) {
         function flush() { if (cur && cur.key) fresh.push(cur); cur = null }
         var lines = String(dump).split("\n")
         var cur = null
@@ -130,8 +145,11 @@ FloatingWindow {
             var h = line.match(/NotificationRecord\([^:]*: pkg=([^\s]+)/)
             if (h) {
                 flush()
-                if (h[1].indexOf("whatsapp") !== -1)
-                    cur = { key: (line.match(/key=([^:\s]+)/) || [])[1] || null, title: "" }
+                for (var a = 0; a < root.notifyApps.length; a++)
+                    if (h[1].indexOf(root.notifyApps[a].pkg) !== -1) {
+                        cur = { key: (line.match(/key=([^:\s]+)/) || [])[1] || null, title: "", label: root.notifyApps[a].name }
+                        break
+                    }
                 continue
             }
             if (!cur) continue
@@ -139,20 +157,39 @@ FloatingWindow {
             if (!cur.title) { var t = line.match(/android\.title=String \(([^)]*)\)/); if (t) cur.title = t[1] }
         }
         flush()
-        if (!root.waPrimed) {
+        if (!root.primed) {
             // first scan after connect: absorb what is already in the shade,
             // do not re-ping old notifications
-            for (var j = 0; j < fresh.length; j++) root.waSeen.push(fresh[j].key)
-            root.waPrimed = true
+            for (var j = 0; j < fresh.length; j++) root.seenKeys.push(fresh[j].key)
+            root.primed = true
             return
         }
         for (var k = 0; k < fresh.length; k++) {
             var f = fresh[k]
-            if (root.waSeen.indexOf(f.key) !== -1) continue
-            root.waSeen.push(f.key)
-            if (root.waSeen.length > 200) root.waSeen.shift()
-            Quickshell.execDetached(["notify-send", "-a", "WhatsApp", f.title || "New WhatsApp message"])
+            if (root.seenKeys.indexOf(f.key) !== -1) continue
+            root.seenKeys.push(f.key)
+            if (root.seenKeys.length > 200) root.seenKeys.shift()
+            Quickshell.execDetached(["notify-send", "-a", f.label, f.title || "New " + f.label + " notification"])
         }
+    }
+
+    // find-my-phone: wake, max media volume, try the ringtone, buzz hard.
+    // Probed on this device: the `media` tool and /system/media/audio/ringtones
+    // do not exist, no media session to resume, shell notification posts play
+    // no sound — so the vibration burst is the audible carrier; the ringtone
+    // VIEW intent is best-effort (no player handles it on this build).
+    function ringPhone() {
+        if (!root.connected) { root.say("No phone connected — same WiFi as the laptop?"); return }
+        root.say("Ringing phone…")
+        ringProc.command = ["sh", "-c",
+            "a=adb; i=" + root.sq(root.deviceId) + "; " +
+            "$a -s $i shell input keyevent 224; " +                                  // wake
+            "$a -s $i shell cmd media_session volume --stream 3 --set 15; " +        // media volume max
+            "$a -s $i shell am start -a android.intent.action.VIEW -d content://settings/system/ringtone; " +
+            "$a -s $i shell cmd vibrator_manager synced -f oneshot 400 255; sleep 0.35; " +
+            "$a -s $i shell cmd vibrator_manager synced -f oneshot 400 255; sleep 0.35; " +
+            "$a -s $i shell cmd vibrator_manager synced -f oneshot 400 255"]
+        ringProc.running = true
     }
 
     // phone screenshot -> ~/Pictures/PhoneLink
@@ -279,24 +316,39 @@ FloatingWindow {
         }
     }
 
-    // ── WhatsApp watcher: poll the shade every 4s while a phone is paired
+    // ── notify forward watcher: poll the shade every 4s while a phone is paired
     Process {
-        id: waProc
+        id: notifProc
         stdout: StdioCollector {
             waitForEnd: true
-            onStreamFinished: root.scanWhats(text)
+            onStreamFinished: root.scanNotifs(text)
         }
     }
     Timer {
+        id: notifTimer
         interval: 4000
         running: root.connected
         repeat: true
         onTriggered: {
-            if (waProc.running) return
-            waProc.command = ["adb", "-s", root.deviceId, "shell", "dumpsys", "notification", "--noredact"]
-            waProc.running = true
+            var now = Date.now()
+            if (notifProc.running) {
+                // stale poll (hung adb on flaky wifi): kill so the next tick restarts
+                if (now - root.pollStart > 10000) notifProc.kill()
+                return
+            }
+            root.pollStart = now
+            // phone-side filter: the full --noredact dump is ~1 MB; we only
+            // consume record headers + key= + android.title lines, so truncate
+            // the Notification(...) blob and grep to ~19 KB per poll (~5 KB/s)
+            notifProc.command = ["adb", "-s", root.deviceId, "shell",
+                "dumpsys notification --noredact | sed 's/ Notification(.*//' | grep -E 'NotificationRecord\\(|key=|android.title'"]
+            notifProc.running = true
         }
     }
+
+    // one-shot runner for the ring sequence
+    Process { id: ringProc }
+
 
     Timer { interval: 15000; running: root.open; repeat: true; triggeredOnStart: false; onTriggered: { root.refreshDevices(); root.refreshBattery() } }
     onOpenChanged: { if (open) { root.refreshDevices(); root.refreshBattery(); remoteList.focus = true } }
@@ -735,7 +787,7 @@ FloatingWindow {
                 elide: Text.ElideRight
             }
 
-            // device strip — battery + shot, only when a phone is reachable
+            // device strip — battery + shot + ring, only when a phone is reachable
             RowLayout {
                 visible: root.connected
                 Layout.fillWidth: true
@@ -759,6 +811,7 @@ FloatingWindow {
                     Layout.alignment: Qt.AlignVCenter
                 }
                 GlyphChip { glyph: "󰉏"; px: 22; accent: colors.primary; Layout.alignment: Qt.AlignVCenter; tapped: () => root.shotPhone() }
+                GlyphChip { glyph: "󰳨"; px: 22; accent: colors.tertiary; Layout.alignment: Qt.AlignVCenter; tapped: () => root.ringPhone() }
             }
 
             // ---- SEND: drop zone tile ----

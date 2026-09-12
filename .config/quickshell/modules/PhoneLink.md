@@ -21,16 +21,31 @@ objects that run `adb` on demand, and polls phone state on timers.
   (via the adb-clip java helper).
 - **Screenshot** — camera chip on the device strip saves
   `~/Pictures/PhoneLink/phonelink-<timestamp>.png` via `exec-out screencap`.
+- **Ring my phone** — vibrating chip on the device strip: wakes the screen,
+  maxes media volume, fires the ringtone-open intent and three hard vibration
+  bursts. Volume + vibration are the proven carriers on this device (`media`
+  tool, ringtones dir and shell notification posts were probed and ruled out;
+  nothing on this build can force a sound).
 - **Phone browser** — browse and pull files off the phone (see keys below).
 - **Battery + status** — device row shows the paired phone and battery %,
   refreshed on a 15 s timer while the panel is open.
-- **WhatsApp forwarder** — every 4 s while a phone is paired it polls
-  `adb shell dumpsys notification --noredact`, and when a *new*
-  `com.whatsapp.*` notification appears it pings the desktop with
-  `notify-send` (title only), which quickshell's own NotificationCenter
-  displays. Works with phone DND on or off — DND silences the phone, it does
-  not remove entries from the shade. The first scan after connecting absorbs
-  whatever is already in the shade, so only genuinely new messages ping.
+- **Notify forwarder** — every 4 s while a phone is paired it polls the
+  notification shade and when a *new* notification appears from an
+  allowlisted app it pings the desktop with `notify-send` (title only), shown
+  by quickshell's own NotificationCenter. The allowlist (`notifyApps` in
+  PhoneLink.qml — package substring to app label) ships with WhatsApp,
+  Telegram and SMS/messages entries and is trivial to extend. Works with
+  phone DND on or off — DND silences the phone, it does not remove entries
+  from the shade. The first scan after connecting absorbs whatever is
+  already in the shade, so only genuinely new messages ping.
+
+## Bandwidth
+
+The full `dumpsys notification --noredact` dump is ~1 MB (~0.25 MB/s if
+polled raw every 4 s, with multi-MB bursts per poll). The poll command
+truncates the `Notification(...)` blob and greps on the phone side down to
+~19 KB per poll (~5 KB/s sustained). A stale-poll watchdog kills any dump
+hung past 10 s so a flaky-wifi hiccup cannot wedge the loop.
 
 ## Browser keys
 
@@ -63,5 +78,8 @@ selection.
 ## Caveats
 
 - Battery percentage is polled, so it can be stale by up to 15 s.
-- WhatsApp detection matches any package containing `whatsapp`
-  (this phone runs `com.whatsapp.w4b`); other modded clients are covered too.
+- Notify-forwarding matches any allowlisted package substring
+  (this phone runs `com.whatsapp.w4b`; modded clients are covered too).
+- Ringing is vibration-first; the alarm-intent path (`SET_ALARM` with
+  `SKIP_UI`) is the upgrade if you want an actual siren — it leaves an armed
+  alarm behind, so it is not wired in by default.

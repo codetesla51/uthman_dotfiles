@@ -1,25 +1,26 @@
 # PhoneLink — adb phone bridge
 
-`PhoneLink.qml` is a standalone `FloatingWindow` popup that talks to your phone over
-`adb` (wifi or USB). Toggle it with:
+`PhoneLink.qml` is a standalone `FloatingWindow` popup and a thin client over
+the `~/phonelink` backend (single-file Python CLI — all adb orchestration
+lives there, so other UIs can build on the same commands). Toggle it with:
 
 ```bash
 quickshell -p ~/.config/quickshell ipc call phonelink toggle
 ```
 
-No daemon, no background service: the module spawns one-shot child `Process`
-objects that run `adb` on demand, and polls phone state on timers.
+No background service of its own: the module shells out to `~/phonelink/phonelink`
+one-shot subcommands and polls on timers. Pairing/config: `~/phonelink/init.sh`.
 
 ## What it does
 
 - **Pair / connect** — remembers the last device from
-  `~/.config/phone-sender/target`. First-time pairing over USB:
+  `~/.config/phonelink/config.ini ([phone] target)`. First-time pairing over USB:
   `adb tcpip 5555`, then reconnect over wifi. No gateway/hotspot guessing:
   the phone is a device on the LAN, not the router.
 - **Send to phone** — drag files onto the drop tile; they are pushed via
   `adb push` (paths are shell-quoted). `c` sends the PC clipboard text via
-  the bundled **PhoneRelay** flash app (`.config/quickshell/android-app/`,
-  `build.sh`, install once with `adb install`). The relay writes the clipboard while its invisible window flashes.
+  the bundled **PhoneRelay** flash app (`~/phonelink/android-app/`,
+  `./init.sh` (builds + installs the APK, writes the config, smoke-tests)). The relay writes the clipboard while its invisible window flashes.
   Caveat: this ROM's clipboard watcher reaps clips the relay sets within
   ~seconds when idle — paste immediately, or use the share sheet for
   anything that isn't paste-now. The old adb-clip jar silently no-oped.

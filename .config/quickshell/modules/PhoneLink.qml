@@ -5,9 +5,11 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
 
-// PhoneLink — wireless file sender over ADB. No app on the phone, no cable
-// after the one-time `tcpip` bootstrap: drop files and they land in Download,
-// browse the phone and pull anything back. Toggle: ipc call phonelink (SUPER ALT K).
+// PhoneLink — wireless file sender over ADB. Thin client over the standalone
+// ~/phonelink backend (daemon CLI: devices, battery, clip, push, pull, ls,
+// shot, ring, inbox-sync, notifs). No app on the phone, no cable after the
+// one-time `tcpip` bootstrap: drop files and they land in Download, browse
+// the phone and pull anything back. Toggle: ipc call phonelink (SUPER ALT K).
 FloatingWindow {
     id: root
 
@@ -30,6 +32,8 @@ FloatingWindow {
     }
     property var colors: fallback
     property bool open: false
+    // standalone backend (~/phonelink repo): all adb orchestration lives there
+    property string daemon: Quickshell.env("HOME") + "/phonelink/phonelink"
 
     // --- device state ---
     property string deviceId: ""        // "192.168.58.159:5555"
@@ -61,16 +65,9 @@ FloatingWindow {
     property bool searching: false
     property string searchBuf: ""
 
-    // --- notify forward allowlist ---
-    // package substring -> desktop app label; anything matching gets a toast
-    property var notifyApps: [
-        { pkg: "whatsapp", name: "WhatsApp" },
-        { pkg: "telegram", name: "Telegram" },
-        { pkg: "messages", name: "Messages" },
-        { pkg: "messaging", name: "SMS" },
-        { pkg: "sms", name: "SMS" },
-        { pkg: "mms", name: "SMS" }
-    ]
+    // --- notify forward allowlist lives in the daemon config ---
+    // (~/.config/phonelink/config.ini [notify]); the daemon filters + extracts
+    // senders, this client only pings.
     property var seenKeys: []        // notification keys already pinged
     property bool primed: false      // first scan after connect absorbs, no pings
     property int pollStart: 0        // ms epoch when the current dump started (stale-poll watchdog)
@@ -116,54 +113,19 @@ FloatingWindow {
         }
     }
 
-    // battery: dumpsys battery is read-only with no path args — no quoting needed
+    // battery via the daemon (JSON: {level, charging})
     function refreshBattery() {
         if (!root.connected) return
-        batteryProc.command = ["adb", "-s", root.deviceId, "shell", "dumpsys", "battery"]
+        batteryProc.command = [root.daemon, "battery"]
         batteryProc.running = true
     }
 
-    // ── notify forward: poll the notification shade, ping the desktop on new
-    // entries from allowlisted apps. Works in DND too — DND silences the
+    // ── notify forward: the daemon polls the shade and returns parsed records
+    // [{key, label, title, sender}]. Works in DND too — DND silences the
     // phone, it does not remove entries from the shade. The desktop ping goes
     // through notify-send to quickshell's own NotificationCenter (owns
-    // org.freedesktop.Notifications).
-    function scanNotifs(dump) {
-        function flush() { if (cur && cur.key) fresh.push(cur); cur = null }
-        var lines = String(dump).split("\n")
-        var cur = null
-        var fresh = []
-        for (var i = 0; i < lines.length; i++) {
-            var line = lines[i]
-            var h = line.match(/NotificationRecord\([^:]*: pkg=([^\s]+)/)
-            if (h) {
-                flush()
-                for (var a = 0; a < root.notifyApps.length; a++)
-                    if (h[1].indexOf(root.notifyApps[a].pkg) !== -1) {
-                        cur = { key: (line.match(/key=([^:\s]+)/) || [])[1] || null, title: "", label: root.notifyApps[a].name }
-                        break
-                    }
-                continue
-            }
-            if (!cur) continue
-            cur.key = cur.key || (line.match(/key=([^:\s]+)/) || [])[1] || null
-            if (!cur.title) { var t = line.match(/android\.title=String \(([^)]*)\)/); if (t) cur.title = t[1] }
-        }
-        flush()
-        for (var j = 0; j < fresh.length; j++) {
-            var rec = fresh[j]
-            // w4b embeds the author in group-chat titles:
-            // "Group (149 messages): ~ Jay"; 1:1 titles are the contact
-            // themselves, channels have no suffix at all
-            rec.sender = ""
-            if (rec.label === "WhatsApp" && rec.title) {
-                var sm = rec.title.match(/[:：]\s*~?\s*(.+)$/)
-                if (sm) {
-                    var tail = sm[1].trim().replace(/\)\s*$/, "").trim()
-                    if (tail && !/^\s*\d/.test(tail) && tail.length <= 30) rec.sender = tail
-                }
-            }
-        }
+    // org.freedesktop.Notifications). First scan after connect absorbs.
+    function scanNotifs(fresh) {
         if (!root.primed) {
             // first scan after connect: absorb what is already in the shade,
             // do not re-ping old notifications
@@ -182,67 +144,34 @@ FloatingWindow {
         }
     }
 
-    // find-my-phone: wake, max media volume, try the ringtone, buzz hard.
-    // Probed on this device: the `media` tool and /system/media/audio/ringtones
-    // do not exist, no media session to resume, shell notification posts play
-    // no sound — so the vibration burst is the audible carrier; the ringtone
-    // VIEW intent is best-effort (no player handles it on this build).
+    // find-my-phone via the daemon: wake, max media volume, ringtone VIEW
+    // intent (best-effort), vibration burst (the audible carrier on builds
+    // with no media session/ringtones).
     function ringPhone() {
         if (!root.connected) { root.say("No phone connected — same WiFi as the laptop?"); return }
         root.say("Ringing phone…")
-        ringProc.command = ["sh", "-c",
-            "a=adb; i=" + root.sq(root.deviceId) + "; " +
-            "$a -s $i shell input keyevent 224; " +                                  // wake
-            "$a -s $i shell cmd media_session volume --stream 3 --set 15; " +        // media volume max
-            "$a -s $i shell am start -a android.intent.action.VIEW -d content://settings/system/ringtone; " +
-            "$a -s $i shell cmd vibrator_manager synced -f oneshot 400 255; sleep 0.35; " +
-            "$a -s $i shell cmd vibrator_manager synced -f oneshot 400 255; sleep 0.35; " +
-            "$a -s $i shell cmd vibrator_manager synced -f oneshot 400 255"]
+        ringProc.command = [root.daemon, "ring"]
         ringProc.running = true
     }
 
-    // phone screenshot -> ~/Pictures/PhoneLink
+    // phone screenshot -> ~/Pictures/PhoneLink (daemon names the file)
     function shotPhone() {
         if (!root.connected) {
             root.say("No phone connected — same WiFi as the laptop?")
             return
         }
-        var shots = Quickshell.env("HOME") + "/Pictures/PhoneLink"
-        var d = new Date()
-        function p2(n) { return (n < 10 ? "0" : "") + n }
-        root.shotName = "phonelink-" + d.getFullYear() + p2(d.getMonth() + 1) + p2(d.getDate()) +
-            "-" + p2(d.getHours()) + p2(d.getMinutes()) + p2(d.getSeconds()) + ".png"
         root.say("Snapping shot…")
-        shotProc.command = ["sh", "-c",
-            "mkdir -p " + root.sq(shots) + " && adb -s " + root.sq(root.deviceId) +
-            " exec-out screencap -p > " + root.sq(shots + "/" + root.shotName)]
+        shotProc.command = [root.daemon, "shot"]
         shotProc.running = true
     }
 
     // ================= discovery =================
-    // Remembered target first (~/.config/phone-sender/target); if that fails we
-    // say how to bootstrap over USB. No gateway guessing — the phone is a
-    // device on the LAN, not the hotspot router.
-
-    FileView {
-        id: rememberedFile
-        path: Quickshell.env("HOME") + "/.config/phone-sender/target"
-        printErrors: false
-        blockLoading: true
-        onLoaded: root.remembered(text())
-        onLoadFailed: root.say("No phone pair — USB cable once: adb tcpip 5555, then reconnect")
-    }
+    // The daemon owns pairing state (~/.config/phonelink/config.ini, written
+    // by ~/phonelink/init.sh). If nothing is attached we ask it to connect
+    // to the remembered target; first-time Wi-Fi needs `adb tcpip 5555` once.
     function connectTo(addr) {
-        connectProc.command = ["adb", "connect", addr]
+        connectProc.command = addr ? [root.daemon, "connect", addr] : [root.daemon, "connect"]
         connectProc.running = true
-    }
-    function remembered(text) {
-        var addr = String(text || "").trim().split("\n")[0] || ""
-        if (addr.length > 0) {
-            root.connectTo(addr)
-        } else {
-            root.say("No phone pair — USB cable once: adb tcpip 5555, then reconnect")
-        }
     }
 
     function refreshDevices() {
@@ -253,26 +182,13 @@ FloatingWindow {
 
     Process {
         id: listProc
-        command: ["adb", "devices", "-l"]
+        command: [root.daemon, "devices"]
         stdout: StdioCollector {
             waitForEnd: true
             onStreamFinished: {
                 root.busy = false
-                var lines = text.trim().split("\n")
                 var found = []
-                for (var i = 0; i < lines.length; i++) {
-                    var m = lines[i].match(/^(\S+)\s+device\b/)
-                    if (m) {
-                        var mod = lines[i].match(/\bmodel:(\S+)/)
-                        var nm = mod ? mod[1].replace(/_/g, " ") : "Phone"
-                        if (nm.toLowerCase().indexOf("itel") === 0) nm = "Uthman"  // user prefers not seeing the brand
-                        found.push({ id: m[1], name: nm })
-                        continue
-                    }
-                    if (!root.connected && lines[i].match(/^(\S+)\s+unauthorized/)) {
-                        root.say("Accept the RSA prompt on your phone (cable once)")
-                    }
-                }
+                try { found = JSON.parse(text) } catch (e) {}
                 if (found.length > 0) {
                     // several devices can be visible (cable + wifi): prefer the paired one
                     var pick = found[0]
@@ -289,10 +205,9 @@ FloatingWindow {
                     if (root.remoteRows.length === 0) root.listRemote()
                     return
                 }
-                // nothing attached: fall through to remembered/gateway connect
+                // nothing attached: fall through to remembered-target connect
                 if (!root.connected) {
-                    rememberedFile.path = ""
-                    rememberedFile.path = Quickshell.env("HOME") + "/.config/phone-sender/target"
+                    root.connectTo("")
                 } else {
                     root.connected = false
                     root.deviceId = ""
@@ -302,10 +217,7 @@ FloatingWindow {
         onExited: {
             if (root.busy) {
                 root.busy = false
-                if (!root.connected) {
-                    rememberedFile.path = ""
-                    rememberedFile.path = Quickshell.env("HOME") + "/.config/phone-sender/target"
-                }
+                if (!root.connected) root.say("No phone pair — run ~/phonelink/init.sh (cable once for tcpip 5555)")
             }
         }
     }
@@ -315,15 +227,15 @@ FloatingWindow {
         stdout: StdioCollector {
             waitForEnd: true
             onStreamFinished: {
-                if (text.indexOf("connected to") !== -1 || text.indexOf("already connected") !== -1) {
-                    root.refreshDevices()
-                } else {
-                    root.say("Phone not answering — cable once for tcpip?")
-                }
+                var ok = false
+                try { ok = JSON.parse(text).status === "ok" } catch (e) {}
+                if (ok) root.refreshDevices()
+                else root.say("Phone not answering — cable once for tcpip?")
             }
         }
         onExited: function (code) {
             if (code === 127) root.say("adb not installed — sudo pacman -S android-tools")
+            else if (code !== 0 && !root.connected) root.say("Phone not answering — cable once for tcpip?")
         }
     }
 
@@ -332,7 +244,11 @@ FloatingWindow {
         id: notifProc
         stdout: StdioCollector {
             waitForEnd: true
-            onStreamFinished: root.scanNotifs(text)
+            onStreamFinished: {
+                var fresh = []
+                try { fresh = JSON.parse(text) } catch (e) {}
+                root.scanNotifs(fresh)
+            }
         }
     }
     Timer {
@@ -348,29 +264,32 @@ FloatingWindow {
                 return
             }
             root.pollStart = now
-            // phone-side filter: the full --noredact dump is ~1 MB; we only
-            // consume record headers + key= + android.title lines, so truncate
-            // the Notification(...) blob and grep to ~19 KB per poll (~5 KB/s)
-            notifProc.command = ["adb", "-s", root.deviceId, "shell",
-                "dumpsys notification --noredact | sed 's/ Notification(.*//' | grep -E 'NotificationRecord\\(|key=|android.title'"]
+            // the daemon truncates + greps the ~1 MB --noredact dump phone-side
+            // and returns parsed records (~5 KB/s)
+            notifProc.command = [root.daemon, "notifs"]
             notifProc.running = true
         }
     }
 
-    // ── inbox auto-delivery: when the phone share-sheet writes new files into
-    // Download/PhoneLinkInbox, pull them to ~/Downloads automatically.
+    // ── inbox auto-delivery: the daemon pulls new share-sheet files into
+    // ~/Downloads itself (dedupe by name+size, >250 MB stays in the browser).
+    // This client just announces arrivals.
     Process {
-        id: inboxListProc
+        id: inboxSyncProc
         stdout: StdioCollector {
             waitForEnd: true
-            onStreamFinished: root.scanInbox(text)
-        }
-    }
-    Process {
-        id: inboxPullProc
-        stdout: StdioCollector {
-            waitForEnd: true
-            onStreamFinished: root.finishInboxPull(text)
+            onStreamFinished: {
+                var pulled = [], skipped = []
+                try {
+                    var r = JSON.parse(text)
+                    pulled = r.pulled || []
+                    skipped = r.skipped || []
+                } catch (e) {}
+                for (var i = 0; i < pulled.length; i++) root.say("Phone → PC: " + pulled[i].name)
+                for (var j = 0; j < skipped.length; j++)
+                    if (skipped[j].reason === "too-big")
+                        root.say("Inbox " + skipped[j].name + " too big — pull via browser")
+            }
         }
     }
 
@@ -381,15 +300,9 @@ FloatingWindow {
         repeat: true
         onTriggered: {
             // don't fight a manual browser pull
-            if (root.inboxBusy || root.pullState !== "" || root.pullQueue.length > 0) return
-            inboxListProc.command = ["sh", "-c",
-                "adb -s " + root.sq(root.deviceId) + " shell 'for f in /sdcard/Download/PhoneLinkInbox/*; do [ -f \"$f\" ] || continue; n=${f##*/}; printf \"%s\\t%s\\n\" \"$(stat -c %s \"$f\")\" \"$n\"; done' | " +
-                "while IFS=$'\\t' read -r s n; do " +
-                "[ -n \"$n\" ] || continue; " +
-                "pc=\"$HOME/Downloads/$n\"; " +
-                "[ -f \"$pc\" ] && [ \"$(stat -c %s \"$pc\")\" = \"$s\" ] && continue; " +
-                "printf \"%s\\t%s\\n\" \"$s\" \"$n\"; done"]
-            inboxListProc.running = true
+            if (inboxSyncProc.running || root.pullState !== "" || root.pullQueue.length > 0) return
+            inboxSyncProc.command = [root.daemon, "inbox-sync"]
+            inboxSyncProc.running = true
         }
     }
 
@@ -447,7 +360,6 @@ FloatingWindow {
         sizeProc.running = true
     }
     property int pushIndex: -1
-
     Process {
         id: sizeProc
         stdout: StdioCollector {
@@ -456,7 +368,8 @@ FloatingWindow {
                 var total = parseInt(text.trim()) || 0
                 root.setRow(root.pushIndex, { total: total })
                 var row = root.queue[root.pushIndex]
-                pushProc.command = ["adb", "-s", root.deviceId, "push", row.path, "/sdcard/Download/"]
+                // daemon pushes + fires the media scanner; stdout is JSON (ignored here)
+                pushProc.command = [root.daemon, "push", row.path]
                 pushProc.running = true
                 progressPoll.restart()
             }
@@ -480,7 +393,6 @@ FloatingWindow {
                 root.setRow(i, { active: false, done: true, sent: row.total })
                 root.notify("Sent to " + root.deviceName, row.name)
                 root.say("Sent " + row.name)
-                root.scanMedia("/sdcard/Download/" + row.name)
             } else {
                 var err = (pushErr.text.trim().split("\n").pop() || "push failed").slice(0, 90)
                 root.setRow(i, { active: false, error: err })
@@ -515,27 +427,30 @@ FloatingWindow {
         }
     }
 
-    // ── media scan: adb push bypasses MediaStore, so a freshly pushed file is
-    // invisible in Recents/Photos/Downloads until the scanner notices it.
-    // Fire the per-file MEDIA_SCANNER broadcast right after each push succeeds.
-    Process {
-        id: scanProc
-    }
-
     Process {
         id: batteryProc
         stdout: StdioCollector {
             waitForEnd: true
             onStreamFinished: {
-                var lv = text.match(/level:\s*(\d+)/)
-                var st = text.match(/status:\s*(\d+)/)
-                root.battery = lv ? parseInt(lv[1]) : -1
-                root.charging = st ? parseInt(st[1]) === 2 : false
+                try {
+                    var b = JSON.parse(text)
+                    root.battery = b.level
+                    root.charging = b.charging
+                } catch (e) {}
             }
         }
     }
     Process {
         id: shotProc
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: {
+                try {
+                    var s = JSON.parse(text)
+                    root.shotName = s.name
+                } catch (e) { root.shotName = "" }
+            }
+        }
         onExited: function (code) {
             if (code === 0) {
                 root.notify("Phone shot", root.shotName)
@@ -545,95 +460,73 @@ FloatingWindow {
             }
         }
     }
-    function scanMedia(remotePath) {
-        var uri = "file://" + encodeURIComponent(remotePath).replace(/%2F/g, "/")
-        scanProc.command = ["adb", "-s", root.deviceId, "shell",
-            "am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d " + root.sq(uri)]
-        scanProc.running = true
-    }
-
     Process {
         id: clipSetProc
         stdout: StdioCollector {
             waitForEnd: true
             onStreamFinished: {
-                var t = text
-                if (t.indexOf("CLIP_IMG_OK") !== -1) root.say("Image on your phone — saved in Download")
-                else if (t.indexOf("CLIP_SET_OK") !== -1) root.say("On your phone's clipboard")
-                else if (t.indexOf("CLIP_EMPTY") !== -1) root.say("Clipboard is empty (or not text/image)")
-                else if (t.indexOf("CLIP_TOOLONG") !== -1) root.say("Too long for direct set (100KB max)")
-                else if (t.indexOf("CLIP_FAIL") !== -1) root.say("Image push failed — screen on and unlocked?")
+                var st = ""
+                try { st = JSON.parse(text).status } catch (e) {}
+                if (st === "ok") root.say("On your phone's clipboard")
+                else if (st === "empty") root.say("Clipboard is empty (or not text/image)")
+                else if (st === "toolong") root.say("Too long for direct set (100KB max)")
                 else root.say("Couldn't set it — screen on and unlocked?")
             }
         }
+        onExited: function (code) { if (code !== 0) root.say("Couldn't set it — screen on and unlocked?") }
     }
     // C: PC clipboard straight into the phone's clipboard (paste-ready).
-    // Text goes through the PhoneRelay flash app; images push straight into
-    // Download. Caveat (verified): this ROM's clipboard watcher reaps clips
-    // set by the relay app within ~seconds of idle — paste right away. The
-    // old adb-clip jar silently no-oped entirely; this is strictly better.
+    // Clipboard *reading* stays here (wl-paste is compositor-specific); the
+    // daemon takes the bytes via --file. Text goes through the PhoneRelay
+    // flash app; images push straight into Download. Caveat (verified): this
+    // ROM's clipboard watcher reaps clips set by the relay app within
+    // ~seconds of idle — paste right away.
     function sendClipboard() {
         if (!root.connected) {
             root.say("No phone connected — same WiFi as the laptop?")
             return
         }
-        var home = Quickshell.env("HOME")
-        var q = function (s) { return "'" + String(s).replace(/'/g, "'\\''") + "'" }
-        var clipFile = home + "/.cache/phonelink-clipboard.txt"
-        clipSetProc.command = ["sh", "-c",
-            "D=" + q(root.deviceId) + "; F=" + q(clipFile) + "; I=/tmp/.qs-phonelink-img.png; " +
-            "case \"$(wl-paste --list-types 2>/dev/null)\" in *image*) " +
-            "wl-paste -t image/png > \"$I\" 2>/dev/null; " +
-            "if [ ! -s \"$I\" ]; then echo CLIP_EMPTY; exit 0; fi; " +
-            "TS=$(date +%H%M%S); " +
-            "adb -s \"$D\" push \"$I\" \"/sdcard/Download/clipboard-$TS.png\" >/dev/null 2>&1 && " +
-            "{ adb -s \"$D\" shell am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d \"file:///sdcard/Download/clipboard-$TS.png\" >/dev/null 2>&1; echo CLIP_IMG_OK; } || echo CLIP_FAIL;; " +
-            "*) " +
-            "wl-paste -t text/plain --no-newline > \"$F\" 2>/dev/null || { echo CLIP_EMPTY; exit 0; }; " +
-            "n=$(wc -c < \"$F\"); " +
-            "if [ \"$n\" -eq 0 ]; then echo CLIP_EMPTY; exit 0; fi; " +
-            "if [ \"$n\" -gt 100000 ]; then echo CLIP_TOOLONG; exit 0; fi; " +
-            "P=com.uthman.phonelink; R=/sdcard/Android/data/$P/files; " +
-            "{ adb -s \"$D\" push \"$F\" \"$R/in.txt\" >/dev/null 2>&1 && " +
-            "adb -s \"$D\" shell \"am start -n $P/.PhoneRelayActivity --es mode write --es textfile $R/in.txt\" >/dev/null 2>&1 && " +
-            "sleep 1.5 && adb -s \"$D\" shell cat \"$R/ack.txt\" 2>/dev/null | grep -q OK; } " +
-            "&& echo CLIP_SET_OK || echo CLIP_FAIL;; " +
-            "esac"]
-        clipSetProc.running = true
+        clipReadProc.command = ["sh", "-c",
+            "if wl-paste --list-types 2>/dev/null | grep -q image; then echo CLIP_HAS_IMAGE; " +
+            "else wl-paste -t text/plain --no-newline > " + root.sq(root.clipFile) + " 2>/dev/null && echo CLIP_HAS_TEXT || echo CLIP_EMPTY; fi"]
+        clipReadProc.running = true
     }
-    // ── inbox auto-delivery state + handlers ───────────────────────────────
-    property string inboxBusy: ""     // file currently being pulled
-
-    function scanInbox(out) {
-        // input lines: "<size>\t<name>"; names may contain spaces
-        var lines = String(out).split("\n")
-        var t, size, name
-        for (var i = 0; i < lines.length; i++) {
-            t = lines[i].split("\t")
-            if (t.length < 2 || t[1] === "") continue
-            size = parseInt(t[0], 10)
-            name = t[1].trim()
-            if (name === root.inboxBusy || isNaN(size)) continue
-            if (size > 250 * 1024 * 1024) {
-                root.say("Inbox " + name + " too big (" + (size / 1048576).toFixed(0) + " MB) — pull via browser")
-                continue
+    property string clipFile: Quickshell.env("HOME") + "/.cache/phonelink-clipboard.txt"
+    Process {
+        id: clipReadProc
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: {
+                var t = text.trim()
+                if (t.indexOf("CLIP_HAS_IMAGE") !== -1) {
+                    var d = new Date()
+                    function p2(n) { return (n < 10 ? "0" : "") + n }
+                    var ip = "/tmp/clipboard-" + p2(d.getHours()) + p2(d.getMinutes()) + p2(d.getSeconds()) + ".png"
+                    clipImgProc.command = ["sh", "-c",
+                        "wl-paste -t image/png > " + root.sq(ip) + " 2>/dev/null && " +
+                        "[ -s " + root.sq(ip) + " ] && " + root.sq(root.daemon) + " push " + root.sq(ip)]
+                    clipImgProc.running = true
+                } else if (t.indexOf("CLIP_HAS_TEXT") !== -1) {
+                    clipSetProc.command = [root.daemon, "clip", "--file", root.clipFile]
+                    clipSetProc.running = true
+                } else {
+                    root.say("Clipboard is empty (or not text/image)")
+                }
             }
-            root.inboxBusy = name
-            root.say("Phone → PC: " + name)
-            inboxPullProc.command = ["adb", "-s", root.deviceId, "pull",
-                "/sdcard/Download/PhoneLinkInbox/" + name, Quickshell.env("HOME") + "/Downloads/"]
-            inboxPullProc.running = true
-            return  // one at a time; next tick picks up the rest
         }
     }
-
-    function finishInboxPull(out) {
-        var name = root.inboxBusy
-        root.inboxBusy = ""
-        if (name !== "" && String(out).indexOf("1 file pulled") === -1)
-            root.say("Inbox pull failed — " + name)
+    Process {
+        id: clipImgProc
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: {
+                var ok = false
+                try { ok = JSON.parse(text).status === "ok" } catch (e) {}
+                root.say(ok ? "Image on your phone — saved in Download" : "Image push failed — screen on and unlocked?")
+            }
+        }
+        onExited: function (code) { if (code !== 0) root.say("Image push failed — screen on and unlocked?") }
     }
-
     function removeRow(i) {
         var q = root.queue.slice()
         if (i >= 0 && i < q.length) q.splice(i, 1)
@@ -647,7 +540,7 @@ FloatingWindow {
     // ================= pull =================
     function listRemote() {
         if (!root.connected) return
-        lsProc.command = ["adb", "-s", root.deviceId, "shell", "ls", "-p", root.sq(root.remoteDir)]
+        lsProc.command = [root.daemon, "ls", root.remoteDir]
         lsProc.running = true
     }
     Process {
@@ -656,16 +549,7 @@ FloatingWindow {
             waitForEnd: true
             onStreamFinished: {
                 var rows = []
-                var lines = text.trim().split("\n")
-                for (var i = 0; i < lines.length; i++) {
-                    var n = lines[i].trim()
-                    if (!n) continue
-                    rows.push({ name: n.replace(/\/$/, ""), isDir: n.charAt(n.length - 1) === "/" })
-                }
-                rows.sort(function (a, b) {
-                    if (a.isDir !== b.isDir) return a.isDir ? -1 : 1
-                    return a.name.localeCompare(b.name)
-                })
+                try { rows = JSON.parse(text) } catch (e) {}
                 root.remoteRows = rows
                 remoteList.currentIndex = rows.length > 0 ? 0 : -1
             }
@@ -684,7 +568,7 @@ FloatingWindow {
         root.say("Pulling " + name + "…")
         sizeRemoteProc.command = ["adb", "-s", root.deviceId, "shell", "stat", "-c", "%s", root.sq(root.remoteDir + "/" + name)]
         sizeRemoteProc.running = true
-        pullProc.command = ["adb", "-s", root.deviceId, "pull", root.remoteDir + "/" + name, Quickshell.env("HOME") + "/Downloads/"]
+        pullProc.command = [root.daemon, "pull", name, "--dir", root.remoteDir]
         pullProc.running = true
         pullProgress.restart()
     }

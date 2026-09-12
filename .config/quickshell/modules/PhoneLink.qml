@@ -52,9 +52,6 @@ FloatingWindow {
     property var pullQueue: []
     property bool yankAfterPull: false
 
-    // --- history: [{name, dir, time}] ---
-    property var recentFiles: []
-
     // --- battery + shot ---
     property int battery: -1
     property bool charging: false
@@ -443,7 +440,6 @@ FloatingWindow {
             if (code === 0) {
                 var row = root.queue[i]
                 root.setRow(i, { active: false, done: true, sent: row.total })
-                root.pushHistory(row.name, "sent")
                 root.notify("Sent to " + root.deviceName, row.name)
                 root.say("Sent " + row.name)
                 root.scanMedia("/sdcard/Download/" + row.name)
@@ -479,13 +475,6 @@ FloatingWindow {
                 if (row && got > row.sent) root.setRow(root.pushIndex, { sent: Math.min(got, row.total) })
             }
         }
-    }
-
-    function pushHistory(name, dir) {
-        var entry = { name: name, dir: dir, time: Qt.formatDateTime(new Date(), "HH:mm") }
-        var arr = [entry]
-        for (var i = 0; i < root.recentFiles.length && i < 9; i++) arr.push(root.recentFiles[i])
-        root.recentFiles = arr
     }
 
     // ── media scan: adb push bypasses MediaStore, so a freshly pushed file is
@@ -701,7 +690,6 @@ FloatingWindow {
             root.pullTotal = 0
             root.pullGot = 0
             if (code === 0) {
-                root.pushHistory(name, "pulled")
                 root.notify("Pulled from " + root.deviceName, name)
                 root.say("Pulled " + name + " to Downloads")
                 if (root.yankAfterPull) {
@@ -977,57 +965,6 @@ FloatingWindow {
                                 color: colors.primary
                                 Behavior on width { NumberAnimation { duration: 250; easing.type: Easing.OutCubic } }
                             }
-                        }
-                    }
-                }
-            }
-
-            // ---- recent transfers ----
-            ColumnLayout {
-                visible: root.recentFiles.length > 0
-                Layout.fillWidth: true
-                spacing: 3
-                RowLayout {
-                    Layout.fillWidth: true
-                    Text { text: "RECENT"; color: colors.alpha(colors.outline, 0.65); font.family: colors.fontSans; font.pixelSize: 7; font.weight: Font.Bold; font.letterSpacing: 1.3; Layout.fillWidth: true; Layout.alignment: Qt.AlignVCenter }
-                    Text {
-                        text: root.recentFiles.length + " today"
-                        color: colors.alpha(colors.outline, 0.5)
-                        font.family: colors.fontSans
-                        font.pixelSize: 8
-                    }
-                }
-                ListView {
-                    id: recentList
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: Math.min(3, root.recentFiles.length) * 18
-                    clip: true
-                    spacing: 1
-                    model: root.recentFiles
-                    interactive: false
-                    delegate: RowLayout {
-                        required property var modelData
-                        width: recentList.width
-                        spacing: 6
-                        Text {
-                            text: modelData.dir === "sent" ? "→" : "←"
-                            color: modelData.dir === "sent" ? colors.primary : colors.tertiary
-                            font.family: colors.fontSans
-                            font.pixelSize: 10
-                        }
-                        Text {
-                            text: modelData.name
-                            color: colors.foreground
-                            font.family: colors.fontSans
-                            font.pixelSize: 10
-                            elide: Text.ElideRight
-                            Layout.fillWidth: true
-                        }
-                        Text {
-                            text: modelData.time
-                            color: colors.alpha(colors.outline, 0.6)
-                            font.family: colors.fontSans
-                            font.pixelSize: 8
                         }
                     }
                 }

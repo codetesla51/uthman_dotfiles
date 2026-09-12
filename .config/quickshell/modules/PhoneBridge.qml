@@ -48,7 +48,7 @@ FloatingWindow {
     property bool sending: false
 
     // --- pull browser ---
-    property string remoteDir: "/sdcard/Download"
+    property string remoteDir: "/sdcard"
     property var remoteRows: []         // [{name, isDir}]
     property string pullState: ""       // name pulling, "" when idle
     property int pullTotal: 0

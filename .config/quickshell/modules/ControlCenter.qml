@@ -1,15 +1,16 @@
 import Quickshell
 import Quickshell.Io
-import Quickshell.Wayland
 import Quickshell.Services.Mpris
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
 import QtQuick.LocalStorage 2.0
 import QtQuick.Effects
+import Qt5Compat.GraphicalEffects
 
-// Control Center — bento-grid overlay popup (layershell).
-PanelWindow {
+// Control Center — bento-grid regular Hyprland window (FloatingWindow, NOT layershell overlay).
+// Opens with SUPER ALT P, behaves like a normal window: floats centered, focusable, tileable if you unfloat.
+FloatingWindow {
     id: root
     property var colors
     property bool open: false
@@ -23,20 +24,39 @@ PanelWindow {
         { type: "PushEvent", repo: "uthman/habit", msg: "fix: heatmap off-by-one", time: "1d ago" }
     ]
     property var githubHeatCells: []
-    property string weatherTemp: "23°"
-    property string weatherFeel: "25°"
+    property string weatherTemp: "25°"
+    property string weatherFeel: "26°"
     property string weatherLoc: "Lagos"
-    property string weatherCond: "Partly cloudy"
-    property string weatherIcon: ""
+    property string weatherCond: "Overcast"
+    property string weatherIcon: "󰖐"
+    property string weatherKind: "cloud"
+    function condKind(c) {
+        var t = String(c || "").toLowerCase()
+        if (t.indexOf("thunder") !== -1 || t.indexOf("storm") !== -1) return "storm"
+        if (t.indexOf("snow") !== -1 || t.indexOf("sleet") !== -1 || t.indexOf("hail") !== -1) return "snow"
+        if (t.indexOf("rain") !== -1 || t.indexOf("drizzle") !== -1 || t.indexOf("shower") !== -1) return "rain"
+        if (t.indexOf("fog") !== -1 || t.indexOf("mist") !== -1 || t.indexOf("haze") !== -1) return "fog"
+        if (t.indexOf("partly") !== -1 || t.indexOf("part") !== -1) return "partly"
+        if (t.indexOf("clear") !== -1) return "clear"
+        if (t.indexOf("sun") !== -1) return "clear"
+        if (t.indexOf("cloud") !== -1 || t.indexOf("overcast") !== -1) return "cloud"
+        return "partly"
+    }
+    property string weatherHumidity: "87%"
+    property string weatherWind: "22 km/h"
+    property string weatherHigh: "26°"
+    property string weatherLow: "25°"
     function condGlyph(c) {
         var t = String(c || "").toLowerCase()
-        if (t.indexOf("thunder") !== -1 || t.indexOf("storm") !== -1) return ""
-        if (t.indexOf("rain") !== -1 || t.indexOf("drizzle") !== -1 || t.indexOf("shower") !== -1) return ""
-        if (t.indexOf("snow") !== -1 || t.indexOf("sleet") !== -1 || t.indexOf("hail") !== -1) return ""
-        if (t.indexOf("fog") !== -1 || t.indexOf("mist") !== -1 || t.indexOf("haze") !== -1) return ""
-        if (t.indexOf("clear") !== -1 || t.indexOf("sun") !== -1) return ""
-        if (t.indexOf("cloud") !== -1 || t.indexOf("overcast") !== -1) return ""
-        return ""
+        if (t.indexOf("thunder") !== -1 || t.indexOf("storm") !== -1) return "󰙾"
+        if (t.indexOf("snow") !== -1 || t.indexOf("sleet") !== -1 || t.indexOf("hail") !== -1) return "󰖘"
+        if (t.indexOf("rain") !== -1 || t.indexOf("drizzle") !== -1 || t.indexOf("shower") !== -1) return "󰖗"
+        if (t.indexOf("fog") !== -1 || t.indexOf("mist") !== -1 || t.indexOf("haze") !== -1) return "󰖑"
+        if (t.indexOf("clear") !== -1) return "󰖙"
+        if (t.indexOf("sun") !== -1) return "󰖙"
+        if (t.indexOf("partly") !== -1 || t.indexOf("part") !== -1) return "󰖕"
+        if (t.indexOf("cloud") !== -1 || t.indexOf("overcast") !== -1) return "󰖐"
+        return "󰖕"
     }
 
     property var player: Mpris.players.values.find(function(p){ return p.isPlaying }) || Mpris.players.values[0] || null
@@ -60,7 +80,44 @@ PanelWindow {
         if (!hasPlayer || player.length<=0) return "3:20"
         var s = Math.floor(player.length); var m=Math.floor(s/60); s=s%60; return m+":"+(s<10?"0":"")+s
     }
-    property var cavaLevels: []
+    // visualizer — live cava feed, embedded here (moved from SUPER ALT V window)
+    readonly property int vizBars: 24
+    property var vizLevels: []
+    function vizApply(line){
+        var parts = line.trim().split(";")
+        if (parts.length < root.vizBars) return
+        var arr = new Array(root.vizBars)
+        for (var i = 0; i < root.vizBars; i++)
+            arr[i] = Math.max(0, Math.min(100, parseInt(parts[i]) || 0))
+        vizLevels = arr
+    }
+
+    // pomodoro — moved here from CalendarPanel (SUPER ALT C retired)
+    property int timerSeconds: 25*60
+    property int timerTotal: 25*60
+    property int pomodoroWork: 25*60
+    property int pomodoroBreak: 5*60
+    property bool pomodoroIsBreak: false
+    property int pomodoroCycles: 0
+    property bool timerRunning: false
+    property real pacmanMouth: 0.25
+    function fmtPomo(s){ var m=Math.floor(s/60), sec=s%60; return (m<10?"0"+m:m)+":"+(sec<10?"0"+sec:sec) }
+    Timer { id: pacmanAnim; interval: 120; running: root.open && root.timerRunning; repeat: true; onTriggered: root.pacmanMouth = root.pacmanMouth===0.25?0.05:0.25 }
+    Timer {
+        id: pomoTick
+        interval: 1000; running: root.timerRunning; repeat: true
+        onTriggered: {
+            if (root.timerSeconds > 0) root.timerSeconds--
+            else {
+                root.timerRunning = false
+                var msg = root.pomodoroIsBreak ? "Break over — back to focus!" : "Focus done — break time!"
+                Quickshell.execDetached(["notify-send", "-u", "critical", "-i", "alarm", "Pomodoro", msg])
+                Quickshell.execDetached(["sh","-c","paplay /usr/share/sounds/freedesktop/stereo/complete.oga 2>/dev/null || paplay /usr/share/sounds/freedesktop/stereo/alarm-clock-elapsed.oga 2>/dev/null || true"])
+                if (!root.pomodoroIsBreak) { root.pomodoroIsBreak = true; root.timerSeconds = root.pomodoroBreak; root.timerTotal = root.pomodoroBreak; root.timerRunning = true }
+                else { root.pomodoroIsBreak = false; root.pomodoroCycles++; root.timerSeconds = root.pomodoroWork; root.timerTotal = root.pomodoroWork }
+            }
+        }
+    }
 
     // pet full behavior — reuse actual pet module assets, not just walking
     property var petActions: ({})
@@ -125,10 +182,19 @@ PanelWindow {
         var first = (new Date(y, m, 1).getDay() + 6) % 7
         var dim = new Date(y, m + 1, 0).getDate()
         var cells = []
-        for (var i = 0; i < first; i++) cells.push({ d: 0, today: false })
-        for (var d = 1; d <= dim; d++) cells.push({ d: d, today: root.calOffset === 0 && d === now.getDate() })
+        for (var i = 0; i < first; i++) cells.push({ d: 0, today: false, wd: i })
+        for (var d = 1; d <= dim; d++) cells.push({ d: d, today: root.calOffset === 0 && d === now.getDate(), wd: (first + d - 1) % 7 })
         root.calCells = cells
         root.calTitle = Qt.formatDate(base, "MMMM yyyy")
+    }
+    function isoWeek(d) {
+        var t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()))
+        var day = (t.getUTCDay() + 6) % 7
+        t.setUTCDate(t.getUTCDate() - day + 3)
+        var first = new Date(Date.UTC(t.getUTCFullYear(), 0, 4))
+        var fday = (first.getUTCDay() + 6) % 7
+        first.setUTCDate(first.getUTCDate() - fday + 3)
+        return 1 + Math.round((t - first) / (7 * 864e5))
     }
     function setBrightness(v){ Quickshell.execDetached(["sh","-c","brightnessctl set "+Math.round(v*100)+"% >/dev/null 2>&1 &"]) }
     Process {
@@ -142,8 +208,15 @@ PanelWindow {
                     var cur = j.current_condition[0]
                     root.weatherTemp = cur.temp_C + "°"
                     root.weatherFeel = cur.FeelsLikeC + "°"
-                    root.weatherCond = cur.weatherDesc[0].value
+                    root.weatherCond = cur.weatherDesc[0].value.trim()
                     root.weatherIcon = root.condGlyph(root.weatherCond)
+                    root.weatherKind = root.condKind(root.weatherCond)
+                    root.weatherHumidity = (cur.humidity || "--") + "%"
+                    root.weatherWind = (cur.windspeedKmph || "--") + " km/h"
+                    if (j.weather && j.weather[0]) {
+                        root.weatherHigh = j.weather[0].maxtempC + "°"
+                        root.weatherLow = j.weather[0].mintempC + "°"
+                    }
                     var area = j.nearest_area[0]
                     if (area) root.weatherLoc = area.areaName[0].value
                 } catch (e) {}
@@ -152,17 +225,17 @@ PanelWindow {
     }
     function setVolume(v){ Quickshell.execDetached(["sh","-c","wpctl set-volume @DEFAULT_AUDIO_SINK@ "+v.toFixed(2)+" >/dev/null 2>&1 || pactl set-sink-volume @DEFAULT_SINK@ "+Math.round(v*100)+"% >/dev/null 2>&1 &"]) }
 
-    anchors { top: true; bottom: true; left: true; right: true }
-    exclusionMode: ExclusionMode.Ignore
+    title: "Control Center"
+    implicitWidth: 760
+    implicitHeight: 580
+    minimumSize: Qt.size(700, 560)
+    maximumSize: Qt.size(820, 640)
     color: "transparent"
     visible: root.open
-    focusable: true
-    WlrLayershell.namespace: "qs-controlcenter"
-    WlrLayershell.layer: WlrLayer.Overlay
 
     IpcHandler { target: "controlcenter"; function toggle(): void { root.open = !root.open } }
 
-    onOpenChanged: if(open) { ghUserProc.running=true; btProc.running=true; weatherProc.running=true; root.calOffset=0; root.rebuildCal(); root.loadActivityLast7(); Qt.callLater(function(){ card.forceActiveFocus() }) }
+    onOpenChanged: if(open) { ghUserProc.running=true; weatherProc.running=true; root.calOffset=0; root.rebuildCal(); root.loadTopActivities(); root.loadActivityLast7(); Qt.callLater(function(){ card.forceActiveFocus() }) }
 
     // pet actions loader — full behavior
     FileView {
@@ -183,23 +256,15 @@ PanelWindow {
         if(root.petCurrentFrames.length>0) root.petFrameIdx=(root.petFrameIdx+1)%root.petCurrentFrames.length
     } }
 
-    // bluetooth — real devices via bluetoothctl, air buds icon, handles empty
-    property var btDevices: []
-    function toggleBt(idx){
-        var list = root.btDevices.length>0 ? root.btDevices : [{name:"Air Buds Pro",mac:"",bat:"68%",connected:true},{name:"WH-1000XM5",mac:"",bat:"82%",connected:false}]
-        var dev=list[idx]; if(!dev) return
-        var target=dev.mac && dev.mac.length===17 ? dev.mac : dev.name
-        Quickshell.execDetached(["sh","-c","bluetoothctl connect '"+String(target).replace(/'/g,"'\\''")+"' >/dev/null 2>&1 &"])
-        if(root.btDevices.length>0){ var a=root.btDevices.slice(); a[idx].connected=!a[idx].connected; root.btDevices=a }
-    }
+    // visualizer feed — cava raw ascii, runs only while control center is open
     Process {
-        id: btProc
-        command: ["sh","-c","bluetoothctl devices 2>/dev/null | head -20"]
-        stdout: StdioCollector { waitForEnd:true; onStreamFinished: {
-            var lines=text.trim().split("\n"); var arr=[]
-            for(var i=0;i<lines.length;i++){ var l=lines[i].trim(); if(!l) continue; var m=l.match(/^Device\s+(\S+)\s+(.+)$/); if(!m) continue; var mac=m[1], name=m[2]; arr.push({name:name, mac:mac, bat:"", connected:false}) }
-            if(arr.length>0) root.btDevices=arr
-        }}
+        id: vizProc
+        command: ["cava", "-p", Quickshell.env("HOME") + "/.config/quickshell/scripts/cava-qs.conf"]
+        running: root.open
+        stdout: SplitParser {
+            splitMarker: "\n"
+            onRead: function(line){ root.vizApply(line) }
+        }
     }
     // github — real events via gh cli
     property string ghUser: "uthman"
@@ -243,21 +308,12 @@ PanelWindow {
     NetRate { id: netRate }
 
     Rectangle {
-        anchors.fill: parent
-        color: colors.alpha(colors.background, root.open ? 0.38 : 0)
-        Behavior on color { ColorAnimation { duration: 200 } }
-        MouseArea { anchors.fill: parent }
-    }
-
-    Rectangle {
         id: card
-        anchors.centerIn: parent
-        width: 860
-        height: 700
-        radius: 24
-        color: colors.alpha(colors.background, 0.62)
+        anchors.fill: parent
+        radius: 20
+        color: colors.alpha(colors.background, 0.68)
         border.width: 1
-        border.color: colors.alpha(colors.outline, 0.18)
+        border.color: colors.alpha(colors.primary, 0.14)
         scale: root.open ? 1 : 0.97
         opacity: root.open ? 1 : 0
         Behavior on scale { NumberAnimation { duration: 240; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] } }
@@ -267,158 +323,244 @@ PanelWindow {
 
         ColumnLayout {
             anchors.fill: parent
-            anchors.margins: 14
-            spacing: 10
+            anchors.margins: 10
+            spacing: 6
 
-            // ── TOP — Now Playing | Weather ──
+            // ── HERO — Now Playing (tall left) | Weather ↑ Pomodoro ↓ (stacked right) ──
             RowLayout {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 138
-                spacing: 10
+                Layout.preferredHeight: 144
+                spacing: 8
+                // Now Playing — tall left, stretches
                 Rectangle {
                     Layout.fillWidth: true; Layout.fillHeight: true
                     radius: 16
                     clip: true
                     color: colors.alpha(colors.surface, 0.4)
                     border.width: 1; border.color: colors.alpha(colors.outline, 0.14)
-                    Image {
-                        id: npBg
+                    Item {
+                        id: npArtLayer
                         anchors.fill: parent
-                        source: root.hasPlayer ? root.player.trackArtUrl : ""
-                        fillMode: Image.PreserveAspectCrop
-                        asynchronous: true
                         visible: root.hasPlayer && root.player.trackArtUrl !== ""
-                        layer.enabled: visible
-                        layer.effect: MultiEffect {
-                            blurEnabled: false
-                            saturation: 0.85
-                            brightness: -0.08
+                        layer.enabled: true
+                        layer.effect: OpacityMask {
+                            maskSource: Rectangle { width: npArtLayer.width; height: npArtLayer.height; radius: 16 }
                         }
-                    }
-                    Rectangle {
-                        anchors.fill: parent
-                        visible: npBg.visible
-                        gradient: Gradient {
-                            GradientStop { position: 0; color: colors.alpha(colors.background, 0.5) }
-                            GradientStop { position: 0.55; color: colors.alpha(colors.background, 0.4) }
-                            GradientStop { position: 1; color: colors.alpha(colors.background, 0.85) }
+                        Image {
+                            id: npBg
+                            anchors.fill: parent
+                            source: root.hasPlayer ? root.player.trackArtUrl : ""
+                            fillMode: Image.PreserveAspectCrop
+                            asynchronous: true
+                            layer.enabled: true
+                            layer.effect: MultiEffect {
+                                blurEnabled: false
+                                saturation: 0.85
+                                brightness: -0.08
+                            }
+                        }
+                        Rectangle {
+                            anchors.fill: parent
+                            gradient: Gradient {
+                                GradientStop { position: 0; color: colors.alpha(colors.background, 0.5) }
+                                GradientStop { position: 0.55; color: colors.alpha(colors.background, 0.4) }
+                                GradientStop { position: 1; color: colors.alpha(colors.background, 0.85) }
+                            }
                         }
                     }
                     ColumnLayout {
-                        anchors.fill: parent; anchors.margins: 12; spacing: 6
+                        anchors.fill: parent; anchors.margins: 12; spacing: 4
                         RowLayout {
                             Layout.fillWidth: true
                             Text { text: "NOW PLAYING"; color: colors.alpha(colors.outline,0.55); font.family: colors.fontSans; font.pixelSize: 7; font.weight: Font.Bold; font.letterSpacing: 1.3 }
                             Item { Layout.fillWidth: true }
                             Text { text: root.isPlaying ? "▶ PLAYING" : "PAUSED"; color: root.isPlaying ? colors.primary : colors.alpha(colors.outline,0.45); font.family: colors.fontSans; font.pixelSize: 7; font.weight: Font.Bold; font.letterSpacing: 1 }
                         }
-                        RowLayout {
-                            Layout.fillWidth: true; spacing: 12
-                            ColumnLayout {
-                                Layout.fillWidth: true; spacing: 5
-                                Text {
-                                    Layout.fillWidth: true
-                                    text: root.npTitle
-                                    color: root.hasPlayer?colors.foreground:colors.alpha(colors.foreground,0.5)
-                                    font.family: colors.fontSans; font.pixelSize: 14; font.weight: Font.ExtraBold; elide: Text.ElideRight
-                                }
-                                Text { text: root.hasPlayer?root.npArtist:"No player"; color: colors.alpha(colors.foreground,0.7); font.family: colors.fontSans; font.pixelSize: 9; elide: Text.ElideRight; Layout.fillWidth: true }
+                        Item { Layout.fillHeight: true }
+                        ColumnLayout {
+                            Layout.fillWidth: true; spacing: 5
+                            Text {
+                                Layout.fillWidth: true
+                                text: root.npTitle
+                                color: root.hasPlayer?colors.foreground:colors.alpha(colors.foreground,0.5)
+                                font.family: colors.fontSans; font.pixelSize: 14; font.weight: Font.ExtraBold; elide: Text.ElideRight
+                            }
+                            Text { text: root.hasPlayer?root.npArtist:"No player"; color: colors.alpha(colors.foreground,0.7); font.family: colors.fontSans; font.pixelSize: 9; elide: Text.ElideRight; Layout.fillWidth: true }
+                            Rectangle {
+                                Layout.fillWidth: true; height: 18; radius: 9
+                                clip: true
+                                color: colors.alpha(colors.surfaceVariant, 0.55)
                                 Rectangle {
-                                    Layout.fillWidth: true; height: 18; radius: 9
-                                    color: colors.alpha(colors.surfaceVariant, 0.55)
-                                    Rectangle {
-                                        width: Math.max(18, parent.width * root.npPos); height: parent.height; radius: 9
-                                        gradient: Gradient {
-                                            GradientStop { position: 0; color: colors.primary }
-                                            GradientStop { position: 0.55; color: colors.secondary }
-                                            GradientStop { position: 1; color: colors.tertiary }
-                                        }
-                                        Rectangle {
-                                            anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
-                                            width: 10; height: 10; radius: 5
-                                            color: colors.background
-                                            border.width: 2; border.color: colors.primary
-                                        }
+                                    width: Math.max(18, parent.width * root.npPos); height: parent.height; radius: 9
+                                    gradient: Gradient {
+                                        GradientStop { position: 0; color: colors.primary }
+                                        GradientStop { position: 0.55; color: colors.secondary }
+                                        GradientStop { position: 1; color: colors.tertiary }
                                     }
-                                    MouseArea {
-                                        anchors.fill: parent
-                                        onClicked: function(mouse){
-                                            if(!root.hasPlayer || !root.player.length || !root.player.canSeek) return
-                                            var v = mouse.x / width
-                                            root.player.position = v * root.player.length
-                                        }
+                                    Rectangle {
+                                        anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
+                                        width: 10; height: 10; radius: 5
+                                        color: colors.background
+                                        border.width: 2; border.color: colors.primary
                                     }
                                 }
+                                MouseArea {
+                                    anchors.fill: parent
+                                    onClicked: function(mouse){
+                                        if(!root.hasPlayer || !root.player.length || !root.player.canSeek) return
+                                        var v = mouse.x / width
+                                        root.player.position = v * root.player.length
+                                    }
+                                }
+                            }
+                                Item { Layout.preferredHeight: 8 }
                                 RowLayout {
                                     Layout.fillWidth: true
                                     Text { text: root.npCur; Layout.alignment: Qt.AlignVCenter; color: colors.alpha(colors.outline,0.7); font.family: colors.fontSans; font.pixelSize: 8 }
                                     Item { Layout.fillWidth: true }
-                                    RowLayout {
-                                        spacing: 5
-                                        Rectangle { width: 28; height: 28; radius: 14; color: "transparent"; Text { anchors.centerIn: parent; text: "󰒮"; color: colors.alpha(colors.foreground,0.7); font.family: colors.fontSans; font.pixelSize: 11 } MouseArea { id: prevMa; anchors.fill: parent; hoverEnabled:false; onClicked: if(root.hasPlayer && root.player.canGoPrevious) root.player.previous() } }
+                                    RowLayout { spacing: 7
+                                        Rectangle { width: 30; height: 30; radius: 15
+                                            color: (root.hasPlayer && root.player.shuffle) ? colors.alpha(colors.tertiary,0.2) : shufMa.containsMouse ? colors.alpha(colors.surfaceVariant,0.4) : colors.alpha(colors.surface,0.55)
+                                            border.width: 1; border.color: (root.hasPlayer && root.player.shuffle) ? colors.alpha(colors.tertiary,0.45) : colors.alpha(colors.outline,0.15)
+                                            scale: shufMa.containsMouse ? 1.1 : 1
+                                            Behavior on scale { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
+                                            Text { anchors.centerIn: parent; text: "󰒝"; color: (root.hasPlayer && root.player.shuffle) ? colors.tertiary : colors.alpha(colors.foreground,0.7); font.family: colors.fontSans; font.pixelSize: 12 }
+                                            MouseArea { id: shufMa; anchors.fill: parent; hoverEnabled: true; onClicked: if(root.hasPlayer) root.player.shuffle = !root.player.shuffle } }
+                                        Rectangle { width: 32; height: 32; radius: 16
+                                            color: prevMa.containsMouse ? colors.alpha(colors.primary,0.16) : colors.alpha(colors.surface,0.55)
+                                            border.width: 1; border.color: prevMa.containsMouse ? colors.alpha(colors.primary,0.4) : colors.alpha(colors.outline,0.15)
+                                            scale: prevMa.containsMouse ? 1.1 : 1
+                                            Behavior on scale { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
+                                            Text { anchors.centerIn: parent; text: "󰒮"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 12 }
+                                            MouseArea { id: prevMa; anchors.fill: parent; hoverEnabled: true; onClicked: if(root.hasPlayer && root.player.canGoPrevious) root.player.previous() } }
                                         Rectangle {
-                                            width: 38; height: 38; radius: 19
-                                            color: playMa.containsMouse ? colors.primary : colors.alpha(colors.primary,0.18)
-                                            border.width: 1; border.color: root.isPlaying ? colors.alpha(colors.primary,0.6) : colors.alpha(colors.primary,0.35)
-                                            Text { anchors.centerIn: parent; text: root.isPlaying?"󰏤":"󰐊"; color: playMa.containsMouse ? colors.background : colors.primary; font.family: colors.fontSans; font.pixelSize: 15 }
+                                            width: 44; height: 44; radius: 22
+                                            color: playMa.containsMouse ? colors.primary : colors.alpha(colors.primary,0.22)
+                                            border.width: 1; border.color: root.isPlaying ? colors.alpha(colors.primary,0.65) : colors.alpha(colors.primary,0.4)
+                                            scale: playMa.containsMouse ? 1.08 : 1
+                                            Behavior on scale { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
+                                            Text { anchors.centerIn: parent; text: root.isPlaying?"󰏤":"󰐊"; color: playMa.containsMouse ? colors.background : colors.primary; font.family: colors.fontSans; font.pixelSize: 17 }
                                             MouseArea { id: playMa; anchors.fill: parent; hoverEnabled:true; onClicked: if(root.hasPlayer && root.player.canTogglePlaying) root.player.togglePlaying() }
                                         }
-                                        Rectangle { width: 28; height: 28; radius: 14; color: "transparent"; Text { anchors.centerIn: parent; text: "󰒭"; color: colors.alpha(colors.foreground,0.7); font.family: colors.fontSans; font.pixelSize: 11 } MouseArea { id: nextMa; anchors.fill: parent; hoverEnabled:false; onClicked: if(root.hasPlayer && root.player.canGoNext) root.player.next() } }
+                                        Rectangle { width: 32; height: 32; radius: 16
+                                            color: nextMa.containsMouse ? colors.alpha(colors.primary,0.16) : colors.alpha(colors.surface,0.55)
+                                            border.width: 1; border.color: nextMa.containsMouse ? colors.alpha(colors.primary,0.4) : colors.alpha(colors.outline,0.15)
+                                            scale: nextMa.containsMouse ? 1.1 : 1
+                                            Behavior on scale { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
+                                            Text { anchors.centerIn: parent; text: "󰒭"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 12 }
+                                            MouseArea { id: nextMa; anchors.fill: parent; hoverEnabled: true; onClicked: if(root.hasPlayer && root.player.canGoNext) root.player.next() } }
+                                        Rectangle { width: 30; height: 30; radius: 15
+                                            color: (root.hasPlayer && root.player.loopState!==0) ? colors.alpha(colors.tertiary,0.2) : loopMa.containsMouse ? colors.alpha(colors.surfaceVariant,0.4) : colors.alpha(colors.surface,0.55)
+                                            border.width: 1; border.color: (root.hasPlayer && root.player.loopState!==0) ? colors.alpha(colors.tertiary,0.45) : colors.alpha(colors.outline,0.15)
+                                            scale: loopMa.containsMouse ? 1.1 : 1
+                                            Behavior on scale { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
+                                            Text { anchors.centerIn: parent; text: (root.hasPlayer && root.player.loopState===1) ? "󰑘" : "󰑖"; color: (root.hasPlayer && root.player.loopState!==0) ? colors.tertiary : colors.alpha(colors.foreground,0.7); font.family: colors.fontSans; font.pixelSize: 12 }
+                                            MouseArea { id: loopMa; anchors.fill: parent; hoverEnabled: true; onClicked: if(root.hasPlayer){ var s=root.player.loopState; root.player.loopState = s===0?2:(s===2?1:0) } } }
                                     }
                                     Item { Layout.fillWidth: true }
                                     Text { text: root.npTot; Layout.alignment: Qt.AlignVCenter; color: colors.alpha(colors.outline,0.7); font.family: colors.fontSans; font.pixelSize: 8 }
                                 }
-                            }
                         }
+                        Item { Layout.fillHeight: true }
                     }
                 }
+                // Weather — hero card, fills its 260px allocation edge-to-edge
                 Rectangle {
-                    Layout.preferredWidth: 300; Layout.maximumWidth: 300; Layout.minimumWidth: 300
-                    Layout.fillWidth: false; Layout.fillHeight: true
+                    Layout.preferredWidth: 260; Layout.maximumWidth: 260; Layout.minimumWidth: 260
+                    Layout.fillHeight: true
                     radius: 16
                     clip: true
                     gradient: Gradient {
-                        GradientStop { position: 0; color: colors.alpha(colors.tertiary, 0.14) }
-                        GradientStop { position: 1; color: colors.alpha(colors.surface, 0.4) }
+                        GradientStop { position: 0; color: colors.alpha(colors.tertiary, 0.22) }
+                        GradientStop { position: 0.55; color: colors.alpha(colors.tertiary, 0.09) }
+                        GradientStop { position: 1; color: colors.alpha(colors.surface, 0.55) }
                     }
-                    border.width: 1; border.color: colors.alpha(colors.outline, 0.14)
+                    border.width: 1; border.color: colors.alpha(colors.tertiary, 0.30)
+                    // giant ghost icon backdrop — kills the empty feel, adds depth
+                    WeatherIcon {
+                        anchors.right: parent.right; anchors.top: parent.top
+                        anchors.rightMargin: -18; anchors.topMargin: -18
+                        width: 110; height: 110
+                        kind: root.weatherKind
+                        animate: false
+                        opacity: 0.13
+                        tint: colors.tertiary
+                        tintStrength: 0.2
+                    }
                     ColumnLayout {
-                        anchors.fill: parent; anchors.margins: 14; spacing: 6
-                                RowLayout {
-                                    Layout.fillWidth: true
-                                    Text { text: "WEATHER"; Layout.alignment: Qt.AlignVCenter; color: colors.alpha(colors.outline,0.55); font.family: colors.fontSans; font.pixelSize: 7; font.weight: Font.Bold; font.letterSpacing: 1.3 }
-                                    Item { Layout.fillWidth: true }
-                                    Rectangle {
-                                        radius: 2
-                                        Layout.alignment: Qt.AlignVCenter
-                                        Layout.maximumWidth: 170
-                                        width: Math.min(locText.implicitWidth + 16, 170); height: 20
-                                        color: colors.alpha(colors.tertiary, 0.16)
-                                        border.width: 1; border.color: colors.alpha(colors.tertiary, 0.35)
-                                        Text { id: locText; anchors.centerIn: parent; width: parent.width - 12; elide: Text.ElideRight; text: root.weatherLoc; color: colors.tertiary; font.family: colors.fontSans; font.pixelSize: 10; font.weight: Font.Bold }
-                                    }
-                                }
-                        Item { Layout.fillHeight: true }
-                        RowLayout {
-                            Layout.fillWidth: true; spacing: 12
-                            Text { text: root.weatherIcon !== "" ? root.weatherIcon : ""; color: colors.tertiary; font.family: colors.fontSans; font.pixelSize: 40 }
-                            ColumnLayout {
-                                spacing: 1
-                                Text { text: root.weatherTemp; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 30; font.weight: Font.ExtraBold; maximumLineCount: 1 }
-                                Text { text: root.weatherCond; Layout.maximumWidth: 130; maximumLineCount: 1; elide: Text.ElideRight; color: colors.alpha(colors.outline,0.8); font.family: colors.fontSans; font.pixelSize: 9 }
-                            }
+                        anchors.fill: parent; anchors.margins: 11; spacing: 2
+                        RowLayout { spacing: 6; Layout.fillWidth: true
+                            Text { text: "WEATHER"; color: colors.alpha(colors.foreground,0.62); font.family: colors.fontSans; font.pixelSize: 7; font.weight: Font.Bold; font.letterSpacing: 1.4; Layout.alignment: Qt.AlignVCenter }
                             Item { Layout.fillWidth: true }
-                            Text { text: "feels " + root.weatherFeel; maximumLineCount: 1; elide: Text.ElideRight; Layout.maximumWidth: 70; color: colors.alpha(colors.outline,0.65); font.family: colors.fontSans; font.pixelSize: 9; Layout.alignment: Qt.AlignBottom }
+                            Rectangle {
+                                radius: 9
+                                Layout.alignment: Qt.AlignVCenter
+                                Layout.maximumWidth: 140
+                                width: Math.min(locText.implicitWidth + 20, 140); height: 20
+                                color: colors.alpha(colors.tertiary, 0.18)
+                                border.width: 1; border.color: colors.alpha(colors.tertiary, 0.42)
+                                Text { id: locText; anchors.centerIn: parent; width: parent.width - 12; elide: Text.ElideRight; horizontalAlignment: Text.AlignHCenter; text: "󰍎 " + root.weatherLoc; color: colors.tertiary; font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold }
+                            }
+                        }
+                        RowLayout { Layout.fillWidth: true; Layout.topMargin: 6; spacing: 10
+                            Rectangle {
+                                id: wxTile
+                                width: 56; height: 56; radius: 15
+                                Layout.alignment: Qt.AlignVCenter
+                                color: colors.alpha(colors.tertiary, 0.17)
+                                border.width: 1; border.color: colors.alpha(colors.tertiary, 0.40)
+                                clip: true
+                                WeatherIcon {
+                                    anchors.centerIn: parent
+                                    width: 44; height: 44
+                                    kind: root.weatherKind
+                                    animate: root.open
+                                    tint: colors.tertiary
+                                    tintStrength: 0.5
+                                }
+                            }
+                            ColumnLayout { Layout.fillWidth: true; spacing: 0
+                                Text { text: root.weatherTemp; color: colors.foreground; font.family: "Iceland"; font.pixelSize: 42; font.weight: Font.Normal; lineHeight: 0.95 }
+                                Text { text: root.weatherCond; color: colors.alpha(colors.foreground,0.78); font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.DemiBold; elide: Text.ElideRight; Layout.fillWidth: true; maximumLineCount: 1 }
+                                Text { text: "H:" + root.weatherHigh + "  L:" + root.weatherLow; color: colors.alpha(colors.outline,0.75); font.family: colors.fontSans; font.pixelSize: 8 }
+                            }
                         }
                         Item { Layout.fillHeight: true }
+                        Rectangle { Layout.fillWidth: true; height: 1; color: colors.alpha(colors.tertiary, 0.20) }
+                        RowLayout { Layout.fillWidth: true; Layout.topMargin: 6; Layout.bottomMargin: 2; Layout.leftMargin: 10; spacing: 8
+                            ColumnLayout { Layout.fillWidth: true; spacing: 2
+                                Text { text: "FEELS"; color: colors.alpha(colors.outline,0.60); font.family: colors.fontSans; font.pixelSize: 6; font.weight: Font.Bold; font.letterSpacing: 1.1; Layout.alignment: Qt.AlignHCenter }
+                                RowLayout { spacing: 3; Layout.alignment: Qt.AlignHCenter
+                                    Text { text: "󰔏"; color: colors.tertiary; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 13; Layout.alignment: Qt.AlignVCenter }
+                                    Text { text: root.weatherFeel; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 10; font.weight: Font.ExtraBold; Layout.alignment: Qt.AlignVCenter }
+                                }
+                            }
+                            Rectangle { width: 1; height: 22; Layout.alignment: Qt.AlignVCenter; color: colors.alpha(colors.tertiary, 0.20) }
+                            ColumnLayout { Layout.fillWidth: true; spacing: 2
+                                Text { text: "HUMIDITY"; color: colors.alpha(colors.outline,0.60); font.family: colors.fontSans; font.pixelSize: 6; font.weight: Font.Bold; font.letterSpacing: 1.1; Layout.alignment: Qt.AlignHCenter }
+                                RowLayout { spacing: 3; Layout.alignment: Qt.AlignHCenter
+                                    Text { text: "󰸊"; color: colors.tertiary; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 13; Layout.alignment: Qt.AlignVCenter }
+                                    Text { text: root.weatherHumidity; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 10; font.weight: Font.ExtraBold; Layout.alignment: Qt.AlignVCenter }
+                                }
+                            }
+                            Rectangle { width: 1; height: 22; Layout.alignment: Qt.AlignVCenter; color: colors.alpha(colors.tertiary, 0.20) }
+                            ColumnLayout { Layout.fillWidth: true; spacing: 2
+                                Text { text: "WIND"; color: colors.alpha(colors.outline,0.60); font.family: colors.fontSans; font.pixelSize: 6; font.weight: Font.Bold; font.letterSpacing: 1.1; Layout.alignment: Qt.AlignHCenter }
+                                RowLayout { spacing: 3; Layout.alignment: Qt.AlignHCenter
+                                    Text { text: "󰖝"; color: colors.tertiary; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 13; Layout.alignment: Qt.AlignVCenter }
+                                    Text { text: root.weatherWind; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 10; font.weight: Font.ExtraBold; Layout.alignment: Qt.AlignVCenter }
+                                }
+                            }
+                        }
                     }
+                    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: weatherProc.running = true }
                 }
             }
 
             // ── QUICK CONTROLS ──
             Rectangle {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 116
+                Layout.preferredHeight: 96
                 radius: 16
                 color: colors.alpha(colors.surface, 0.4)
                 border.width: 1; border.color: colors.alpha(colors.outline, 0.14)
@@ -466,72 +608,63 @@ PanelWindow {
                         }
                     }
                     Rectangle { width: 1; height: parent.height - 14; color: colors.alpha(colors.outline,0.12) }
-                    // Bluetooth
+                    // Visualizer — live cava pill bars (moved here from SUPER ALT V window)
                     ColumnLayout {
-                        Layout.fillWidth: true; Layout.preferredWidth: parent.width*0.32; spacing: 3
-                        RowLayout { spacing: 8; Layout.alignment: Qt.AlignVCenter; Text { text: "󰂯"; Layout.alignment: Qt.AlignVCenter; color: colors.tertiary; font.family: colors.fontSans; font.pixelSize: 12 } Text { text: "Bluetooth"; Layout.alignment: Qt.AlignVCenter; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold } Item { Layout.fillWidth: true } Rectangle { Layout.alignment: Qt.AlignVCenter; width: 36; height: 16; radius: 8; color: colors.alpha(colors.tertiary,0.15); border.width:1; border.color: colors.alpha(colors.tertiary,0.4); Text { anchors.centerIn: parent; text: "ON"; color: colors.tertiary; font.family: colors.fontSans; font.pixelSize: 7; font.weight: Font.Bold } } }
-                        ColumnLayout {
-                            Layout.fillWidth: true; spacing: 3
-                            Text { visible: btRepeater.count===0; text: "No Bluetooth devices"; color: colors.alpha(colors.outline,0.5); font.family: colors.fontSans; font.pixelSize: 8; Layout.alignment: Qt.AlignHCenter }
-                            Repeater {
-                                id: btRepeater
-                                model: root.btDevices.slice(0, 2)
-                                delegate: Rectangle {
-                                    required property var modelData
-                                    required property int index
-                                    Layout.fillWidth: true; height: 24; radius: 7
-                                    color: modelData.connected ? colors.alpha(colors.tertiary,0.12) : colors.alpha(colors.surface,0.45)
-                                    border.width: 1; border.color: modelData.connected ? colors.alpha(colors.tertiary,0.35) : colors.alpha(colors.outline,0.12)
-                                    RowLayout {
-                                        anchors.fill: parent; anchors.leftMargin: 8; anchors.rightMargin: 6; spacing: 5
-                                        Text {
-                                            text: {
-                                                var n=modelData.name.toLowerCase()
-                                                if(n.indexOf("air")!==-1 || n.indexOf("buds")!==-1) return "󰋋"
-                                                if(n.indexOf("wh-")!==-1) return "󰋋"
-                                                if(n.indexOf("mx")!==-1) return "󰍽"
-                                                return modelData.connected?"●":"○"
-                                            }
-                                            color: modelData.connected?colors.tertiary:colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 10
+                        Layout.fillWidth: true; Layout.preferredWidth: parent.width*0.32; spacing: 4
+                        RowLayout { spacing: 8
+                            Rectangle { width: 22; height: 22; radius: 11; color: colors.alpha(colors.tertiary,0.15); border.width:1; border.color: colors.alpha(colors.tertiary,0.3); Text { anchors.centerIn: parent; text: "󰐊"; color: colors.tertiary; font.family: colors.fontSans; font.pixelSize: 11 } }
+                            Text { text: "VISUALIZER"; Layout.alignment: Qt.AlignVCenter; color: colors.alpha(colors.outline,0.65); font.family: colors.fontSans; font.pixelSize: 7; font.weight: Font.Bold; font.letterSpacing: 1.3 }
+                        }
+                        Item {
+                            Layout.fillWidth: true; Layout.fillHeight: true
+                            Row {
+                                id: vizRow
+                                anchors.fill: parent
+                                spacing: 2
+                                Repeater {
+                                    model: root.vizBars
+                                    delegate: Rectangle {
+                                        required property int index
+                                        readonly property real v: (root.vizLevels[index] || 0) / 100
+                                        width: (vizRow.width - (root.vizBars - 1) * vizRow.spacing) / root.vizBars
+                                        height: Math.max(4, vizRow.height * v)
+                                        radius: width / 2
+                                        y: vizRow.height - height
+                                        gradient: Gradient {
+                                            orientation: Gradient.Vertical
+                                            GradientStop { position: 0; color: colors.primary }
+                                            GradientStop { position: 1; color: colors.tertiary }
                                         }
-                                        Text { text: modelData.name; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 8; Layout.fillWidth: true; elide: Text.ElideRight }
-                                        Text { visible: modelData.bat!==""; text: modelData.bat; color: colors.alpha(colors.outline,0.7); font.family: colors.fontSans; font.pixelSize: 7; Layout.preferredWidth: 28; horizontalAlignment: Text.AlignRight }
-                                        Rectangle {
-                                            Layout.preferredWidth: modelData.connected?62:52; Layout.preferredHeight: 18; radius: 9
-                                            color: modelData.connected ? colors.alpha(colors.surface,0.6) : colors.alpha(colors.primary,0.14)
-                                            border.width: 1; border.color: modelData.connected?colors.alpha(colors.outline,0.12):colors.alpha(colors.primary,0.35)
-                                            Text { anchors.centerIn: parent; text: modelData.connected?"Connected":"Connect"; color: modelData.connected?colors.alpha(colors.outline,0.7):colors.primary; font.family: colors.fontSans; font.pixelSize: 7; font.weight: Font.Bold }
-                                            MouseArea { anchors.fill: parent; onClicked: root.toggleBt(index) }
-                                        }
+                                        Behavior on height { NumberAnimation { duration: 90; easing.type: Easing.OutQuad } }
                                     }
                                 }
                             }
-                            Text { visible: root.btDevices.length > 2; text: "＋" + (root.btDevices.length - 2) + " more"; color: colors.alpha(colors.outline,0.5); font.family: colors.fontSans; font.pixelSize: 6; Layout.alignment: Qt.AlignHCenter }
+                            Text { anchors.centerIn: parent; visible: root.vizLevels.length===0; text: "listening…"; color: colors.alpha(colors.outline,0.45); font.family: colors.fontSans; font.pixelSize: 7 }
                         }
                     }
                 }
             }
 
-            // ── NETWORK ──
+            // ── NETWORK — compact ──
             Rectangle {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 88
-                radius: 16
+                Layout.preferredHeight: 56
+                radius: 14
                 color: colors.alpha(colors.surface, 0.4)
                 border.width: 1; border.color: colors.alpha(colors.outline, 0.14)
                 clip: true
                 RowLayout {
-                    anchors.fill: parent; anchors.margins: 10
-                    spacing: 12
+                    anchors.fill: parent; anchors.margins: 8
+                    spacing: 10
                     Rectangle {
                         Layout.fillWidth: true; Layout.fillHeight: true
-                        radius: 10
+                        radius: 8
                         color: colors.alpha(colors.surfaceVariant,0.25)
                         border.width: 1; border.color: colors.alpha(colors.outline,0.08)
                         Canvas {
                             id: wifiSpark
                             anchors.fill: parent
-                            anchors.margins: 6
+                            anchors.margins: 4
                             Connections {
                                 target: netRate
                                 function onRxHistoryChanged(){ wifiSpark.requestPaint() }
@@ -579,27 +712,27 @@ PanelWindow {
                         }
                         Text { anchors.centerIn: parent; visible: netRate.rxHistory.length<2; text: "collecting…"; color: colors.alpha(colors.outline,0.45); font.family: colors.fontSans; font.pixelSize: 7 }
                     }
-                    Rectangle { width: 1; height: parent.height - 20; color: colors.alpha(colors.outline,0.12) }
+                    Rectangle { width: 1; height: parent.height - 16; color: colors.alpha(colors.outline,0.12) }
                     ColumnLayout {
-                        Layout.fillWidth: true; Layout.fillHeight: true; spacing: 2
+                        Layout.fillWidth: true; Layout.fillHeight: true; spacing: 1
                         Layout.alignment: Qt.AlignHCenter
-                        RowLayout { spacing: 6; Layout.alignment: Qt.AlignHCenter
-                            Rectangle { width: 22; height: 22; radius: 11; color: colors.alpha(colors.primary,0.15); border.width:1; border.color: colors.alpha(colors.primary,0.3); Text { anchors.centerIn: parent; text: "󰇚"; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 10 } }
-                            Text { text: netRate.fmt(netRate.rxKbs); Layout.alignment: Qt.AlignVCenter; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 14; font.weight: Font.ExtraBold }
+                        RowLayout { spacing: 5; Layout.alignment: Qt.AlignHCenter
+                            Rectangle { width: 18; height: 18; radius: 9; color: colors.alpha(colors.primary,0.15); border.width:1; border.color: colors.alpha(colors.primary,0.3); Text { anchors.centerIn: parent; text: "󰇚"; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 9 } }
+                            Text { text: netRate.fmt(netRate.rxKbs); Layout.alignment: Qt.AlignVCenter; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 12; font.weight: Font.ExtraBold }
                         }
-                        Text { text: "DOWNLOAD"; color: colors.alpha(colors.outline,0.55); font.family: colors.fontSans; font.pixelSize: 7; font.weight: Font.Bold; font.letterSpacing: 1.5; Layout.alignment: Qt.AlignHCenter }
-                        Text { text: "today " + netRate.fmtTotal(netRate.totalRxMb); color: colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 7; Layout.alignment: Qt.AlignHCenter; horizontalAlignment: Text.AlignHCenter }
+                        Text { text: "DOWNLOAD"; color: colors.alpha(colors.outline,0.55); font.family: colors.fontSans; font.pixelSize: 6; font.weight: Font.Bold; font.letterSpacing: 1.3; Layout.alignment: Qt.AlignHCenter }
+                        Text { text: "today " + netRate.fmtTotal(netRate.totalRxMb); color: colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 6; Layout.alignment: Qt.AlignHCenter; horizontalAlignment: Text.AlignHCenter }
                     }
-                    Rectangle { width: 1; height: parent.height - 20; color: colors.alpha(colors.outline,0.12) }
+                    Rectangle { width: 1; height: parent.height - 16; color: colors.alpha(colors.outline,0.12) }
                     ColumnLayout {
-                        Layout.fillWidth: true; Layout.fillHeight: true; spacing: 2
+                        Layout.fillWidth: true; Layout.fillHeight: true; spacing: 1
                         Layout.alignment: Qt.AlignHCenter
-                        RowLayout { spacing: 6; Layout.alignment: Qt.AlignHCenter
-                            Rectangle { width: 22; height: 22; radius: 11; color: colors.alpha(colors.secondary,0.15); border.width:1; border.color: colors.alpha(colors.secondary,0.3); Text { anchors.centerIn: parent; text: "󰕒"; color: colors.secondary; font.family: colors.fontSans; font.pixelSize: 10 } }
-                            Text { text: netRate.fmt(netRate.txKbs); Layout.alignment: Qt.AlignVCenter; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 14; font.weight: Font.ExtraBold }
+                        RowLayout { spacing: 5; Layout.alignment: Qt.AlignHCenter
+                            Rectangle { width: 18; height: 18; radius: 9; color: colors.alpha(colors.secondary,0.15); border.width:1; border.color: colors.alpha(colors.secondary,0.3); Text { anchors.centerIn: parent; text: "󰕒"; color: colors.secondary; font.family: colors.fontSans; font.pixelSize: 9 } }
+                            Text { text: netRate.fmt(netRate.txKbs); Layout.alignment: Qt.AlignVCenter; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 12; font.weight: Font.ExtraBold }
                         }
-                        Text { text: "UPLOAD"; color: colors.alpha(colors.outline,0.55); font.family: colors.fontSans; font.pixelSize: 7; font.weight: Font.Bold; font.letterSpacing: 1.5; Layout.alignment: Qt.AlignHCenter }
-                        Text { text: "today " + netRate.fmtTotal(netRate.totalTxMb); color: colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 7; Layout.alignment: Qt.AlignHCenter; horizontalAlignment: Text.AlignHCenter }
+                        Text { text: "UPLOAD"; color: colors.alpha(colors.outline,0.55); font.family: colors.fontSans; font.pixelSize: 6; font.weight: Font.Bold; font.letterSpacing: 1.3; Layout.alignment: Qt.AlignHCenter }
+                        Text { text: "today " + netRate.fmtTotal(netRate.totalTxMb); color: colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 6; Layout.alignment: Qt.AlignHCenter; horizontalAlignment: Text.AlignHCenter }
                     }
                 }
             }
@@ -607,9 +740,8 @@ PanelWindow {
             // ── MIDDLE — Pet | Activity | Calendar ──
             RowLayout {
                 Layout.fillWidth: true
-                Layout.fillHeight: true
-                Layout.preferredHeight: 150
-                spacing: 10
+                Layout.preferredHeight: 126
+                spacing: 6
                 Rectangle {
                     Layout.fillWidth: true; Layout.fillHeight: true
                     radius: 16
@@ -745,6 +877,14 @@ PanelWindow {
                             }
                             Text { text: root.calTitle; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.ExtraBold; Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter }
                             Rectangle {
+                                visible: root.calOffset !== 0
+                                width: todayTxt.implicitWidth + 14; height: 22; radius: 11
+                                color: todayMa.containsMouse ? colors.alpha(colors.primary,0.2) : colors.alpha(colors.primary,0.08)
+                                border.width: 1; border.color: colors.alpha(colors.primary,0.3)
+                                Text { id: todayTxt; anchors.centerIn: parent; text: "today"; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold }
+                                MouseArea { id: todayMa; anchors.fill: parent; hoverEnabled: true; onClicked: { root.calOffset = 0; root.rebuildCal() } }
+                            }
+                            Rectangle {
                                 width: 22; height: 22; radius: 11
                                 color: nextCalMa.containsMouse ? colors.alpha(colors.primary,0.2) : colors.alpha(colors.primary,0.08)
                                 Text { anchors.centerIn: parent; text: "›"; color: colors.primary; font.pixelSize: 12 }
@@ -754,32 +894,49 @@ PanelWindow {
                         RowLayout {
                             Layout.fillWidth: true
                             spacing: 6
-                            Text { id: calClock; text: "--:--"; Layout.alignment: Qt.AlignVCenter; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 18; font.weight: Font.ExtraBold }
+                            Text { id: calClock; text: "--:--"; Layout.alignment: Qt.AlignVCenter; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 20; font.weight: Font.ExtraBold }
                             Text { id: calSecs; text: "--"; Layout.alignment: Qt.AlignBottom; Layout.bottomMargin: 3; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold }
                             Item { Layout.fillWidth: true }
+                            Rectangle {
+                                Layout.alignment: Qt.AlignVCenter
+                                width: calWeek.implicitWidth + 12; height: 18; radius: 9
+                                color: colors.alpha(colors.tertiary, 0.14)
+                                border.width: 1; border.color: colors.alpha(colors.tertiary, 0.3)
+                                Text { id: calWeek; anchors.centerIn: parent; text: "W–"; color: colors.tertiary; font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold }
+                            }
                             Text { id: calDate; text: "—"; Layout.alignment: Qt.AlignVCenter; color: colors.alpha(colors.outline,0.65); font.family: colors.fontSans; font.pixelSize: 7; font.weight: Font.Bold; font.letterSpacing: 0.8 }
                             Timer {
-                                interval: 1000; running: true; repeat: true; triggeredOnStart: true
+                                interval: 1000; running: root.open; repeat: true; triggeredOnStart: true
                                 onTriggered: {
                                     var now = new Date()
                                     calClock.text = Qt.formatTime(now, "HH:mm")
                                     calSecs.text = Qt.formatTime(now, "ss")
                                     calDate.text = Qt.formatDate(now, "ddd d MMM")
+                                    calWeek.text = "W" + root.isoWeek(now)
                                 }
                             }
                         }
                         GridLayout {
                             Layout.fillWidth: true; Layout.fillHeight: true; columns: 7; rowSpacing: 3; columnSpacing: 4
-                            Repeater { model: ["M","T","W","T","F","S","S"]; Text { text: modelData; color: colors.alpha(colors.outline,0.5); font.family: colors.fontSans; font.pixelSize: 5; font.weight: Font.Bold; Layout.alignment: Qt.AlignHCenter } }
+                            Repeater {
+                                model: ["M","T","W","T","F","S","S"]
+                                delegate: Text {
+                                    required property var modelData
+                                    required property int index
+                                    text: modelData
+                                    color: index >= 5 ? colors.alpha(colors.tertiary,0.65) : colors.alpha(colors.outline,0.5)
+                                    font.family: colors.fontSans; font.pixelSize: 6; font.weight: Font.Bold
+                                    Layout.alignment: Qt.AlignHCenter
+                                }
+                            }
                             Repeater {
                                 model: root.calCells
                                 delegate: Rectangle {
                                     required property var modelData
                                     Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredHeight: 14; radius: 6
-                                    color: modelData.today ? colors.primary : "transparent"
-                                    border.width: modelData.today ? 2 : 0
-                                    border.color: modelData.today ? colors.alpha(colors.primary,0.5) : "transparent"
-                                    Text { anchors.centerIn: parent; visible: modelData.d > 0; text: modelData.d; color: modelData.today ? colors.background : colors.alpha(colors.foreground,0.8); font.family: colors.fontSans; font.pixelSize: 8; font.weight: modelData.today ? Font.Bold : Font.Normal }
+                                    color: modelData.today ? colors.primary : dayMa.containsMouse ? colors.alpha(colors.surfaceVariant,0.4) : "transparent"
+                                    Text { anchors.centerIn: parent; visible: modelData.d > 0; text: modelData.d; color: modelData.today ? colors.background : (modelData.wd >= 5 ? colors.alpha(colors.foreground,0.45) : colors.alpha(colors.foreground,0.8)); font.family: colors.fontSans; font.pixelSize: 8; font.weight: modelData.today ? Font.Bold : Font.Normal }
+                                    MouseArea { id: dayMa; anchors.fill: parent; hoverEnabled: true }
                                 }
                             }
                         }
@@ -789,7 +946,7 @@ PanelWindow {
 
 
             Text {
-                text: "Esc or SUPER ALT P to close  •  sliders/typing inside never closes  •  outside click does not close"
+                text: "Esc or SUPER ALT P to close  •  regular window — move / resize / tile like any other"
                 color: colors.alpha(colors.outline, 0.38)
                 font.family: colors.fontSans; font.pixelSize: 7; Layout.alignment: Qt.AlignHCenter
             }

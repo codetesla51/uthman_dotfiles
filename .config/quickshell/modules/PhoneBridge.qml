@@ -142,9 +142,10 @@ FloatingWindow {
             if (root.seenKeys.indexOf(f.key) !== -1) continue
             root.seenKeys.push(f.key)
             if (root.seenKeys.length > 200) root.seenKeys.shift()
+            var who = f.sender || ("New " + f.label + " notification")
+            var body = f.body ? String(f.body) : (f.sender ? "via " + f.label : "")
             Quickshell.execDetached(["notify-send", "-a", f.label,
-                f.title || "New " + f.label + " notification",
-                f.sender ? "from " + f.sender : ""])
+                who, body])
         }
     }
 

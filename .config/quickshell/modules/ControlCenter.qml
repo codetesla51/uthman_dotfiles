@@ -528,10 +528,10 @@ FloatingWindow {
                                     tintStrength: 0.5
                                 }
                             }
-                            ColumnLayout { Layout.fillWidth: true; spacing: 0
-                                Text { text: root.weatherTemp; color: colors.foreground; font.family: "Iceland"; font.pixelSize: 42; font.weight: Font.Normal; lineHeight: 0.95 }
-                                Text { text: root.weatherCond; color: colors.alpha(colors.foreground,0.78); font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.DemiBold; elide: Text.ElideRight; Layout.fillWidth: true; maximumLineCount: 1 }
-                                Text { text: "H:" + root.weatherHigh + "  L:" + root.weatherLow; color: colors.alpha(colors.outline,0.75); font.family: colors.fontSans; font.pixelSize: 8 }
+                            ColumnLayout { Layout.fillWidth: true; spacing: 1; clip: true
+                                Text { text: root.weatherTemp; color: colors.foreground; font.family: "Iceland"; font.pixelSize: 42; font.weight: Font.Normal; lineHeight: 0.95; elide: Text.ElideRight; maximumLineCount: 1; Layout.fillWidth: true }
+                                Text { text: root.weatherCond; color: colors.alpha(colors.foreground,0.78); font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.DemiBold; elide: Text.ElideRight; Layout.fillWidth: true; maximumLineCount: 1; wrapMode: Text.NoWrap }
+                                Text { text: "H:" + root.weatherHigh + "  L:" + root.weatherLow; color: colors.alpha(colors.outline,0.75); font.family: colors.fontSans; font.pixelSize: 8; elide: Text.ElideRight; maximumLineCount: 1; Layout.fillWidth: true; wrapMode: Text.NoWrap }
                             }
                         }
                         Item { Layout.fillHeight: true }

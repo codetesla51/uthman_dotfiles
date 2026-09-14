@@ -429,14 +429,12 @@ FloatingWindow {
                                     Item { Layout.fillWidth: true }
                                     RowLayout { spacing: 7
                                         Rectangle { width: 30; height: 30; radius: 15
-                                            readonly property bool supported: root.hasPlayer && typeof root.player.shuffle !== "undefined"
-                                            opacity: supported ? 1 : 0.45
-                                            color: (supported && root.player.shuffle) ? colors.alpha(colors.tertiary,0.2) : shufMa.containsMouse && supported ? colors.alpha(colors.surfaceVariant,0.4) : colors.alpha(colors.surface,0.55)
-                                            border.width: 1; border.color: (supported && root.player.shuffle) ? colors.alpha(colors.tertiary,0.45) : colors.alpha(colors.outline,0.15)
-                                            scale: shufMa.containsMouse && supported ? 1.1 : 1
+                                            color: (root.hasPlayer && root.player.shuffle) ? colors.alpha(colors.tertiary,0.2) : shufMa.containsMouse ? colors.alpha(colors.surfaceVariant,0.4) : colors.alpha(colors.surface,0.55)
+                                            border.width: 1; border.color: (root.hasPlayer && root.player.shuffle) ? colors.alpha(colors.tertiary,0.45) : colors.alpha(colors.outline,0.15)
+                                            scale: shufMa.containsMouse ? 1.1 : 1
                                             Behavior on scale { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
-                                            Text { anchors.centerIn: parent; text: "󰒝"; color: (supported && root.player.shuffle) ? colors.tertiary : colors.alpha(colors.foreground,0.7); font.family: colors.fontSans; font.pixelSize: 12 }
-                                            MouseArea { id: shufMa; anchors.fill: parent; hoverEnabled: true; cursorShape: supported ? Qt.PointingHandCursor : Qt.ForbiddenCursor; onClicked: { if(!root.hasPlayer) return; if(!parent.supported){ Quickshell.execDetached(["notify-send","-u","low","Shuffle","Not supported by "+(root.player.identity||"this player")]); return } root.player.shuffle = !root.player.shuffle } } }
+                                            Text { anchors.centerIn: parent; text: "󰒝"; color: (root.hasPlayer && root.player.shuffle) ? colors.tertiary : colors.alpha(colors.foreground,0.7); font.family: colors.fontSans; font.pixelSize: 12 }
+                                            MouseArea { id: shufMa; anchors.fill: parent; hoverEnabled: true; onClicked: if(root.hasPlayer) root.player.shuffle = !root.player.shuffle } }
                                         Rectangle { width: 32; height: 32; radius: 16
                                             color: prevMa.containsMouse ? colors.alpha(colors.primary,0.16) : colors.alpha(colors.surface,0.55)
                                             border.width: 1; border.color: prevMa.containsMouse ? colors.alpha(colors.primary,0.4) : colors.alpha(colors.outline,0.15)
@@ -461,14 +459,12 @@ FloatingWindow {
                                             Text { anchors.centerIn: parent; text: "󰒭"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 12 }
                                             MouseArea { id: nextMa; anchors.fill: parent; hoverEnabled: true; onClicked: if(root.hasPlayer && root.player.canGoNext) root.player.next() } }
                                         Rectangle { width: 30; height: 30; radius: 15
-                                            readonly property bool supported: root.hasPlayer && typeof root.player.loopState !== "undefined"
-                                            opacity: supported ? 1 : 0.45
-                                            color: (supported && root.player.loopState!==0) ? colors.alpha(colors.tertiary,0.2) : loopMa.containsMouse && supported ? colors.alpha(colors.surfaceVariant,0.4) : colors.alpha(colors.surface,0.55)
-                                            border.width: 1; border.color: (supported && root.player.loopState!==0) ? colors.alpha(colors.tertiary,0.45) : colors.alpha(colors.outline,0.15)
-                                            scale: loopMa.containsMouse && supported ? 1.1 : 1
+                                            color: (root.hasPlayer && root.player.loopState!==0) ? colors.alpha(colors.tertiary,0.2) : loopMa.containsMouse ? colors.alpha(colors.surfaceVariant,0.4) : colors.alpha(colors.surface,0.55)
+                                            border.width: 1; border.color: (root.hasPlayer && root.player.loopState!==0) ? colors.alpha(colors.tertiary,0.45) : colors.alpha(colors.outline,0.15)
+                                            scale: loopMa.containsMouse ? 1.1 : 1
                                             Behavior on scale { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
-                                            Text { anchors.centerIn: parent; text: (supported && root.player.loopState===1) ? "󰑘" : "󰑖"; color: (supported && root.player.loopState!==0) ? colors.tertiary : colors.alpha(colors.foreground,0.7); font.family: colors.fontSans; font.pixelSize: 12 }
-                                            MouseArea { id: loopMa; anchors.fill: parent; hoverEnabled: true; cursorShape: supported ? Qt.PointingHandCursor : Qt.ForbiddenCursor; onClicked: { if(!root.hasPlayer) return; if(!parent.supported){ Quickshell.execDetached(["notify-send","-u","low","Repeat","Not supported by "+(root.player.identity||"this player")]); return } var s=root.player.loopState; root.player.loopState = s===0?2:(s===2?1:0) } } }
+                                            Text { anchors.centerIn: parent; text: (root.hasPlayer && root.player.loopState===1) ? "󰑘" : "󰑖"; color: (root.hasPlayer && root.player.loopState!==0) ? colors.tertiary : colors.alpha(colors.foreground,0.7); font.family: colors.fontSans; font.pixelSize: 12 }
+                                            MouseArea { id: loopMa; anchors.fill: parent; hoverEnabled: true; onClicked: if(root.hasPlayer){ var s=root.player.loopState; root.player.loopState = s===0?2:(s===2?1:0) } } }
                                     }
                                     Item { Layout.fillWidth: true }
                                     Text { text: root.npTot; Layout.alignment: Qt.AlignVCenter; color: colors.alpha(colors.outline,0.7); font.family: colors.fontSans; font.pixelSize: 8 }

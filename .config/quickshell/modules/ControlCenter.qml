@@ -58,6 +58,11 @@ FloatingWindow {
         if (t.indexOf("cloud") !== -1 || t.indexOf("overcast") !== -1) return "󰖐"
         return "󰖕"
     }
+    function hiResArt(u) {
+        var s = String(u || "")
+        if (s.indexOf("googleusercontent.com") === -1) return s
+        return s.replace(/([=&])w\d+-h\d+([-_a-z0-9]*)/gi, "$1w640-h640")
+    }
 
     property var player: Mpris.players.values.find(function(p){ return p.isPlaying }) || Mpris.players.values[0] || null
     readonly property bool hasPlayer: player !== null
@@ -349,9 +354,13 @@ FloatingWindow {
                         Image {
                             id: npBg
                             anchors.fill: parent
-                            source: root.hasPlayer ? root.player.trackArtUrl : ""
+                            source: root.hasPlayer ? root.hiResArt(root.player.trackArtUrl) : ""
                             fillMode: Image.PreserveAspectCrop
                             asynchronous: true
+                            cache: true
+                            mipmap: true
+                            smooth: true
+                            sourceSize: Qt.size(640, 640)
                             layer.enabled: true
                             layer.effect: MultiEffect {
                                 blurEnabled: false

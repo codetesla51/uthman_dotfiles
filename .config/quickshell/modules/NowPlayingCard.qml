@@ -17,7 +17,19 @@ PanelWindow {
     property var player: Mpris.players.values.find(function(p){ return p.isPlaying }) || Mpris.players.values[0] || null
     readonly property bool hasPlayer: player !== null
     readonly property bool open: root.hovered && root.hasPlayer
-    readonly property string artUrl: root.hasPlayer ? (player.trackArtUrl || "") : ""
+    readonly property string artUrl: root.hasPlayer ? root.hiResArt(root.player.trackArtUrl) : ""
+
+    // MPRIS hands us the URL the PARENT handed IT — and limusic (YoutubeMusic)
+    // hands over a **w120-h120** / w84-h84 thumbnail, which is exactly why the
+    // art looks soft the moment we fill a 300px card with it. Google's CDN
+    // (yt3.googleusercontent.com / lh3.googleusercontent.com) accepts a larger
+    // hint: rewrite =wHHH-hWWW(-...) to =w640-h640 and the same bytes come
+    // back cachable at real resolution. Non-youtube URLs pass through untouched.
+    function hiResArt(u) {
+        var s = String(u || "")
+        if (s.indexOf("googleusercontent.com") === -1) return s
+        return s.replace(/([=&])w\d+-h\d+([-_a-z0-9]*)/gi, "$1w640-h640")
+    }
     readonly property real position: root.hasPlayer ? (player.position || 0) : 0
     readonly property real length: root.hasPlayer ? (player.length || 0) : 0
     readonly property real progress: root.length > 0 ? Math.min(1, root.position / root.length) : 0
@@ -61,10 +73,13 @@ PanelWindow {
             visible: root.artUrl !== ""
             anchors.fill: parent
             source: root.artUrl
+            sourceSize: Qt.size(640, 640)
             fillMode: Image.PreserveAspectCrop
             asynchronous: true
             cache: true
-            opacity: 0.55
+            mipmap: true
+            smooth: true
+            opacity: 0.75
         }
 
         // overlay: top sheen for the glass read, then the scrim the text sits on

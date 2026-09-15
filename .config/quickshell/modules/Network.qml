@@ -22,8 +22,8 @@ Item {
     readonly property string essid: wifiNet ? (wifiNet.name ?? "").trim() : ""
     readonly property bool disconnected: !ethUp && essid === ""
 
-    // cap pill width — long SSIDs elide instead of stretching the bar
-    readonly property int maxLabelW: 160
+    // compact cap — small names stay small, long SSIDs elide at ~96px total
+    readonly property int maxLabelW: 64
     implicitWidth: Math.min(label.implicitWidth + 32, root.maxLabelW + 32)
     implicitHeight: 30
 

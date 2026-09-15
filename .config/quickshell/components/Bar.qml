@@ -179,7 +179,7 @@ PanelWindow {
 
         RowLayout {
             id: rightRow
-            anchors { right: parent.right; top: parent.top; bottom: parent.bottom; topMargin: 6; bottomMargin: 8 }
+            anchors { right: parent.right; top: parent.top; bottom: parent.bottom; topMargin: 6; bottomMargin: 8; rightMargin: 6 }
             spacing: 6
             opacity: bar.barsVisible ? 1 : 0
             Behavior on opacity { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }

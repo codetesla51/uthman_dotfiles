@@ -27,7 +27,7 @@ Rules of the house (from AGENTS.md / memory.md):
 | FastFetchWindow.qml | system info card w/ avatar | `fastfetch` | `SUPER N` | FloatingWindow 560x340 |
 | AudioVisualizer.qml | retired — visualizer lives inside ControlCenter now | — | — | file kept on disk, unwired; cava feed via `vizProc` in ControlCenter |
 | PkgManager.qml | **package manager** — search pacman+AUR, queue, install progress, uninstall (native vs foreign), updates | `pkgman` (`packages` alias) | `SUPER I` | FloatingWindow 980×640 — Hyprland window, not popup; pacman for repo, yay for AUR; .desktop for rofi/walker |
-| PdfViewer.qml | **PDF viewer** — poppler pdftoppm 150 DPI, one-page PNG, pre-render next, glass layershell popup | `pdfviewer` | `SUPER ALT N` | PanelWindow 900×700 Overlay, Matugen, page nav ←→, zoom +/-; `utpdf <file>` wrapper |
+| PdfViewer.qml | **PDF library** — recents, favs, title+full-text search, copy-path/show-in-files | `pdfviewer` | `SUPER ALT N` | FloatingWindow 960×640 — Hyprland window, not overlay; reads in Zathura; `utpdf <file>` wrapper |
 | ControlCenter.qml | **control center** — bento grid (now playing, weather+pomodoro, quick controls, network, pet, activity, cava visualizer) | `controlcenter` | `SUPER ALT P` | FloatingWindow 760×580 tight glass, Esc to close; pomodoro replaced SUPER ALT C calendar |
 | MediaOsd.qml | volume/brightness/mic OSD overlay | `media` (`volup/voldown/volmute/micmute/briup/bridown/brimax/brimin`) | Fn-row keys (XF86) | replaced omarchy swayosd; binds in bindings.conf |
 | PluginMenu.qml | pick-and-open grid for **extras/plugins only** | `plugins` | `SUPER ALT P` → `controlcenter` now | native modules excluded, use `plugins` ipc directly |

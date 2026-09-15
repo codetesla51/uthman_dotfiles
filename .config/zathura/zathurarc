@@ -1,0 +1,57 @@
+# generated from the matugen zathurarc template — do not hand-edit,
+# re-render via matugen (templates/zathurarc) or mirror that file here
+set notification-error-bg       "#ffb4ab"
+set notification-error-fg       "#580003"
+set notification-warning-bg     "#d0c3c9"
+set notification-warning-fg     "#2d262b"
+set notification-bg             "#141312"
+set notification-fg             "#eae6e4"
+
+set completion-bg               "#232322"
+set completion-fg               "#eae6e4"
+set completion-group-bg         "#232322"
+set completion-group-fg         "#c8c6c0"
+set completion-highlight-bg     "#c7c7bb"
+set completion-highlight-fg     "#272920"
+
+set index-bg                    "#141312"
+set index-fg                    "#eae6e4"
+set index-active-bg             "#919286"
+set index-active-fg             "#272920"
+
+set inputbar-bg                 "#232322"
+set inputbar-fg                 "#eae6e4"
+set statusbar-bg                "#232322"
+set statusbar-fg                "#eae6e4"
+
+set highlight-color             "#c7c7bb"
+set highlight-active-color      "#c8c6c0"
+set default-bg                  "#141312"
+set default-fg                  "#eae6e4"
+set recolor-lightcolor          "#141312"
+set recolor-darkcolor           "#eae6e4"
+
+set render-loading              true
+set recolor                     true
+set recolor-keephue             true
+set adjust-open                 width
+set scroll-page-aware           true
+set selection-clipboard         clipboard
+
+# rice: basename in statusbar (z-library paths are endless), % position,
+# comfortable padding + terminal-matched font
+set font                        "FiraCode Nerd Font 10"
+set statusbar-basename          true
+set statusbar-page-percent      true
+set statusbar-h-padding         10
+set statusbar-v-padding         6
+set page-padding                12
+set scroll-step                 60
+set zoom-min                    20
+set zoom-max                    500
+
+# n/N flip pages (search-match nav moves to t/T)
+map n navigate next
+map N navigate previous
+map t search next
+map T search previous

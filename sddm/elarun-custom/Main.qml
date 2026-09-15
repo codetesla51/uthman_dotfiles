@@ -12,6 +12,7 @@ Rectangle {
 
     property int sessionIndex: sessionModel.lastIndex
     property string failMsg: ""
+    property bool loggingIn: false
     property string loginUser: userModel.lastUser !== "" ? userModel.lastUser : "uthman"
     property color field: Qt.lighter(pal.background, 1.35)
     property color edge: Qt.lighter(pal.background, 2.1)
@@ -19,13 +20,17 @@ Rectangle {
     property color faint: Qt.rgba(pal.text.r, pal.text.g, pal.text.b, 0.35)
 
     function doLogin() {
+        if (root.loggingIn)
+            return
         failMsg = ""
+        loggingIn = true
         sddm.login(root.loginUser, pwField.text, sessionIndex)
     }
 
     Connections {
         target: sddm
         onLoginFailed: {
+            loggingIn = false
             failMsg = "Wrong password, try again"
             pwField.text = ""
             pwField.focus = true
@@ -87,10 +92,14 @@ Rectangle {
                 color: pal.text
                 selectionColor: pal.primary
                 selectedTextColor: pal.background
-                font.family: "Iceland"
-                font.pixelSize: 20
+                // NOTE: bullets render in FiraCode, not Iceland — Iceland has
+                // no bullet glyph, so Qt fell back to another font whose dots
+                // looked oversized next to the rest of the theme.
+                font.family: "FiraCode Nerd Font"
+                font.pixelSize: 18
                 echoMode: TextInput.Password
-                passwordCharacter: "●"
+                passwordCharacter: "•"
+                readOnly: root.loggingIn
                 focus: true
                 Keys.onPressed: {
                     if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
@@ -121,8 +130,8 @@ Rectangle {
             Behavior on color { ColorAnimation { duration: 120 } }
             Text {
                 anchors.centerIn: parent
-                text: "LOG IN"
-                color: pal.background
+                text: root.loggingIn ? "PLEASE WAIT" : "LOG IN"
+                color: root.loggingIn ? root.dim : pal.background
                 font.family: "Iceland"
                 font.pixelSize: 20
                 font.weight: Font.Bold
@@ -133,19 +142,48 @@ Rectangle {
                 anchors.fill: parent
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
+                enabled: !root.loggingIn
                 onClicked: root.doLogin()
             }
         }
 
-        // error line (reserved space so nothing jumps)
-        Text {
+        // status line (reserved space so nothing jumps): error or logging-in
+        Item {
             anchors.horizontalCenter: parent.horizontalCenter
+            width: 340
             height: 20
-            text: root.failMsg
-            color: pal.error
-            font.family: "Iceland"
-            font.pixelSize: 16
-            visible: root.failMsg !== ""
+            Text {
+                anchors.centerIn: parent
+                text: root.failMsg
+                color: pal.error
+                font.family: "Iceland"
+                font.pixelSize: 16
+                visible: root.failMsg !== "" && !root.loggingIn
+            }
+            Row {
+                anchors.centerIn: parent
+                spacing: 6
+                visible: root.loggingIn
+                Repeater {
+                    model: 3
+                    delegate: Rectangle {
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: 5
+                        height: 5
+                        radius: 2.5
+                        color: pal.primary
+                        opacity: 0.25
+                        SequentialAnimation on opacity {
+                            loops: Animation.Infinite
+                            running: root.loggingIn
+                            PauseAnimation { duration: index * 180 }
+                            NumberAnimation { to: 1; duration: 300 }
+                            NumberAnimation { to: 0.25; duration: 300 }
+                            PauseAnimation { duration: (2 - index) * 180 }
+                        }
+                    }
+                }
+            }
         }
     }
 

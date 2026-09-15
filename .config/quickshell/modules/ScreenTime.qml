@@ -1,10 +1,8 @@
 import Quickshell
 import Quickshell.Io
-import Quickshell.Hyprland
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
-import QtQuick.LocalStorage 2.0
 
 // uthmanHabit — graph + 7-day list, Hyprland FloatingWindow, no hover clutter
 FloatingWindow {
@@ -21,9 +19,8 @@ FloatingWindow {
 
     IpcHandler { target: "screentime"; function toggle(): void { root.open = !root.open } }
 
-    function db() { return LocalStorage.openDatabaseSync("qs_screentime", "1.0", "screen time", 1000000) }
-    function fmtDay(d) { return Qt.formatDate(d, "yyyy-MM-dd") }
-    function fmtDisplay(d) { return Qt.formatDate(d, "ddd MMM dd") }
+    // data comes from the `screentime` backend (Go daemon): `screentime --export all`
+    // -> { cells[105]{secs,future}, last7[]{display,secs,today}, total_secs }
     function fmtDur(secs) {
         if (secs <= 0) return "No activity"
         var m = Math.floor(secs / 60)
@@ -33,82 +30,32 @@ FloatingWindow {
         if (rm === 0) return h + "h"
         return h + "h " + rm + "m"
     }
-    readonly property string today: fmtDay(new Date())
-
-    function initDb() {
-        db().transaction(function (tx) {
-            tx.executeSql("CREATE TABLE IF NOT EXISTS app_time(day TEXT, app TEXT, seconds INTEGER, PRIMARY KEY(day, app))")
-            tx.executeSql("CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT)")
-        })
-    }
-    property var mem: ({})
-    function sample() {
-        var t = Hyprland.activeToplevel
-        var cls = (t && t.class) ? t.class : "unknown"
-        mem[cls] = (mem[cls] || 0) + 10
-    }
-    function flush() {
-        var entries = []
-        for (var k in mem) entries.push([today, k, mem[k]])
-        mem = {}
-        if (entries.length === 0) return
-        db().transaction(function (tx) {
-            for (var i = 0; i < entries.length; i++) {
-                tx.executeSql("UPDATE app_time SET seconds = seconds + ? WHERE day=? AND app=?", [entries[i][2], entries[i][0], entries[i][1]])
-                tx.executeSql("INSERT INTO app_time(day, app, seconds) SELECT ?, ?, ? WHERE (SELECT changes()) = 0", [entries[i][0], entries[i][1], entries[i][2]])
-            }
-        })
-        if (root.open) loadAll()
-    }
-
-    Timer { interval: 10000; running: true; repeat: true; onTriggered: root.sample() }
-    Timer { interval: 60000; running: true; repeat: true; onTriggered: root.flush() }
-    Component.onCompleted: initDb()
-    Component.onDestruction: flush()
 
     property var heatCells: []
     property var last7: []
     property int totalSecs: 0
-    function unflushedToday() {
-        var t = 0
-        for (var k in mem) t += mem[k]
-        return t
-    }
-    function loadAll() {
-        var byDay = {}
-        db().transaction(function (tx) {
-            var rs = tx.executeSql("SELECT day, SUM(seconds) AS s FROM app_time GROUP BY day")
-            for (var i = 0; i < rs.rows.length; i++) byDay[rs.rows.item(i).day] = rs.rows.item(i).s
-        })
-        byDay[today] = (byDay[today] || 0) + unflushedToday()
-        var now = new Date()
-        now.setHours(0,0,0,0)
-        // 105-day heatmap
-        var dow = (now.getDay() + 6) % 7
-        var start = new Date(now); start.setDate(now.getDate() - (14 * 7 + dow))
-        var cells = []
-        for (var c = 0; c < 105; c++) {
-            var d = new Date(start); d.setDate(start.getDate() + c)
-            var ds = fmtDay(d)
-            cells.push({ secs: (byDay[ds] || 0), future: d > now, dateStr: ds })
+
+    Process {
+        id: fetcher
+        command: ["screentime", "--export", "all"]
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: {
+                var j = null
+                try { j = JSON.parse(text) } catch (e) { j = null }
+                if (!j) { root.heatCells = []; root.last7 = []; root.totalSecs = 0; return }
+                root.heatCells = j.cells || []
+                root.totalSecs = j.total_secs || 0
+                var days = []
+                var src = j.last7 || []
+                for (var i = 0; i < src.length; i++) {
+                    days.push({ display: src[i].display, secs: src[i].secs || 0, isToday: !!src[i].today })
+                }
+                root.last7 = days
+            }
         }
-        heatCells = cells
-        // last 7 days list
-        var days = []
-        var total = 0
-        for (var i = 6; i >= 0; i--) {
-            var dd = new Date(now); dd.setDate(now.getDate() - i)
-            var dds = fmtDay(dd)
-            var secs = byDay[dds] || 0
-            var fut = dd > now
-            if (fut) continue
-            days.push({ date: dd, dateStr: dds, display: fmtDisplay(dd), secs: secs, isToday: i === 0 })
-            total += secs
-        }
-        last7 = days
-        totalSecs = total
     }
-    onOpenChanged: if (open) { flush(); loadAll() }
+    onOpenChanged: if (open) { fetcher.running = true }
 
     function heatColor(secs, future) {
         if (future) return colors.alpha(colors.outline, 0.04)

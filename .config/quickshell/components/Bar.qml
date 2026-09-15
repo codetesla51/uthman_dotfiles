@@ -44,12 +44,6 @@ PanelWindow {
     WatchCatPanel { id: watchCat; colors: palette }
     MediaOsd { id: mediaOsd; colors: palette }
 
-    CalendarPanel {
-        id: calendarPanel
-        colors: palette
-        onCloseRequested: { bar.calendarPinned = false; calendarPanel.open = false }
-    }
-
     // bar sides toggle — SUPER SHIFT SPACE leaves middle island
     property bool barsVisible: true
     // center style — SUPER ALT SPACE flips Dynamic Island against the trapezoid tab
@@ -67,11 +61,6 @@ PanelWindow {
         function toggle(): void { bar.barsVisible = !bar.barsVisible }
         function toggleIsland(): void { bar.dynamicIsland = !bar.dynamicIsland }
     }
-
-    // calendar — manual only, you control open/close (click clock or Super+C, Esc/backdrop to close)
-    property bool calendarPinned: false
-    onCalendarPinnedChanged: calendarPanel.open = calendarPinned
-    IpcHandler { target: "calendar"; function toggle(): void { bar.calendarPinned = !bar.calendarPinned } }
 
     Item {
         id: content

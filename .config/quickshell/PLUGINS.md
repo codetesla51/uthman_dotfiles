@@ -15,7 +15,7 @@ Rules of the house (from AGENTS.md / memory.md):
 | Workspaces.qml | live Hyprland workspaces | — | — | bar pill, left row |
 | Clock.qml | bar clock, alt format on right-click | — | — | left-click opens ClockWindow |
 | ClockWindow.qml | small draggable clock window | `clockwin` | via bar clock click | FastFetch-style FloatingWindow |
-| CalendarPanel.qml | month grid + reminders + pomodoro | `calendar` | `SUPER C` | drawer panel (720px) |
+| CalendarPanel.qml | retired — pomodoro moved into ControlCenter | — | — | file kept on disk, unwired; reminders dormant in LocalStorage |
 | NotificationCenter.qml + BellButton + Toasts | notifications daemon + drawer | `notifications` (+`toggleDnd`) | `SUPER ALT COMMA` | owns freedesktop Notifications bus |
 | WifiPanel.qml + NetRate.qml | network manager + speedtest | `wifi` | `SUPER H` | cloudflare speedtest built in |
 | SystemMonitor.qml | process/system stats window | `sysmon` | `SUPER U` | FloatingWindow 920x640 |
@@ -25,10 +25,10 @@ Rules of the house (from AGENTS.md / memory.md):
 | KeybindsPanel.qml | static keybind cheatsheet | `keybinds` | `SUPER K` | Enter executes bind |
 | PowerMenu.qml | lock/logout/suspend/reboot/shutdown | `power` | `SUPER ESCAPE` | TODO: confirm step for destructive actions |
 | FastFetchWindow.qml | system info card w/ avatar | `fastfetch` | `SUPER N` | FloatingWindow 560x340 |
-| AudioVisualizer.qml | cava bars in draggable window | `visualizer` | `SUPER ALT V` | cava raw/ascii feed, scripts/cava-qs.conf |
+| AudioVisualizer.qml | retired — visualizer lives inside ControlCenter now | — | — | file kept on disk, unwired; cava feed via `vizProc` in ControlCenter |
 | PkgManager.qml | **package manager** — search pacman+AUR, queue, install progress, uninstall (native vs foreign), updates | `pkgman` (`packages` alias) | `SUPER I` | FloatingWindow 980×640 — Hyprland window, not popup; pacman for repo, yay for AUR; .desktop for rofi/walker |
 | PdfViewer.qml | **PDF viewer** — poppler pdftoppm 150 DPI, one-page PNG, pre-render next, glass layershell popup | `pdfviewer` | `SUPER ALT N` | PanelWindow 900×700 Overlay, Matugen, page nav ←→, zoom +/-; `utpdf <file>` wrapper |
-| ControlCenter.qml | **control center** — bento grid (now playing, wifi graph, quick controls, pet, activity) | `controlcenter` | `SUPER ALT P` | PanelWindow Overlay 860×700, Esc to close |
+| ControlCenter.qml | **control center** — bento grid (now playing, weather+pomodoro, quick controls, network, pet, activity, cava visualizer) | `controlcenter` | `SUPER ALT P` | FloatingWindow 760×580 tight glass, Esc to close; pomodoro replaced SUPER ALT C calendar |
 | MediaOsd.qml | volume/brightness/mic OSD overlay | `media` (`volup/voldown/volmute/micmute/briup/bridown/brimax/brimin`) | Fn-row keys (XF86) | replaced omarchy swayosd; binds in bindings.conf |
 | PluginMenu.qml | pick-and-open grid for **extras/plugins only** | `plugins` | `SUPER ALT P` → `controlcenter` now | native modules excluded, use `plugins` ipc directly |
 | ScreenTime.qml | usage tracker: GitHub heatmap, top apps ranked, week bars, login count | `screentime` | `SUPER ALT T` | samples focused window every 10s → SQLite; gap >4h = new login |

@@ -44,7 +44,8 @@ one-shot subcommands and polls on timers. Pairing/config: `~/phonebridge/init.sh
   refreshed on a 15 s timer while the panel is open.
 - **Notify forwarder** — every 4 s while a phone is paired it polls the
   notification shade and when a *new* notification appears from an
-  allowlisted app it pings the desktop with `notify-send` (title + group-chat author, shown
+  allowlisted app it pings the desktop with `notify-send` (sender name only —
+  message content never leaves the phone), shown
   by quickshell's own NotificationCenter. The allowlist (`[notify]` in `~/.config/phonebridge/config.ini` — package substring to app label) ships with WhatsApp,
   Telegram and SMS/messages entries and is trivial to extend. Works with
   phone DND on or off — DND silences the phone, it does not remove entries

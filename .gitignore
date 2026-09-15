@@ -1,5 +1,7 @@
 # Don't accidentally commit these
 .env
+# wallhaven api key for wallshelf — local secret
+.config/quickshell/wallshelf.ini
 *.secret
 *.key
 *.pem

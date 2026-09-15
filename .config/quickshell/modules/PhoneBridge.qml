@@ -1,6 +1,5 @@
 import Quickshell
 import Quickshell.Io
-import Quickshell.Wayland
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
@@ -74,8 +73,8 @@ FloatingWindow {
     property int pollStart: 0        // ms epoch when the current dump started (stale-poll watchdog)
 
     title: "PhoneBridge"
-    width: 400
-    height: 460
+    implicitWidth: 400
+    implicitHeight: 460
     minimumSize: Qt.size(360, 400)
     maximumSize: Qt.size(460, 520)
     color: "transparent"
@@ -542,6 +541,9 @@ FloatingWindow {
     function retryRow(i) {
         root.setRow(i, { error: "", active: false })
         root.pumpQueue()
+    }
+    function clearFinished() {
+        root.queue = root.queue.filter(function(r){ return !r.done })
     }
 
     // ================= pull =================

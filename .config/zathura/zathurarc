@@ -1,5 +1,3 @@
-# generated from the matugen zathurarc template — do not hand-edit,
-# re-render via matugen (templates/zathurarc) or mirror that file here
 set notification-error-bg       "#ffb4ab"
 set notification-error-fg       "#580003"
 set notification-warning-bg     "#d0c3c9"
@@ -17,7 +15,7 @@ set completion-highlight-fg     "#272920"
 set index-bg                    "#141312"
 set index-fg                    "#eae6e4"
 set index-active-bg             "#919286"
-set index-active-fg             "#272920"
+set index-active-fg             "#000000"
 
 set inputbar-bg                 "#232322"
 set inputbar-fg                 "#eae6e4"

@@ -255,6 +255,50 @@ Full list lives in `.config/hypr/bindings.conf` (+ vendored defaults in `.config
 - **Matugen templates:** `~/.config/matugen/templates/*` → `config.toml` maps `input_path` → `output_path`
 - **Neovim / Zed / tmux:** `~/.config/nvim/`, `~/.config/zed/settings.json`, `~/.config/tmux/tmux.conf`
 
+## Disaster recovery (snapper)
+
+Root is btrfs (`@` + `@home` + `@log` + `@pkg`, snapshots in `.snapshots`, hourly
+timelines enabled). No boot-menu snapshot entries — recovery is via snapper itself.
+
+Most breakages (bad update, nuked `/etc` file, dead Hypr config) still reach a TTY.
+Log in as root there and roll back — no USB needed:
+
+```bash
+snapper list                          # pick a number from before the breakage
+snapper rollback 80
+reboot
+```
+
+A USB stick with an Arch ISO is only needed when nothing boots at all — kernel
+panic, no login prompt. On this setup that means one of: a bad kernel +
+initramfs after an interrupted update, a broken `mkinitcpio.conf` (check HOOKS
+before every `mkinitcpio -P`), a full `/` partition (snapshots live on it too),
+a bad `/etc/fstab` line, or a damaged ESP/`limine.conf` in `/boot`. Then:
+
+```bash
+# from the ISO:
+mount -o subvol=@ /dev/sda2 /mnt
+arch-chroot /mnt
+snapper list
+snapper rollback 80
+reboot
+```
+
+Notes: `@home`/`@log`/`@pkg` are separate subvolumes, so rollback never touches
+your files, logs, or package cache. Snapper keeps the broken `@` as a backup,
+so a bad rollback is itself reversible. And the kernel cmdline pins
+`rootflags=subvol=@` — snapper's own rollback restores under the same `@` name,
+so Limine entries boot it unchanged (only hand-rolled `set-default` to a
+*differently-named* subvolume would need a flag fix).
+
+Day-to-day (no reboot involved):
+
+```bash
+snapper create -d "before i break things"
+snapper undochange 82..0 /etc          # un-break one directory
+snapper status 82..0                  # preview what changed first
+```
+
 ---
 
 ## Credits

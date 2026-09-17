@@ -13,6 +13,8 @@ ShellRoot {
     QuickNotes { colors: barPalette }
     PkgManager { colors: barPalette }
     ControlCenter { colors: barPalette }
+    Pomodoro { colors: barPalette }
+    GitHubDash { colors: barPalette }
     PdfViewer { colors: barPalette }
     PassPrompt { colors: barPalette }
     Wallshelf { colors: barPalette }

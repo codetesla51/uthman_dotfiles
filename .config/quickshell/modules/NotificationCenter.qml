@@ -1,6 +1,7 @@
 import Quickshell
 import Quickshell.Io
 import Quickshell.Services.Notifications
+import Quickshell.Wayland
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
@@ -98,6 +99,8 @@ Item {
         margins { top: 52; right: 8 }
         exclusionMode: ExclusionMode.Ignore
         color: "transparent"
+        WlrLayershell.namespace: "qs-toasts"
+        WlrLayershell.layer: WlrLayer.Overlay
         implicitWidth: 380
         implicitHeight: toastColumn.implicitHeight + 8
 
@@ -135,12 +138,13 @@ Item {
         exclusionMode: ExclusionMode.Ignore
         color: "transparent"
         focusable: true   // grabs keyboard while open -> ESC works
+        WlrLayershell.namespace: "qs-notify"
+        WlrLayershell.layer: WlrLayer.Overlay
 
-        // dimmed click-outside catcher (inside the SAME window, always below card)
+        // click-outside catcher (invisible — no dim backdrop, card floats over desktop)
         Rectangle {
             anchors.fill: parent
-            color: colors.alpha(colors.background, root.panelOpen ? 0.3 : 0)
-            Behavior on color { ColorAnimation { duration: 200 } }
+            color: "transparent"
 
             MouseArea {
                 anchors.fill: parent
@@ -157,9 +161,9 @@ Item {
             width: 380
             height: 520
             radius: 16
-            color: colors.alpha(colors.background, 0.94)
+            color: colors.alpha(colors.background, 0.78)
             border.width: 1
-            border.color: colors.alpha(colors.outline, 0.3)
+            border.color: colors.alpha(colors.outline, 0.15)
 
             // ESC closes any open panel (convention for all future panels)
             Keys.onEscapePressed: root.panelOpen = false
@@ -182,13 +186,22 @@ Item {
                     Layout.fillWidth: true
                     spacing: 8
 
+                    Rectangle {
+                        Layout.preferredWidth: 26; Layout.preferredHeight: 26; radius: 13
+                        color: colors.alpha(colors.primary, 0.15)
+                        border.width: 1; border.color: colors.alpha(colors.primary, 0.3)
+                        Text { anchors.centerIn: parent; text: "󰂚"; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 12 }
+                        Layout.alignment: Qt.AlignVCenter
+                    }
                     Text {
-                        text: "Notifications"
+                        text: "NOTIFICATIONS"
                         color: colors.foreground
                         font.family: colors.fontSans
-                        font.pixelSize: 13
+                        font.pixelSize: 12
                         font.weight: Font.ExtraBold
+                        font.letterSpacing: 1.3
                         Layout.fillWidth: true
+                        Layout.alignment: Qt.AlignVCenter
                     }
 
                     Rectangle {

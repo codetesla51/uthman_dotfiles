@@ -36,6 +36,7 @@ PanelWindow {
         {key:"SUPER + U", desc:"System monitor", cat:"System", disp:"exec", arg:"quickshell -p ~/.config/quickshell ipc call sysmon toggle"},
         {key:"SUPER + K", desc:"Show key bindings", cat:"System", disp:"exec", arg:"quickshell -p ~/.config/quickshell ipc call keybinds toggle"},
         {key:"SUPER + N", desc:"System info", cat:"System", disp:"exec", arg:"quickshell -p ~/.config/quickshell ipc call fastfetch toggle"},
+        {key:"SUPER Alt + C", desc:"Pomodoro timer", cat:"System", disp:"exec", arg:"quickshell -p ~/.config/quickshell ipc call pomodoro toggle"},
         {key:"SUPER + E", desc:"Theme selector", cat:"System", disp:"exec", arg:"quickshell -p ~/.config/quickshell ipc call theme toggle"},
         {key:"SUPER Ctrl + V", desc:"Clipboard manager", cat:"System", disp:"exec", arg:"quickshell -p ~/.config/quickshell ipc call clipboard toggle"},
         {key:"SUPER Ctrl + E", desc:"Emoji picker", cat:"System", disp:"exec", arg:"uwsm-app -- ~/.config/rofi/emoji.sh"},

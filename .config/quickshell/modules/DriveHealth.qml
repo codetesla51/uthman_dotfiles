@@ -374,7 +374,7 @@ FloatingWindow {
     Rectangle {
         id: card
         anchors.fill: parent
-        radius: 22
+        radius: 16
         color: colors.alpha(colors.background, 0.78)
         border.width: 1
         border.color: colors.alpha(colors.outline, 0.15)
@@ -397,6 +397,36 @@ FloatingWindow {
             anchors.topMargin: 14
             anchors.bottomMargin: 14
             spacing: 10
+
+            // header — chip + label + drive + close
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 10
+                Rectangle {
+                    Layout.preferredWidth: 26; Layout.preferredHeight: 26; radius: 13
+                    color: colors.alpha(colors.primary, 0.15)
+                    border.width: 1; border.color: colors.alpha(colors.primary, 0.3)
+                    Text { anchors.centerIn: parent; text: "󰍛"; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 12 }
+                    Layout.alignment: Qt.AlignVCenter
+                }
+                Text { text: "DRIVE HEALTH"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 12; font.weight: Font.ExtraBold; font.letterSpacing: 1.3; Layout.alignment: Qt.AlignVCenter }
+                Rectangle {
+                    visible: root.devName !== ""
+                    Layout.preferredWidth: devTxt.implicitWidth + 16; Layout.preferredHeight: 20; radius: 10
+                    color: colors.alpha(colors.secondary, 0.14)
+                    border.width: 1; border.color: colors.alpha(colors.secondary, 0.35)
+                    Text { id: devTxt; anchors.centerIn: parent; text: "/dev/" + root.devName; color: colors.secondary; font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold }
+                    Layout.alignment: Qt.AlignVCenter
+                }
+                Item { Layout.fillWidth: true }
+                Rectangle {
+                    width: 28; height: 28; radius: 14
+                    color: drvCloseMa.containsMouse ? colors.alpha(colors.surfaceVariant, 0.6) : colors.alpha(colors.surface, 0.6)
+                    border.width: 1; border.color: colors.alpha(colors.outline, 0.15)
+                    Text { anchors.centerIn: parent; text: "󰅖"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 12 }
+                    MouseArea { id: drvCloseMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.open = false }
+                }
+            }
 
             // warning / scan result
             Text {
@@ -447,15 +477,15 @@ FloatingWindow {
                     }
                     Row { spacing: 16; Layout.alignment: Qt.AlignVCenter
                         Column { spacing: 2
-                            Text { text: "TEMP"; color: colors.alpha(colors.outline, 0.5); font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold; anchors.horizontalCenter: parent.horizontalCenter }
+                            Text { text: "TEMP"; color: colors.alpha(colors.outline, 0.5); font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold; font.letterSpacing: 1.1; anchors.horizontalCenter: parent.horizontalCenter }
                             Text { text: root.hasTemp ? Math.round(root.tempC) + "°C" : "—"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 14; font.weight: Font.ExtraBold; anchors.horizontalCenter: parent.horizontalCenter }
                         }
                         Column { spacing: 2
-                            Text { text: "UPTIME"; color: colors.alpha(colors.outline, 0.5); font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold; anchors.horizontalCenter: parent.horizontalCenter }
+                            Text { text: "UPTIME"; color: colors.alpha(colors.outline, 0.5); font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold; font.letterSpacing: 1.1; anchors.horizontalCenter: parent.horizontalCenter }
                             Text { text: root.hasHours ? root.fmtHours(root.powerHours) : "—"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 14; font.weight: Font.ExtraBold; anchors.horizontalCenter: parent.horizontalCenter }
                         }
                         Column { spacing: 2
-                            Text { text: "SELF-TEST"; color: colors.alpha(colors.outline, 0.5); font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold; anchors.horizontalCenter: parent.horizontalCenter }
+                            Text { text: "SELF-TEST"; color: colors.alpha(colors.outline, 0.5); font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold; font.letterSpacing: 1.1; anchors.horizontalCenter: parent.horizontalCenter }
                             Text { text: root.selftest !== "" ? root.selftest : "—"; color: root.selftest === "success" ? colors.secondary : colors.foreground; font.family: colors.fontSans; font.pixelSize: 14; font.weight: Font.ExtraBold; anchors.horizontalCenter: parent.horizontalCenter }
                         }
                     }
@@ -567,6 +597,8 @@ FloatingWindow {
                 Layout.fillWidth: true; spacing: 10
                 Rectangle {
                     width: 104; height: 28; radius: 14
+                    scale: speedMa.containsMouse ? 1.05 : 1
+                    Behavior on scale { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
                     color: root.speedBusy ? colors.alpha(colors.surfaceVariant, 0.4) : speedMa.containsMouse ? colors.alpha(colors.primary, 0.2) : colors.alpha(colors.primary, 0.08)
                     border.width: 1; border.color: colors.alpha(colors.primary, 0.3)
                     Behavior on color { ColorAnimation { duration: 200 } }
@@ -589,6 +621,8 @@ FloatingWindow {
                 Layout.fillWidth: true; spacing: 10
                 Rectangle {
                     width: 104; height: 28; radius: 14
+                    scale: selfMa.containsMouse ? 1.05 : 1
+                    Behavior on scale { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
                     color: root.selfBusy ? colors.alpha(colors.surfaceVariant, 0.4) : selfMa.containsMouse ? colors.alpha(colors.tertiary, 0.2) : colors.alpha(colors.tertiary, 0.08)
                     border.width: 1; border.color: colors.alpha(colors.tertiary, 0.3)
                     Behavior on color { ColorAnimation { duration: 200 } }

@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=Utilities
+Comment=Quickshell utility hub: pomodoro, GitHub, notes, phone and more (no keybind needed)
+Exec=quickshell -p ~/.config/quickshell ipc call plugins toggle
+Icon=applications-system
+Terminal=false
+Type=Application
+Categories=System;Utility;
+Keywords=utility;quickshell;pomodoro;github;notes;hub;
+StartupWMClass=quickshell

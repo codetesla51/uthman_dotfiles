@@ -1,31 +1,33 @@
 import Quickshell
 import Quickshell.Io
-import Quickshell.Wayland
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
 import QtQuick.LocalStorage 2.0
 
-// QuickNotes — small draggable idea capture window
-// SUPER+I to toggle. Drag via header. LocalStorage backed (qs_ideas).
-// Glassmorphic, matches bar: surface@0.55, primary accents, 14-18 radii.
-PanelWindow {
+// QuickNotes — small floating idea capture window.
+// Opens from the PluginMenu tile (`ipc call notes toggle`).
+// LocalStorage backed (qs_ideas). Glass Amber Bento card.
+FloatingWindow {
     id: root
     property var colors
     property bool open: false
     property string searchQuery: ""
     property string editId: "" // id of note being edited
-    property string draftTitle: ""
-    property string draftBody: ""
 
-    anchors { top:true; bottom:true; left:true; right:true }
-    exclusionMode: ExclusionMode.Ignore
+    title: "QuickNotes"
+    implicitWidth: 440
+    implicitHeight: 580
+    minimumSize: Qt.size(400, 520)
+    maximumSize: Qt.size(460, 600)
     color: "transparent"
     visible: root.open
-    focusable: true
-    WlrLayershell.namespace: "qs-notes"
 
-    IpcHandler { target: "notes"; function toggle(): void { root.open = !root.open } }
+    IpcHandler {
+        target: "notes"
+        function toggle(): void { root.open = !root.open }
+        function close(): void { root.open = false }
+    }
 
     // ---- storage ----
     property var notes: []
@@ -85,119 +87,133 @@ PanelWindow {
         if (d<604800000) return Math.floor(d/86400000)+"d"
         return new Date(ts).toLocaleDateString()
     }
-
-    // backdrop
-    Rectangle {
-        anchors.fill: parent
-        color: colors.alpha(colors.background, root.open?0.35:0)
-        Behavior on color { ColorAnimation { duration: 200 } }
-        MouseArea { anchors.fill: parent; onClicked: root.open=false }
+    function startEdit(modelData) {
+        root.editId = modelData.id
+        titleField.text = modelData.title
+        bodyField.text = modelData.body
+        titleField.forceActiveFocus()
     }
+    function metaGet(k) {
+        var v = ""
+        db().transaction(function(tx){
+            tx.executeSql('CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT)')
+            var rs = tx.executeSql('SELECT value FROM meta WHERE key=?', [k])
+            if(rs.rows.length > 0) v = rs.rows.item(0).value
+        })
+        return v
+    }
+    function metaSet(k, v) {
+        db().transaction(function(tx){
+            tx.executeSql('CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT)')
+            tx.executeSql('INSERT OR REPLACE INTO meta VALUES(?,?)', [k, v])
+        })
+    }
+    // pinned notes act as reminders: one digest notification per day
+    function maybeRemind() {
+        var today = Qt.formatDate(new Date(), "yyyy-MM-dd")
+        if(root.metaGet("last_remind") === today) return
+        var pinned = notes.filter(function(n){ return n.pinned })
+        if(pinned.length === 0) return
+        var names = pinned.slice(0, 3).map(function(n){ return n.title || "(no title)" })
+        var body = names.join(" · ")
+        if(pinned.length > 3) body += " · +" + (pinned.length - 3) + " more"
+        Quickshell.execDetached(["notify-send", "-a", "QuickNotes", "Pinned ideas (" + pinned.length + ")", body])
+        root.metaSet("last_remind", today)
+    }
+    Timer { id: remindTimer; interval: 3600000; running: true; repeat: true; triggeredOnStart: true; onTriggered: root.maybeRemind() }
 
-    // draggable card — centered, glass, small
+    // window glass
     Rectangle {
         id: card
-        width: 440
-        height: 560
+        anchors.fill: parent
         radius: 18
-        color: colors.alpha(colors.background, 0.94)
+        color: colors.alpha(colors.background, 0.78)
         border.width: 1
-        border.color: colors.alpha(colors.outline, 0.22)
-        anchors.horizontalCenter: parent.horizontalCenter
-        anchors.verticalCenter: parent.verticalCenter
-        anchors.verticalCenterOffset: dragArea.drag.active ? 0 : 0
-        opacity: root.open?1:0
-        scale: root.open?1:0.96
-        Behavior on opacity { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
-        Behavior on scale { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
+        border.color: colors.alpha(colors.outline, 0.15)
         focus: root.open
-        Keys.onEscapePressed: root.open=false
-
-        // subtle shadow
-        layer.enabled: true
+        Keys.onEscapePressed: root.open = false
 
         ColumnLayout {
             anchors.fill: parent
             anchors.margins: 16
             spacing: 12
 
-            // ---- header (drag handle) ----
-            Item {
-                id: header
+            // ---- header ----
+            RowLayout {
                 Layout.fillWidth: true
-                height: 36
-                RowLayout {
-                    anchors.fill: parent
-                    spacing: 8
+                spacing: 8
+                Rectangle {
+                    Layout.preferredWidth: 26; Layout.preferredHeight: 26; radius: 13
+                    color: colors.alpha(colors.primary, 0.15)
+                    border.width: 1; border.color: colors.alpha(colors.primary, 0.3)
+                    Text { anchors.centerIn: parent; text: "󰎚"; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 12 }
+                    Layout.alignment: Qt.AlignVCenter
+                }
+                Text {
+                    text: "QUICK NOTES"
+                    color: colors.foreground
+                    font.family: colors.fontSans
+                    font.pixelSize: 12
+                    font.weight: Font.ExtraBold
+                    font.letterSpacing: 1.3
+                    Layout.alignment: Qt.AlignVCenter
+                }
+                Rectangle {
+                    width: countText.implicitWidth+12
+                    height: 20
+                    radius: 10
+                    color: colors.alpha(colors.primary, 0.14)
+                    border.width: 1
+                    border.color: colors.alpha(colors.primary, 0.25)
+                    Layout.alignment: Qt.AlignVCenter
                     Text {
-                        text: "󰎚 ideas"
-                        color: colors.foreground
+                        id: countText
+                        anchors.centerIn: parent
+                        text: notes.length+""
+                        color: colors.primary
                         font.family: colors.fontSans
-                        font.pixelSize: 13
-                        font.weight: Font.ExtraBold
-                        font.letterSpacing: 0.5
-                    }
-                    Rectangle {
-                        width: countText.implicitWidth+12
-                        height: 20
-                        radius: 10
-                        color: colors.alpha(colors.primary, 0.14)
-                        border.width: 1
-                        border.color: colors.alpha(colors.primary, 0.25)
-                        Text {
-                            id: countText
-                            anchors.centerIn: parent
-                            text: notes.length+""
-                            color: colors.primary
-                            font.family: colors.fontSans
-                            font.pixelSize: 10
-                            font.weight: Font.Bold
-                        }
-                    }
-                    Item { Layout.fillWidth: true }
-                    // pin filter hint
-                    Text {
-                        text: "drag header to move"
-                        color: colors.alpha(colors.outline, 0.45)
-                        font.family: colors.fontSans
-                        font.pixelSize: 8
-                        visible: !dragArea.drag.active
-                    }
-                    Rectangle {
-                        width: 28; height: 28; radius: 14
-                        color: closeMa.containsMouse ? colors.alpha(colors.error, 0.12) : "transparent"
-                        Text { anchors.centerIn: parent; text: "󰅖"; color: closeMa.containsMouse?colors.error:colors.alpha(colors.outline,0.7); font.family: colors.fontSans; font.pixelSize:13 }
-                        MouseArea { id: closeMa; anchors.fill: parent; hoverEnabled:true; onClicked: root.open=false }
+                        font.pixelSize: 10
+                        font.weight: Font.Bold
                     }
                 }
-                MouseArea {
-                    id: dragArea
-                    anchors.fill: parent
-                    drag.target: card
-                    drag.axis: Drag.XAndYAxis
-                    drag.threshold: 4
-                    // keep within window bounds
-                    onPressed: card.anchors.horizontalCenter = undefined, card.anchors.verticalCenter = undefined
-                    // reset on release? keep position
+                Item { Layout.fillWidth: true }
+                Rectangle {
+                    width: 28; height: 28; radius: 14
+                    color: closeMa.containsMouse ? colors.alpha(colors.surfaceVariant, 0.6) : colors.alpha(colors.surface, 0.6)
+                    border.width: 1; border.color: colors.alpha(colors.outline, 0.15)
+                    Text { anchors.centerIn: parent; text: "󰅖"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 12 }
+                    MouseArea { id: closeMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.open = false }
                 }
             }
 
             // search
-            TextField {
-                id: searchField
+            Rectangle {
                 Layout.fillWidth: true
-                implicitHeight: 34
-                leftPadding: 12; rightPadding: 12
-                placeholderText: "Search ideas…"
-                placeholderTextColor: colors.alpha(colors.outline,0.5)
-                color: colors.foreground
-                font.family: colors.fontSans; font.pixelSize: 11
-                background: Rectangle {
-                    radius: 10
-                    color: colors.alpha(colors.surface,0.7)
-                    border.width: 1; border.color: searchField.activeFocus?colors.alpha(colors.primary,0.4):colors.alpha(colors.outline,0.15)
+                Layout.preferredHeight: 42
+                radius: 12
+                color: colors.alpha(colors.surface, 0.6)
+                border.width: 1
+                border.color: searchField.activeFocus ? colors.alpha(colors.primary, 0.5) : colors.alpha(colors.outline, 0.15)
+                Behavior on border.color { ColorAnimation { duration: 150 } }
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: 12
+                    anchors.rightMargin: 12
+                    spacing: 8
+                    Text { text: ""; color: colors.alpha(colors.outline, 0.8); font.family: colors.fontSans; font.pixelSize: 12; Layout.alignment: Qt.AlignVCenter }
+                    TextField {
+                        id: searchField
+                        Layout.fillWidth: true
+                        Layout.alignment: Qt.AlignVCenter
+                        placeholderText: "Search ideas…"
+                        placeholderTextColor: colors.alpha(colors.outline,0.5)
+                        color: colors.foreground
+                        font.family: colors.fontSans; font.pixelSize: 11
+                        background: null
+                        selectByMouse: true
+                        onTextChanged: root.searchQuery = text
+                    }
                 }
-                onTextChanged: root.searchQuery = text
             }
 
             // list
@@ -216,23 +232,24 @@ PanelWindow {
                     width: list.width
                     height: contentCol.implicitHeight+20
                     radius: 12
-                    color: delMa.containsMouse ? colors.alpha(colors.surfaceVariant,0.35) : colors.alpha(colors.surface,0.45)
+                    color: modelData.pinned ? colors.alpha(colors.primary, 0.10) : delMa.containsMouse ? colors.alpha(colors.surfaceVariant,0.35) : colors.alpha(colors.surface,0.45)
                     border.width: 1
-                    border.color: modelData.pinned ? colors.alpha(colors.primary,0.35) : delMa.containsMouse?colors.alpha(colors.primary,0.18):colors.alpha(colors.outline,0.12)
+                    border.color: modelData.pinned ? colors.alpha(colors.primary, 0.5) : delMa.containsMouse?colors.alpha(colors.primary,0.18):colors.alpha(colors.outline,0.12)
                     Behavior on color { ColorAnimation { duration: 120 } }
 
-                    // left accent
-                    Rectangle {
-                        anchors { left: parent.left; top: parent.top; bottom: parent.bottom; leftMargin: 0 }
-                        width: 3; radius: 12
-                        color: modelData.pinned ? colors.primary : colors.alpha(colors.primary, delMa.containsMouse?0.5:0.0)
-                        Behavior on color { ColorAnimation { duration: 150 } }
+                    // click-catcher FIRST (bottom) so the action buttons on top receive clicks
+                    MouseArea {
+                        id: delMa
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        onDoubleClicked: root.startEdit(modelData)
                     }
 
                     ColumnLayout {
                         id: contentCol
                         anchors { left: parent.left; right: parent.right; top: parent.top; margins: 12 }
                         anchors.leftMargin: 14
+                        anchors.rightMargin: 92
                         spacing: 4
                         RowLayout {
                             Layout.fillWidth: true
@@ -243,6 +260,12 @@ PanelWindow {
                                 font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.DemiBold
                                 elide: Text.ElideRight; Layout.fillWidth: true
                                 maximumLineCount: 1
+                            }
+                            Text {
+                                visible: modelData.pinned
+                                text: "PINNED"
+                                color: colors.primary
+                                font.family: colors.fontSans; font.pixelSize: 7; font.weight: Font.Bold; font.letterSpacing: 1.0
                             }
                             Text {
                                 text: root.timeAgo(modelData.created)
@@ -262,24 +285,22 @@ PanelWindow {
                         }
                     }
 
-                    // hover actions
+                    // hover actions — declared LAST (top) so clicks land on the buttons
                     Row {
-                        visible: delMa.containsMouse
+                        visible: delMa.containsMouse || pinMa.containsMouse || editMa.containsMouse || trashMa.containsMouse
                         anchors { right: parent.right; top: parent.top; margins: 6 }
                         spacing: 4
                         Rectangle {
                             width: 24; height: 24; radius: 12
                             color: pinMa.containsMouse?colors.alpha(colors.primary,0.2):colors.alpha(colors.surfaceVariant,0.3)
-                            Text { anchors.centerIn: parent; text: modelData.pinned ? "" : ""; color: modelData.pinned?colors.primary:colors.alpha(colors.outline,0.7); font.family: colors.fontSans; font.pixelSize:10; rotation: modelData.pinned?0:45 }
+                            Text { anchors.centerIn: parent; text: ""; color: modelData.pinned?colors.primary:colors.alpha(colors.outline,0.7); font.family: colors.fontSans; font.pixelSize:10; rotation: modelData.pinned?0:45 }
                             MouseArea { id: pinMa; anchors.fill: parent; hoverEnabled:true; onClicked: root.togglePin(modelData.id, !modelData.pinned) }
                         }
                         Rectangle {
                             width: 24; height: 24; radius: 12
                             color: editMa.containsMouse?colors.alpha(colors.primary,0.15):colors.alpha(colors.surfaceVariant,0.3)
-                            Text { anchors.centerIn: parent; text: "󰉁"; color: colors.alpha(colors.outline,0.8); font.family: colors.fontSans; font.pixelSize:10 }
-                            MouseArea { id: editMa; anchors.fill: parent; hoverEnabled:true; onClicked: {
-                                root.editId = modelData.id; titleField.text = modelData.title; bodyField.text = modelData.body; titleField.forceActiveFocus()
-                            } }
+                            Text { anchors.centerIn: parent; text: ""; color: colors.alpha(colors.outline,0.8); font.family: colors.fontSans; font.pixelSize:10 }
+                            MouseArea { id: editMa; anchors.fill: parent; hoverEnabled:true; onClicked: root.startEdit(modelData) }
                         }
                         Rectangle {
                             width: 24; height: 24; radius: 12
@@ -287,13 +308,6 @@ PanelWindow {
                             Text { anchors.centerIn: parent; text: "󰆴"; color: trashMa.containsMouse?colors.error:colors.alpha(colors.outline,0.7); font.family: colors.fontSans; font.pixelSize:10 }
                             MouseArea { id: trashMa; anchors.fill: parent; hoverEnabled:true; onClicked: root.deleteNote(modelData.id) }
                         }
-                    }
-
-                    MouseArea {
-                        id: delMa
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        onDoubleClicked: { root.editId = modelData.id; titleField.text = modelData.title; bodyField.text = modelData.body }
                     }
                 }
             }
@@ -357,8 +371,11 @@ PanelWindow {
                     }
                 }
                 Rectangle {
+                    id: addBtn
                     Layout.fillWidth: true
                     height: 36; radius: 10
+                    scale: addMa.containsMouse ? 1.02 : 1
+                    Behavior on scale { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
                     color: (titleField.text.trim()!=="" || bodyField.text.trim()!=="") ? colors.primary : colors.alpha(colors.surfaceVariant,0.35)
                     border.width: 1; border.color: (titleField.text.trim()!=="" || bodyField.text.trim()!=="") ? colors.primary : colors.alpha(colors.outline,0.12)
                     opacity: (titleField.text.trim()!=="" || bodyField.text.trim()!=="") ? 1 : 0.6
@@ -369,7 +386,9 @@ PanelWindow {
                         font.family: colors.fontSans; font.pixelSize: 10; font.weight: Font.Bold; font.letterSpacing: 0.5
                     }
                     MouseArea {
+                        id: addMa
                         anchors.fill: parent
+                        hoverEnabled: true
                         onClicked: {
                             var t=titleField.text.trim(), b=bodyField.text.trim()
                             if (t==="" && b==="") return
@@ -382,7 +401,7 @@ PanelWindow {
             }
 
             Text {
-                text: "↵ save  •  esc close  •  drag header to move  •  double-click note to edit"
+                text: "↵ save  •  esc close  •  double-click note to edit"
                 color: colors.alpha(colors.outline,0.4)
                 font.family: colors.fontSans; font.pixelSize: 7; font.letterSpacing: 0.3
                 Layout.alignment: Qt.AlignHCenter

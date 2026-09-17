@@ -1,0 +1,248 @@
+#!/usr/bin/env python3
+"""md2pdf — markdown -> styled HTML -> PDF via headless Firefox (stdlib only).
+
+Renders notes in an ElegantNote-flavoured layout: TeX Gyre Termes serif
+body, blue double-rule title block, numbered sections, boxed code blocks,
+booktabs-style tables. No LaTeX, no pip packages.
+
+Usage:
+  md2pdf note.md -t "Title" [-a "Author"] [-o out.pdf]
+"""
+import sys, re, html, subprocess, tempfile, os, argparse, pathlib
+
+# ---------------------------------------------------------------- markdown
+
+def esc(t):
+    return html.escape(t, quote=False)
+
+INLINE = re.compile(r'(`[^`]+`|\*\*[^*]+?\*\*|\*[^*]+?\*|\[[^\]\n]+\]\([^)\n]+\))')
+
+def inline(s):
+    out = []
+    pos = 0
+    for m in INLINE.finditer(s):
+        if m.start() > pos:
+            out.append(esc(s[pos:m.start()]))
+        tok = m.group(0)
+        if tok.startswith('`'):
+            out.append('<code>' + esc(tok[1:-1]) + '</code>')
+        elif tok.startswith('**'):
+            out.append('<strong>' + inline(tok[2:-2]) + '</strong>')
+        elif tok.startswith('*'):
+            out.append('<em>' + inline(tok[1:-1]) + '</em>')
+        else:
+            m2 = re.match(r'\[([^\]\n]+)\]\(([^)\n]+)\)', tok)
+            label, url = m2.group(1), m2.group(2)
+            out.append(f'<a href="{esc(url)}">{inline(label)}</a>')
+        pos = m.end()
+    if pos < len(s):
+        out.append(esc(s[pos:]))
+    return ''.join(out)
+
+def split_cells(row):
+    cells, cur = [], []
+    for c in re.split(r'(?<!\\)\|', row.strip())[1:-1] if row.strip().startswith('|') and row.strip().endswith('|') else re.split(r'(?<!\\)\|', row.strip()):
+        cells.append(c.strip())
+    return cells
+
+def align_of(dash_row):
+    out = []
+    for c in split_cells(dash_row):
+        if c.startswith(':') and c.endswith(':'): out.append('c')
+        elif c.endswith(':'): out.append('r')
+        else: out.append('l')
+    return out
+
+def convert(md):
+    lines = md.split('\n')
+    out = []
+    para = []
+    in_code = None
+    in_list = None          # 'ul' | 'ol'
+    in_quote = False
+    table = []
+
+    def flush_para():
+        if para:
+            out.append('<p>' + inline(' '.join(para).strip()) + '</p>')
+            para.clear()
+
+    def flush_list():
+        nonlocal in_list
+        if in_list:
+            out.append(f'</{in_list}>')
+            in_list = None
+
+    def flush_quote():
+        nonlocal in_quote
+        if in_quote:
+            out.append('</blockquote>')
+            in_quote = False
+
+    def flush_table():
+        if table:
+            rows, aligns = table
+            ncol = max(len(r) for r in rows)
+            aligns = (aligns or ['l'] * ncol) + ['l'] * (ncol - len(aligns or []))
+            t = ['<table>', '<thead><tr>']
+            for i, c in enumerate(rows[0][:ncol]):
+                t.append(f'<th class="a{aligns[i]}">{inline(c)}</th>')
+            t.append('</tr></thead><tbody>')
+            for r in rows[1:]:
+                t.append('<tr>' + ''.join(f'<td class="a{aligns[i]}">{inline(r[i] if i < len(r) else "")}</td>' for i in range(ncol)) + '</tr>')
+            t.append('</tbody></table>')
+            out.append(''.join(t))
+            table.clear()
+
+    i = 0
+    while i < len(lines):
+        raw = lines[i]
+        line = raw.rstrip()
+        i += 1
+
+        if in_code is not None:
+            if line.strip().startswith('```'):
+                code = '\n'.join(in_code).rstrip('\n')
+                out.append(f'<pre><code>{esc(code)}</code></pre>')
+                in_code = None
+            else:
+                in_code.append(line)
+            continue
+
+        m = re.match(r'^\s{0,4}(```+|~~~+)\s*([A-Za-z0-9_+.-]*)\s*$', line)
+        if m:
+            flush_para(); flush_list(); flush_quote(); flush_table()
+            in_code = []
+            continue
+
+        m = re.match(r'^(#{1,6})\s+(.*)$', line)
+        if m:
+            flush_para(); flush_list(); flush_quote(); flush_table()
+            lvl = len(m.group(1))
+            out.append(f'<h{lvl}>{inline(m.group(2))}</h{lvl}>')
+            continue
+
+        if re.match(r'^\s*\|.*\|\s*$', line):
+            cells = split_cells(line)
+            if re.match(r'^\s*\|?[\s:|-]+\|?\s*$', line) and all(re.fullmatch(r':?-{2,}:?', c) for c in cells if c):
+                table[1] = aligns if (aligns := align_of(line)) else table[1]
+            else:
+                flush_para(); flush_list(); flush_quote()
+                if not table: table = [[], None]
+                table[0].append(cells)
+            continue
+
+        if re.match(r'^\s{0,3}([-*+]|\d+[.)])\s+', line):
+            flush_para(); flush_quote()
+            kind = 'ul' if re.match(r'^\s{0,3}[-*+]', line) else 'ol'
+            if in_list != kind:
+                flush_table()
+                flush_list()
+                in_list = kind
+                out.append(f'<{kind}>')
+            content = re.sub(r'^\s{0,3}([-*+]|\d+[.)])\s+', '', line)
+            # code fence at col 0 inside a list: close list, let fence render, reopen later
+            out.append('<li>' + inline(content) + '</li>')
+            continue
+
+        if line.strip() == '>' or (line.startswith('>') and (line.strip() == '>' or line[1:2] in ' >')):
+            flush_para(); flush_list(); flush_table()
+            body = line[1:].strip()
+            if not in_quote:
+                in_quote = True
+                out.append('<blockquote>')
+            if body:
+                out.append('<p>' + inline(body) + '</p>')
+            continue
+
+        if re.match(r'^\s{0,3}(---+|\*\*\*+)\s*$', line):
+            flush_para(); flush_list(); flush_quote(); flush_table()
+            out.append('<hr/>')
+            continue
+
+        if line.strip() == '':
+            flush_para(); flush_list(); flush_quote(); flush_table()
+            continue
+
+        para.append(line)
+
+    flush_para(); flush_list(); flush_quote(); flush_table()
+    if in_code is not None:
+        out.append(f'<pre><code>{esc(chr(10).join(in_code).rstrip(chr(10)))}</code></pre>')
+    return '\n'.join(out)
+
+# ---------------------------------------------------------------- style
+
+CSS = """
+@page { size: A4; margin: 22mm 20mm; @bottom-center { content: "\\2013  " counter(page) "  \\2013"; font-family: "TeX Gyre Termes", serif; font-size: 9pt; color: #666; } }
+body { font-family: "TeX Gyre Termes", "Liberation Serif", serif; font-size: 10.5pt; line-height: 1.55; color: #1a1a1a; text-align: justify; counter-reset: sec; }
+/* title block — ElegantNote double-rule header */
+.titleblock { text-align: center; margin: 4mm 0 8mm; padding: 6mm 0; border-top: 2.4pt solid #4166a1; border-bottom: 0.7pt solid #4166a1; }
+.titleblock h1 { font-size: 21pt; font-weight: bold; margin: 0 0 2mm; color: #101010; }
+.titleblock .sub {  font-size: 11pt; color: #4166a1; margin-bottom: 2.5mm; }
+.titleblock .auth-line { font-size: 10pt; color: #444; }
+h2 { counter-increment: sec; counter-reset: sub; font-size: 14.5pt; color: #101010; margin: 7mm 0 2.5mm; text-align: left; }
+h2::before { content: counter(sec) "  "; color: #4166a1; font-weight: bold; }
+h3 { counter-increment: sub; font-size: 12pt; color: #101010; margin: 4.5mm 0 2mm; text-align: left; }
+h3::before { content: counter(sec) "." counter(sub) "  "; color: #4166a1; font-weight: bold; }
+h4 { font-size: 11pt; margin: 3mm 0 1.5mm; text-align: left; }
+p { margin: 0 0 2.8mm; }
+code { font-family: "Fira Code", "DejaVu Sans Mono", monospace; font-size: 9pt; background: #f2f3f7; padding: 0 2px; border-radius: 2px; }
+pre { background: #f7f8fa; border: 0.5pt solid #dfe3ea; border-left: 2.5pt solid #4166a1; padding: 3mm 4mm; margin: 3mm 0 4mm; font-size: 8.8pt; line-height: 1.4; page-break-inside: avoid; }
+pre code { background: none; padding: 0; font-size: 8.8pt; }
+ul, ol { margin: 1mm 0 3mm; padding-left: 6mm; }
+li { margin-bottom: 1.6mm; }
+li > pre { margin-left: -2mm; }
+blockquote { margin: 2mm 0 4mm; padding: 1mm 0 1mm 4mm; border-left: 2pt solid #9db4d8; color: #333; font-style: italic; }
+blockquote p { margin: 0 0 1.5mm; }
+hr { border: none; border-top: 0.5pt solid #bbb; margin: 6mm 20mm; }
+/* booktabs-style tables */
+table { border-collapse: collapse; margin: 3mm 0 4mm; font-size: 9.5pt; width: 100%; page-break-inside: avoid; }
+thead th { border-top: 1.2pt solid #1a1a1a; border-bottom: 0.6pt solid #1a1a1a; padding: 1.6mm 2mm; text-align: left; }
+tbody td { padding: 1.4mm 2mm; border-bottom: 0.3pt solid #cccccc; }
+tbody tr:last-child td { border-bottom: 1.2pt solid #1a1a1a; }
+.a c, th.a c, td.a c { text-align: center; }
+.a r, th.a r, td.a r { text-align: right; }
+a { color: #4166a1; text-decoration: none; }
+"""
+
+def document(md, title, author, source_path):
+    body = convert(md)
+    source = pathlib.Path(source_path).stem
+    auth = f'<div class="auth-line">{html.escape(author)} &nbsp;·&nbsp;{html.escape(source)}</div>' if author else ''
+    return f"""<!DOCTYPE html><html><head><meta charset="utf-8"><style>{CSS}</style></head>
+<body>
+<div class="titleblock">
+  <h1>{html.escape(title)}</h1>
+  {auth}
+</div>
+{body}
+</body></html>"""
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument('md')
+    ap.add_argument('-t', '--title', default=None)
+    ap.add_argument('-a', '--author', default='')
+    ap.add_argument('-o', '--out', required=True)
+    args = ap.parse_args()
+
+    src = pathlib.Path(args.md).read_text(encoding='utf-8')
+    title = args.title or src.split('\n', 1)[0].lstrip('#').strip() or pathlib.Path(args.md).stem
+    html_doc = document(src, title, args.author, args.md)
+
+    out = pathlib.Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    html_path = out.with_suffix('.html')
+    html_path.write_text(html_doc, encoding='utf-8')
+
+    with tempfile.TemporaryDirectory(prefix='md2pdf-') as prof:
+        cmd = ['firefox', '--headless', '--no-remote', f'-profile', prof,
+               '--print-to-pdf=' + str(out), 'file://' + str(html_path.resolve())]
+        subprocess.run(cmd, capture_output=True, timeout=120)
+    if not out.exists() or out.stat().st_size < 1000:
+        sys.exit('PDF generation failed')
+    print(f'OK -> {out} ({out.stat().st_size//1024} KiB)')
+
+if __name__ == '__main__':
+    main()

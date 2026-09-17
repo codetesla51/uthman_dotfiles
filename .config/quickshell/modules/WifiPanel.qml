@@ -1,6 +1,7 @@
 import Quickshell
 import Quickshell.Io
 import Quickshell.Networking
+import Quickshell.Wayland
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
@@ -62,7 +63,20 @@ PanelWindow {
     function connectTo(net) {
         root.errorText = ""
         root.connectingSsid = net.name.trim()
+        connectWatch.restart()
         net.connect()
+    }
+
+    Timer {
+        id: connectWatch
+        interval: 25000
+        onTriggered: {
+            if (root.connectingSsid !== "") {
+                root.errorText = "\"" + root.connectingSsid + "\" is taking too long — wrong password?"
+                root.connectingSsid = ""
+                root.failClear.restart()
+            }
+        }
     }
 
     Timer {
@@ -101,6 +115,8 @@ PanelWindow {
     color: "transparent"
     focusable: true
     visible: root.open
+    WlrLayershell.namespace: "qs-wifi"
+    WlrLayershell.layer: WlrLayer.Overlay
 
     IpcHandler {
         target: "wifi"
@@ -133,11 +149,10 @@ PanelWindow {
         onTriggered: root.scanSpinning = false
     }
 
-    // ── dimmed backdrop / click-outside catcher ──
+    // ── click-outside catcher (invisible — no dim backdrop, card floats over desktop) ──
     Rectangle {
         anchors.fill: parent
-        color: colors.alpha(colors.background, root.open ? 0.3 : 0)
-        Behavior on color { ColorAnimation { duration: 200 } }
+        color: "transparent"
         MouseArea { anchors.fill: parent; onClicked: root.open = false }
     }
 
@@ -150,9 +165,9 @@ PanelWindow {
         width: 410
         height: 640
         radius: 16
-        color: colors.alpha(colors.background, 0.96)
+        color: colors.alpha(colors.background, 0.78)
         border.width: 1
-        border.color: colors.alpha(colors.outline, 0.3)
+        border.color: colors.alpha(colors.outline, 0.15)
         focus: root.open
         Keys.onEscapePressed: root.open = false
         Keys.onPressed: function(event){
@@ -189,13 +204,22 @@ PanelWindow {
                 Layout.fillWidth: true
                 spacing: 8
 
+                Rectangle {
+                    Layout.preferredWidth: 26; Layout.preferredHeight: 26; radius: 13
+                    color: colors.alpha(colors.primary, 0.15)
+                    border.width: 1; border.color: colors.alpha(colors.primary, 0.3)
+                    Text { anchors.centerIn: parent; text: "󰤯"; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 12 }
+                    Layout.alignment: Qt.AlignVCenter
+                }
                 Text {
-                    text: "󰤡  Wi-Fi"
-                    color: colors.primary
+                    text: "WI-FI"
+                    color: colors.foreground
                     font.family: colors.fontSans
-                    font.pixelSize: 14
+                    font.pixelSize: 12
                     font.weight: Font.ExtraBold
+                    font.letterSpacing: 1.3
                     Layout.fillWidth: true
+                    Layout.alignment: Qt.AlignVCenter
                 }
 
                 // wifi radio on/off
@@ -565,7 +589,7 @@ PanelWindow {
             TextField {
                 id: wifiSearch
                 Layout.fillWidth: true
-                implicitHeight: 32
+                implicitHeight: 40
                 leftPadding: 12
                 rightPadding: 12
                 placeholderText: "Search networks…  (S)"
@@ -574,10 +598,10 @@ PanelWindow {
                 font.family: colors.fontSans
                 font.pixelSize: 11
                 background: Rectangle {
-                    radius: 10
-                    color: colors.alpha(colors.surface,0.7)
+                    radius: 12
+                    color: colors.alpha(colors.surface,0.6)
                     border.width: 1
-                    border.color: wifiSearch.activeFocus ? colors.alpha(colors.primary,0.4) : colors.alpha(colors.outline,0.15)
+                    border.color: wifiSearch.activeFocus ? colors.alpha(colors.primary,0.5) : colors.alpha(colors.outline,0.15)
                 }
                 onTextChanged: root.searchQuery = text
             }
@@ -632,7 +656,7 @@ PanelWindow {
                     }
 
                     width: netList.width - 8
-                    height: askPw ? 120 : 44
+                    height: askPw ? 120 : isConnecting ? 68 : 44
                     radius: 10
                     color: hovered ? colors.alpha(colors.surfaceVariant, 0.3) : "transparent"
                     border.width: modelData.connected || isSelected ? 1 : 0
@@ -772,6 +796,7 @@ PanelWindow {
                                     function tap() {
                                         if (pwField.text.length < 8) return
                                         root.connectingSsid = modelData.name.trim()
+                                        root.connectWatch.restart()
                                         modelData.connectWithPsk(pwField.text)
                                         pwField.text = ""
                                         root.askPwSsid = ""

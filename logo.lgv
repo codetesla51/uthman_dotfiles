@@ -1,0 +1,27 @@
+scene(1, 30)
+
+shape("bg", "rect", table{
+    "0": table{x: 0, y: 0, w: 432, h: 432, color: "#000000"},
+})
+
+shape("ringA_outer", "circle", table{
+    "0": table{x: 176, y: 216, r: 74, color: "#ffffff", layer: 1},
+})
+shape("ringA_inner", "circle", table{
+    "0": table{x: 176, y: 216, r: 68, color: "#000000", layer: 2},
+})
+
+shape("solidB", "circle", table{
+    "0": table{x: 256, y: 216, r: 74, color: "#ffffff", layer: 3},
+})
+
+shape("band", "line", table{
+    "0": table{x1: 182, y1: 216, x2: 330, y2: 216, width: 9, color: "#000000", layer: 4},
+})
+
+shape("buttonRing_outer", "circle", table{
+    "0": table{x: 256, y: 216, r: 15, color: "#000000", layer: 5},
+})
+shape("buttonCore", "circle", table{
+    "0": table{x: 256, y: 216, r: 9, color: "#ffffff", layer: 6},
+})

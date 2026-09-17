@@ -25,10 +25,10 @@ Rectangle {
     height: content.height + 24
     radius: 16
     clip: true
-    color: colors.alpha(colors.background, 0.88)
+    color: colors.alpha(colors.background, 0.78)
     border.width: 1
     border.color: critical ? colors.alpha(colors.error, 0.5)
-                           : colors.alpha(colors.outline, 0.3)
+                           : colors.alpha(colors.outline, 0.15)
 
     opacity: 0
     transform: Translate { id: slide }

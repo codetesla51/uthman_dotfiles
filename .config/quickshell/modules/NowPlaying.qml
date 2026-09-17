@@ -169,30 +169,36 @@ Item {
             opacity: root.hasPlayer ? 1 : 0.45
             spacing: 3
             Rectangle {
+                id: prevBtn
+                property bool fresh: true
                 width: 20; height: 20; radius: 10
-                color: prevMa.containsMouse ? colors.alpha(colors.primary, 0.15) : "transparent"
-                scale: prevMa.containsMouse ? 1.12 : 1
+                color: (prevMa.containsMouse && prevBtn.fresh) ? colors.alpha(colors.primary, 0.15) : "transparent"
+                scale: (prevMa.containsMouse && prevBtn.fresh) ? 1.12 : 1
                 Behavior on scale { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
                 Text { anchors.centerIn: parent; text: "󰒮"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 10 }
-                MouseArea { id: prevMa; anchors.fill: parent; hoverEnabled: true; onClicked: if(root.hasPlayer && root.player.canGoPrevious) root.player.previous() }
+                MouseArea { id: prevMa; anchors.fill: parent; hoverEnabled: true; onContainsMouseChanged: if(!containsMouse) prevBtn.fresh = true; onClicked: { if(root.hasPlayer && root.player.canGoPrevious) root.player.previous(); prevBtn.fresh = false } }
             }
             Rectangle {
+                id: playBtn
+                property bool fresh: true
                 width: 22; height: 22; radius: 11
-                color: playMa.containsMouse ? colors.primary : colors.alpha(colors.primary, 0.18)
+                color: (playMa.containsMouse && playBtn.fresh) ? colors.primary : colors.alpha(colors.primary, 0.18)
                 border.width: 1
-                border.color: playMa.containsMouse ? colors.primary : colors.alpha(colors.primary, 0.35)
-                scale: playMa.containsMouse ? 1.1 : 1
+                border.color: (playMa.containsMouse && playBtn.fresh) ? colors.primary : colors.alpha(colors.primary, 0.35)
+                scale: (playMa.containsMouse && playBtn.fresh) ? 1.1 : 1
                 Behavior on scale { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
-                Text { anchors.centerIn: parent; text: root.isPlaying ? "󰏤" : "󰐊"; color: playMa.containsMouse ? colors.background : colors.primary; font.family: colors.fontSans; font.pixelSize: 10 }
-                MouseArea { id: playMa; anchors.fill: parent; hoverEnabled: true; onClicked: if(root.hasPlayer && root.player.canTogglePlaying) root.player.togglePlaying() }
+                Text { anchors.centerIn: parent; text: root.isPlaying ? "󰏤" : "󰐊"; color: (playMa.containsMouse && playBtn.fresh) ? colors.background : colors.primary; font.family: colors.fontSans; font.pixelSize: 10 }
+                MouseArea { id: playMa; anchors.fill: parent; hoverEnabled: true; onContainsMouseChanged: if(!containsMouse) playBtn.fresh = true; onClicked: { if(root.hasPlayer && root.player.canTogglePlaying) root.player.togglePlaying(); playBtn.fresh = false } }
             }
             Rectangle {
+                id: nextBtn
+                property bool fresh: true
                 width: 20; height: 20; radius: 10
-                color: nextMa.containsMouse ? colors.alpha(colors.primary, 0.15) : "transparent"
-                scale: nextMa.containsMouse ? 1.12 : 1
+                color: (nextMa.containsMouse && nextBtn.fresh) ? colors.alpha(colors.primary, 0.15) : "transparent"
+                scale: (nextMa.containsMouse && nextBtn.fresh) ? 1.12 : 1
                 Behavior on scale { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
                 Text { anchors.centerIn: parent; text: "󰒭"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 10 }
-                MouseArea { id: nextMa; anchors.fill: parent; hoverEnabled: true; onClicked: if(root.hasPlayer && root.player.canGoNext) root.player.next() }
+                MouseArea { id: nextMa; anchors.fill: parent; hoverEnabled: true; onContainsMouseChanged: if(!containsMouse) nextBtn.fresh = true; onClicked: { if(root.hasPlayer && root.player.canGoNext) root.player.next(); nextBtn.fresh = false } }
             }
         }
     }

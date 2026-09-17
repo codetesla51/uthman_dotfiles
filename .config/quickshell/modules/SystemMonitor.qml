@@ -24,9 +24,53 @@ FloatingWindow {
     property real memUsed: 0
     property real memTotal: 0
     property var processes: []
+    property string topCpuName: ""
+    property string topCpuVal: ""
+    property string topMemName: ""
+    property string topMemVal: ""
+    property int rogueCount: 0
+    property string killMsg: ""
+    property string hoverPid: ""
+    property string hoverName: ""
+    property bool roguesOnly: false
+    function toggleRogues(){
+        if(root.roguesOnly){ root.roguesOnly = false; return }
+        if(root.rogueCount === 0){ root.killMsg = "no rogue processes right now"; killClear.restart(); return }
+        root.roguesOnly = true
+    }
+    function killHovered(force){
+        if(root.hoverPid === ""){ root.killMsg = "hover a process first, then K"; killClear.restart(); return }
+        var ok = false
+        for(var i = 0; i < root.processes.length; i++)
+            if(root.processes[i].pid === root.hoverPid){ ok = true; break }
+        if(!ok){ root.killMsg = "process gone — hover again"; killClear.restart(); return }
+        root.killPid(root.hoverPid, root.hoverName, force ? "KILL" : "TERM")
+    }
+    function isRogue(stat){ return stat.indexOf("Z") !== -1 || stat.charAt(0) === "D" }
+    function killPid(pid, name, sig){
+        if(pid === "1" || pid === "0" || pid === ""){ root.killMsg = "refusing to kill PID " + pid; killClear.restart(); return }
+        var st = "", ppid = ""
+        for(var i = 0; i < root.processes.length; i++)
+            if(root.processes[i].pid === pid){ st = root.processes[i].stat; ppid = root.processes[i].ppid; break }
+        if(st.indexOf("Z") !== -1){
+            var pname = "PID " + ppid
+            for(var j = 0; j < root.processes.length; j++)
+                if(root.processes[j].pid === ppid){ pname = root.processes[j].name + " (" + ppid + ")"; break }
+            root.killMsg = name + " is a zombie (already dead) — kill its parent " + pname
+            killClear.restart(); return
+        }
+        Quickshell.execDetached(["kill", sig === "KILL" ? "-KILL" : "-TERM", pid])
+        var extra = st.charAt(0) === "D" ? " — uninterruptible sleep, may survive until I/O finishes" : ""
+        root.killMsg = (sig === "KILL" ? "SIGKILL" : "SIGTERM") + " → " + name + " (" + pid + ")" + extra
+        killClear.restart()
+        killRefresh.restart()
+    }
+    Timer { id: killClear; interval: 4000; onTriggered: root.killMsg = "" }
+    Timer { id: killRefresh; interval: 1200; onTriggered: psProc.running = true }
     property var filteredProcesses: {
         var f = filter.trim().toLowerCase()
         var list = f === "" ? processes : processes.filter(function(p){ return p.name.toLowerCase().includes(f) || p.pid.includes(f) })
+        if (root.roguesOnly) list = list.filter(function(p){ return root.isRogue(p.stat) })
         // sort
         list = list.slice()
         if (sortBy === "cpu") list.sort(function(a,b){ return parseFloat(b.cpu)-parseFloat(a.cpu) })
@@ -57,8 +101,16 @@ FloatingWindow {
         border.color: colors.alpha(colors.primary, 0.12)
         focus: root.open
         Keys.onEscapePressed: root.open = false
+        Keys.onPressed: function(e){
+            if(e.key === Qt.Key_K && (e.modifiers & Qt.ShiftModifier) === 0){ root.killHovered(false); e.accepted = true }
+            else if(e.key === Qt.Key_K){ root.killHovered(true); e.accepted = true }
+            else if(e.key === Qt.Key_R){ root.toggleRogues(); e.accepted = true }
+        }
 
 
+
+        // click empty space refocuses the card so K / R work after using the filter box
+        MouseArea { anchors.fill: parent; onClicked: card.forceActiveFocus() }
 
         ColumnLayout {
             anchors.fill: parent
@@ -76,7 +128,14 @@ FloatingWindow {
                     anchors.fill: parent
                     anchors.leftMargin: 14; anchors.rightMargin: 14
                     spacing: 12
-                    Text { text: "◉ SYSTEM MONITOR"; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 14; font.weight: Font.ExtraBold; font.letterSpacing: 1.2 }
+                    Rectangle {
+                        Layout.preferredWidth: 26; Layout.preferredHeight: 26; radius: 13
+                        color: colors.alpha(colors.primary, 0.15)
+                        border.width: 1; border.color: colors.alpha(colors.primary, 0.3)
+                        Text { anchors.centerIn: parent; text: "󰓅"; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 12 }
+                        Layout.alignment: Qt.AlignVCenter
+                    }
+                    Text { text: "SYSTEM MONITOR"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 13; font.weight: Font.ExtraBold; font.letterSpacing: 1.3; Layout.alignment: Qt.AlignVCenter }
                     Item { Layout.fillWidth: true }
                     ColumnLayout {
                         spacing: 1
@@ -86,6 +145,14 @@ FloatingWindow {
                     }
                     Rectangle { width: 1; height: 28; color: colors.alpha(colors.outline,0.15) }
                     Text { text: root.memUsed.toFixed(1)+"G / "+root.memTotal.toFixed(1)+"G"; color: colors.alpha(colors.outline,0.7); font.family: colors.fontSans; font.pixelSize: 9; Layout.alignment: Qt.AlignVCenter }
+                    Rectangle {
+                        width: 28; height: 28; radius: 14
+                        color: smCloseMa.containsMouse ? colors.alpha(colors.surfaceVariant, 0.6) : colors.alpha(colors.surface, 0.6)
+                        border.width: 1; border.color: colors.alpha(colors.outline, 0.15)
+                        Layout.alignment: Qt.AlignVCenter
+                        Text { anchors.centerIn: parent; text: "󰅖"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 12 }
+                        MouseArea { id: smCloseMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.open = false }
+                    }
                 }
 
             }
@@ -250,7 +317,7 @@ FloatingWindow {
                     rightPadding: 14
                     topPadding: 8
                     bottomPadding: 8
-                    placeholderText: "  Filter processes…"
+                    placeholderText: "Filter processes…"
                     placeholderTextColor: colors.alpha(colors.outline,0.5)
                     color: colors.foreground
                     font.family: colors.fontSans
@@ -263,6 +330,7 @@ FloatingWindow {
                         Behavior on border.color { ColorAnimation { duration: 150 } }
                     }
                     onTextChanged: root.filter = text
+                    Keys.onEscapePressed: card.forceActiveFocus()
                 }
                 Repeater {
                     model: [{k:"cpu", l:"CPU"},{k:"mem", l:"MEM"},{k:"pid", l:"PID"}]
@@ -275,7 +343,7 @@ FloatingWindow {
                         MouseArea { anchors.fill: parent; onClicked: root.sortBy = modelData.k }
                     }
                 }
-                Text { text: root.filteredProcesses.length+" / "+root.processes.length; color: colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 9; Layout.preferredWidth: 60; horizontalAlignment: Text.AlignRight }
+                Text { text: root.filteredProcesses.length+" / "+root.processes.length + (root.roguesOnly ? " · ROGUES" : ""); color: colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 9; Layout.preferredWidth: 118; elide: Text.ElideRight; horizontalAlignment: Text.AlignRight }
                 Rectangle {
                     width: 28; height: 28; radius: 8
                     color: refreshMa.containsMouse?colors.alpha(colors.primary,0.15):"transparent"
@@ -302,6 +370,41 @@ FloatingWindow {
                 Item { Layout.fillWidth: true }
             }
 
+            // hogs strip — top eaters + rogue states, computed per poll
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 38
+                radius: 10
+                color: colors.alpha(colors.surface, 0.45)
+                border.width: 1; border.color: colors.alpha(colors.outline, 0.12)
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: 12; anchors.rightMargin: 12
+                    spacing: 10
+                    Text { text: "HOGS"; color: colors.alpha(colors.outline, 0.55); font.family: colors.fontSans; font.pixelSize: 7; font.weight: Font.Bold; font.letterSpacing: 1.3; Layout.alignment: Qt.AlignVCenter }
+                    Text { text: "CPU  " + (root.topCpuName !== "" ? root.topCpuName + " " + root.topCpuVal + "%" : "—"); color: colors.secondary; font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold; elide: Text.ElideRight; Layout.maximumWidth: 220; Layout.alignment: Qt.AlignVCenter }
+                    Rectangle { width: 1; height: 18; color: colors.alpha(colors.outline, 0.12) }
+                    Text { text: "MEM  " + (root.topMemName !== "" ? root.topMemName + " " + root.topMemVal + "%" : "—"); color: colors.tertiary; font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold; elide: Text.ElideRight; Layout.maximumWidth: 220; Layout.alignment: Qt.AlignVCenter }
+                    Rectangle { width: 1; height: 18; color: colors.alpha(colors.outline, 0.12) }
+                    Rectangle {
+                        visible: root.rogueCount > 0
+                        Layout.preferredWidth: rogueTxt.implicitWidth + 18; Layout.preferredHeight: 22; radius: 11
+                        color: root.roguesOnly ? colors.alpha(colors.error, 0.25) : colors.alpha(colors.error, 0.10)
+                        border.width: 1; border.color: colors.alpha(colors.error, 0.4)
+                        Layout.alignment: Qt.AlignVCenter
+                        Text { id: rogueTxt; anchors.centerIn: parent; text: "● " + root.rogueCount + " rogue" + (root.roguesOnly ? " · all ×" : ""); color: colors.error; font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold }
+                        MouseArea { anchors.fill: parent; hoverEnabled: true; onClicked: if(root.roguesOnly) root.roguesOnly = false }
+                    }
+                    Item { Layout.fillWidth: true }
+                    Text { text: "hover a row · K kill · Shift+K force · R rogues"; color: colors.alpha(colors.outline, 0.45); font.family: colors.fontSans; font.pixelSize: 8; Layout.alignment: Qt.AlignVCenter }
+                }
+            }
+            Text {
+                visible: root.killMsg !== ""
+                Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter
+                text: root.killMsg
+                color: colors.secondary; font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold
+            }
             // process header — power-user columns
             RowLayout {
                 Layout.fillWidth: true
@@ -333,12 +436,20 @@ FloatingWindow {
                         anchors.fill: parent
                         anchors.leftMargin: 10; anchors.rightMargin: 8
                         spacing: 8
+                        Rectangle { visible: root.isRogue(modelData.stat); width: 7; height: 7; radius: 3.5; color: colors.error; Layout.alignment: Qt.AlignVCenter }
                         Text { text: modelData.pid; color: colors.alpha(colors.outline,0.7); font.family: colors.fontSans; font.pixelSize: 9; Layout.preferredWidth: 60 }
                         Text { text: modelData.name; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 10; elide: Text.ElideRight; Layout.fillWidth: true }
                         Rectangle { width: 48; height: 14; radius: 7; color: colors.alpha(colors.secondary, parseFloat(modelData.cpu)/100*0.35+0.08); Text { anchors.centerIn: parent; text: modelData.cpu+"%"; color: colors.secondary; font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold } }
                         Rectangle { width: 48; height: 14; radius: 7; color: colors.alpha(colors.tertiary, parseFloat(modelData.mem)/100*0.35+0.08); Text { anchors.centerIn: parent; text: modelData.mem+"%"; color: colors.tertiary; font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold } }
                     }
-                    MouseArea { id: maProc; anchors.fill: parent; hoverEnabled:true }
+                    MouseArea {
+                        id: maProc
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        acceptedButtons: Qt.NoButton
+                        onEntered: { root.hoverPid = modelData.pid; root.hoverName = modelData.name }
+                        onExited: if(root.hoverPid === modelData.pid){ root.hoverPid = ""; root.hoverName = "" }
+                    }
                 }
             }
         }
@@ -403,18 +514,27 @@ FloatingWindow {
     }
     Process {
         id: psProc
-        command: ["sh","-c","ps -eo pid,pcpu,pmem,comm --sort=-%cpu | head -n 60"]
+        command: ["sh","-c","ps -eo pid,ppid,pcpu,pmem,stat,comm --sort=-%cpu | head -n 60"]
         stdout: StdioCollector {
             waitForEnd: true
             onStreamFinished: {
                 var lines=text.trim().split("\n").slice(1)
                 var arr=[]
+                var tc="", tv="-1", tm="", tmv="-1", rogues=0
                 for(var i=0;i<lines.length;i++){
                     var p=lines[i].trim().split(/\s+/)
-                    if(p.length<4) continue
-                    arr.push({pid:p[0], cpu:p[1], mem:p[2], name:p.slice(3).join(" ")})
+                    if(p.length<6) continue
+                    var st=p[4]
+                    var nm=p.slice(5).join(" ")
+                    arr.push({pid:p[0], ppid:p[1], cpu:p[2], mem:p[3], stat:st, name:nm})
+                    if(parseFloat(p[2])>parseFloat(tv)){ tv=p[2]; tc=nm }
+                    if(parseFloat(p[3])>parseFloat(tmv)){ tmv=p[3]; tm=nm }
+                    if(root.isRogue(st)) rogues++
                 }
                 root.processes=arr
+                root.topCpuName=tc; root.topCpuVal=tv
+                root.topMemName=tm; root.topMemVal=tmv
+                root.rogueCount=rogues
             }
         }
     }

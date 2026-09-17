@@ -11,17 +11,17 @@ lower_cutoff_freq = 50
 higher_cutoff_freq = 12000
 
 [color]
-background = "#141312"
+background = "#121415"
 gradient = 1
 gradient_count = 8
-gradient_color_1 = "#c7c7bb"
-gradient_color_2 = "#c7c7bb"
-gradient_color_3 = "#c8c6c0"
-gradient_color_4 = "#c8c6c0"
-gradient_color_5 = "#d0c3c9"
-gradient_color_6 = "#d0c3c9"
-gradient_color_7 = "#97978e"
-gradient_color_8 = "#474740"
+gradient_color_1 = "#a2cde2"
+gradient_color_2 = "#a2cde2"
+gradient_color_3 = "#b9c9d2"
+gradient_color_4 = "#b9c9d2"
+gradient_color_5 = "#f2bc8e"
+gradient_color_6 = "#f2bc8e"
+gradient_color_7 = "#91979c"
+gradient_color_8 = "#41484c"
 
 [smoothing]
 # the rice: clean jitter-free bars with the classic monstercat shoulder

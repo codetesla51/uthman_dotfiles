@@ -38,6 +38,8 @@ PanelWindow {
     ClockWindow { id: clockWin; colors: palette }
     ScreenTime { id: screenTime; colors: palette }
     PhoneBridge { id: phoneLink; colors: palette }
+    // WhatsApp PARKED (ban caution, 2026-09-17): kept on disk, unwired so no daemon spawns.
+    // WhatsApp { id: waPanel; colors: palette }
     PluginMenu { id: pluginMenu; colors: palette }
     KeybindsPanel { id: keybindsPanel; colors: palette }
     DriveHealth { id: driveHealth; colors: palette }
@@ -88,6 +90,10 @@ PanelWindow {
             // trapezoid geometry shared by fill + border — fixed rounding
             readonly property real inset: 18         // horizontal inset of bottom edge
             readonly property real cr: 12            // corner radius — reverted from 16, 16 was too bulbous with inset 20
+            readonly property real tc: 8             // top corner radius — tab reads fully rounded
+            readonly property real slantLen: Math.sqrt(inset*inset + (height-cr)*(height-cr))
+            readonly property real ux: inset / slantLen
+            readonly property real uy: (height-cr) / slantLen
             Behavior on width { NumberAnimation { duration: 380; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] } }
 
             // Dynamic-Island capsule: floating black glass, no border
@@ -105,29 +111,21 @@ PanelWindow {
                 Behavior on opacity { NumberAnimation { duration: 220; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] } }
                 anchors.fill: parent
                 antialiasing: true
+                layer.enabled: true
+                layer.samples: 4
                 ShapePath {
                     fillColor: colors.alpha(colors.surface, 0.60)
                     strokeColor: "transparent"
                     strokeWidth: 0
-                    startX: 0; startY: 0
-                    PathLine { x: island.width; y: 0 }
+                    startX: island.tc; startY: 0
+                    PathLine { x: island.width - island.tc; y: 0 }
+                    PathQuad { controlX: island.width; controlY: 0; x: island.width - island.ux*island.tc; y: island.uy*island.tc }
                     PathLine { x: island.width - island.inset; y: island.height - island.cr }
                     PathQuad { controlX: island.width - island.inset; controlY: island.height; x: island.width - island.inset - island.cr; y: island.height }
                     PathLine { x: island.inset + island.cr; y: island.height }
                     PathQuad { controlX: island.inset; controlY: island.height; x: island.inset; y: island.height - island.cr }
-                }
-                // hairline border — three visible edges only, never across the screen top;
-                // protruding bottom angles get the same rounded corners as the fill
-                ShapePath {
-                    fillColor: "transparent"
-                    strokeColor: colors.alpha(colors.primary, 0.28)
-                    strokeWidth: 1
-                    startX: 0.5; startY: 0
-                    PathLine { x: island.inset; y: island.height - island.cr }
-                    PathQuad { controlX: island.inset; controlY: island.height - 0.5; x: island.inset + island.cr; y: island.height - 0.5 }
-                    PathLine { x: island.width - island.inset - island.cr; y: island.height - 0.5 }
-                    PathQuad { controlX: island.width - island.inset; controlY: island.height - 0.5; x: island.width - island.inset; y: island.height - island.cr }
-                    PathLine { x: island.width - 0.5; y: 0 }
+                    PathLine { x: island.ux*island.tc; y: island.uy*island.tc }
+                    PathQuad { controlX: 0; controlY: 0; x: island.tc; y: 0 }
                 }
             }
 

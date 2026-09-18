@@ -26,7 +26,7 @@ header()  { echo -e "\n${BOLD}$*${RESET}"; }
 # ── Step 1: Check dependencies ────────────────────────────────────────────────
 header "Checking dependencies..."
 
-DEPS=(hyprland quickshell ghostty matugen starship zsh lsd zoxide fzf cava btop stow hyprlock hypridle hyprsunset wl-clipboard cliphist swaync mako walker rofi)
+DEPS=(hyprland quickshell ghostty kitty matugen starship zsh lsd zoxide fzf cava btop stow hyprlock hypridle hyprsunset wl-clipboard cliphist swaync mako walker rofi)
 MISSING=()
 
 for dep in "${DEPS[@]}"; do

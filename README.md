@@ -70,7 +70,7 @@ Log out, pick Hyprland at the SDDM greeter, log in. `SUPER+K` opens the searchab
 | Compositor | Hyprland (Wayland). Defaults vendored in `.config/hypr/vendor/`, personal overrides in `.config/hypr/*.conf` |
 | Shell / bar | Quickshell. `shell.qml` wires `components/Bar.qml` (left/center/right rows) plus standalone windows |
 | Theming | Matugen (Material You). ~40 templates write to `~/.config/theme/current/*`, `~/.config/quickshell/colors.css`, and the SDDM palette |
-| Terminal | Ghostty (`config-file` sources the generated `ghostty.conf`) |
+| Terminal | Ghostty + Kitty (both `config`/`kitty.conf` source the generated `ghostty.conf`/`kitty.conf`) |
 | Shell | Zsh + Starship + `lsd` / `zoxide` / `fzf` / `mise` |
 | Launcher | Quickshell AppLauncher (Spotlight-style). Walker + Rofi kept for emoji, clipboard, and dmenu shims |
 | Notifications | Quickshell daemon (owns `org.freedesktop.Notifications`): toasts, drawer, history. `swaync`/`mako` remain as fallback only |
@@ -97,7 +97,7 @@ matugen image ~/Pictures/your-wallpaper.jpg
 |----------|--------|
 | `waybar` | `~/.config/quickshell/colors.css` (the file the live shell polls) |
 | `hyprland-*` | `snow_black/colors.conf` + `theme/current` (+ `omarchy/current` legacy mirror) |
-| `hyprlock-*`, `ghostty-*`, `gtk`, `btop`, `walker`, `mako` | matching `snow_black` snapshot + `theme/current` live file |
+| `hyprlock-*`, `ghostty-*`, `kitty-*`, `gtk`, `btop`, `walker`, `mako` | matching `snow_black` snapshot + `theme/current` live file |
 | `cava` | `snow_black/cava_theme` + `~/.config/cava/config` (rewritten directly) |
 | `sddm` | `/usr/share/sddm/themes/elarun-custom/Palette.qml` (login follows every theme change) |
 | `firefox` (+ chrome wiring) | `theme/current/firefox{,-usercontent}.css`, symlinked as `userChrome.css`/`userContent.css`; `firefox/user.js` enables it |
@@ -274,6 +274,7 @@ The full list lives in `.config/hypr/bindings.conf` (vendored defaults alongside
 │   │   └── AGENTS.md         # contributor rules for this codebase (read before editing)
 │   ├── matugen/              # config.toml + 40 templates (btop, gtk, rofi, nvim, zed, sddm, zathura, …)
 │   ├── ghostty/config        # sources theme/current/ghostty.conf
+│   ├── kitty/kitty.conf      # sources theme/current/kitty.conf
 │   ├── zathura/zathurarc     # matugen-rendered (do not hand-edit, edit the template)
 │   ├── rofi/                 # themes + wall.sh / wal.sh / emoji.sh / clipboard.sh
 │   ├── nvim/lua/plugins/ / zed/settings.json / tmux/tmux.conf
@@ -300,7 +301,7 @@ The full list lives in `.config/hypr/bindings.conf` (vendored defaults alongside
 * Look and feel: `.config/hypr/looknfeel.conf` plus `~/.config/theme/current/colors.conf`
 * Bar and modules: `.config/quickshell/modules/*.qml`, then `pkill -x quickshell` and relaunch (never trust hot reload for verdicts)
 * New theme template: add it under `.config/matugen/templates/`, map it in `config.toml`, run `matugen image` once
-* Terminal: `.config/ghostty/config` for font and behavior. Colors always come from the generated file
+* Terminal: `.config/ghostty/config` and `.config/kitty/kitty.conf` for font and behavior. Colors always come from the generated files
 
 ## Gotchas
 

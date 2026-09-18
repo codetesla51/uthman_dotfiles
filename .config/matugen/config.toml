@@ -41,6 +41,18 @@ output_path = "~/.config/omarchy/current/theme/ghostty.conf"
 input_path = "~/.config/matugen/templates/ghostty-theme.conf"
 output_path = "~/.config/theme/current/ghostty.conf"
 
+[templates.kitty-theme]
+input_path = "~/.config/matugen/templates/kitty-theme.conf"
+output_path = "~/.config/theme/themes/snow_black/kitty.conf"
+
+[templates.kitty-current]
+input_path = "~/.config/matugen/templates/kitty-theme.conf"
+output_path = "~/.config/omarchy/current/theme/kitty.conf"
+
+[templates.kitty-standalone]
+input_path = "~/.config/matugen/templates/kitty-theme.conf"
+output_path = "~/.config/theme/current/kitty.conf"
+
 
 [templates.pear-desktop-theme]
 input_path = "~/.config/matugen/templates/pear-desktop.css"

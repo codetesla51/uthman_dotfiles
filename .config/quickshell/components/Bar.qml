@@ -48,8 +48,8 @@ PanelWindow {
 
     // bar sides toggle — SUPER SHIFT SPACE leaves middle island
     property bool barsVisible: true
-    // center style — SUPER ALT SPACE flips Dynamic Island against the trapezoid tab
-    property bool dynamicIsland: true
+    // center style — SUPER ALT SPACE flips trapezoid tab against the Dynamic Island
+    property bool dynamicIsland: false
     // island hover swells the NowPlaying glass card; the linger timer keeps it from
     // flickering when the cursor cuts the corner between island and card
     property bool musicHover: false
@@ -89,8 +89,8 @@ PanelWindow {
             Behavior on height { NumberAnimation { duration: 320; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] } }
             // trapezoid geometry shared by fill + border — fixed rounding
             readonly property real inset: 18         // horizontal inset of bottom edge
-            readonly property real cr: 12            // corner radius — reverted from 16, 16 was too bulbous with inset 20
-            readonly property real tc: 8             // top corner radius — tab reads fully rounded
+            readonly property real cr: 8             // bottom corners (showing) — soft radius
+            readonly property real tc: 0             // top corners (screen edge) — sharp, no curve
             readonly property real slantLen: Math.sqrt(inset*inset + (height-cr)*(height-cr))
             readonly property real ux: inset / slantLen
             readonly property real uy: (height-cr) / slantLen

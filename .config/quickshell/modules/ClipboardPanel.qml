@@ -24,7 +24,7 @@ PanelWindow {
         listProc.running = true
     }
     function copyEntry(id){
-        Quickshell.execDetached(["sh","-c","cliphist decode "+id+" | wl-copy && notify-send -u low 'Clipboard' 'Copied'"])
+        Quickshell.execDetached(["sh","-c","cliphist decode "+id+" | wl-copy && notify-send -u low -a 'Clipboard' 'Clipboard' 'Copied'"])
         root.open = false
     }
     function deleteEntry(id){
@@ -35,7 +35,7 @@ PanelWindow {
         entries = arr
     }
     function clearAll(){
-        Quickshell.execDetached(["sh","-c","cliphist wipe 2>/dev/null; notify-send -u low 'Clipboard' 'Cleared'"])
+        Quickshell.execDetached(["sh","-c","cliphist wipe 2>/dev/null; notify-send -u low -a 'Clipboard' 'Clipboard' 'Cleared'"])
         entries = []
     }
 

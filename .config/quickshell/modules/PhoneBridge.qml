@@ -93,7 +93,7 @@ FloatingWindow {
     Timer { id: searchTimer; interval: 1200; onTriggered: root.clearSearch() }
 
     function notify(title, body) {
-        Quickshell.execDetached(["sh", "-c", "notify-send -u normal -i phone '" + String(title).replace(/'/g, "'\\''") + "' '" + String(body).replace(/'/g, "'\\''") + "'"])
+        Quickshell.execDetached(["sh", "-c", "notify-send -u normal -a 'Phone' '" + String(title).replace(/'/g, "'\\''") + "' '" + String(body).replace(/'/g, "'\\''") + "'"])
     }
 
     // shell-quote one argument so names with spaces/quotes survive `adb shell`

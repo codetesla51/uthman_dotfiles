@@ -67,7 +67,7 @@ PanelWindow {
         }
     }
     function setProfile(p, manual){
-        Quickshell.execDetached(["sh","-c","powerprofilesctl set "+p+" 2>/dev/null || notify-send -u low 'Power profiles' 'daemon not running'"])
+        Quickshell.execDetached(["sh","-c","powerprofilesctl set "+p+" 2>/dev/null || notify-send -u low -a 'Battery' 'Power profiles' 'daemon not running'"])
         curProfile=p
         if (manual) { lastAutoProfile=""; lastAutoSwitchMs=Date.now() }
     }
@@ -87,7 +87,7 @@ PanelWindow {
         if (target===lastAutoProfile && Date.now()-lastAutoSwitchMs < 45000) return
         if (Date.now()-lastAutoSwitchMs < 8000) return
         console.log("[Battery] auto " + curProfile + " -> " + target + " (" + stateStr + " " + pct + "%)")
-        Quickshell.execDetached(["sh","-c","powerprofilesctl set "+target+" && notify-send -u low -i battery 'Power " + target + "' 'Auto: " + stateStr + " " + pct + "% -> " + target + "' 2>/dev/null &"])
+        Quickshell.execDetached(["sh","-c","powerprofilesctl set "+target+" && notify-send -u low -a 'Battery' 'Power " + target + "' 'Auto: " + stateStr + " " + pct + "% -> " + target + "' 2>/dev/null &"])
         curProfile=target; lastAutoProfile=target; lastAutoSwitchMs=Date.now()
     }
     function loadAutoSwitch(){
@@ -239,10 +239,27 @@ PanelWindow {
                     RowLayout {
                         spacing: 4
                         Text { text: "Auto"; color: root.autoSwitch ? colors.primary : colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold }
-                        Switch {
-                            checked: root.autoSwitch
-                            onToggled: root.autoSwitch = checked
-                            scale: 0.75
+                        Rectangle {
+                            width: 38; height: 22; radius: 11
+                            color: root.autoSwitch ? colors.alpha(colors.primary, 0.9) : colors.alpha(colors.surfaceVariant, 0.5)
+                            border.width: 1
+                            border.color: root.autoSwitch ? colors.primary : colors.alpha(colors.outline, 0.25)
+                            scale: togMa.containsMouse ? 1.06 : 1.0
+                            Behavior on scale { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
+                            Behavior on color { ColorAnimation { duration: 180 } }
+                            Rectangle {
+                                width: 16; height: 16; radius: 8
+                                x: root.autoSwitch ? parent.width - width - 3 : 3
+                                anchors.verticalCenter: parent.verticalCenter
+                                color: colors.background
+                                Behavior on x { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
+                            }
+                            MouseArea {
+                                id: togMa
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                onClicked: root.autoSwitch = !root.autoSwitch
+                            }
                         }
                     }
                 }

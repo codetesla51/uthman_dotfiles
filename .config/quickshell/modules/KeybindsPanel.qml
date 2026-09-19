@@ -23,7 +23,7 @@ PanelWindow {
     property var binds: [
         {key:"SUPER + Return", desc:"Terminal", cat:"Apps", disp:"exec", arg:"uwsm-app -- ghostty"},
         {key:"SUPER + Space", desc:"Launch apps", cat:"Apps", disp:"exec", arg:"quickshell -p ~/.config/quickshell ipc call launcher toggle"},
-        {key:"SUPER Shift + F", desc:"File manager", cat:"Apps", disp:"exec", arg:"uwsm-app -- filemanager --gui"},
+        {key:"SUPER Shift + F", desc:"File manager", cat:"Apps", disp:"exec", arg:"uwsm-app -- nautilus"},
         {key:"SUPER Shift + B", desc:"Browser", cat:"Apps", disp:"exec", arg:"xdg-open https://google.com"},
         {key:"SUPER Shift + N", desc:"Editor (Zed)", cat:"Apps", disp:"exec", arg:"uwsm-app -- zed"},
         {key:"SUPER Shift + M", desc:"Music (Spotify)", cat:"Apps", disp:"exec", arg:"uwsm-app -- spotify"},

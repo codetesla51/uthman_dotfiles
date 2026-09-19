@@ -136,6 +136,7 @@ Item {
         if (n.indexOf("thunar") !== -1) return ""
         if (n.indexOf("dolphin") !== -1) return ""
         if (n.indexOf("filemanager") !== -1) return ""
+        if (n.indexOf("nautilus") !== -1) return ""
         if (n.indexOf("code") !== -1) return ""
         if (n.indexOf("zed") !== -1) return ""
         if (n.indexOf("nvim") !== -1) return ""

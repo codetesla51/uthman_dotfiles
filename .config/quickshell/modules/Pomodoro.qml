@@ -102,7 +102,7 @@ FloatingWindow {
         var msg = was === "focus"
             ? ("Focus done — " + (next === "long" ? "long break!" : "break time!"))
             : "Break over — back to focus!"
-        if(!skipped) Quickshell.execDetached(["notify-send", "-u", "critical", "-i", "alarm", "Pomodoro", msg])
+        if(!skipped) Quickshell.execDetached(["notify-send", "-u", "critical", "-a", "Pomodoro", "Pomodoro", msg])
         root.phase = next
         root.total = root.phaseSecs(next)
         root.seconds = root.total

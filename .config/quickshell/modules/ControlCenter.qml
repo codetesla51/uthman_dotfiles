@@ -116,7 +116,7 @@ FloatingWindow {
             else {
                 root.timerRunning = false
                 var msg = root.pomodoroIsBreak ? "Break over — back to focus!" : "Focus done — break time!"
-                Quickshell.execDetached(["notify-send", "-u", "critical", "-i", "alarm", "Pomodoro", msg])
+                Quickshell.execDetached(["notify-send", "-u", "critical", "-a", "Pomodoro", "Pomodoro", msg])
                 Quickshell.execDetached(["sh","-c","paplay /usr/share/sounds/freedesktop/stereo/complete.oga 2>/dev/null || paplay /usr/share/sounds/freedesktop/stereo/alarm-clock-elapsed.oga 2>/dev/null || true"])
                 if (!root.pomodoroIsBreak) { root.pomodoroIsBreak = true; root.timerSeconds = root.pomodoroBreak; root.timerTotal = root.pomodoroBreak; root.timerRunning = true }
                 else { root.pomodoroIsBreak = false; root.pomodoroCycles++; root.timerSeconds = root.pomodoroWork; root.timerTotal = root.pomodoroWork }
@@ -140,40 +140,51 @@ FloatingWindow {
     property var activityLast7: []
     property real activityMax: 1
     function fmtDurShort(s){ if(s<60) return s+"s"; var m=Math.floor(s/60); if(m<60) return m+"m"; var h=Math.floor(m/60); var rm=m%60; return h+"h"+(rm>0?" "+rm+"m":"") }
-    function loadTopActivities(){
-        try {
-            var db=LocalStorage.openDatabaseSync("qs_screentime","1.0","screen time",1000000)
-            var arr=[]
-            db.transaction(function(tx){
-                var rs=tx.executeSql("SELECT app, SUM(seconds) as s FROM app_time GROUP BY app ORDER BY s DESC LIMIT 5")
-                for(var i=0;i<rs.rows.length;i++) arr.push({app: rs.rows.item(i).app, secs: rs.rows.item(i).s})
-            })
-            if(arr.length>0) topActivities=arr
-        } catch(e){}
-    }
-    function loadActivityLast7(){
-        try {
-            var db=LocalStorage.openDatabaseSync("qs_screentime","1.0","screen time",1000000)
-            var byDay={}
-            var todayStr=Qt.formatDate(new Date(),"yyyy-MM-dd")
-            db.transaction(function(tx){
-                var rs=tx.executeSql("SELECT day, SUM(seconds) as s FROM app_time GROUP BY day")
-                for(var i=0;i<rs.rows.length;i++) byDay[rs.rows.item(i).day]=rs.rows.item(i).s
-            })
-            var now=new Date(); now.setHours(0,0,0,0)
-            var days=[]
-            var maxS=1
-            for(var i=6;i>=0;i--){
-                var d=new Date(now); d.setDate(now.getDate()-i)
-                var ds=Qt.formatDate(d,"yyyy-MM-dd")
-                var s=byDay[ds]||0
-                if(s>maxS) maxS=s
-                days.push({date:d, dow:"MTWTFSS"[(d.getDay()+6)%7], secs:s, today: ds===todayStr})
+    // activity comes from the same `screentime` Go daemon as ScreenTime.qml.
+    // was LocalStorage qs_screentime/app_time (dead table) — bars stayed empty / out of sync.
+    function loadTopActivities(){ topAppsFetcher.running = true }
+    function loadActivityLast7(){ activityFetcher.running = true }
+    Process {
+        id: activityFetcher
+        command: ["screentime", "--export", "all"]
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: {
+                try {
+                    var j = JSON.parse(text)
+                    var src = j.last7 || []
+                    var days = []
+                    var maxS = 1
+                    for (var i = 0; i < src.length; i++) {
+                        var s = src[i].secs || 0
+                        if (s > maxS) maxS = s
+                        var d = new Date(src[i].day + "T00:00:00")
+                        days.push({date: d, dow: "MTWTFSS"[(d.getDay()+6)%7], secs: s, today: !!src[i].today})
+                    }
+                    if (days.length > 0) {
+                        root.activityLast7 = days
+                        root.activityMax = maxS
+                    }
+                } catch (e) {}
             }
-            // store normalized
-            activityLast7=days
-            activityMax=maxS
-        } catch(e){ activityLast7=[] }
+        }
+    }
+    Process {
+        id: topAppsFetcher
+        command: ["screentime", "--export", "today"]
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: {
+                try {
+                    var j = JSON.parse(text)
+                    var by = j.by_app || {}
+                    var arr = []
+                    for (var k in by) arr.push({app: k, secs: by[k]})
+                    arr.sort(function(a, b) { return b.secs - a.secs })
+                    if (arr.length > 0) root.topActivities = arr.slice(0, 5)
+                } catch (e) {}
+            }
+        }
     }
 
     // mini calendar state: offset in months from today, rebuilt on open and on flip

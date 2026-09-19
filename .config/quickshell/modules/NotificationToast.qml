@@ -33,6 +33,99 @@ Rectangle {
     opacity: 0
     transform: Translate { id: slide }
 
+
+    // compact per-app Phosphor icon (mirrors NotificationCenter.appGlyph)
+    function appGlyph(name) {
+        var n = String(name || "").toLowerCase()
+        if (n.indexOf("whatsapp") !== -1) return ""
+        if (n.indexOf("firefox") !== -1) return ""
+        if (n.indexOf("mozilla") !== -1) return ""
+        if (n.indexOf("chrome") !== -1) return ""
+        if (n.indexOf("chromium") !== -1) return ""
+        if (n.indexOf("spotify") !== -1) return ""
+        if (n.indexOf("telegram") !== -1) return ""
+        if (n.indexOf("discord") !== -1) return ""
+        if (n.indexOf("ghostty") !== -1) return ""
+        if (n.indexOf("kitty") !== -1) return ""
+        if (n.indexOf("terminal") !== -1) return ""
+        if (n.indexOf("console") !== -1) return ""
+        if (n.indexOf("volume") !== -1) return ""
+        if (n.indexOf("audio") !== -1) return ""
+        if (n.indexOf("wpctl") !== -1) return ""
+        if (n.indexOf("pactl") !== -1) return ""
+        if (n.indexOf("speaker") !== -1) return ""
+        if (n.indexOf("mic") !== -1) return ""
+        if (n.indexOf("battery") !== -1) return ""
+        if (n.indexOf("power") !== -1) return ""
+        if (n.indexOf("tlp") !== -1) return ""
+        if (n.indexOf("wifi") !== -1) return ""
+        if (n.indexOf("network") !== -1) return ""
+        if (n.indexOf("nmcli") !== -1) return ""
+        if (n.indexOf("iwctl") !== -1) return ""
+        if (n.indexOf("bluetooth") !== -1) return ""
+        if (n.indexOf("screenshot") !== -1) return ""
+        if (n.indexOf("shot") !== -1) return ""
+        if (n.indexOf("camera") !== -1) return ""
+        if (n.indexOf("clipboard") !== -1) return ""
+        if (n.indexOf("cliphist") !== -1) return ""
+        if (n.indexOf("music") !== -1) return ""
+        if (n.indexOf("mpv") !== -1) return ""
+        if (n.indexOf("video") !== -1) return ""
+        if (n.indexOf("mail") !== -1) return ""
+        if (n.indexOf("thunderbird") !== -1) return ""
+        if (n.indexOf("envelope") !== -1) return ""
+        if (n.indexOf("calendar") !== -1) return ""
+        if (n.indexOf("download") !== -1) return ""
+        if (n.indexOf("brightness") !== -1) return ""
+        if (n.indexOf("sunset") !== -1) return ""
+        if (n.indexOf("night") !== -1) return ""
+        if (n.indexOf("image") !== -1) return ""
+        if (n.indexOf("chat") !== -1) return ""
+        if (n.indexOf("note") !== -1) return ""
+        if (n.indexOf("github") !== -1) return ""
+        if (n.indexOf("git") !== -1) return ""
+        if (n.indexOf("brave") !== -1) return ""
+        if (n.indexOf("vivaldi") !== -1) return ""
+        if (n.indexOf("edge") !== -1) return ""
+        if (n.indexOf("opera") !== -1) return ""
+        if (n.indexOf("zen") !== -1) return ""
+        if (n.indexOf("grim") !== -1) return ""
+        if (n.indexOf("slurp") !== -1) return ""
+        if (n.indexOf("flameshot") !== -1) return ""
+        if (n.indexOf("swappy") !== -1) return ""
+        if (n.indexOf("obs") !== -1) return ""
+        if (n.indexOf("recorder") !== -1) return ""
+        if (n.indexOf("swayosd") !== -1) return ""
+        if (n.indexOf("upower") !== -1) return ""
+        if (n.indexOf("mpd") !== -1) return ""
+        if (n.indexOf("ncmpcpp") !== -1) return ""
+        if (n.indexOf("pacman") !== -1) return ""
+        if (n.indexOf("yay") !== -1) return ""
+        if (n.indexOf("paru") !== -1) return ""
+        if (n.indexOf("update") !== -1) return ""
+        if (n.indexOf("keepassxc") !== -1) return ""
+        if (n.indexOf("password") !== -1) return ""
+        if (n.indexOf("nautilus") !== -1) return ""
+        if (n.indexOf("thunar") !== -1) return ""
+        if (n.indexOf("dolphin") !== -1) return ""
+        if (n.indexOf("filemanager") !== -1) return ""
+        if (n.indexOf("code") !== -1) return ""
+        if (n.indexOf("zed") !== -1) return ""
+        if (n.indexOf("nvim") !== -1) return ""
+        if (n.indexOf("neovim") !== -1) return ""
+        if (n.indexOf("phone") !== -1) return ""
+        if (n.indexOf("hyprlock") !== -1) return ""
+        if (n.indexOf("lock") !== -1) return ""
+        if (n.indexOf("weather") !== -1) return ""
+        if (n.indexOf("usb") !== -1) return ""
+        if (n.indexOf("udisk") !== -1) return ""
+        if (n.indexOf("timer") !== -1) return ""
+        if (n.indexOf("pomodoro") !== -1) return ""
+        if (n.indexOf("alarm") !== -1) return ""
+        if (n.indexOf("watchcat") !== -1) return ""
+        return ""
+    }
+
     function dismiss() {
         if (state_ !== "open") return
         state_ = "closing"
@@ -83,6 +176,16 @@ Rectangle {
             spacing: 8
 
             Text {
+                readonly property string ag: root.appGlyph(root.alive ? notification.appName : "")
+                visible: ag !== ""
+                text: ag
+                color: colors.alpha(colors.primary, 0.9)
+                font.family: "Phosphor"
+                font.pixelSize: 12
+                Layout.alignment: Qt.AlignVCenter
+            }
+
+            Text {
                 text: root.alive ? notification.appName : ""
                 color: colors.alpha(colors.outline, 0.9)
                 font.family: colors.fontSans
@@ -97,9 +200,9 @@ Rectangle {
 
                 Text {
                     anchors.centerIn: parent
-                    text: "󰅖"
+                    text: ""
                     color: closeMouse.containsMouse ? colors.foreground : colors.alpha(colors.outline, 0.7)
-                    font.family: colors.fontSans
+                    font.family: "Phosphor"
                     font.pixelSize: 12
                 }
 
@@ -206,7 +309,7 @@ Rectangle {
         Row {
             Layout.fillWidth: true
             spacing: 6
-            visible: root.alive && notification.image !== ""
+            visible: root.alive && notification.image !== "" && /\.(png|jpe?g|webp)$/i.test(notification.image)
             Rectangle {
                 width: 68; height: 22; radius: 11
                 color: saveMa.containsMouse ? colors.alpha(colors.primary,0.18) : colors.alpha(colors.surfaceVariant,0.35)
@@ -220,7 +323,7 @@ Rectangle {
                         // handle file:// prefix
                         if (src && src.startsWith("file://")) src = src.substring(7)
                                                 var safe = src.replace(/'/g, "'\\''")
-                        Quickshell.execDetached(["sh","-c","mkdir -p ~/Pictures/Screenshots; cp -- '"+safe+"' ~/Pictures/Screenshots/ 2>/dev/null; cp -- '"+safe+"' /tmp/ 2>/dev/null; notify-send -u normal 'Screenshot saved' 'Saved to ~/Pictures/Screenshots' 2>/dev/null || true"])
+                        Quickshell.execDetached(["sh","-c","mkdir -p ~/Pictures/Screenshots; cp -- '"+safe+"' ~/Pictures/Screenshots/ 2>/dev/null; cp -- '"+safe+"' /tmp/ 2>/dev/null; notify-send -u normal -a 'Screenshot' 'Screenshot saved' 'Saved to ~/Pictures/Screenshots' 2>/dev/null || true"])
                         console.log("[toast] saved", src)
                         root.dismiss()
                     }

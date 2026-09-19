@@ -65,12 +65,12 @@ PanelWindow {
                 // alert — system notification + sound
                 if (root.pomodoroMode) {
                     var msg = root.pomodoroIsBreak ? "Break over — back to focus!" : "Focus done — break time!"
-                    Quickshell.execDetached(["notify-send", "-u", "critical", "-i", "alarm", "Pomodoro", msg])
+                    Quickshell.execDetached(["notify-send", "-u", "critical", "-a", "Pomodoro", "Pomodoro", msg])
                     Quickshell.execDetached(["sh","-c","paplay /usr/share/sounds/freedesktop/stereo/complete.oga 2>/dev/null || paplay /usr/share/sounds/freedesktop/stereo/alarm-clock-elapsed.oga 2>/dev/null || true"])
                     if (!root.pomodoroIsBreak) { root.pomodoroIsBreak=true; root.timerSeconds=root.pomodoroBreak; root.timerTotal=root.pomodoroBreak; root.timerRunning=true }
                     else { root.pomodoroIsBreak=false; root.pomodoroCycles++; root.timerSeconds=root.pomodoroWork; root.timerTotal=root.pomodoroWork; }
                 } else {
-                    Quickshell.execDetached(["notify-send", "-u", "critical", "-i", "alarm", "Timer", "Time's up!"])
+                    Quickshell.execDetached(["notify-send", "-u", "critical", "-a", "Timer", "Timer", "Time's up!"])
                     Quickshell.execDetached(["sh","-c","paplay /usr/share/sounds/freedesktop/stereo/complete.oga 2>/dev/null || true"])
                 }
             }

@@ -263,8 +263,8 @@ FloatingWindow {
         onTriggered: {
             var now = Date.now()
             if (notifProc.running) {
-                // stale poll (hung adb on flaky wifi): kill so the next tick restarts
-                if (now - root.pollStart > 10000) notifProc.kill()
+                // stale poll (hung adb on flaky wifi): stop it so the next tick restarts
+                if (now - root.pollStart > 10000) notifProc.running = false
                 return
             }
             root.pollStart = now

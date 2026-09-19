@@ -57,7 +57,7 @@ PanelWindow {
     NetRate { id: rate }
 
     function strengthGlyph(sig) {
-        return sig >= 80 ? "󰤟" : sig >= 60 ? "󰤞" : sig >= 40 ? "󰤝" : "󰤜"
+        return sig >= 80 ? "󰤨" : sig >= 60 ? "󰤥" : sig >= 40 ? "󰤢" : "󰤟"
     }
 
     function connectTo(net) {

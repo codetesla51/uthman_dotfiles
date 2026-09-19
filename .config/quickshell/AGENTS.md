@@ -53,8 +53,8 @@ s = s.replace('\\uF04C4', chr(0xF04C4))
 
 Verify after: `grep -P '\\\\u[0-9A-Fa-f]{4}' modules/*.qml` must return 0.
 
-Verified glyphs present in `FiraCode Nerd Font` (checked via `fontTools.ttLib.TTFont.getBestCmap()`):
-`F091C/F091D/F091E/F091F` (wifi strength), `F023` lock, `F00C` check, `F021` refresh, `F0156` close, `F04C4` speedometer, `F01DA` download, `F0552` upload. Always verify new codepoints against the font before using them.
+Verified glyphs present in `FiraCode Nerd Font Mono` (checked via `fontTools.ttLib.TTFont.getBestCmap()`):
+`F091F/F0922/F0925/F0928` (wifi strength 1-4), `F023` lock, `F00C` check, `F021` refresh, `F0156` close, `F04C4` speedometer, `F01DA` download, `F0552` upload. Always verify new codepoints against the font before using them.
 
 ---
 

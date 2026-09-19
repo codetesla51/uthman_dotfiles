@@ -75,12 +75,12 @@ Item {
         id: row
         anchors.centerIn: parent
         spacing: 9
-        // -- album art: 26px, near-circular, hairline ring; mask rounds the corners
+        // -- album art: 26px box, hairline ring; mask rounds the corners
         // (Rectangle.clip is unreliable for rounding — same OpacityMask trick as the card)
         Rectangle {
             id: artFrame
             visible: root.hasPlayer && player.trackArtUrl !== ""
-            width: 26; height: 26; radius: 12
+            width: 26; height: 26; radius: 6
             color: colors.alpha(colors.surface, 0.5)
             border.width: 1
             border.color: colors.alpha(colors.outline, 0.15)
@@ -97,7 +97,7 @@ Item {
         }
         Rectangle {
             visible: !root.hasPlayer || player.trackArtUrl === ""
-            width: 26; height: 26; radius: 12
+            width: 26; height: 26; radius: 6
             color: colors.alpha(colors.surface, 0.5)
             border.width: 1
             border.color: colors.alpha(colors.outline, 0.15)

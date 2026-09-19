@@ -23,7 +23,6 @@ modules/
   ScriptIndicator.qml        generic JSON script runner (idle/update indicators)
   Tray.qml                   SNI system tray
   BellButton.qml             opens/closes the notification drawer, count badge
-  DndIndicator.qml           DND toggle (moon glyph when active)
   NotificationToast.qml      glass toast popups (critical never expires, actions supported)
   NotificationCenter.qml     daemon + drawer panel + history archive
   PhoneBridge.qml             adb phone bridge — send/pull files, screenshot, WhatsApp forwarder (see PhoneBridge.md)

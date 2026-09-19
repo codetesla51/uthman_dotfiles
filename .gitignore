@@ -22,3 +22,9 @@ plan.md
 .config/quickshell/android-app/out/
 .config/quickshell/android-app/keystore.jks
 .config/quickshell/android-app/classes/
+# local quickshell runtime log
+.config/quickshell/quickshell.log
+# compiled local tools (built from ~/projects, not source)
+.local/bin/barrage
+.local/bin/kyfram
+.local/bin/screentime

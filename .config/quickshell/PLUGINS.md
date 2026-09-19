@@ -15,7 +15,6 @@ Rules of the house (from AGENTS.md / memory.md):
 | Workspaces.qml | live Hyprland workspaces | — | — | bar pill, left row |
 | Clock.qml | bar clock, alt format on right-click | — | — | left-click opens ClockWindow |
 | ClockWindow.qml | small draggable clock window | `clockwin` | via bar clock click | FastFetch-style FloatingWindow |
-| CalendarPanel.qml | retired — pomodoro moved into ControlCenter | — | — | file kept on disk, unwired; reminders dormant in LocalStorage |
 | NotificationCenter.qml + BellButton + Toasts | notifications daemon + drawer | `notifications` (+`toggleDnd`) | `SUPER ALT COMMA` | owns freedesktop Notifications bus |
 | WifiPanel.qml + NetRate.qml | network manager + speedtest | `wifi` | `SUPER H` | cloudflare speedtest built in |
 | SystemMonitor.qml | process/system stats + killer: HOGS strip (top CPU/MEM), zombie/D-state auto-flag, hover row + K TERM / Shift+K KILL (PID 0/1 guarded) | `sysmon` | `SUPER U` | FloatingWindow 920x640 |
@@ -25,7 +24,6 @@ Rules of the house (from AGENTS.md / memory.md):
 | KeybindsPanel.qml | static keybind cheatsheet | `keybinds` | `SUPER K` | Enter executes bind |
 | PowerMenu.qml | lock/logout/suspend/reboot/shutdown | `power` | `SUPER ESCAPE` | TODO: confirm step for destructive actions |
 | FastFetchWindow.qml | system info card w/ avatar | `fastfetch` | `SUPER N` | FloatingWindow 560x340 |
-| AudioVisualizer.qml | retired — visualizer lives inside ControlCenter now | — | — | file kept on disk, unwired; cava feed via `vizProc` in ControlCenter |
 | PkgManager.qml | **package manager** — search pacman+AUR, queue, install progress, uninstall (native vs foreign), updates | `pkgman` (`packages` alias) | `SUPER I` | FloatingWindow 980×640 — Hyprland window, not popup; pacman for repo, yay for AUR; .desktop for rofi/walker |
 | PdfViewer.qml | **PDF library** — recents, favs, title+full-text search, copy-path/show-in-files | `pdfviewer` | `SUPER ALT N` | FloatingWindow 960×640 — Hyprland window, not overlay; reads in Zathura; `utpdf <file>` wrapper |
 | ControlCenter.qml | **control center** — bento grid (now playing, weather+pomodoro, quick controls, network, pet, activity, cava visualizer) | `controlcenter` | `SUPER ALT P` | FloatingWindow 760×580 tight glass, Esc to close; pomodoro replaced SUPER ALT C calendar |

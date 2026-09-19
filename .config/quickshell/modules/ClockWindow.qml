@@ -3,8 +3,8 @@ import Quickshell.Io
 import QtQuick
 import QtQuick.Layouts
 
-// ClockWindow — small draggable Hyprland floating window (FastFetch-style):
-// big live time, date chip, week/unix trivia row. Toggle from the bar clock.
+// ClockWindow — small glass CARD on bar-clock click.
+// FloatingWindow centered popup, Amber Bento tokens only.
 FloatingWindow {
     id: root
 
@@ -12,8 +12,10 @@ FloatingWindow {
     property bool open: false
 
     title: "Clock"
-    implicitWidth: 320
-    implicitHeight: 190
+    implicitWidth: 300
+    implicitHeight: 230
+    minimumSize: Qt.size(280, 210)
+    maximumSize: Qt.size(320, 250)
     color: "transparent"
     visible: root.open
 
@@ -25,41 +27,67 @@ FloatingWindow {
     readonly property string ss: clock.seconds.toString().padStart(2, "0")
     readonly property var now: new Date()
 
+    function dayFrac() {
+        return (clock.hours * 3600 + clock.minutes * 60 + clock.seconds) / 86400
+    }
+    function dayPct() {
+        return Math.floor(root.dayFrac() * 100)
+    }
+    function elapsedStr() {
+        var h = clock.hours
+        var m = clock.minutes
+        return h + "h " + (m < 10 ? "0" + m : m) + "m elapsed"
+    }
+    function leftStr() {
+        var total = 24 * 3600 - (clock.hours * 3600 + clock.minutes * 60 + clock.seconds)
+        var h = Math.floor(total / 3600)
+        var m = Math.floor((total % 3600) / 60)
+        return h + "h " + (m < 10 ? "0" + m : m) + "m left"
+    }
+    function hourFill(i) {
+        if (i < clock.hours) return 1
+        if (i > clock.hours) return 0
+        return (clock.minutes * 60 + clock.seconds) / 3600
+    }
+
     Rectangle {
         id: card
         anchors.fill: parent
-        radius: 18
-        color: colors.alpha(colors.background, 0.92)
+        radius: 16
+        color: colors.alpha(colors.surface, 0.4)
         border.width: 1
-        border.color: colors.alpha(colors.outline, 0.12)
+        border.color: colors.alpha(colors.outline, 0.14)
         scale: root.open ? 1 : 0.96
         opacity: root.open ? 1 : 0
         Behavior on scale { NumberAnimation { duration: 240; easing.type: Easing.OutCubic } }
         Behavior on opacity { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
+        focus: root.open
+        Keys.onEscapePressed: root.open = false
 
         ColumnLayout {
             anchors.fill: parent
-            anchors.margins: 18
-            spacing: 8
+            anchors.margins: 10
+            spacing: 6
 
-            // -- header: label + date chip --
             RowLayout {
                 Layout.fillWidth: true
                 spacing: 8
                 Text {
-                    text: "TIME"
-                    color: colors.alpha(colors.outline, 0.65)
+                    text: "CLOCK"
+                    color: colors.alpha(colors.outline, 0.55)
                     font.family: colors.fontSans
-                    font.pixelSize: 9
+                    font.pixelSize: 7
                     font.weight: Font.Bold
-                    font.letterSpacing: 1.5
+                    font.letterSpacing: 1.3
+                    Layout.alignment: Qt.AlignVCenter
                 }
                 Item { Layout.fillWidth: true }
                 Rectangle {
-                    radius: 9
+                    Layout.alignment: Qt.AlignVCenter
+                    radius: 11
                     height: 22
                     width: dateText.implicitWidth + 16
-                    color: colors.alpha(colors.surfaceVariant, 0.30)
+                    color: colors.alpha(colors.surfaceVariant, 0.25)
                     border.width: 1
                     border.color: colors.alpha(colors.outline, 0.12)
                     Text {
@@ -72,51 +100,151 @@ FloatingWindow {
                         font.weight: Font.Medium
                     }
                 }
-            }
-
-            Rectangle { Layout.fillWidth: true; height: 1; color: colors.alpha(colors.outline, 0.12) }
-
-            // -- big time --
-            Item { Layout.fillHeight: true }
-            Row {
-                Layout.alignment: Qt.AlignHCenter
-                spacing: 6
-                Text {
-                    text: root.hhmm
-                    color: colors.primary
-                    font.family: colors.fontSans
-                    font.pixelSize: 52
-                    font.weight: Font.ExtraBold
-                    font.letterSpacing: 2
-                    anchors.verticalCenter: parent.verticalCenter
-                }
-                Column {
-                    anchors.verticalCenter: parent.verticalCenter
-                    spacing: 2
+                Rectangle {
+                    Layout.alignment: Qt.AlignVCenter
+                    width: 26
+                    height: 26
+                    radius: 13
+                    color: closeMa.containsMouse ? colors.alpha(colors.primary, 0.2) : colors.alpha(colors.primary, 0.15)
+                    border.width: 1
+                    border.color: colors.alpha(colors.primary, 0.3)
+                    scale: closeMa.containsMouse ? 1.06 : 1.0
+                    Behavior on scale { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
                     Text {
-                        text: root.ss
-                        color: colors.tertiary
+                        anchors.centerIn: parent
+                        text: "󰅖"
+                        color: colors.primary
                         font.family: colors.fontSans
-                        font.pixelSize: 16
-                        font.weight: Font.Bold
+                        font.pixelSize: 12
+                    }
+                    MouseArea {
+                        id: closeMa
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        onClicked: root.open = false
                     }
                 }
             }
-            Item { Layout.fillHeight: true }
 
-            // -- footer trivia --
             Rectangle { Layout.fillWidth: true; height: 1; color: colors.alpha(colors.outline, 0.12) }
-            Text {
+
+            RowLayout {
+                Layout.fillWidth: true
                 Layout.alignment: Qt.AlignHCenter
+                spacing: 8
+                Text {
+                    text: root.hhmm
+                    color: colors.primary
+                    font.family: "Iceberg"
+                    font.pixelSize: 38
+                    font.weight: Font.Normal
+                    font.letterSpacing: 2
+                    Layout.alignment: Qt.AlignVCenter
+                }
+                ColumnLayout {
+                    Layout.alignment: Qt.AlignVCenter
+                    spacing: 0
+                    Text {
+                        text: root.ss
+                        color: colors.tertiary
+                        font.family: "Iceberg"
+                        font.pixelSize: 14
+                        font.weight: Font.Normal
+                        Layout.alignment: Qt.AlignLeft
+                    }
+                    Text {
+                        text: "SEC"
+                        color: colors.alpha(colors.outline, 0.55)
+                        font.family: colors.fontSans
+                        font.pixelSize: 7
+                        font.weight: Font.Bold
+                        font.letterSpacing: 1.3
+                        Layout.alignment: Qt.AlignLeft
+                    }
+                }
+            }
+
+            Text {
                 text: Qt.formatDateTime(root.now, "dddd dd MMMM yyyy") + "  ·  W" + Qt.formatDateTime(root.now, "ww")
-                color: colors.alpha(colors.foreground, 0.65)
+                color: colors.foreground
                 font.family: colors.fontSans
-                font.pixelSize: 10
+                font.pixelSize: 11
                 font.weight: Font.Medium
+                Layout.alignment: Qt.AlignHCenter
+            }
+
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: 5
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 6
+                    Text {
+                        text: "DAY — 24H"
+                        color: colors.alpha(colors.outline, 0.55)
+                        font.family: colors.fontSans
+                        font.pixelSize: 7
+                        font.weight: Font.Bold
+                        font.letterSpacing: 1.3
+                        Layout.alignment: Qt.AlignVCenter
+                    }
+                    Item { Layout.fillWidth: true }
+                    Text {
+                        text: "DAY " + root.dayPct() + "%"
+                        color: colors.alpha(colors.primary, 0.75)
+                        font.family: colors.fontSans
+                        font.pixelSize: 7
+                        font.weight: Font.Bold
+                        Layout.alignment: Qt.AlignVCenter
+                    }
+                }
+                RowLayout {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 12
+                    spacing: 2
+                    Repeater {
+                        model: 24
+                        delegate: Item {
+                            required property int index
+                            readonly property real f: root.hourFill(index)
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            Rectangle {
+                                anchors.fill: parent
+                                radius: 3
+                                color: colors.alpha(colors.outline, 0.12)
+                            }
+                            Rectangle {
+                                anchors.left: parent.left
+                                anchors.right: parent.right
+                                anchors.bottom: parent.bottom
+                                height: parent.height * f
+                                radius: 3
+                                visible: f > 0
+                                color: index < clock.hours ? colors.primary : colors.tertiary
+                                opacity: index < clock.hours ? 0.85 : 1.0
+                            }
+                            Rectangle {
+                                anchors.left: parent.left
+                                anchors.right: parent.right
+                                anchors.bottom: parent.bottom
+                                height: 2
+                                radius: 1
+                                visible: index === clock.hours
+                                color: colors.tertiary
+                            }
+                        }
+                    }
+                }
+                Text {
+                    text: root.leftStr()
+                    color: colors.tertiary
+                    font.family: colors.fontSans
+                    font.pixelSize: 10
+                    font.weight: Font.ExtraBold
+                    Layout.alignment: Qt.AlignHCenter
+                }
             }
         }
-
-        Keys.onEscapePressed: root.open = false
-        focus: root.open
     }
 }

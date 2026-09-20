@@ -170,8 +170,8 @@ PanelWindow {
         var c = (cls||"").toLowerCase()
         var t = (title||"").toLowerCase()
         if (!c && !t) return "idle"
-        if (c.indexOf("code") !== -1 || c.indexOf("cursor") !== -1 || c.indexOf("nvim") !== -1 || c.indexOf("neovim") !== -1 || c.indexOf("windsurf") !== -1 || t.indexOf(".ts") !== -1 || t.indexOf(".py") !== -1 || t.indexOf(".go") !== -1 || c === "ghostty" && (t.indexOf("nvim")!==-1 || t.indexOf("code")!==-1)) return "coding"
-        if (c.indexOf("ghostty") !== -1 || c.indexOf("alacritty") !== -1 || c.indexOf("kitty") !== -1 || c.indexOf("foot") !== -1 || c.indexOf("konsole") !== -1) return "terminal"
+        if (c.indexOf("code") !== -1 || c.indexOf("cursor") !== -1 || c.indexOf("nvim") !== -1 || c.indexOf("neovim") !== -1 || c.indexOf("windsurf") !== -1 || t.indexOf(".ts") !== -1 || t.indexOf(".py") !== -1 || t.indexOf(".go") !== -1 || c === "kitty" && (t.indexOf("nvim")!==-1 || t.indexOf("code")!==-1)) return "coding"
+        if (c.indexOf("alacritty") !== -1 || c.indexOf("kitty") !== -1 || c.indexOf("foot") !== -1 || c.indexOf("konsole") !== -1) return "terminal"
         if (c.indexOf("firefox") !== -1 || c.indexOf("chrome") !== -1 || c.indexOf("chromium") !== -1 || c.indexOf("brave") !== -1) {
             if (t.indexOf("youtube")!==-1 || t.indexOf("twitch")!==-1) return "media"
             return "browsing"

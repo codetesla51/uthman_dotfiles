@@ -132,7 +132,7 @@ FloatingWindow {
     property int petFrameIdx: 0
     property bool petFacingRight: false
     property var topActivities: [
-        {app: "ghostty", secs: 5400},
+        {app: "kitty", secs: 5400},
         {app: "firefox", secs: 3200},
         {app: "code", secs: 1800},
         {app: "spotify", secs: 900}

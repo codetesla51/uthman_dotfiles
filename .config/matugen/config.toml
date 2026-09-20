@@ -29,18 +29,6 @@ output_path = "~/.config/omarchy/current/theme/hyprlock.conf"
 input_path = "~/.config/matugen/templates/hyprlock-colors.conf"
 output_path = "~/.config/theme/current/hyprlock.conf"
 
-[templates.ghostty-theme]
-input_path = "~/.config/matugen/templates/ghostty-theme.conf"
-output_path = "~/.config/theme/themes/snow_black/ghostty.conf"
-
-[templates.ghostty-current]
-input_path = "~/.config/matugen/templates/ghostty-theme.conf"
-output_path = "~/.config/omarchy/current/theme/ghostty.conf"
-
-[templates.ghostty-standalone]
-input_path = "~/.config/matugen/templates/ghostty-theme.conf"
-output_path = "~/.config/theme/current/ghostty.conf"
-
 [templates.kitty-theme]
 input_path = "~/.config/matugen/templates/kitty-theme.conf"
 output_path = "~/.config/theme/themes/snow_black/kitty.conf"

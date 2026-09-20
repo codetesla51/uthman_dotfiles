@@ -35,7 +35,7 @@ function setTab(name) {
   if (name === 'idle') loadHypridle();
   if (name === 'power') { loadPowerProfile(); }
   if (name === 'appearance') { loadMatugen(); loadTheme(); loadWallpapers(); }
-  if (name === 'terminal') loadGhostty();
+  if (name === 'terminal') loadKitty();
   if (name === 'hyprland') { loadHyprland(); loadEffects(); loadInput(); }
   if (name === 'binds') { loadKeybinds(); loadAutostart(); }
   if (name === 'fonts') { loadFonts(); }
@@ -971,7 +971,7 @@ async function loadWallpapers() {
   } catch (e) {}
 }
 
-/* ── Ghostty ── */
+/* ── Kitty ── */
 bindRange('#r-size', '#o-size', v => v);
 bindRange('#r-opacity', '#o-opacity', v => (+v).toFixed(2));
 bindRange('#r-padding', '#o-padding', v => v + 'px');
@@ -1005,9 +1005,9 @@ $('#r-opacity')?.addEventListener('input', () => {
   api('/api/theme').then(updateTermBg).catch(() => {});
 });
 
-async function loadGhostty() {
+async function loadKitty() {
   try {
-    const g = await api('/api/ghostty');
+    const g = await api('/api/kitty');
     $('#s-family').value = g.fontFamily;
     $('#r-size').value = g.fontSize; $('#o-size').textContent = g.fontSize;
     $('#r-opacity').value = g.opacity; $('#o-opacity').textContent = g.opacity.toFixed(2);
@@ -1016,12 +1016,12 @@ async function loadGhostty() {
     $('#r-blur').value = g.blur; $('#o-blur').textContent = g.blur;
     updateTermFont();
     api('/api/theme').then(updateTermBg).catch(() => {});
-  } catch (e) { flash('#st-ghostty', e.message, false); }
+  } catch (e) { flash('#st-kitty', e.message, false); }
 }
-async function saveGhostty(btn) {
+async function saveKitty(btn) {
   btn.disabled = true;
   try {
-    await api('/api/ghostty', post({
+    await api('/api/kitty', post({
       fontFamily: $('#s-family').value.trim(),
       fontSize: +$('#r-size').value,
       opacity: +$('#r-opacity').value,
@@ -1029,8 +1029,8 @@ async function saveGhostty(btn) {
       cursorStyle: $('#s-cursor').value,
       blur: +$('#r-blur').value
     }));
-    flash('#st-ghostty', 'Saved — ghostty reloaded');
-  } catch (e) { flash('#st-ghostty', e.message, false); }
+    flash('#st-kitty', 'Saved — kitty reloaded');
+  } catch (e) { flash('#st-kitty', e.message, false); }
   btn.disabled = false;
 }
 

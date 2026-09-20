@@ -34,7 +34,7 @@ const (
 	hypridleConf  = "~/dotfiles/.config/hypr/hypridle.conf"
 	hyprlockConf  = "~/dotfiles/.config/hypr/hyprlock.conf"
 	looknfeelConf = "~/dotfiles/.config/hypr/looknfeel.conf"
-	ghosttyConf   = "~/dotfiles/.config/ghostty/config"
+	kittyConf     = "~/dotfiles/.config/kitty/kitty.conf"
 	getThemeBin   = "~/dotfiles/.local/bin/getTheme"
 	matugenConf   = "~/dotfiles/.config/matugen/config.toml"
 	themeJSON     = "~/.config/omarchy/current/theme/matugen-base.json"
@@ -69,7 +69,7 @@ func main() {
 	mux.HandleFunc("/api/theme", handleTheme)
 	mux.HandleFunc("/api/hypridle", handleHypridle)
 	mux.HandleFunc("/api/hyprland", handleHyprland)
-	mux.HandleFunc("/api/ghostty", handleGhostty)
+	mux.HandleFunc("/api/kitty", handleKitty)
 	mux.HandleFunc("/api/matugen", handleMatugen)
 	mux.HandleFunc("/api/wallpapers", handleWallpapers)
 	mux.HandleFunc("/api/wallpaper/set", handleWallpaperSet)
@@ -1202,7 +1202,7 @@ func handleServices(w http.ResponseWriter, r *http.Request) {
 	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
-	names := []string{"hypridle", "hyprlock", "waybar", "ghostty", "mako", "swaync", "hyprsunset", "matugen"}
+	names := []string{"hypridle", "hyprlock", "waybar", "kitty", "mako", "swaync", "hyprsunset", "matugen"}
 	type svc struct {
 		Name    string `json:"name"`
 		Running bool   `json:"running"`
@@ -1393,9 +1393,9 @@ func handleHyprland(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// ── Ghostty ──
+// ── Kitty ──
 
-type Ghostty struct {
+type Kitty struct {
 	FontSize    int     `json:"fontSize"`
 	FontFamily  string  `json:"fontFamily"`
 	Opacity     float64 `json:"opacity"`
@@ -1404,8 +1404,46 @@ type Ghostty struct {
 	Blur        int     `json:"blur"`
 }
 
-func handleGhostty(w http.ResponseWriter, r *http.Request) {
-	const confPath = ghosttyConf
+func parseKitty(txt string) Kitty {
+	ks := Kitty{FontSize: 13, FontFamily: "FiraCode Nerd Font", Opacity: 0.8, Padding: 12, CursorStyle: "block", Blur: 0}
+	for _, line := range strings.Split(txt, "\n") {
+		f := strings.Fields(strings.TrimSpace(line))
+		if len(f) < 2 || strings.HasPrefix(f[0], "#") {
+			continue
+		}
+		val := strings.Join(f[1:], " ")
+		switch f[0] {
+		case "font_size":
+			if v, err := strconv.ParseFloat(val, 64); err == nil {
+				ks.FontSize = int(v)
+			}
+		case "font_family":
+			ks.FontFamily = val
+		case "background_opacity":
+			if v, err := strconv.ParseFloat(val, 64); err == nil {
+				ks.Opacity = v
+			}
+		case "window_padding_width":
+			if v, err := strconv.Atoi(f[1]); err == nil {
+				ks.Padding = v
+			}
+		case "cursor_shape":
+			if val == "beam" {
+				ks.CursorStyle = "bar" // UI calls kitty's beam "bar"
+			} else if val == "block" || val == "underline" {
+				ks.CursorStyle = val
+			}
+		case "background_blur":
+			if v, err := strconv.Atoi(f[1]); err == nil {
+				ks.Blur = v
+			}
+		}
+	}
+	return ks
+}
+
+func handleKitty(w http.ResponseWriter, r *http.Request) {
+	const confPath = kittyConf
 	switch r.Method {
 	case http.MethodGet:
 		txt, err := readFile(confPath)
@@ -1413,83 +1451,80 @@ func handleGhostty(w http.ResponseWriter, r *http.Request) {
 			jsonErr(w, err.Error(), 500)
 			return
 		}
-		gs := Ghostty{FontSize: 13, FontFamily: "FiraCode Nerd Font", Opacity: 0.8, Padding: 12, CursorStyle: "block", Blur: 0}
-		for _, line := range strings.Split(txt, "\n") {
-			kv := strings.SplitN(strings.TrimSpace(line), "=", 2)
-			if len(kv) != 2 {
-				continue
-			}
-			key := strings.TrimSpace(kv[0])
-			val := strings.Trim(strings.TrimSpace(kv[1]), `"`)
-			switch key {
-			case "font-size":
-				if v, err := strconv.Atoi(val); err == nil {
-					gs.FontSize = v
-				}
-			case "font-family":
-				gs.FontFamily = val
-			case "background-opacity":
-				if v, err := strconv.ParseFloat(val, 64); err == nil {
-					gs.Opacity = v
-				}
-			case "window-padding-x":
-				if v, err := strconv.Atoi(val); err == nil {
-					gs.Padding = v
-				}
-			case "cursor-style":
-				if val == "block" || val == "bar" || val == "underline" {
-					gs.CursorStyle = val
-				}
-			case "background-blur":
-				if v, err := strconv.Atoi(val); err == nil {
-					gs.Blur = v
-				}
-			}
-		}
-		jsonOK(w, gs)
+		jsonOK(w, parseKitty(txt))
 
 	case http.MethodPost:
-		var gs Ghostty
-		if !decodeBody(w, r, &gs) {
+		var ks Kitty
+		if !decodeBody(w, r, &ks) {
 			return
 		}
-		gs.FontSize = clampInt(gs.FontSize, 6, 32)
-		gs.Padding = clampInt(gs.Padding, 0, 40)
-		gs.Blur = clampInt(gs.Blur, 0, 40)
-		gs.Opacity = clampFloat(gs.Opacity, 0.3, 1.0)
-		gs.FontFamily = strings.TrimSpace(gs.FontFamily)
-		if gs.FontFamily == "" {
-			gs.FontFamily = "FiraCode Nerd Font"
+		ks.FontSize = clampInt(ks.FontSize, 6, 32)
+		ks.Padding = clampInt(ks.Padding, 0, 40)
+		ks.Blur = clampInt(ks.Blur, 0, 64)
+		ks.Opacity = clampFloat(ks.Opacity, 0.3, 1.0)
+		ks.FontFamily = strings.TrimSpace(ks.FontFamily)
+		if ks.FontFamily == "" {
+			ks.FontFamily = "FiraCode Nerd Font"
 		}
-		switch gs.CursorStyle {
-		case "bar", "underline":
-		default:
-			gs.CursorStyle = "block"
+		shape := "block"
+		switch ks.CursorStyle {
+		case "bar":
+			shape = "beam"
+		case "underline":
+			shape = "underline"
 		}
 		txt, err := readFile(confPath)
 		if err != nil {
 			jsonErr(w, err.Error(), 500)
 			return
 		}
-		set := map[string]func() string{
-			"font-size":          func() string { return fmt.Sprintf("font-size = %d", gs.FontSize) },
-			"font-family":        func() string { return fmt.Sprintf("font-family = %q", gs.FontFamily) },
-			"background-opacity": func() string { return fmt.Sprintf("background-opacity = %.2f", gs.Opacity) },
-			"window-padding-x":   func() string { return fmt.Sprintf("window-padding-x = %d", gs.Padding) },
-			"cursor-style":       func() string { return fmt.Sprintf("cursor-style = %s", gs.CursorStyle) },
-			"background-blur":    func() string { return fmt.Sprintf("background-blur = %d", gs.Blur) },
+		set := map[string]func(old []string) string{}
+		// Only touch lines whose value actually changed — preserves the
+		// file's original formatting (13.0 vs 13) everywhere else.
+		cur := parseKitty(txt)
+		if ks.FontSize != cur.FontSize {
+			sz := ks.FontSize
+			set["font_size"] = func(old []string) string { return fmt.Sprintf("font_size %d", sz) }
+		}
+		if ks.FontFamily != cur.FontFamily {
+			fam := ks.FontFamily
+			set["font_family"] = func(old []string) string { return fmt.Sprintf("font_family %s", fam) }
+		}
+		if math.Abs(ks.Opacity-cur.Opacity) > 0.0005 {
+			op := ks.Opacity
+			set["background_opacity"] = func(old []string) string { return fmt.Sprintf("background_opacity %.2f", op) }
+		}
+		if ks.Padding != cur.Padding {
+			pad := ks.Padding
+			set["window_padding_width"] = func(old []string) string {
+				tail := ""
+				if len(old) > 2 {
+					tail = " " + strings.Join(old[2:], " ")
+				}
+				return fmt.Sprintf("window_padding_width %d%s", pad, tail)
+			}
+		}
+		if ks.CursorStyle != cur.CursorStyle {
+			set["cursor_shape"] = func(old []string) string { return fmt.Sprintf("cursor_shape %s", shape) }
+		}
+		if ks.Blur != cur.Blur {
+			bl := ks.Blur
+			set["background_blur"] = func(old []string) string { return fmt.Sprintf("background_blur %d", bl) }
+		}
+		if len(set) == 0 {
+			jsonOK(w, map[string]string{"status": "ok"})
+			return
 		}
 		found := map[string]bool{}
 		lines := strings.Split(txt, "\n")
 		for i, line := range lines {
-			kv := strings.SplitN(strings.TrimSpace(line), "=", 2)
-			if len(kv) != 2 {
+			f := strings.Fields(strings.TrimSpace(line))
+			if len(f) < 2 || strings.HasPrefix(f[0], "#") {
 				continue
 			}
-			key := strings.TrimSpace(kv[0])
-			if fn, ok := set[key]; ok && !found[key] {
-				lines[i] = fn()
-				found[key] = true
+			if fn, ok := set[f[0]]; ok && !found[f[0]] {
+				lines[i] = fn(f)
+				found[f[0]] = true
 			}
 		}
 		newTxt := strings.Join(lines, "\n")
@@ -1497,8 +1532,8 @@ func handleGhostty(w http.ResponseWriter, r *http.Request) {
 			jsonErr(w, err.Error(), 500)
 			return
 		}
-		_ = writeFile("~/.config/ghostty/config", newTxt)
-		go func() { _ = exec.Command("bash", "-c", "pkill -SIGUSR2 -x ghostty || true").Run() }()
+		_ = writeFile("~/.config/kitty/kitty.conf", newTxt)
+		go func() { _ = exec.Command("bash", "-c", "pkill -SIGUSR1 -x kitty || true").Run() }()
 		jsonOK(w, map[string]string{"status": "ok"})
 	default:
 		requireMethod(w, r, http.MethodGet, http.MethodPost)
@@ -2699,7 +2734,7 @@ func handleFonts(w http.ResponseWriter, r *http.Request) {
 			"installed": installed,
 			"catalog":   catalog,
 			"current": map[string]string{
-				"terminal":   regexFirst(readFileStr(ghosttyConf), `(?m)^\s*font-family\s*=\s*"?(.*?)"?\s*$`),
+				"terminal":   regexFirst(readFileStr(kittyConf), `(?m)^\s*font_family\s+(.+?)\s*$`),
 				"bar":        currentWaybarFont(),
 				"lockscreen": regexFirst(readFileStr(hyprlockConf), `(?m)^\s*font_family\s*=\s*(.+?)\s*$`),
 				"gtk":        gtk,
@@ -2758,11 +2793,11 @@ func handleFonts(w http.ResponseWriter, r *http.Request) {
 			for _, t := range req.Targets {
 				switch t {
 				case "terminal":
-					if err := replaceLines(ghosttyConf, regexp.MustCompile(`(?m)^\s*font-family\s*=.*$`), "font-family = \""+req.Family+"\""); err != nil {
+					if err := replaceLines(kittyConf, regexp.MustCompile(`(?m)^\s*font_family\s+.*$`), "font_family "+req.Family); err != nil {
 						results[t] = err.Error()
 						continue
 					}
-					go exec.Command("bash", "-c", "pkill -SIGUSR2 -x ghostty || true").Run()
+					go exec.Command("bash", "-c", "pkill -SIGUSR1 -x kitty || true").Run()
 					results[t] = "ok"
 				case "bar":
 					path := home + "/dotfiles/.config/waybar/style.css"
@@ -3023,7 +3058,7 @@ func handleAppearance(w http.ResponseWriter, r *http.Request) {
 			os.WriteFile(tweakStatePath(), b, 0644)
 		}
 		// 4. reload visual apps
-		go exec.Command("bash", "-c", "omarchy-restart-waybar >/dev/null 2>&1; pkill -SIGUSR2 -x ghostty || true; pgrep -x swaync >/dev/null && swaync-client --reload-css >/dev/null 2>&1; true").Run()
+		go exec.Command("bash", "-c", "omarchy-restart-waybar >/dev/null 2>&1; pkill -SIGUSR1 -x kitty || true; pgrep -x swaync >/dev/null && swaync-client --reload-css >/dev/null 2>&1; true").Run()
 		jsonOK(w, map[string]interface{}{"status": "applied", "tweak": t})
 	default:
 		requireMethod(w, r, http.MethodGet, http.MethodPost)
@@ -3073,7 +3108,7 @@ func reapplyTweakNow() {
 		return
 	}
 	shiftThemeDir(t)
-	exec.Command("bash", "-c", "omarchy-restart-waybar >/dev/null 2>&1; pkill -SIGUSR2 -x ghostty || true; true").Run()
+	exec.Command("bash", "-c", "omarchy-restart-waybar >/dev/null 2>&1; pkill -SIGUSR1 -x kitty || true; true").Run()
 }
 
 var hexRe = regexp.MustCompile(`#[0-9a-fA-F]{6}\b`)

@@ -38,7 +38,7 @@ You need Arch Linux, `yay`, and a GPU with working Wayland drivers.
 Install the dependencies. The installer warns about anything missing but does not abort, so you can install in rounds and re-run it.
 
 ```bash
-yay -S hyprland quickshell ghostty matugen starship zsh lsd zoxide fzf \
+yay -S hyprland quickshell kitty matugen starship zsh lsd zoxide fzf \
        cava btop walker rofi swaync mako swayosd hyprlock hypridle hyprsunset sddm \
        xdg-desktop-portal-hyprland uwsm cliphist wl-clipboard \
        ttf-jetbrainsmono-nerd ttf-firacode-nerd inter-font
@@ -79,7 +79,7 @@ matugen image ~/Pictures/your-wallpaper.jpg
 |----------|--------|
 | `waybar` | `~/.config/quickshell/colors.css` (the file the live shell polls) |
 | `hyprland-*` | `snow_black/colors.conf` + `theme/current` |
-| `hyprlock-*`, `ghostty-*`, `kitty-*`, `gtk`, `btop`, `walker`, `mako` | matching live files under `theme/current` |
+| `hyprlock-*`, `kitty-*`, `gtk`, `btop`, `walker`, `mako` | matching live files under `theme/current` |
 | `cava` | `snow_black/cava_theme` + `~/.config/cava/config` (rewritten directly) |
 | `sddm` | `/usr/share/sddm/themes/elarun-custom/Palette.qml` (login follows every theme change) |
 | `firefox` | `theme/current/firefox{,-usercontent}.css`, symlinked as `userChrome.css`/`userContent.css` |
@@ -257,7 +257,6 @@ The full list lives in `.config/hypr/bindings.conf` (vendored defaults alongside
 │   │   ├── PLUGINS.md        # module registry: IPC target + bind per module
 │   │   └── AGENTS.md         # contributor rules for this codebase (read before editing)
 │   ├── matugen/              # config.toml + templates (btop, gtk, rofi, nvim, zed, sddm, zathura, …)
-│   ├── ghostty/config        # sources theme/current/ghostty.conf
 │   ├── kitty/kitty.conf      # sources theme/current/kitty.conf
 │   ├── systemd/user/         # panel + helper services
 ├── .local/bin/             # set-wallpaper, getTheme, record, shot, filemanager, …
@@ -280,7 +279,7 @@ The full list lives in `.config/hypr/bindings.conf` (vendored defaults alongside
 * Look and feel: `.config/hypr/looknfeel.conf` plus `~/.config/theme/current/colors.conf`
 * Bar and modules: `.config/quickshell/modules/*.qml`, then restart quickshell (never trust hot reload for verdicts)
 * New theme template: add it under `.config/matugen/templates/`, map it in `config.toml`, run `matugen image` once
-* Terminal: `.config/ghostty/config` and `.config/kitty/kitty.conf` for font and behavior. Colors always come from the generated files
+* Terminal: `.config/kitty/kitty.conf` for font and behavior. Colors always come from the generated files
 
 ## Gotchas
 
@@ -327,7 +326,7 @@ snapper status 82..0                  # preview what changed first
 ## Credits
 
 * [Matugen](https://github.com/InioX/matugen): Material You generation
-* [Hyprland](https://hyprland.org) · [Quickshell](https://quickshell.outfoxxed.me) · [Ghostty](https://ghostty.org) · [Walker](https://github.com/abenz1267/walker)
+* [Hyprland](https://hyprland.org) · [Quickshell](https://quickshell.outfoxxed.me) · [Walker](https://github.com/abenz1267/walker)
 * [Starship](https://starship.rs) · [FiraCode / JetBrainsMono Nerd Fonts](https://www.nerdfonts.com) · [Phosphor Icons](https://phosphoricons.com)
 * [Limine](https://limine-bootloader.org) · [Snapper](http://snapper.io) · [Wallhaven](https://wallhaven.cc) (wallpaper source)
 * [Bubble Tea](https://charm.sh) for the QEMU launcher TUI

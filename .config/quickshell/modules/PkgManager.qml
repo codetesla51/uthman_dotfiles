@@ -885,7 +885,7 @@ FloatingWindow {
                         Text {
                             anchors.centerIn: parent
                             visible: !root.searching && root.searchResults.length===0 && root.query.trim()===""
-                            text: "Try  “ghostty”  •  “zed”  •  “firefox”"
+                            text: "Try  “kitty”  •  “zed”  •  “firefox”"
                             color: colors.alpha(colors.outline,0.4); font.family: colors.fontSans; font.pixelSize: 10
                         }
                     }

@@ -72,7 +72,6 @@ Item {
         if (n.indexOf("spotify") !== -1) return ""
         if (n.indexOf("telegram") !== -1) return ""
         if (n.indexOf("discord") !== -1) return ""
-        if (n.indexOf("ghostty") !== -1) return ""
         if (n.indexOf("kitty") !== -1) return ""
         if (n.indexOf("terminal") !== -1) return ""
         if (n.indexOf("console") !== -1) return ""

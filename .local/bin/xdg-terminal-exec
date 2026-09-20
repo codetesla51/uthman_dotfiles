@@ -10,7 +10,7 @@ while [ $# -gt 0 ]; do
   esac
 done
 if [ $# -eq 0 ]; then
-  exec uwsm-app -- ghostty --working-directory="$dir"
+  exec uwsm-app -- kitty --directory="$dir"
 else
-  exec uwsm-app -- ghostty --working-directory="$dir" -e "$@"
+  exec uwsm-app -- kitty --directory="$dir" -e "$@"
 fi

@@ -62,7 +62,7 @@
       <li data-tab="power" tabindex="0"><i class="ph ph-lightning"></i><span>Power</span><em>tlp</em></li>
       <li data-tab="idle" tabindex="0"><i class="ph ph-moon-stars"></i><span>Idle &amp; Lock</span><em>hypridle</em></li>
       <li data-tab="appearance" tabindex="0"><i class="ph ph-palette"></i><span>Appearance</span><em>matugen</em></li>
-      <li data-tab="terminal" tabindex="0"><i class="ph ph-terminal-window"></i><span>Terminal</span><em>ghostty</em></li>
+      <li data-tab="terminal" tabindex="0"><i class="ph ph-terminal-window"></i><span>Terminal</span><em>kitty</em></li>
       <li data-tab="hyprland" tabindex="0"><i class="ph ph-browser"></i><span>Hyprland</span><em>look&amp;feel</em></li>
       <li data-tab="logs" tabindex="0"><i class="ph ph-scroll"></i><span>Logs</span><em>journalctl</em></li>
       <li data-tab="binds" tabindex="0"><i class="ph ph-keyboard"></i><span>Binds</span><em>keys</em></li>
@@ -298,7 +298,7 @@
             <button class="btn primary" onclick="saveMatugen(this)"><i class="ph ph-sparkle"></i> Apply &amp; regenerate</button>
             <span class="status" id="st-mat" role="status"></span>
           </div>
-          <div class="caption">Regenerates ~28 outputs: waybar, ghostty, zed, nvim, gtk, hyprlock…</div>
+          <div class="caption">Regenerates ~28 outputs: waybar, kitty, zed, nvim, gtk, hyprlock…</div>
         </div>
         <div class="card">
           <div class="card-head"><span><i class="ph ph-swatchbook"></i> Generated palette</span><button class="btn ghost sm" onclick="loadTheme()"><i class="ph ph-arrows-clockwise"></i></button></div>
@@ -322,7 +322,7 @@
           <button class="btn ghost" onclick="resetTweak(this)"><i class="ph ph-arrow-counter-clockwise"></i> Reset to wallpaper</button>
           <span class="status" id="st-tweak" role="status"></span>
         </div>
-        <div class="caption">Shifts every generated theme file (waybar, rofi, gtk, ghostty, zed, btop, cava, hyprlock&hellip;). Changing wallpaper regenerates from scratch &mdash; apply again after.</div>
+        <div class="caption">Shifts every generated theme file (waybar, rofi, gtk, kitty, zed, btop, cava, hyprlock&hellip;). Changing wallpaper regenerates from scratch &mdash; apply again after.</div>
       </div>
       <div class="card">
         <div class="card-head"><span><i class="ph ph-image"></i> Wallpapers</span><span class="mono tiny dim" id="wp-count">snow_black/backgrounds</span></div>
@@ -333,7 +333,7 @@
     <!-- ══════════ TERMINAL ══════════ -->
     <section id="tab-terminal" class="tab">
       <div class="page-head">
-        <div><h1>Terminal</h1><p class="sub">Ghostty config · changes hot-reload via SIGUSR2</p></div>
+        <div><h1>Terminal</h1><p class="sub">Kitty config · changes hot-reload via SIGUSR1</p></div>
       </div>
       <div class="grid2">
         <div class="card">
@@ -374,14 +374,14 @@
             </label>
           </div>
           <div class="actions">
-            <button class="btn primary" onclick="saveGhostty(this)"><i class="ph ph-floppy-disk-back"></i> Save &amp; reload ghostty</button>
-            <span class="status" id="st-ghostty" role="status"></span>
+            <button class="btn primary" onclick="saveKitty(this)"><i class="ph ph-floppy-disk-back"></i> Save &amp; reload kitty</button>
+            <span class="status" id="st-kitty" role="status"></span>
           </div>
         </div>
         <div class="card preview-card">
           <div class="card-head"><span><i class="ph ph-terminal-window"></i> Live preview</span><span class="mono tiny dim">theme-aware</span></div>
           <div class="term-preview" id="term-preview" aria-hidden="true">
-            <div class="term-bar"><span class="tb-dot r"></span><span class="tb-dot y"></span><span class="tb-dot g"></span><span class="tb-title mono tiny">uthman@uthmansArch ~ ghostty</span></div>
+            <div class="term-bar"><span class="tb-dot r"></span><span class="tb-dot y"></span><span class="tb-dot g"></span><span class="tb-title mono tiny">uthman@uthmansArch ~ kitty</span></div>
             <div class="term-body mono" id="term-body">
 <span><span class="t-primary">➜</span> <span class="t-cyan">~</span> neofetch</span>
 <span><span class="t-dim">uthman@uthmansArch · kernel 7.1.8 · 8GB</span></span>
@@ -432,7 +432,7 @@
           <div class="hl-preview" id="hl-preview" aria-hidden="true">
             <div class="hl-bar"><span></span><span class="mono tiny">workspace 1</span><span></span></div>
             <div class="hl-desktop">
-              <div class="hl-win a"><span class="mono tiny">ghostty</span></div>
+              <div class="hl-win a"><span class="mono tiny">kitty</span></div>
               <div class="hl-col">
                 <div class="hl-win b"><span class="mono tiny">zed</span></div>
                 <div class="hl-win c"><span class="mono tiny">firefox</span></div>
@@ -853,7 +853,7 @@
           <span><i class="ph ph-file"></i> hypr/looknfeel.conf</span>
           <span><i class="ph ph-file"></i> hypr/input.conf</span>
           <span><i class="ph ph-file"></i> hypr/monitors.conf</span>
-          <span><i class="ph ph-file"></i> ghostty/config</span>
+          <span><i class="ph ph-file"></i> kitty/kitty.conf</span>
           <span><i class="ph ph-file"></i> mako/config</span>
           <span><i class="ph ph-file"></i> waybar/config.jsonc</span>
           <span><i class="ph ph-file"></i> local/bin/getTheme</span>

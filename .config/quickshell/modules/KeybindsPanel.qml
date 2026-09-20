@@ -21,7 +21,7 @@ PanelWindow {
     onOpenChanged: if(open){ slide.y = 20; slideIn.restart(); filter=""; searchField.text=""; searchField.forceActiveFocus() }
 
     property var binds: [
-        {key:"SUPER + Return", desc:"Terminal", cat:"Apps", disp:"exec", arg:"uwsm-app -- ghostty"},
+        {key:"SUPER + Return", desc:"Terminal", cat:"Apps", disp:"exec", arg:"uwsm-app -- kitty"},
         {key:"SUPER + Space", desc:"Launch apps", cat:"Apps", disp:"exec", arg:"quickshell -p ~/.config/quickshell ipc call launcher toggle"},
         {key:"SUPER Shift + F", desc:"File manager", cat:"Apps", disp:"exec", arg:"uwsm-app -- nautilus"},
         {key:"SUPER Shift + B", desc:"Browser", cat:"Apps", disp:"exec", arg:"xdg-open https://google.com"},
@@ -31,7 +31,7 @@ PanelWindow {
         {key:"SUPER Shift + O", desc:"Obsidian", cat:"Apps", disp:"exec", arg:"uwsm-app -- obsidian"},
         {key:"SUPER Shift + W", desc:"Typora", cat:"Apps", disp:"exec", arg:"uwsm-app -- typora"},
         {key:"SUPER Shift + /", desc:"Passwords", cat:"Apps", disp:"exec", arg:"uwsm-app -- 1password"},
-        {key:"SUPER Shift + D", desc:"Docker (lazydocker)", cat:"Apps", disp:"exec", arg:"uwsm-app -- ghostty -e lazydocker"},
+        {key:"SUPER Shift + D", desc:"Docker (lazydocker)", cat:"Apps", disp:"exec", arg:"uwsm-app -- kitty -e lazydocker"},
         {key:"SUPER + H", desc:"WiFi manager", cat:"System", disp:"exec", arg:"quickshell -p ~/.config/quickshell ipc call wifi toggle"},
         {key:"SUPER + U", desc:"System monitor", cat:"System", disp:"exec", arg:"quickshell -p ~/.config/quickshell ipc call sysmon toggle"},
         {key:"SUPER + K", desc:"Show key bindings", cat:"System", disp:"exec", arg:"quickshell -p ~/.config/quickshell ipc call keybinds toggle"},
@@ -57,7 +57,7 @@ PanelWindow {
         {key:"SUPER + ,", desc:"Notification center", cat:"System", disp:"exec", arg:"quickshell -p ~/.config/quickshell ipc call notifications toggle"},
         {key:"SUPER Shift + ,", desc:"Do not disturb", cat:"System", disp:"exec", arg:"quickshell -p ~/.config/quickshell ipc call notifications toggleDnd"},
         {key:"SUPER + R", desc:"Screen record toggle", cat:"System", disp:"exec", arg:"uwsm-app -- record"},
-        {key:"SUPER Ctrl + T", desc:"System activity (btop)", cat:"System", disp:"exec", arg:"uwsm-app -- ghostty -e btop"},
+        {key:"SUPER Ctrl + T", desc:"System activity (btop)", cat:"System", disp:"exec", arg:"uwsm-app -- kitty -e btop"},
         {key:"Print", desc:"Screenshot (drag area)", cat:"System", disp:"exec", arg:"shot"},
         {key:"Shift + Print", desc:"Screenshot fullscreen", cat:"System", disp:"exec", arg:"shot full"},
         {key:"Alt + Print", desc:"Screen record (alt)", cat:"System", disp:"exec", arg:"record"},

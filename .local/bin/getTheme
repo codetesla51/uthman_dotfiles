@@ -68,7 +68,6 @@ hyprctl reload &
 # (e.g. when Quickshell owns notifications) — cap it so `wait` can't hang.
 timeout 5 swaync-client --reload-css 2>/dev/null &
 pkill -SIGUSR1 mako 2>/dev/null &
-pkill -SIGUSR2 -x ghostty 2>/dev/null & true
 # kitty watches only kitty.conf, not the matugen theme include — force the
 # reload explicitly (kitty's reload_conf_in_all_kitties is SIGUSR1).
 pkill -SIGUSR1 -x kitty 2>/dev/null & true

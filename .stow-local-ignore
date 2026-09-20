@@ -1,9 +1,14 @@
 ^README\.md$
 ^install\.sh$
 ^\.gitignore$
+^\.stow-local-ignore$
 ^theme-fallback$
 ^Pictures$
 ^wallpapers$
+^\.git$
+^panel$
+^logo\.lgv$
+^phonebridge_logo\.png$
 ^sddm$
 ^assets$
 ^firefox$

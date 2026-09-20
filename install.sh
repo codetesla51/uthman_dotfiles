@@ -26,7 +26,10 @@ header()  { echo -e "\n${BOLD}$*${RESET}"; }
 # ── Step 1: Check dependencies ────────────────────────────────────────────────
 header "Checking dependencies..."
 
-DEPS=(hyprland quickshell kitty matugen starship zsh lsd zoxide fzf cava btop stow hyprlock hypridle hyprsunset wl-clipboard cliphist swaync mako walker rofi)
+# Note: notifications are owned by the Quickshell shell (org.freedesktop.Notifications),
+# and the app launcher is the local rofi shim ~/.local/bin/walker-dmenu — so neither
+# walker, mako nor swaync is a real dependency.
+DEPS=(hyprland quickshell kitty matugen starship zsh lsd zoxide fzf cava btop stow hyprlock hypridle hyprsunset wl-clipboard cliphist rofi)
 MISSING=()
 
 for dep in "${DEPS[@]}"; do
@@ -70,59 +73,65 @@ else
     warn "No fallback colors found at $FALLBACK_DIR — run matugen after install."
 fi
 
-# ── Step 4: Clear integration symlinks before stow ────────────────────────────
-# (Recreated after stowing in Step 6 — stow aborts on absolute symlinks it
-# doesn't own, so they must not exist when stow runs. Safe on re-runs.)
-header "Clearing stale theme integration symlinks..."
-
-rm -f "$HOME/.config/btop/themes/current.theme" "$HOME/.config/cava/themes/matugen"
-success "Cleared (recreated after stow)"
-
-
-# ── Step 5: Stow dotfiles ─────────────────────────────────────────────────────
+# ── Step 4: Stow dotfiles ─────────────────────────────────────────────────────
+# Theme wiring (btop/cava/gtk symlinks) ships inside the repo as relative
+# symlinks into the $HOME theme dirs. They are calibrated for stow's default
+# folded layout with the repo at ~/dotfiles, so one stow pass links
+# everything — no post-stow fixups to run or forget.
 header "Stowing dotfiles..."
 
-# Back up any existing real files that would conflict with stow
-BACKUP_DIR="$HOME/.config-backup-$(date +%Y%m%d-%H%M%S)"
-CONFLICTS=()
+if [ "$DOTFILES_DIR" != "$HOME/dotfiles" ]; then
+    warn "Repo is not at ~/dotfiles — relative theme symlinks (btop/cava/gtk) will not resolve from here."
+fi
 
-while IFS= read -r -d '' f; do
-    rel="${f#$DOTFILES_DIR/}"
-    target="$HOME/$rel"
-    if [ -e "$target" ] && [ ! -L "$target" ]; then
-        CONFLICTS+=("$target")
+# Ask stow where it would collide (dry run) and back those paths up first.
+# Deriving the list from stow itself — not re-implementing stow's ignore
+# rules — keeps this in lockstep with .stow-local-ignore, so a fresh install
+# can never abort mid-stow. Foreign symlinks stow wouldn't own (e.g. service
+# files) are preserved in the backup and re-created by stow in canonical form.
+BACKUP_DIR="$HOME/.config-backup-$(date +%Y%m%d-%H%M%S)"
+readarray -t CONFLICTS < <(stow --dir="$DOTFILES_DIR" --target="$HOME" --no --verbose=2 . 2>&1 \
+    | sed -n -e 's/.*existing target is not owned by stow: *//p' \
+             -e 's/.*cannot stow .* over existing target \([^ ]*\).*/\1/p' \
+    | sort -u)
+
+# Legacy installs left .config/btop and .config/cava as real directories with
+# absolute wiring links. Moving them aside (preserved in the backup) lets
+# stow fold them, so fresh and upgraded machines end up byte-identical.
+for d in btop cava; do
+    t="$HOME/.config/$d"
+    if [ -d "$t" ] && [ ! -L "$t" ]; then
+        mkdir -p "$BACKUP_DIR"
+        mv "$t" "$BACKUP_DIR/$d"
+        warn "  Normalized legacy real dir .config/$d into a stow fold (backup: $BACKUP_DIR/$d)"
     fi
-done < <(find "$DOTFILES_DIR" -not -path "$DOTFILES_DIR/.git/*" -not -name '.git' -type f -print0)
+done
 
 if [ ${#CONFLICTS[@]} -gt 0 ]; then
     mkdir -p "$BACKUP_DIR"
-    warn "Backing up ${#CONFLICTS[@]} existing config file(s) to $BACKUP_DIR"
-    for f in "${CONFLICTS[@]}"; do
-        rel="${f#$HOME/}"
-        mkdir -p "$BACKUP_DIR/$(dirname "$rel")"
-        mv "$f" "$BACKUP_DIR/$rel"
-        info "  Backed up: $f"
+    warn "Backing up ${#CONFLICTS[@]} conflicting path(s) to $BACKUP_DIR"
+    for rel in "${CONFLICTS[@]}"; do
+        target="$HOME/$rel"
+        if [ -L "$target" ]; then
+            mkdir -p "$BACKUP_DIR/$(dirname "$rel")"
+            cp -P "$target" "$BACKUP_DIR/$rel" && rm -f "$target"
+        elif [ -e "$target" ]; then
+            mkdir -p "$BACKUP_DIR/$(dirname "$rel")"
+            mv "$target" "$BACKUP_DIR/$rel"
+        else
+            continue
+        fi
+        info "  Backed up: $target"
     done
     success "Backup complete"
 fi
 
+# ~/.config already exists as a real directory (Step 2), so stow descends
+# into it and links each subtree — it never folds .config into one symlink.
 stow --dir="$DOTFILES_DIR" --target="$HOME" --restow .
 success "Stow complete — all configs symlinked to \$HOME"
 
-# ── Step 6: Create integration symlinks (AFTER stow) ──────────────────────────
-header "Creating theme integration symlinks..."
-
-# btop: color_theme = "current" looks for ~/.config/btop/themes/current.theme
-mkdir -p "$HOME/.config/btop/themes"
-ln -sf "$HOME/.config/theme/current/btop.theme" "$HOME/.config/btop/themes/current.theme"
-success "btop theme symlink: ~/.config/btop/themes/current.theme -> ~/.config/theme/current/btop.theme"
-
-# cava: theme = 'matugen' looks for ~/.config/cava/themes/matugen
-mkdir -p "$HOME/.config/cava/themes"
-ln -sf "$HOME/.config/theme/current/cava_theme" "$HOME/.config/cava/themes/matugen"
-success "cava theme symlink: ~/.config/cava/themes/matugen -> ~/.config/theme/current/cava_theme"
-
-# ── Step 7: Matugen (optional) ────────────────────────────────────────────────
+# ── Step 5: Matugen (optional) ────────────────────────────────────────────────
 header "Matugen dynamic theming (optional)"
 
 echo ""
@@ -152,7 +161,7 @@ else
     info "Skipped. Run later with: matugen image ~/your-wallpaper.jpg"
 fi
 
-# ── Step 8: System-level extras (fonts, SDDM, fastfetch art) ───────────────
+# ── Step 6: System-level extras (fonts, SDDM, fastfetch art) ───────────────
 header "System extras (needs sudo for fonts/SDDM)..."
 
 # Inter from repos; Iceland is vendored (SDDM runs as its own user and
@@ -201,10 +210,17 @@ for _ffbase in "$HOME/.mozilla/firefox" "$HOME/.config/mozilla/firefox"; do
     [ -z "$_profdir" ] && _profdir=$(ls -d "$_ffbase"/*.default* 2>/dev/null | head -1)
     [ -z "$_profdir" ] && continue
     mkdir -p "$_profdir/chrome"
-    ln -sf "$HOME/.config/theme/current/firefox.css" "$_profdir/chrome/userChrome.css"
-    ln -sf "$HOME/.config/theme/current/firefox-usercontent.css" "$_profdir/chrome/userContent.css"
-    ln -sf "$DOTFILES_DIR/firefox/user.js" "$_profdir/user.js"
-    success "Firefox theme wired: $_profdir"
+    if [ -f "$HOME/.config/theme/current/firefox.css" ]; then
+        # Real files, not symlinks: Firefox's sandboxed UI process silently
+        # skips a symlinked userChrome.css. getTheme re-copies these on every
+        # theme switch.
+        cp -f "$HOME/.config/theme/current/firefox.css" "$_profdir/chrome/userChrome.css"
+        cp -f "$HOME/.config/theme/current/firefox-usercontent.css" "$_profdir/chrome/userContent.css"
+        ln -sf "$DOTFILES_DIR/firefox/user.js" "$_profdir/user.js"
+        success "Firefox theme wired: $_profdir"
+    else
+        warn "No theme CSS yet in ~/.config/theme/current — run matugen (Step 5) first, then re-run install"
+    fi
 done
 
 # ── Done ──────────────────────────────────────────────────────────────────────
@@ -216,5 +232,5 @@ echo -e "  ${CYAN}1.${RESET} Log out and back in (or restart Hyprland)"
 echo -e "  ${CYAN}2.${RESET} Apply a wallpaper:  ${BOLD}matugen image ~/your-wallpaper.jpg${RESET}"
 echo -e "  ${CYAN}3.${RESET} Colors live in:     ${BOLD}~/.config/theme/current/${RESET}"
 echo -e "  ${CYAN}4.${RESET} Saved themes in:    ${BOLD}~/.config/theme/themes/${RESET}"
-echo -e "  ${CYAN}5.${RESET} SDDM theme, fonts + fetch art handled by Step 8 (needs sudo)"
+echo -e "  ${CYAN}5.${RESET} SDDM theme, fonts + fetch art handled by Step 6 (needs sudo)"
 echo ""

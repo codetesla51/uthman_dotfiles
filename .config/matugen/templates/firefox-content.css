@@ -1,11 +1,24 @@
-/* ── matugen Firefox content — new-tab / home pages only ── */
+/* ── matugen Firefox content — new-tab/home pages + global niceties ── */
+
+/* Everything (all sites): themed selection + thin scrollbars */
+::selection {
+  background: color-mix(in srgb, {{ colors.primary.default.hex }} 35%, transparent);
+  color: {{ colors.on_background.default.hex }};
+}
+html {
+  scrollbar-width: thin;
+  scrollbar-color: {{ colors.surface_variant.default.hex }} {{ colors.background.default.hex }};
+}
+
+/* New-tab / home / blank pages */
 @-moz-document url("about:newtab"), url("about:home"), url("about:blank") {
   body {
     background: {{ colors.background.default.hex }} !important;
     color: {{ colors.on_background.default.hex }} !important;
+    color-scheme: dark;
   }
 
-  /* search box (handoff button + real input variants) */
+  /* search box (handoff + real input variants) */
   .search-handoff-button,
   .search-wrapper input,
   .search-inner-wrapper,
@@ -18,13 +31,17 @@
   }
   .search-handoff-button:focus,
   .search-handoff-button:focus-within,
-  .search-wrapper input:focus {
+  .search-wrapper input:focus,
+  input[type="search"]:focus {
     border-color: {{ colors.primary.default.hex }} !important;
   }
   .fake-textbox,
   .search-handoff-button::placeholder,
   .search-wrapper input::placeholder {
     color: {{ colors.on_surface.default.hex }} !important;
+  }
+  .search-handoff-button .fake-caret {
+    background: {{ colors.primary.default.hex }} !important;
   }
 
   /* top-site cards */
@@ -33,8 +50,15 @@
     border-radius: 12px !important;
     box-shadow: none !important;
   }
+  .top-site-outer:hover .tile,
+  .top-site-outer .tile:hover {
+    background: color-mix(in srgb, {{ colors.surface_variant.default.hex }} 80%, {{ colors.primary.default.hex }} 20%) !important;
+  }
   .top-site-outer .title {
     color: {{ colors.on_background.default.hex }} !important;
+  }
+  .top-site-outer .context-menu-button {
+    color: {{ colors.on_surface.default.hex }} !important;
   }
 
   /* pocket / highlights cards */
@@ -43,8 +67,12 @@
     background: {{ colors.surface.default.hex }} !important;
     border-radius: 12px !important;
   }
+  .card-outer:hover,
+  .ds-card:hover {
+    background: color-mix(in srgb, {{ colors.surface.default.hex }} 90%, {{ colors.primary.default.hex }} 10%) !important;
+  }
 
-  /* logo + wordmark follow accent */
+  /* logo + wordmark follow the accent */
   .logo-and-wordmark .wordmark {
     fill: {{ colors.primary.default.hex }} !important;
   }
@@ -53,5 +81,17 @@
   .icon-settings,
   .personalize-button {
     color: {{ colors.on_surface.default.hex }} !important;
+  }
+  .icon-settings:hover,
+  .personalize-button:hover {
+    color: {{ colors.primary.default.hex }} !important;
+  }
+
+  /* weather / preferences pill */
+  .weatherCard,
+  .prefs-pane-wrapper {
+    background: {{ colors.surface.default.hex }} !important;
+    border-radius: 12px !important;
+    color: {{ colors.on_background.default.hex }} !important;
   }
 }

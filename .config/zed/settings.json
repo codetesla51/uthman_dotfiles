@@ -1,4 +1,6 @@
 {
+  "proxy": "",
+  "disable_ai": false,
   "cli_default_open_behavior": "existing_window",
   "agent_servers": {
     "opencode": {
@@ -29,7 +31,7 @@
   },
   "edit_predictions": {
     "mode": "eager",
-    "provider": "copilot",
+    "provider": "zed",
   },
   "agent": {
     "dock": "right",

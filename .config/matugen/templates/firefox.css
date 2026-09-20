@@ -1,7 +1,10 @@
 /* ── matugen Firefox chrome — regenerated on every wallpaper change ──
- * Browser UI only. Never touches web content. */
+ * Browser UI only. Never touches web content.
+ * Frosted-glass chrome: translucent bars with backdrop blur over the page.
+ * Selectors target Firefox 156+ (presence attributes: [selected], [focused], [open]). */
 
 :root {
+  color-scheme: dark;
   --m-bg: {{ colors.background.default.hex }};
   --m-surface: {{ colors.surface.default.hex }};
   --m-raised: {{ colors.surface_variant.default.hex }};
@@ -12,45 +15,102 @@
   --m-line: {{ colors.outline.default.hex }};
   --m-err: {{ colors.error.default.hex }};
   --m-dim: color-mix(in srgb, {{ colors.on_background.default.hex }} 55%, transparent);
+  --m-dim2: color-mix(in srgb, {{ colors.on_background.default.hex }} 38%, transparent);
+
+  /* glass */
+  --m-blur: 18px;
+  --m-glass: color-mix(in srgb, {{ colors.background.default.hex }} 90%, transparent);
+  --m-glass-strong: color-mix(in srgb, {{ colors.surface.default.hex }} 95%, transparent);
+  --m-glass-line: color-mix(in srgb, {{ colors.outline.default.hex }} 35%, transparent);
+
+  /* hook the built-in Firefox chrome variables so every surface inherits */
+  --toolbar-color: var(--m-sub);
+  --toolbar-field-background-color: color-mix(in srgb, var(--m-surface) 78%, transparent);
+  --toolbar-field-color: var(--m-fg);
+  --toolbar-field-focus-background-color: color-mix(in srgb, var(--m-surface) 88%, transparent);
+  --toolbar-field-focus-color: var(--m-fg);
+  --toolbar-field-border-color: var(--m-glass-line);
+  --toolbarbutton-icon-fill: var(--m-dim);
+  --toolbarbutton-icon-fill-attention: var(--m-accent);
+  --tab-selected-textcolor: var(--m-fg);
+  --tab-selected-outline-color: var(--m-accent);
+  --panel-background-color: var(--m-glass-strong);
+  --panel-background-color-dimmed: color-mix(in srgb, var(--m-glass-strong) 80%, transparent);
+  --panel-border-color: var(--m-glass-line);
+  --chrome-content-separator: var(--m-glass-line);
 }
 
-/* ── top chrome ── */
-#navigator-toolbox {
+/* ══ top chrome — frosted glass ══ */
+#main-window {
   background: var(--m-bg) !important;
-  border-bottom: 1px solid color-mix(in srgb, var(--m-line) 40%, transparent) !important;
 }
-#nav-bar {
-  background: var(--m-bg) !important;
+#navigator-toolbox {
+  background: var(--m-glass) !important;
+  backdrop-filter: blur(var(--m-blur)) saturate(150%) !important;
+  border-bottom: 1px solid color-mix(in srgb, var(--m-line) 50%, transparent) !important;
+}
+#nav-bar,
+#TabsToolbar,
+#PersonalToolbar,
+#toolbar-menubar {
+  background: transparent !important;
   box-shadow: none !important;
 }
-#TabsToolbar,
-#tabbrowser-tabs {
-  background: transparent !important;
+
+/* ══ toolbar buttons ══ */
+#nav-bar toolbarbutton,
+#TabsToolbar toolbarbutton {
+  fill: var(--m-dim) !important;
+  color: var(--m-sub) !important;
+}
+#nav-bar toolbarbutton:hover,
+#TabsToolbar toolbarbutton:hover {
+  background: color-mix(in srgb, var(--m-raised) 50%, transparent) !important;
+  border-radius: 8px !important;
+  fill: var(--m-fg) !important;
+}
+#nav-bar toolbarbutton[disabled="true"] {
+  fill: var(--m-dim2) !important;
+}
+#stop-reload-button[animate] :is(#stop-button, #reload-button),
+.toolbarbutton-animatable-box {
+  fill: var(--m-fg) !important;
 }
 
-/* tab separators off */
+/* ══ tab separators off ══ */
 .tabbrowser-tab::before,
 .tabbrowser-tab::after {
   border: none !important;
 }
 
-/* tabs */
+/* ══ tabs ══ */
 .tabbrowser-tab .tab-background {
   border-radius: 10px 10px 0 0 !important;
   background: transparent !important;
 }
-.tabbrowser-tab[selected="true"] .tab-background {
-  background: var(--m-raised) !important;
-  box-shadow: inset 0 2px 0 var(--m-accent) !important;
+.tabbrowser-tab[selected] .tab-background,
+.tabbrowser-tab[visuallyselected] .tab-background {
+  background: var(--m-glass-strong) !important;
+  backdrop-filter: blur(var(--m-blur)) !important;
+  box-shadow: inset 0 2px 0 var(--m-accent),
+              0 0 0 1px color-mix(in srgb, var(--m-accent) 30%, transparent) !important;
 }
-.tabbrowser-tab:hover:not([selected="true"]) .tab-background {
-  background: color-mix(in srgb, var(--m-raised) 55%, transparent) !important;
+.tabbrowser-tab:hover:not([selected]):not([visuallyselected]) .tab-background {
+  background: color-mix(in srgb, var(--m-raised) 45%, transparent) !important;
 }
-.tab-content {
+.tabbrowser-tab .tab-content {
   color: var(--m-dim) !important;
 }
-.tabbrowser-tab[selected="true"] .tab-content {
+.tabbrowser-tab[selected] .tab-content,
+.tabbrowser-tab[visuallyselected] .tab-content {
   color: var(--m-fg) !important;
+}
+.tab-close-button {
+  fill: var(--m-dim) !important;
+}
+.tab-close-button:hover {
+  background: color-mix(in srgb, var(--m-accent) 30%, transparent) !important;
+  fill: var(--m-fg) !important;
 }
 
 /* new-tab + list-all buttons */
@@ -60,70 +120,205 @@
 }
 #tabs-newtab-button:hover,
 #alltabs-button:hover {
-  background: color-mix(in srgb, var(--m-raised) 60%, transparent) !important;
+  background: color-mix(in srgb, var(--m-raised) 50%, transparent) !important;
   border-radius: 8px !important;
 }
 
-/* ── urlbar ── */
+/* ══ urlbar — frosted field ══ */
 #urlbar {
   --urlbar-box-bgcolor: var(--m-surface) !important;
+  --urlbar-box-hover-bgcolor: color-mix(in srgb, var(--m-raised) 55%, transparent) !important;
+  --urlbar-box-focus-bgcolor: color-mix(in srgb, var(--m-raised) 60%, transparent) !important;
 }
 #urlbar-background {
-  background: var(--m-surface) !important;
-  border: 1px solid color-mix(in srgb, var(--m-line) 45%, transparent) !important;
+  background: color-mix(in srgb, var(--m-surface) 84%, var(--m-raised) 16%) !important;
+  backdrop-filter: blur(var(--m-blur)) saturate(150%) !important;
+  border: 1px solid color-mix(in srgb, var(--m-line) 60%, transparent) !important;
   border-radius: 10px !important;
   box-shadow: none !important;
 }
-#urlbar[focused="true"] > #urlbar-background,
-#urlbar[breakout][breakout-extend] > #urlbar-background {
+#urlbar[focused] > #urlbar-background,
+#urlbar[open] > #urlbar-background {
+  background: color-mix(in srgb, var(--m-surface) 76%, var(--m-raised) 24%) !important;
   border-color: var(--m-accent) !important;
 }
-#urlbar-input {
+#urlbar-input,
+#urlbar-input::placeholder {
+  color: var(--m-fg) !important;
+}
+#urlbar-input::selection {
+  background: color-mix(in srgb, var(--m-accent) 40%, transparent) !important;
+}
+#identity-box {
+  color: var(--m-dim) !important;
+}
+#identity-box[pageproxystate="valid"] {
   color: var(--m-fg) !important;
 }
 .urlbarView {
-  background: var(--m-surface) !important;
+  background: var(--m-glass-strong) !important;
+  backdrop-filter: blur(var(--m-blur)) saturate(150%) !important;
+  border: 1px solid var(--m-glass-line) !important;
+  border-top: none !important;
   border-radius: 0 0 12px 12px !important;
 }
 .urlbarView-row[selected] {
-  background: color-mix(in srgb, var(--m-raised) 70%, transparent) !important;
+  background: color-mix(in srgb, var(--m-raised) 60%, transparent) !important;
+}
+.urlbarView-row[type="switchtab"][selected] {
+  background: color-mix(in srgb, var(--m-accent) 25%, transparent) !important;
+}
+.urlbarView-title {
+  color: var(--m-fg) !important;
+}
+.urlbarView-secondary,
+.urlbarView-url,
+.urlbarView-tags,
+.urlbarView-title-separator {
+  color: var(--m-dim) !important;
+}
+.urlbarView-favicon,
+.urlbarView-type-icon {
+  fill: var(--m-dim) !important;
 }
 
-/* ── bookmark bar ── */
+/* ══ bookmark bar ══ */
 #PersonalToolbar {
-  background: var(--m-bg) !important;
   color: var(--m-sub) !important;
 }
-toolbarbutton.bookmark-item:hover {
-  background: color-mix(in srgb, var(--m-raised) 65%, transparent) !important;
+#PersonalToolbar toolbarbutton.bookmark-item {
+  color: var(--m-sub) !important;
+}
+#PersonalToolbar toolbarbutton.bookmark-item:hover {
+  background: color-mix(in srgb, var(--m-raised) 50%, transparent) !important;
+  color: var(--m-fg) !important;
+}
+#PlacesToolbarItems .bookmark-item .toolbarbutton-icon {
+  fill: var(--m-dim) !important;
 }
 
-/* ── sidebar ── */
-#sidebar-box {
-  background: var(--m-surface) !important;
+/* ══ sidebar — glass panel over the page ══ */
+#sidebar-box,
+#sidebar {
+  background: var(--m-glass-strong) !important;
+  backdrop-filter: blur(var(--m-blur)) saturate(140%) !important;
+  color: var(--m-fg) !important;
 }
 #sidebar-header {
-  background: var(--m-surface) !important;
+  background: transparent !important;
   color: var(--m-fg) !important;
-  border-bottom: 1px solid color-mix(in srgb, var(--m-line) 40%, transparent) !important;
+  border-bottom: 1px solid var(--m-glass-line) !important;
+}
+#sidebar-search,
+#sidebar-switcher-button,
+.sidebar-search-container input,
+#sidebar-box input[type="text"] {
+  background: color-mix(in srgb, var(--m-bg) 70%, transparent) !important;
+  color: var(--m-fg) !important;
+  border: 1px solid var(--m-glass-line) !important;
+  border-radius: 8px !important;
+}
+#sidebar-tree,
+#historyTree,
+.bookmarks-view-children {
+  color: var(--m-sub) !important;
 }
 
-/* ── popups / menus ── */
+/* ══ popups / menus ══ */
 .panel-arrowcontent,
 menupopup {
-  --panel-background: var(--m-raised) !important;
-  background: var(--m-raised) !important;
+  --panel-background: var(--m-glass-strong) !important;
+  background: var(--m-glass-strong) !important;
+  backdrop-filter: blur(var(--m-blur)) saturate(140%) !important;
   color: var(--m-fg) !important;
+  border: 1px solid var(--m-glass-line) !important;
   border-radius: 12px !important;
 }
 menuitem:hover,
 menu:hover {
-  background: color-mix(in srgb, var(--m-accent) 30%, transparent) !important;
+  background: color-mix(in srgb, var(--m-accent) 18%, transparent) !important;
+  color: var(--m-fg) !important;
+  box-shadow: inset 3px 0 0 var(--m-accent) !important;
+}
+menuitem[disabled="true"],
+menu[disabled="true"] {
+  color: var(--m-dim2) !important;
+}
+menuitem .menu-iconic-icon,
+menu .menu-iconic-icon {
+  fill: var(--m-dim) !important;
+}
+menuseparator {
+  border-color: var(--m-glass-line) !important;
+}
+.menu-accel {
+  color: var(--m-dim) !important;
+}
+.panel-subview-body {
+  background: transparent !important;
+  color: var(--m-fg) !important;
+}
+.panel-view-separator {
+  border-color: var(--m-glass-line) !important;
 }
 
-/* ── find bar ── */
+/* ══ find bar ══ */
 findbar {
-  background: var(--m-surface) !important;
+  background: var(--m-glass-strong) !important;
+  backdrop-filter: blur(var(--m-blur)) !important;
   color: var(--m-fg) !important;
-  border-top: 1px solid color-mix(in srgb, var(--m-line) 40%, transparent) !important;
+  border-top: 1px solid var(--m-glass-line) !important;
+}
+findbar input,
+findbar .findbar-textbox {
+  background: color-mix(in srgb, var(--m-bg) 70%, transparent) !important;
+  color: var(--m-fg) !important;
+  border: 1px solid var(--m-glass-line) !important;
+  border-radius: 8px !important;
+}
+findbar toolbarbutton {
+  fill: var(--m-dim) !important;
+}
+
+/* ══ notification / info bars ══ */
+.notificationbox-stack,
+.notificationbox-stack > notification,
+.notificationbox-stack .notificationbox-stack {
+  background: var(--m-glass-strong) !important;
+  color: var(--m-fg) !important;
+  border-bottom: 1px solid var(--m-glass-line) !important;
+}
+notification button {
+  background: color-mix(in srgb, var(--m-raised) 55%, transparent) !important;
+  color: var(--m-fg) !important;
+  border: 1px solid var(--m-glass-line) !important;
+  border-radius: 8px !important;
+}
+
+/* ══ status panel ══ */
+#statuspanel-label {
+  background: var(--m-glass-strong) !important;
+  color: var(--m-fg) !important;
+  border: 1px solid var(--m-glass-line) !important;
+  border-radius: 8px !important;
+}
+
+/* ══ downloads / extensions buttons ══ */
+#downloads-button[attention],
+#downloads-indicator-progress-outer {
+  fill: var(--m-accent) !important;
+  color: var(--m-accent) !important;
+}
+.unified-extensions-button .toolbarbutton-badge-stack {
+  fill: var(--m-dim) !important;
+}
+.toolbarbutton-badge {
+  background: var(--m-accent) !important;
+  color: var(--m-fg) !important;
+}
+
+/* ══ chrome scrollbars (toolkit) ══ */
+scrollbar {
+  scrollbar-color: color-mix(in srgb, var(--m-raised) 80%, transparent) transparent;
+  scrollbar-width: thin;
 }

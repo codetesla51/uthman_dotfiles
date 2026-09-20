@@ -64,15 +64,25 @@ echo "Applying colors..."
 # Hyprland re-sources colors.conf, so borders/window colors update too.
 hyprctl reload &
 
-# swaync-client blocks forever waiting for a daemon that may not be running
-# (e.g. when Quickshell owns notifications) — cap it so `wait` can't hang.
-timeout 5 swaync-client --reload-css 2>/dev/null &
-pkill -SIGUSR1 mako 2>/dev/null &
 # kitty watches only kitty.conf, not the matugen theme include — force the
 # reload explicitly (kitty's reload_conf_in_all_kitties is SIGUSR1).
 pkill -SIGUSR1 -x kitty 2>/dev/null & true
 gen-zed-theme 2>/dev/null & true
 syncLimusicTheme 2>/dev/null & true
+
+# Firefox reacts to userChrome.css only from a real file inside the profile
+# chrome dir (a symlink is silently skipped by its sandboxed UI process).
+# Copy the freshly-generated theme in; it shows after the next restart.
+for _ffbase in "$HOME/.mozilla/firefox" "$HOME/.config/mozilla/firefox"; do
+    [[ -f "$_ffbase/profiles.ini" ]] || continue
+    _profdir=$(ls -d "$_ffbase"/*.default-release 2>/dev/null | head -1)
+    [[ -z "$_profdir" ]] && _profdir=$(ls -d "$_ffbase"/*.default* 2>/dev/null | head -1)
+    [[ -n "$_profdir" ]] && {
+        mkdir -p "$_profdir/chrome"
+        cp -f "$HOME/.config/theme/current/firefox.css" "$_profdir/chrome/userChrome.css"
+        cp -f "$HOME/.config/theme/current/firefox-usercontent.css" "$_profdir/chrome/userContent.css"
+    }
+done &
 
 # Live-update Cavasik colors (matugen already regenerated ~/.config/cavasik/colors.rgb)
 dbus-send --session --type=method_call --dest="io.github.TheWisker.Cavasik" \

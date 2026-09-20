@@ -58,14 +58,6 @@ output_path = "~/.config/theme/themes/snow_black/cavasik-colors.rgb"
 input_path = "~/.config/matugen/templates/cavasik-colors.rgb"
 output_path = "~/.config/cavasik/colors.rgb"
 
-[templates.mako-theme]
-input_path = "~/.config/matugen/templates/mako.ini"
-output_path = "~/.config/theme/themes/snow_black/mako.ini"
-
-[templates.mako-current]
-input_path = "~/.config/matugen/templates/mako.ini"
-output_path = "~/.config/theme/current/mako.ini"
-
 [templates.gtk-theme]
 input_path = "~/.config/matugen/templates/gtk.css"
 output_path = "~/.config/theme/themes/snow_black/gtk.css"
@@ -105,18 +97,6 @@ output_path = "~/.config/theme/themes/snow_black/cava_theme"
 [templates.cava-current]
 input_path = "~/.config/matugen/templates/cava_theme"
 output_path = "~/.config/cava/config"
-
-[templates.walker-theme]
-input_path = "~/.config/matugen/templates/walker.css"
-output_path = "~/.config/theme/themes/snow_black/walker.css"
-
-[templates.walker-current]
-input_path = "~/.config/matugen/templates/walker.css"
-output_path = "~/.config/theme/current/walker.css"
-
-[templates.swaync-current]
-input_path = "~/.config/matugen/templates/swaync-colors.css"
-output_path = "~/.config/swaync/colors.css"
 
 [templates.firefox-theme]
 input_path = "~/.config/matugen/templates/firefox.css"

@@ -8,7 +8,7 @@ Arch Linux, Hyprland, Quickshell, Matugen. One rice where the wallpaper sets the
 
 ## What this is
 
-A complete, daily-driven Arch Linux desktop. Hyprland composes, a Quickshell shell written from scratch draws the bar and all panels, Matugen recolors everything from the wallpaper, and a local Go control panel exposes the whole system in a browser. Companion daemons (screen time tracker, phone bridge, QEMU launcher) live in their own repos and plug into the shell. Everything here is stow-managed, so a fresh machine reproduces with two commands.
+A complete, daily-driven Arch Linux desktop. Hyprland composes, a Quickshell shell written from scratch draws the bar and all panels, and Matugen recolors everything from the wallpaper. Companion daemons (screen time tracker, phone bridge, QEMU launcher) live in their own repos and plug into the shell. Everything here is stow-managed, so a fresh machine reproduces with two commands.
 
 ## Why it exists
 
@@ -25,7 +25,6 @@ Omarchy (which this setup borrows vendor defaults from) is excellent if you want
 * Own notification stack: the shell owns `org.freedesktop.Notifications`, with toasts, action buttons, screenshot saving, a history drawer, DND, and per-app Phosphor icons
 * Screen time tracker (separate Go daemon): samples the focused window, keeps a heatmap, top apps, and week bars. The control center reads the same daemon, so both views always agree
 * Wallpaper-driven theming: one `matugen image` call recolors the bar, apps, login screen, editor, and terminal with no restarts
-* Go control panel (`localhost:8765`) for theme, fonts, keybinds, monitors, audio, power, processes, snapshots, and updates, all from a browser
 * WatchCat hotspot watchdog (per-process metering against a daily cap, notify-only)
 * Snapper timeline snapshots with a documented bare-metal rollback path
 * Phosphor icons plus Nerd Font glyphs, verified against the installed font files
@@ -39,7 +38,7 @@ Install the dependencies. The installer warns about anything missing but does no
 
 ```bash
 yay -S hyprland quickshell kitty matugen starship zsh lsd zoxide fzf \
-       cava btop walker rofi swaync mako swayosd hyprlock hypridle hyprsunset sddm \
+       cava btop rofi swayosd hyprlock hypridle hyprsunset sddm \
        xdg-desktop-portal-hyprland uwsm cliphist wl-clipboard \
        ttf-jetbrainsmono-nerd ttf-firacode-nerd inter-font
 ```
@@ -79,11 +78,11 @@ matugen image ~/Pictures/your-wallpaper.jpg
 |----------|--------|
 | `waybar` | `~/.config/quickshell/colors.css` (the file the live shell polls) |
 | `hyprland-*` | `snow_black/colors.conf` + `theme/current` |
-| `hyprlock-*`, `kitty-*`, `gtk`, `btop`, `walker`, `mako` | matching live files under `theme/current` |
+| `hyprlock-*`, `kitty-*`, `gtk`, `btop` | matching live files under `theme/current` |
 | `cava` | `snow_black/cava_theme` + `~/.config/cava/config` (rewritten directly) |
 | `sddm` | `/usr/share/sddm/themes/elarun-custom/Palette.qml` (login follows every theme change) |
 | `firefox` | `theme/current/firefox{,-usercontent}.css`, symlinked as `userChrome.css`/`userContent.css` |
-| `rofi`, `neovim`, `swayosd`, `zed`, `obsidian`, `swaync`, `zathura` | per-app live outputs |
+| `rofi`, `neovim`, `swayosd`, `zed`, `obsidian`, `zathura` | per-app live outputs |
 
 Active colors live in `~/.config/theme/current/` and are rewritten on every run. `snow_black/` keeps saved snapshots, `theme-fallback/` ships the static seed.
 
@@ -171,21 +170,6 @@ The shell is its own notification daemon. Toasts carry action buttons, screensho
 
 The `screentime` Go daemon (separate checkout at `~/projects/screentime`, also runs as a user service) samples the focused window every 10 seconds into SQLite. `ScreenTime.qml` renders the heatmap and top apps from `screentime --export all`, and the control center activity bars read the same export. One source, both views agree.
 
-## Control panel
-
-Go service. Single binary, frontend embedded via `embed.FS`, runs as a user service on `http://localhost:8765`:
-
-```bash
-cd ~/dotfiles/panel
-go build -o panel .
-systemctl --user enable --now dotfiles-panel.service
-```
-
-Around 40 endpoints cover live CPU/RAM/battery/network charts, theme plus font/opacity/cursor plus Hyprland blur/shadows/gaps/animations, wallpapers with live matugen regen, keybinds and autostart, monitors, audio, brightness, network, nightlight, TLP profiles and battery health, input devices, journal streaming, and process listing with kill.
-
-> [!NOTE]
-> The panel writes into `~/dotfiles` first (stow-aware, symlinks respected), so every change it makes is git-tracked and revertible.
-
 ## Companion repos
 
 These live outside this repo but plug into the shell:
@@ -258,11 +242,10 @@ The full list lives in `.config/hypr/bindings.conf` (vendored defaults alongside
 │   │   └── AGENTS.md         # contributor rules for this codebase (read before editing)
 │   ├── matugen/              # config.toml + templates (btop, gtk, rofi, nvim, zed, sddm, zathura, …)
 │   ├── kitty/kitty.conf      # sources theme/current/kitty.conf
-│   ├── systemd/user/         # panel + helper services
+│   ├── systemd/user/         # helper services
 ├── .local/bin/             # set-wallpaper, getTheme, record, shot, filemanager, …
 ├── sddm/elarun-custom/     # login theme source → /usr/share/sddm/themes/
 ├── firefox/user.js         # enables userChrome.css theming
-├── panel/                  # Go control panel (main.go + embedded UI)
 ├── wallpapers/             # local only, git-ignored, never committed
 ├── assets/                 # vendored blobs + README screenshots (stow-ignored)
 ├── theme-fallback/         # static snow_black seed

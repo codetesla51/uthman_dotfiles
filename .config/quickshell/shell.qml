@@ -19,6 +19,7 @@ ShellRoot {
     PassPrompt { colors: barPalette }
     Wallshelf { colors: barPalette }
     WorkspaceViewer { colors: barPalette }
+    Grap { colors: barPalette }
 
     Colors { id: barPalette }
 }

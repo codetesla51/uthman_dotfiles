@@ -32,6 +32,7 @@ Rules of the house (from AGENTS.md / memory.md):
 | GitHubDash.qml | **github dashboard** — tabs: Overview (heatmap, stats, top repos) · Inbox · Pulls · Actions (running jobs); bg polls every 5 min, notify-sends on new | `github` | Utilities hub (no bind) | FloatingWindow 760×560 glass; 1-4 tabs, R refresh, rows open in browser |
 | PluginMenu.qml | pick-and-open bento cards for **extras/plugins only** (glyph + desc + arrow, keyboard nav, blur) | `plugins` | SUPER+Space → "util" (desktop entry, no Hypr bind) | native modules excluded; hub for Pomodoro, GitHubDash, notes, phone, drives |
 | ScreenTime.qml | usage tracker: GitHub heatmap, top apps ranked, week bars, login count | `screentime` | `SUPER ALT T` | samples focused window every 10s → SQLite; gap >4h = new login |
+| Grap.qml | **grep search** — instant content search (home by default, `@path` to scope), file-type icons, Enter opens match in nano (kitty) at line | `grap` | Utilities hub (no bind) | FloatingWindow 600×470 glass; debounced ripgrep, ↑↓ + Enter, Esc |
 | PhoneBridge.qml | ADB file sender: drop-to-phone, pull browser, queue, progress | `phonebridge` | `SUPER ALT K` | wireless ADB, one-time cable tcpip; no app on phone |
 | Bar pills (ArchLogo, Memory, Cpu, Network, Temp, Tray, DndIndicator, ScriptIndicator) | status pills | — | — | ScriptIndicator runs scripts/update.sh + idle.sh |
 

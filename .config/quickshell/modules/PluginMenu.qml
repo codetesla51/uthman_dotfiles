@@ -26,7 +26,8 @@ PanelWindow {
         { name: "Quick Notes",   desc: "idea capture · draggable",    target: "notes",       glyph: "󰎚" },
         { name: "Screen Time",   desc: "usage heatmaps · app ranks",  target: "screentime",  glyph: "󰓅" },
         { name: "PhoneBridge",   desc: "send & pull files over ADB",  target: "phonebridge", glyph: "" },
-        { name: "Drive Health",  desc: "SMART + RAM + speed test",    target: "drives",      glyph: "󰍛" }
+        { name: "Drive Health",  desc: "SMART + RAM + speed test",    target: "drives",      glyph: "󰍛" },
+        { name: "Grap",          desc: "instant file search · grep", target: "grap", glyph: "" }
     ]
 
     property string query: ""

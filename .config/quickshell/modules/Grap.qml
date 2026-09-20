@@ -6,27 +6,48 @@ import QtQuick.Controls
 
 // Grap — instant content search across your files (ripgrep wrapper).
 // Small floating card (FastFetch size class). Type → debounced rg over the
-// scope dir → icon rows. Enter/click opens the match in Zed at exact line.
-// Hub-only (no bind). PdfViewer glass language.
+// scope dir (chips or @path) → icon rows with the hit highlighted.
+// Enter/click opens the match in nano at exact line; ^O opens Zed; ^Y copies
+// path:line:col. Hub-only (no bind). PdfViewer glass language.
 FloatingWindow {
     id: root
     property var colors
     property bool open: false
 
     property string query: ""
-    // home only — no scope switching UI; use @path prefix to scope:
+    // scope: chips (~ | dotfiles | .config) or an @path prefix in the query:
     // "@dotfiles foo" → ~/dotfiles, "@~/.config/hypr foo" → that dir,
-    // "@/etc/foo bar" → absolute. Bare query always greps $HOME.
+    // "@/etc/foo bar" → absolute. Bare query greps the chip's dir.
     property string scopeLabel: ""
     function parseScope(q) {
         var m = /^@(\S+)\s+([\s\S]*)$/.exec(q.trim())
-        if (!m) return { dir: Quickshell.env("HOME"), pattern: q, label: "" }
+        if (!m) {
+            root.explicitScope = false
+            return { dir: scopeRoot(), pattern: q, label: scopeKey === "home" ? "" : shortPath(scopeRoot()) }
+        }
         var raw = m[1]
         var dir = raw.charAt(0) === "~" ? Quickshell.env("HOME") + raw.slice(1)
             : raw.charAt(0) !== "/" ? Quickshell.env("HOME") + "/" + raw : raw
+        root.explicitScope = true
         return { dir: dir, pattern: m[2], label: shortPath(dir) }
     }
-    function scopeDir() { return Quickshell.env("HOME") }
+    // scope chips → directory (an @path in the query always wins)
+    function scopeRoot() {
+        if (scopeKey === "dotfiles") return Quickshell.env("HOME") + "/dotfiles"
+        if (scopeKey === "config") return Quickshell.env("HOME") + "/.config"
+        return Quickshell.env("HOME")
+    }
+    function setScope(key) {
+        root.scopeKey = key
+        root.hovered = -1
+        root.queueSearch(root.query)
+    }
+    // drop the @path prefix so the chips take over again
+    function clearScopePrefix() {
+        searchField.text = searchField.text.replace(/^@\S+\s+/, "")
+        root.queueSearch(searchField.text)
+    }
+    function scopeDir() { return scopeRoot() }
     property var results: []
     property bool searching: false
     property string status: ""
@@ -37,6 +58,12 @@ FloatingWindow {
     property bool queued: false
     property string queuedQuery: ""
     property double searchStart: 0
+    // ── search options (chips in the toolbar) ───────────────────────
+    property string scopeKey: "home"     // home | dotfiles | config
+    property bool explicitScope: false   // true while the query carries an @path
+    property bool caseSensitive: false   // Aa  on → rg --case-sensitive
+    property bool regexMode: true        // .*  on → regex, off → --fixed-strings
+    readonly property int preCap: 28     // leading snippet chars kept before the hit
 
     title: "Grap"
     implicitWidth: 600
@@ -59,6 +86,13 @@ FloatingWindow {
         file: "", text: "", code: ""
     })
     readonly property var accents: [colors.primary, colors.secondary, colors.tertiary]
+    // the searchable text of the query with any @scope prefix stripped — computed
+    // once per query so result delegates never re-parse it
+    function patternOf(q) {
+        var m = /^@(\S+)\s+([\s\S]*)$/.exec(q.trim())
+        return m ? m[2] : q
+    }
+    readonly property string activePattern: root.patternOf(root.query)
 
     function shortPath(p) {
         var h = Quickshell.env("HOME")
@@ -76,6 +110,36 @@ FloatingWindow {
         if (["conf","toml","yaml","yml","ini","rasi","json","xml"].indexOf(ext) !== -1) return glyphs.gear
         if (["md","txt","org","tex"].indexOf(ext) !== -1) return glyphs.text
         return glyphs.file
+    }
+    // row accent by file kind — amber-bento accents by purpose
+    function fileAccent(p) {
+        var dot = p.lastIndexOf(".")
+        var ext = dot === -1 ? "" : p.slice(dot + 1).toLowerCase()
+        if (["qml","js","ts","jsx","tsx","go","py","rs","c","h","cpp","java","lua","sh","css","scss"].indexOf(ext) !== -1) return colors.tertiary
+        if (["conf","toml","yaml","yml","ini","rasi","json","xml"].indexOf(ext) !== -1) return colors.secondary
+        if (["md","txt","org","tex"].indexOf(ext) !== -1) return colors.primary
+        return colors.outline
+    }
+    function relDir(p) {
+        var i = p.lastIndexOf("/")
+        return i <= 0 ? "" : shortPath(p.slice(0, i))
+    }
+    // split a snippet around the hit so the match can be highlighted
+    function hlParts(snippet, pattern) {
+        var s = String(snippet)
+        if (!pattern) return { pre: s, hit: "", post: "" }
+        var re = null
+        try {
+            re = new RegExp(root.regexMode ? pattern : pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+                            root.caseSensitive ? "" : "i")
+        } catch (e) { return { pre: s, hit: "", post: "" } }
+        var m = re.exec(s)
+        if (!m || m[0] === "") return { pre: s, hit: "", post: "" }
+        var pre = s.slice(0, m.index)
+        var cut = false
+        if (pre.length > root.preCap) { pre = pre.slice(pre.length - root.preCap); cut = true }
+        var hit = m[0].length > 32 ? m[0].slice(0, 32) : m[0]
+        return { pre: (cut ? "…" : "") + pre, hit: hit, post: s.slice(m.index + m[0].length) }
     }
 
     function queueSearch(text) {
@@ -103,11 +167,16 @@ FloatingWindow {
         root.searching = true
         root.status = "searching" + (p.label !== "" ? " " + p.label : "") + "…"
         root.searchStart = Date.now()
-        searchProc.command = ["rg", "--vimgrep", "--no-heading", "--no-messages",
-            "--smart-case", "--hidden", "-M", "300", "--max-count", "5",
-            "--glob", "!.git/", "--glob", "!.cache/", "--glob", "!node_modules/",
-            "--glob", "!.mozilla/", "--glob", "!.local/share/Trash/",
-            "-e", p.pattern, p.dir]
+        searchProc.command = (function(){
+            var a = ["rg", "--vimgrep", "--no-heading", "--no-messages",
+                "--hidden", "-M", "300", "--max-count", "5",
+                "--glob", "!.git/", "--glob", "!.cache/", "--glob", "!node_modules/",
+                "--glob", "!.mozilla/", "--glob", "!.local/share/Trash/"]
+            a.push(root.caseSensitive ? "--case-sensitive" : "--smart-case")
+            if (!root.regexMode) a.push("--fixed-strings")
+            a.push("-e", p.pattern, p.dir)
+            return a
+        })()
         searchProc.running = true
     }
 
@@ -161,6 +230,19 @@ FloatingWindow {
         Quickshell.execDetached(["uwsm-app", "--", "kitty", "-e", "nano", "+" + r.line, r.file])
         root.open = false
     }
+    function shQuote(s) { return "'" + String(s).replace(/'/g, "'\\''") + "'" }
+    // copy `path:line:col` to the clipboard (house idiom)
+    function copyResult(r) {
+        if (!r) return
+        var loc = r.file + ":" + r.line + ":" + r.col
+        Quickshell.execDetached(["sh", "-c", "printf %s " + root.shQuote(loc) + " | (wl-copy 2>/dev/null || xclip -selection clipboard 2>/dev/null) && notify-send -u low -a 'Grap' 'Copied' " + root.shQuote(loc)])
+    }
+    // open the hit in the GUI editor at the exact line
+    function openInZed(r) {
+        if (!r) return
+        Quickshell.execDetached(["uwsm-app", "--", "zed", r.file + ":" + r.line])
+        root.open = false
+    }
 
     onOpenChanged: {
         if (open) {
@@ -173,6 +255,10 @@ FloatingWindow {
             root.hovered = -1
             root.truncated = false
             root.queued = false
+            root.scopeKey = "home"
+            root.explicitScope = false
+            root.caseSensitive = false
+            root.regexMode = true
             Qt.callLater(function(){ searchField.forceActiveFocus() })
         }
     }
@@ -193,7 +279,7 @@ FloatingWindow {
             anchors.margins: 14
             spacing: 8
 
-            // header — chip + title + status + close
+            // header — glyph chip + wordmark + hit counter + status + close
             RowLayout {
                 Layout.fillWidth: true
                 spacing: 10
@@ -205,8 +291,25 @@ FloatingWindow {
                     Layout.alignment: Qt.AlignVCenter
                 }
                 Text { text: "GRAP"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 12; font.weight: Font.ExtraBold; font.letterSpacing: 1.3; Layout.alignment: Qt.AlignVCenter }
+                // hit counter — ExtraBold number plus a letter-spaced label
+                Rectangle {
+                    visible: root.results.length > 0
+                    Layout.preferredHeight: 20
+                    Layout.preferredWidth: cntRow.implicitWidth + 16
+                    radius: 10
+                    color: colors.alpha(colors.primary, 0.12)
+                    border.width: 1; border.color: colors.alpha(colors.primary, 0.28)
+                    Layout.alignment: Qt.AlignVCenter
+                    Row {
+                        id: cntRow
+                        anchors.centerIn: parent
+                        spacing: 4
+                        Text { text: root.results.length + (root.truncated ? "+" : ""); color: colors.primary; font.family: colors.fontSans; font.pixelSize: 10; font.weight: Font.ExtraBold; anchors.verticalCenter: parent.verticalCenter }
+                        Text { text: "HITS"; color: colors.alpha(colors.outline, 0.65); font.family: colors.fontSans; font.pixelSize: 7; font.weight: Font.Bold; font.letterSpacing: 1.3; anchors.verticalCenter: parent.verticalCenter }
+                    }
+                }
                 Item { Layout.fillWidth: true }
-                Text { text: root.status; color: colors.alpha(colors.outline, 0.55); font.family: colors.fontSans; font.pixelSize: 8; Layout.alignment: Qt.AlignVCenter }
+                Text { text: root.status; color: colors.alpha(colors.outline, 0.6); font.family: colors.fontSans; font.pixelSize: 9; Layout.alignment: Qt.AlignVCenter }
                 Rectangle {
                     width: 28; height: 28; radius: 14
                     color: closeMa.containsMouse ? colors.alpha(colors.surfaceVariant, 0.6) : colors.alpha(colors.surface, 0.6)
@@ -253,6 +356,10 @@ FloatingWindow {
                                 else if (e.key === Qt.Key_Up) { root.selected = Math.max(root.selected - 1, 0); root.hovered = -1; resultList.positionViewAtIndex(root.selected, ListView.Contain); e.accepted = true }
                                 else if (e.key === Qt.Key_Escape) { root.open = false; e.accepted = true }
                                 else if (e.key === Qt.Key_Return || e.key === Qt.Key_Enter) { root.openResult(root.results[root.selected]); e.accepted = true }
+                                else if (e.key === Qt.Key_Y && (e.modifiers & Qt.ControlModifier)) { root.copyResult(root.results[root.selected]); e.accepted = true }
+                                else if (e.key === Qt.Key_O && (e.modifiers & Qt.ControlModifier)) { root.openInZed(root.results[root.selected]); e.accepted = true }
+                                else if (e.key === Qt.Key_PageDown) { root.selected = Math.min(root.selected + 5, root.results.length - 1); root.hovered = -1; resultList.positionViewAtIndex(root.selected, ListView.Contain); e.accepted = true }
+                                else if (e.key === Qt.Key_PageUp) { root.selected = Math.max(root.selected - 5, 0); root.hovered = -1; resultList.positionViewAtIndex(root.selected, ListView.Contain); e.accepted = true }
                             }
                         }
                         Text {
@@ -277,11 +384,89 @@ FloatingWindow {
                 }
             }
 
-            // results — 5 rows visible, rest scrolls
+            // toolbar — scope chips (left) · option chips (right)
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 6
+                Repeater {
+                    model: [ { key: "home", label: "~", glyph: root.glyphs.home },
+                             { key: "dotfiles", label: "dotfiles", glyph: root.glyphs.folder },
+                             { key: "config", label: ".config", glyph: root.glyphs.gear } ]
+                    delegate: Rectangle {
+                        required property var modelData
+                        readonly property bool on: !root.explicitScope && root.scopeKey === modelData.key
+                        Layout.preferredHeight: 22
+                        Layout.preferredWidth: Math.max(30, srow.implicitWidth + 18)
+                        radius: 11
+                        color: on ? colors.alpha(colors.primary, 0.15)
+                                  : (srowMa.containsMouse ? colors.alpha(colors.surfaceVariant, 0.35) : colors.alpha(colors.surface, 0.5))
+                        border.width: 1
+                        border.color: on ? colors.alpha(colors.primary, 0.4) : colors.alpha(colors.outline, 0.12)
+                        Behavior on color { ColorAnimation { duration: 120 } }
+                        Row {
+                            id: srow
+                            anchors.centerIn: parent
+                            spacing: 4
+                            Text { text: modelData.glyph; color: parent.parent.on ? colors.primary : colors.alpha(colors.outline, 0.75); font.family: colors.fontSans; font.pixelSize: 10; anchors.verticalCenter: parent.verticalCenter }
+                            Text { text: modelData.label; color: parent.parent.on ? colors.foreground : colors.alpha(colors.outline, 0.75); font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.DemiBold; anchors.verticalCenter: parent.verticalCenter }
+                        }
+                        MouseArea { id: srowMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.setScope(modelData.key) }
+                    }
+                }
+                // @path scope — shown while the query carries one; click to drop it
+                Rectangle {
+                    visible: root.explicitScope
+                    Layout.preferredHeight: 22
+                    Layout.preferredWidth: Math.max(30, csRow.implicitWidth + 18)
+                    radius: 11
+                    color: colors.alpha(colors.tertiary, 0.14)
+                    border.width: 1; border.color: colors.alpha(colors.tertiary, 0.35)
+                    Row {
+                        id: csRow
+                        anchors.centerIn: parent
+                        spacing: 4
+                        Text { text: root.glyphs.folder; color: colors.tertiary; font.family: colors.fontSans; font.pixelSize: 10; anchors.verticalCenter: parent.verticalCenter }
+                        Text { text: root.scopeLabel; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.DemiBold; anchors.verticalCenter: parent.verticalCenter }
+                        Text { text: root.glyphs.close; color: csMa.containsMouse ? colors.foreground : colors.alpha(colors.outline, 0.7); font.family: colors.fontSans; font.pixelSize: 9; anchors.verticalCenter: parent.verticalCenter }
+                    }
+                    MouseArea { id: csMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.clearScopePrefix() }
+                }
+                Item { Layout.fillWidth: true }
+                // option chips — Aa = case-sensitive, .* = regex mode
+                Repeater {
+                    model: [ { key: "case", label: "Aa" }, { key: "regex", label: ".*" } ]
+                    delegate: Rectangle {
+                        required property var modelData
+                        readonly property bool on: modelData.key === "case" ? root.caseSensitive : root.regexMode
+                        Layout.preferredHeight: 22
+                        Layout.preferredWidth: 30
+                        radius: 11
+                        color: on ? colors.alpha(colors.primary, 0.15)
+                                  : (optMa.containsMouse ? colors.alpha(colors.surfaceVariant, 0.35) : colors.alpha(colors.surface, 0.5))
+                        border.width: 1
+                        border.color: on ? colors.alpha(colors.primary, 0.4) : colors.alpha(colors.outline, 0.12)
+                        Behavior on color { ColorAnimation { duration: 120 } }
+                        Text {
+                            anchors.centerIn: parent
+                            text: modelData.label
+                            color: parent.on ? colors.primary : colors.alpha(colors.outline, 0.75)
+                            font.family: colors.fontSans; font.pixelSize: 10; font.weight: Font.ExtraBold
+                        }
+                        MouseArea { id: optMa; anchors.fill: parent; hoverEnabled: true; onClicked: {
+                            if (modelData.key === "case") root.caseSensitive = !root.caseSensitive
+                            else root.regexMode = !root.regexMode
+                            root.startSearch(root.query)
+                        } }
+                    }
+                }
+            }
+            // results — fills the remaining height, six visible rows max
             ListView {
                 id: resultList
                 Layout.fillWidth: true
-                Layout.preferredHeight: 294
+                Layout.fillHeight: true
+                Layout.minimumHeight: 150
+                visible: root.results.length > 0
                 clip: true
                 spacing: 6
                 model: root.results
@@ -290,69 +475,116 @@ FloatingWindow {
                 boundsBehavior: Flickable.StopAtBounds
                 ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
                 delegate: Rectangle {
+                    id: rowRoot
                     required property var modelData
                     required property int index
+                    readonly property bool active: index === root.selected || index === root.hovered
+                    readonly property var parts: root.hlParts(modelData.snippet, root.activePattern)
                     width: resultList.width
-                    height: 54
-                    radius: 10
+                    height: 58
+                    radius: 12
                     clip: true
-                    color: (index === root.selected || index === root.hovered) ? colors.alpha(colors.primary, 0.14) : colors.alpha(colors.surfaceVariant, 0.18)
+                    color: active ? colors.alpha(colors.primary, 0.13) : colors.alpha(colors.surfaceVariant, 0.16)
                     border.width: 1
-                    border.color: (index === root.selected || index === root.hovered) ? colors.alpha(colors.primary, 0.35) : colors.alpha(colors.outline, 0.08)
+                    border.color: active ? colors.alpha(colors.primary, 0.32) : colors.alpha(colors.outline, 0.08)
                     Behavior on color { ColorAnimation { duration: 120 } }
+                    // accent rail on the active row
+                    Rectangle {
+                        width: 2
+                        height: parent.height - 16
+                        anchors.left: parent.left
+                        anchors.leftMargin: 3
+                        anchors.verticalCenter: parent.verticalCenter
+                        radius: 1
+                        color: rowRoot.active ? colors.primary : "transparent"
+                    }
                     RowLayout {
                         anchors.fill: parent
-                        anchors.leftMargin: 10
+                        anchors.leftMargin: 12
                         anchors.rightMargin: 10
                         spacing: 10
                         Rectangle {
-                            width: 26; height: 26; radius: 13
-                            color: colors.alpha(root.accents[index % 3], 0.16)
+                            width: 24; height: 24; radius: 12
+                            color: colors.alpha(root.fileAccent(modelData.file), 0.16)
                             border.width: 1
-                            border.color: colors.alpha(root.accents[index % 3], 0.45)
+                            border.color: colors.alpha(root.fileAccent(modelData.file), 0.4)
                             Layout.alignment: Qt.AlignVCenter
                             Text {
                                 anchors.centerIn: parent
                                 text: root.fileGlyph(modelData.file)
-                                color: root.accents[index % 3]
+                                color: root.fileAccent(modelData.file)
                                 font.family: colors.fontSans
-                                font.pixelSize: 12
+                                font.pixelSize: 11
                             }
                         }
                         ColumnLayout {
                             Layout.fillWidth: true
                             Layout.alignment: Qt.AlignVCenter
-                            spacing: 1
-                            Text {
-                                text: root.baseName(modelData.file)
-                                color: colors.foreground
-                                font.family: colors.fontSans
-                                font.pixelSize: 11
-                                font.weight: Font.DemiBold
-                                elide: Text.ElideRight
+                            spacing: 0
+                            // line 1 — name : line  ·  ~/dir
+                            RowLayout {
                                 Layout.fillWidth: true
+                                spacing: 6
+                                Text {
+                                    text: root.baseName(modelData.file)
+                                    color: colors.foreground
+                                    font.family: colors.fontSans
+                                    font.pixelSize: 11
+                                    font.weight: Font.DemiBold
+                                    elide: Text.ElideRight
+                                }
+                                Text {
+                                    text: ":" + modelData.line
+                                    color: rowRoot.active ? colors.primary : colors.alpha(colors.outline, 0.7)
+                                    font.family: colors.fontSans
+                                    font.pixelSize: 10
+                                    font.weight: Font.Bold
+                                }
+                                Text {
+                                    text: root.relDir(modelData.file)
+                                    color: colors.alpha(colors.outline, 0.5)
+                                    font.family: colors.fontSans
+                                    font.pixelSize: 9
+                                    elide: Text.ElideMiddle
+                                    Layout.fillWidth: true
+                                }
                             }
-                            Text {
-                                text: modelData.snippet
-                                color: colors.alpha(colors.outline, 0.7)
-                                font.family: colors.fontSans
-                                font.pixelSize: 9
-                                elide: Text.ElideRight
-                                maximumLineCount: 1
+                            // line 2 — snippet with the hit highlighted
+                            RowLayout {
                                 Layout.fillWidth: true
+                                spacing: 0
+                                Text {
+                                    text: rowRoot.parts.pre
+                                    color: colors.alpha(colors.outline, 0.75)
+                                    font.family: colors.fontSans
+                                    font.pixelSize: 9
+                                    elide: Text.ElideRight
+                                    maximumLineCount: 1
+                                }
+                                Text {
+                                    text: rowRoot.parts.hit
+                                    visible: rowRoot.parts.hit !== ""
+                                    color: colors.primary
+                                    font.family: colors.fontSans
+                                    font.pixelSize: 9
+                                    font.weight: Font.Bold
+                                    elide: Text.ElideRight
+                                    maximumLineCount: 1
+                                }
+                                Text {
+                                    text: rowRoot.parts.post
+                                    color: colors.alpha(colors.outline, 0.75)
+                                    font.family: colors.fontSans
+                                    font.pixelSize: 9
+                                    elide: Text.ElideRight
+                                    maximumLineCount: 1
+                                    Layout.fillWidth: true
+                                }
                             }
-                        }
-                        Text {
-                            text: ":" + modelData.line
-                            color: (index === root.selected || index === root.hovered) ? colors.primary : colors.alpha(colors.outline, 0.55)
-                            font.family: colors.fontSans
-                            font.pixelSize: 10
-                            font.weight: Font.Bold
-                            Layout.alignment: Qt.AlignVCenter
                         }
                         Text {
                             text: "→"
-                            color: (index === root.selected || index === root.hovered) ? colors.primary : colors.alpha(colors.outline, 0.4)
+                            color: rowRoot.active ? colors.primary : colors.alpha(colors.outline, 0.35)
                             font.family: colors.fontSans
                             font.pixelSize: 13
                             font.weight: Font.Bold
@@ -370,21 +602,84 @@ FloatingWindow {
                 }
             }
 
-            Text {
-                visible: root.results.length === 0 && !root.searching
-                text: root.query.trim().length < 2 ? "type 2+ chars · @folder to scope" : root.status
-                color: colors.alpha(colors.outline, 0.5)
-                font.family: colors.fontSans
-                font.pixelSize: 9
-                Layout.alignment: Qt.AlignHCenter
+            // idle / empty state
+            ColumnLayout {
+                visible: root.results.length === 0
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                Layout.minimumHeight: 150
+                spacing: 6
+                Item { Layout.fillHeight: true }
+                Text {
+                    text: root.glyphs.search
+                    color: colors.alpha(colors.outline, 0.35)
+                    font.family: colors.fontSans
+                    font.pixelSize: 26
+                    Layout.alignment: Qt.AlignHCenter
+                }
+                Text {
+                    text: root.searching ? "searching…" : (root.query.trim().length < 2 ? "type 2+ characters" : "no matches")
+                    color: colors.alpha(colors.outline, 0.65)
+                    font.family: colors.fontSans
+                    font.pixelSize: 10
+                    Layout.alignment: Qt.AlignHCenter
+                }
+                Text {
+                    visible: !root.searching && root.query.trim().length < 2
+                    text: "EXAMPLES"
+                    color: colors.alpha(colors.outline, 0.5)
+                    font.family: colors.fontSans
+                    font.pixelSize: 7
+                    font.weight: Font.Bold
+                    font.letterSpacing: 1.3
+                    Layout.alignment: Qt.AlignHCenter
+                    Layout.topMargin: 4
+                }
+                RowLayout {
+                    visible: !root.searching && root.query.trim().length < 2
+                    Layout.alignment: Qt.AlignHCenter
+                    spacing: 6
+                    Repeater {
+                        model: [ "colors.css hypr", "@dotfiles matugen", "Pictures .png" ]
+                        delegate: Rectangle {
+                            required property var modelData
+                            Layout.preferredHeight: 22
+                            Layout.preferredWidth: Math.max(30, exT.implicitWidth + 18)
+                            radius: 11
+                            color: exMa.containsMouse ? colors.alpha(colors.surfaceVariant, 0.35) : colors.alpha(colors.surface, 0.5)
+                            border.width: 1
+                            border.color: colors.alpha(colors.outline, 0.12)
+                            Text {
+                                id: exT
+                                anchors.centerIn: parent
+                                text: modelData
+                                color: colors.alpha(colors.outline, 0.8)
+                                font.family: colors.fontSans
+                                font.pixelSize: 9
+                            }
+                            MouseArea {
+                                id: exMa
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                onClicked: {
+                                    searchField.text = modelData
+                                    root.queueSearch(modelData)
+                                    searchField.forceActiveFocus()
+                                }
+                            }
+                        }
+                    }
+                }
+                Item { Layout.fillHeight: true }
             }
 
             Text {
-                text: "↑↓ navigate  •  ↵ nano  •  @path scope  •  esc close"
-                color: colors.alpha(colors.outline, 0.4)
+                text: "↑↓ MOVE  ·  ↵ NANO  ·  ^O ZED  ·  ^Y COPY  ·  ESC CLOSE"
+                color: colors.alpha(colors.outline, 0.45)
                 font.family: colors.fontSans
                 font.pixelSize: 7
-                font.letterSpacing: 0.3
+                font.weight: Font.Bold
+                font.letterSpacing: 1.3
                 Layout.alignment: Qt.AlignHCenter
             }
         }

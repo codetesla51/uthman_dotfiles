@@ -23,6 +23,24 @@ scrollback-limit = 10000
 # ── Cursor ────────────────────────────────────────────────────
 cursor-style = block
 cursor-style-blink = true
+# Readability under transparency (background-opacity 0.40)
+minimum-contrast = 0.4
+bold-is-bright = true
+font-thicken = true
+# Kitty-parity: jump to tab, zoom font
+keybind = alt+1=goto_tab:1
+keybind = alt+2=goto_tab:2
+keybind = alt+3=goto_tab:3
+keybind = alt+4=goto_tab:4
+keybind = alt+5=goto_tab:5
+keybind = alt+6=goto_tab:6
+keybind = alt+7=goto_tab:7
+keybind = alt+8=goto_tab:8
+keybind = alt+9=goto_tab:9
+# Ghostty zoom actions need an explicit amount (:1); the bare action name is rejected.
+keybind = ctrl+plus=increase_font_size:1
+keybind = ctrl+equal=increase_font_size:1
+keybind = ctrl+minus=decrease_font_size:1
 # ── Shell integration ─────────────────────────────────────────
 shell-integration-features = no-cursor,ssh-env
 # ── Opacity & focus ───────────────────────────────────────────

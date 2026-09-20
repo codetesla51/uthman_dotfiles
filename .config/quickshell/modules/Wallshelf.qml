@@ -93,8 +93,10 @@ FloatingWindow {
                 var d = JSON.parse(text())
                 if(!d) return
                 if(d.apiKey) root.apiKey = d.apiKey
-                if(d.cacheDir) root.cacheDir = d.cacheDir
-                if(d.linkDir) root.linkDir = d.linkDir
+                // Stored paths are absolute — only trust them when they belong to
+                // this machine's $HOME, so a fresh install keeps the defaults above.
+                if(d.cacheDir && d.cacheDir.startsWith(Quickshell.env("HOME"))) root.cacheDir = d.cacheDir
+                if(d.linkDir && d.linkDir.startsWith(Quickshell.env("HOME"))) root.linkDir = d.linkDir
                 if(d.resOverride) root.resOverride = d.resOverride
                 if(d.fallbackMin) root.fallbackMin = d.fallbackMin
                 if(d.resolution && !root.resOverride) root.detectedRes = d.resolution
@@ -443,7 +445,7 @@ FloatingWindow {
     }
     function setAsWallpaper(path){
         if(!path) return
-        Quickshell.execDetached(["sh","-c","/home/uthman/.local/bin/set-wallpaper '"+path.replace(/'/g,"'\\''")+"' & disown"])
+        Quickshell.execDetached(["sh","-c","$HOME/.local/bin/set-wallpaper '"+path.replace(/'/g,"'\\''")+"' & disown"])
     }
     function toggleSelect(w){
         if(!w) return

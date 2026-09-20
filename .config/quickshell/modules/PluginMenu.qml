@@ -48,7 +48,7 @@ PanelWindow {
     }
 
     function launch(target) {
-        Quickshell.execDetached(["quickshell", "-p", "/home/uthman/.config/quickshell",
+        Quickshell.execDetached(["quickshell", "-p", Quickshell.env("HOME") + "/.config/quickshell",
                                  "ipc", "call", target, "toggle"])
         root.open = false
         query = ""

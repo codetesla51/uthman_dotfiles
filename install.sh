@@ -61,6 +61,12 @@ mkdir -p "$THEME_SNOW_BLACK"
 success "Created $THEME_CURRENT"
 success "Created $THEME_SNOW_BLACK"
 
+# ~/.local must already exist as a real dir before stow runs: if it does not,
+# stow folds the whole tree into one symlink and ~/.local/share (Zed, mise,
+# pip and node data) would be redirected into this repo. Same reasoning as the
+# theme dirs above, which stop stow from folding .config.
+mkdir -p "$HOME/.local/bin" "$HOME/.local/share"
+
 # ── Step 3: Copy static fallback colors ───────────────────────────────────────
 header "Installing fallback theme colors..."
 

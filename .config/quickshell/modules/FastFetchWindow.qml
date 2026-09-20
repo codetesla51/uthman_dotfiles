@@ -122,7 +122,7 @@ FloatingWindow {
                     }
                     Image {
                         anchors.centerIn: parent
-                        source: "file:///home/uthman/fastfetchImages/The_Knight__Hollow_Knight_-removebg-preview.png"
+                        source: "file://" + Quickshell.env("HOME") + "/fastfetchImages/The_Knight__Hollow_Knight_-removebg-preview.png"
                         width: 132
                         height: 132
                         fillMode: Image.PreserveAspectFit

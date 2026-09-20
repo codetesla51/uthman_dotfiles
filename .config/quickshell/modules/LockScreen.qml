@@ -19,7 +19,7 @@ WlSessionLock {
             // background with blur — use current wallpaper
             Image {
                 anchors.fill: parent
-                source: "file:///home/uthman/.config/theme/current/background"
+                source: "file://" + Quickshell.env("HOME") + "/.config/theme/current/background"
                 fillMode: Image.PreserveAspectCrop
                 asynchronous: true
             }
@@ -124,7 +124,7 @@ WlSessionLock {
                         interval: 5000; running: true; repeat: true; triggeredOnStart: true
                         onTriggered: {
                             var xhr=new XMLHttpRequest()
-                            xhr.open("GET","file:///home/uthman/.config/hypr/scripts/battery.sh",false)
+                            xhr.open("GET","file://" + Quickshell.env("HOME") + "/.config/hypr/scripts/battery.sh",false)
                             try{ xhr.send(); batText.text=xhr.responseText.trim() }catch(e){ batText.text="" }
                         }
                     }
@@ -140,7 +140,7 @@ WlSessionLock {
                         interval: 10000; running: true; repeat: true; triggeredOnStart: true
                         onTriggered: {
                             var xhr=new XMLHttpRequest()
-                            xhr.open("GET","file:///home/uthman/.config/hypr/scripts/sysinfo.sh",false)
+                            xhr.open("GET","file://" + Quickshell.env("HOME") + "/.config/hypr/scripts/sysinfo.sh",false)
                             try{ xhr.send(); sysText.text=xhr.responseText.trim() }catch(e){ sysText.text="" }
                         }
                     }

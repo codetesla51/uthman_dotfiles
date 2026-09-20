@@ -5,10 +5,9 @@ After=graphical-session.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/python3 /home/uthman/dotfiles/.config/quickshell/scripts/failwatch-daemon.py
+ExecStart=/usr/bin/python3 %h/dotfiles/.config/quickshell/scripts/failwatch-daemon.py
 Restart=on-failure
 RestartSec=10
-Environment=HOME=/home/uthman
 Environment=PATH=/usr/local/bin:/usr/bin:/bin
 
 [Install]

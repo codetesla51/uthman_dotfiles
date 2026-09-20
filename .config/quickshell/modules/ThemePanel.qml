@@ -31,7 +31,7 @@ PanelWindow {
     }
     function setWall(path){
         applying = true
-        Quickshell.execDetached(["sh","-c","/home/uthman/.local/bin/set-wallpaper '"+path.replace(/'/g,"'\\''")+"' & disown"])
+        Quickshell.execDetached(["sh","-c","$HOME/.local/bin/set-wallpaper '"+path.replace(/'/g,"'\\''")+"' & disown"])
         currentWall = path
         // find index
         for(var i=0;i<walls.length;i++) if(walls[i].path===path) { currentIndex=i; break }

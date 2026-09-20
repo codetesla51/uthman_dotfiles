@@ -44,6 +44,7 @@ PanelWindow {
     KeybindsPanel { id: keybindsPanel; colors: palette }
     DriveHealth { id: driveHealth; colors: palette }
     WatchCatPanel { id: watchCat; colors: palette }
+    FailWatchPanel { id: failWatch; colors: palette }
     MediaOsd { id: mediaOsd; colors: palette }
 
     // bar sides toggle — SUPER SHIFT SPACE leaves middle island

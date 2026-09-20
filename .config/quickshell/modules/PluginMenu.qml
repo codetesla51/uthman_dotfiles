@@ -27,6 +27,8 @@ PanelWindow {
         { name: "Screen Time",   desc: "usage heatmaps · app ranks",  target: "screentime",  glyph: "󰓅" },
         { name: "PhoneBridge",   desc: "send & pull files over ADB",  target: "phonebridge", glyph: "" },
         { name: "Drive Health",  desc: "SMART + RAM + speed test",    target: "drives",      glyph: "󰍛" },
+        { name: "FailWatch",     desc: "failed units · journal errors", target: "failwatch", glyph: "!" },
+        { name: "Dictionary",    desc: "definitions · synonyms · audio", target: "dict", glyph: "" },
         { name: "Grap",          desc: "instant file search · grep", target: "grap", glyph: "" }
     ]
 

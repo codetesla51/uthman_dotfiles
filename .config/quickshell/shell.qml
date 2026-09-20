@@ -15,6 +15,7 @@ ShellRoot {
     ControlCenter { colors: barPalette }
     Pomodoro { colors: barPalette }
     GitHubDash { colors: barPalette }
+    Dictionary { colors: barPalette }
     PdfViewer { colors: barPalette }
     PassPrompt { colors: barPalette }
     Wallshelf { colors: barPalette }

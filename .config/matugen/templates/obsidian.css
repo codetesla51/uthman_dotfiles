@@ -1,32 +1,332 @@
 /* Matugen-generated Obsidian theme - DO NOT EDIT.
    Regenerated automatically on every theme change (omarchy theme set).
-   Enable in Obsidian: Settings > Appearance > CSS snippets > "matugen" */
-body {
+   Enable in Obsidian: Settings > Appearance > CSS snippets > "matugen"
+   Solid rice theme: opaque surfaces, rice text, red + amber accents.
+   NOTE: --color-amber is the only fixed (non-matugen) value — the rice
+   palette has no yellow role, so this warm amber is pinned by hand. */
+.theme-dark,
+.theme-light {
   --background-primary: {{ colors.background.default.hex }};
   --background-primary-alt: {{ colors.surface.default.hex }};
-  --background-secondary: {{ colors.surface.default.hex }};
-  --background-secondary-alt: {{ colors.surface_variant.default.hex }};
-  --background-modifier-border: {{ colors.surface_variant.default.hex }};
-  --background-modifier-border-hover: {{ colors.primary.default.hex }}55;
+  --background-secondary: {{ colors.surface_container.default.hex }};
+  --background-secondary-alt: {{ colors.surface_container_high.default.hex }};
+  --background-modifier-border: {{ colors.outline_variant.default.hex }};
+  --background-modifier-border-hover: {{ colors.primary.default.hex }};
   --text-normal: {{ colors.on_background.default.hex }};
   --text-muted: {{ colors.on_surface_variant.default.hex }};
-  --text-faint: {{ colors.on_surface_variant.default.hex }}aa;
+  --text-faint: {{ colors.on_surface_variant.default.hex }};
   --text-accent: {{ colors.primary.default.hex }};
-  --text-accent-hover: {{ colors.primary.default.hex }}cc;
+  --text-accent-hover: {{ colors.primary.default.hex }};
   --text-error: {{ colors.error.default.hex }};
   --interactive-accent: {{ colors.primary.default.hex }};
-  --interactive-accent-hover: {{ colors.primary.default.hex }}cc;
+  --interactive-accent-hover: {{ colors.primary.default.hex }};
   --accent: {{ colors.primary.default.hex }};
   --link-color: {{ colors.primary.default.hex }};
-  --link-color-hover: {{ colors.primary.default.hex }}cc;
+  --link-color-hover: {{ colors.primary.default.hex }};
   --link-external-color: {{ colors.tertiary.default.hex }};
-  --link-external-color-hover: {{ colors.tertiary.default.hex }}cc;
-  --code-background: {{ colors.surface.default.hex }};
+  --link-external-color-hover: {{ colors.tertiary.default.hex }};
+  --code-background: {{ colors.surface_container_high.default.hex }};
   --code-normal: {{ colors.on_surface.default.hex }};
   --titlebar-background: {{ colors.background.default.hex }};
   --titlebar-background-focused: {{ colors.background.default.hex }};
-  --text-selection: {{ colors.primary.default.hex }}40;
-  --text-highlight-bg: {{ colors.primary.default.hex }}30;
-  --tag-background: {{ colors.primary.default.hex }}22;
-  --tag-color: {{ colors.primary.default.hex }};
+  --text-selection: {{ colors.primary_container.default.hex }};
+  --text-highlight-bg: #e6c07a33;
+  --tag-background: {{ colors.primary_container.default.hex }};
+  --tag-color: {{ colors.on_background.default.hex }};
+  --color-red: {{ colors.error.default.hex }};
+  --color-amber: #e6c07a;
+  /* gruvbox (and similar themes) drive headings, bold, tags, links and
+     checkboxes through their own vars — repoint them or gruvbox colors
+     survive alongside the rice. */
+  --h1-color: {{ colors.on_background.default.hex }};
+  --h2-color: {{ colors.on_background.default.hex }};
+  --h3-color: {{ colors.on_background.default.hex }};
+  --h4-color: {{ colors.on_background.default.hex }};
+  --h5-color: {{ colors.on_background.default.hex }};
+  --h6-color: {{ colors.on_background.default.hex }};
+  --bold-color: {{ colors.on_background.default.hex }};
+  --italic-color: {{ colors.on_background.default.hex }};
+  --inline-title-color: {{ colors.on_background.default.hex }};
+  --tag-color: #e6c07a;
+  --link-url: {{ colors.primary.default.hex }};
+  --text-accent-color: {{ colors.primary.default.hex }};
+  --text-highlight-fg: {{ colors.on_background.default.hex }};
+  --checkbox-color: #e6c07a;
+  --checklist-done-color: {{ colors.on_surface_variant.default.hex }};
+  --titlebar-text-color: {{ colors.on_surface_variant.default.hex }};
+  --titlebar-text-color-focused: {{ colors.on_background.default.hex }};
+  --tab-text-color-focused-active: {{ colors.on_background.default.hex }};
+  --tab-text-color-focused-active-current: {{ colors.on_background.default.hex }};
+  --font-text: "FiraCode Nerd Font", monospace;
+  --font-interface: "FiraCode Nerd Font", sans-serif;
+  --font-monospace: "FiraCode Nerd Font Mono", "FiraCode Nerd Font", monospace;
+  --radius-s: 8px;
+  --radius-m: 12px;
+  --radius-l: 16px;
+}
+
+/* ── solid window ── */
+body,
+.app-container,
+.horizontal-main-container,
+.workspace,
+.workspace-split,
+.workspace-tabs,
+.workspace-leaf-content,
+.view-content {
+  background: {{ colors.background.default.hex }};
+}
+
+/* ── sidebars slightly lifted ── */
+.workspace-ribbon.mod-left,
+.workspace-split.mod-left-split .workspace-tabs,
+.workspace-split.mod-right-split .workspace-tabs {
+  background: {{ colors.surface_container.default.hex }};
+}
+
+.workspace-split.mod-left-split .workspace-tabs {
+  border-right: 1px solid {{ colors.outline_variant.default.hex }};
+}
+.workspace-split.mod-right-split .workspace-tabs {
+  border-left: 1px solid {{ colors.outline_variant.default.hex }};
+}
+
+/* ── titlebar + status bar ── */
+.titlebar {
+  background: {{ colors.background.default.hex }};
+}
+.status-bar {
+  background: {{ colors.surface_container.default.hex }};
+  border-top: 1px solid {{ colors.outline_variant.default.hex }};
+  border-radius: 12px 12px 0 0;
+}
+
+/* ── tabs ── */
+.workspace-tab-header-container {
+  background: {{ colors.background.default.hex }};
+  border-bottom: 1px solid {{ colors.outline_variant.default.hex }};
+}
+.workspace-tab-header {
+  border-radius: 10px 10px 0 0;
+}
+.workspace-tab-header.is-active {
+  background: {{ colors.surface_container_high.default.hex }};
+}
+
+/* ── red accents: errors, danger, deletes ── */
+.workspace-tab-header-inner-close-button:hover,
+.clickable-icon[aria-label*="Close"]:hover,
+.nav-action-button[aria-label*="Delete"]:hover {
+  color: {{ colors.error.default.hex }};
+}
+.callout[data-callout="warning"],
+.callout[data-callout="danger"],
+.callout[data-callout="bug"],
+.callout[data-callout="failure"] {
+  border-left-color: {{ colors.error.default.hex }};
+}
+.callout[data-callout="warning"] > .callout-title,
+.callout[data-callout="danger"] > .callout-title,
+.callout[data-callout="bug"] > .callout-title,
+.callout[data-callout="failure"] > .callout-title {
+  color: {{ colors.error.default.hex }};
+}
+.markdown-rendered .task-list-item-checkbox[data-task="x"] {
+  border-color: {{ colors.error.default.hex }};
+}
+.cm-s-obsidian .cm-formatting-strikethrough,
+.markdown-rendered del {
+  color: {{ colors.error.default.hex }};
+}
+
+/* ── amber accents: highlights, todos, tips ── */
+.markdown-rendered mark,
+.cm-s-obsidian .cm-highlight {
+  background: #e6c07a33;
+  color: {{ colors.on_background.default.hex }};
+}
+.callout[data-callout="tip"],
+.callout[data-callout="success"],
+.callout[data-callout="todo"],
+.callout[data-callout="example"] {
+  border-left-color: #e6c07a;
+}
+.callout[data-callout="tip"] > .callout-title,
+.callout[data-callout="success"] > .callout-title,
+.callout[data-callout="todo"] > .callout-title,
+.callout[data-callout="example"] > .callout-title {
+  color: #e6c07a;
+}
+.markdown-rendered .task-list-item-checkbox {
+  border-color: #e6c07a;
+}
+
+/* ── headings in rice text, links in primary ── */
+.markdown-rendered h1,
+.markdown-rendered h2,
+.markdown-rendered h3,
+.markdown-rendered h4,
+.markdown-rendered h5,
+.markdown-rendered h6,
+.cm-s-obsidian .HyperMD-header {
+  color: {{ colors.on_background.default.hex }};
+}
+.markdown-rendered a,
+.cm-s-obsidian .cm-hmd-internal-link {
+  color: {{ colors.primary.default.hex }};
+  text-decoration: none;
+}
+.markdown-rendered a:hover {
+  text-decoration: underline;
+}
+
+/* ── callouts: solid rice, not gruvbox tint ── */
+.callout {
+  background-color: {{ colors.surface_container_high.default.hex }};
+}
+
+/* ── floating cards ── */.modal,
+.menu,
+.suggestion-container,
+.prompt,
+.popover.hover-popover {
+  background: {{ colors.surface_container_high.default.hex }};
+  border: 1px solid {{ colors.outline_variant.default.hex }};
+  border-radius: var(--radius-l);
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.45);
+}
+
+/* ── inputs + buttons ── */
+input[type="text"],
+input[type="search"],
+textarea {
+  background: {{ colors.surface_container_high.default.hex }};
+  border: 1px solid {{ colors.outline_variant.default.hex }};
+  border-radius: var(--radius-s);
+  color: {{ colors.on_background.default.hex }};
+}
+button.mod-cta {
+  background: {{ colors.primary.default.hex }};
+  color: {{ colors.background.default.hex }};
+  border-radius: var(--radius-s);
+}
+
+/* ── code blocks ── */
+.markdown-rendered pre,
+.cm-s-obsidian .HyperMD-codeblock {
+  background: {{ colors.surface_container_high.default.hex }};
+  border: 1px solid {{ colors.outline_variant.default.hex }};
+  border-top: 2px solid {{ colors.primary.default.hex }}66;
+  border-radius: var(--radius-m);
+  padding: 14px 16px;
+}
+
+/* copy button */
+.copy-code-button {
+  background: transparent;
+  color: {{ colors.on_surface_variant.default.hex }};
+  border-radius: var(--radius-s);
+}
+.copy-code-button:hover {
+  background: #e6c07a22;
+  color: #e6c07a;
+}
+
+/* inline code */
+.markdown-rendered :not(pre) > code,
+.cm-s-obsidian span.cm-inline-code {
+  background: #e6c07a1f;
+  color: #e6c07a;
+  border: 1px solid #e6c07a2e;
+  border-radius: 6px;
+  padding: 1px 6px;
+  font-family: var(--font-monospace);
+}
+
+/* syntax colors — reading view (prism) */
+.token.comment,
+.token.prolog,
+.token.cdata {
+  color: {{ colors.on_surface_variant.default.hex }};
+  font-style: italic;
+}
+.token.keyword,
+.token.atrule,
+.token.rule {
+  color: #e6c07a;
+}
+.token.string,
+.token.char,
+.token.regex {
+  color: {{ colors.tertiary.default.hex }};
+}
+.token.number,
+.token.boolean,
+.token.constant {
+  color: {{ colors.error.default.hex }};
+}
+.token.function,
+.token.class-name {
+  color: {{ colors.primary.default.hex }};
+}
+.token.operator,
+.token.punctuation {
+  color: {{ colors.on_surface_variant.default.hex }};
+}
+.token.tag,
+.token.attr-name,
+.token.selector {
+  color: #e6c07a;
+}
+.token.builtin,
+.token.inserted {
+  color: {{ colors.primary.default.hex }};
+}
+.token.deleted {
+  color: {{ colors.error.default.hex }};
+}
+
+/* syntax colors — live preview (codemirror) */
+.cm-s-obsidian span.tok-comment {
+  color: {{ colors.on_surface_variant.default.hex }};
+  font-style: italic;
+}
+.cm-s-obsidian span.tok-keyword {
+  color: #e6c07a;
+}
+.cm-s-obsidian span.tok-string {
+  color: {{ colors.tertiary.default.hex }};
+}
+.cm-s-obsidian span.tok-number,
+.cm-s-obsidian span.tok-bool {
+  color: {{ colors.error.default.hex }};
+}
+.cm-s-obsidian span.tok-function,
+.cm-s-obsidian span.tok-typeName,
+.cm-s-obsidian span.tok-className {
+  color: {{ colors.primary.default.hex }};
+}
+.cm-s-obsidian span.tok-operator,
+.cm-s-obsidian span.tok-punctuation {
+  color: {{ colors.on_surface_variant.default.hex }};
+}
+.cm-s-obsidian span.tok-variableName,
+.cm-s-obsidian span.tok-propertyName {
+  color: {{ colors.on_surface.default.hex }};
+}
+
+/* ── slim scrollbars ── */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: {{ colors.outline_variant.default.hex }};
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: {{ colors.primary.default.hex }};
+}
+::-webkit-scrollbar-track {
+  background: transparent;
 }

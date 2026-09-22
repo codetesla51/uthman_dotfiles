@@ -152,4 +152,4 @@ output_path = "/usr/share/sddm/themes/elarun-custom/Palette.qml"
 
 [templates.obsidian-current]
 input_path = "~/.config/matugen/templates/obsidian.css"
-output_path = "~/Documents/Obsidian Vault/.obsidian/snippets/matugen.css"
+output_path = "~/uthman_notes/.obsidian/snippets/matugen.css"

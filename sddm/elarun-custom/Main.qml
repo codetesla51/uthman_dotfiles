@@ -22,6 +22,15 @@ Rectangle {
     function doLogin() {
         if (root.loggingIn)
             return
+        if (pwField.text === "") {
+            failMsg = "Enter your password"
+            pwField.focus = true
+            return
+        }
+        // sessionModel loads async — clamp to a valid index at click time
+        // so a correct password can't hang on a stale index.
+        if (sessionIndex < 0 || sessionIndex >= sessionModel.count)
+            sessionIndex = sessionModel.lastIndex
         failMsg = ""
         loggingIn = true
         sddm.login(root.loginUser, pwField.text, sessionIndex)
@@ -29,11 +38,15 @@ Rectangle {
 
     Connections {
         target: sddm
-        onLoginFailed: {
+        function onLoginFailed() {
             loggingIn = false
             failMsg = "Wrong password, try again"
             pwField.text = ""
             pwField.focus = true
+        }
+        function onLoginSucceeded() {
+            // keep PLEASE WAIT + spinner until the greeter quits
+            loggingIn = true
         }
     }
 
@@ -151,7 +164,7 @@ Rectangle {
         Item {
             anchors.horizontalCenter: parent.horizontalCenter
             width: 340
-            height: 20
+            height: 28
             Text {
                 anchors.centerIn: parent
                 text: root.failMsg
@@ -162,23 +175,22 @@ Rectangle {
             }
             Row {
                 anchors.centerIn: parent
-                spacing: 6
+                spacing: 8
                 visible: root.loggingIn
                 Repeater {
                     model: 3
                     delegate: Rectangle {
-                        anchors.verticalCenter: parent.verticalCenter
-                        width: 5
-                        height: 5
-                        radius: 2.5
+                        width: 8
+                        height: 8
+                        radius: 4
                         color: pal.primary
-                        opacity: 0.25
+                        opacity: 0.3
                         SequentialAnimation on opacity {
                             loops: Animation.Infinite
                             running: root.loggingIn
                             PauseAnimation { duration: index * 180 }
                             NumberAnimation { to: 1; duration: 300 }
-                            NumberAnimation { to: 0.25; duration: 300 }
+                            NumberAnimation { to: 0.3; duration: 300 }
                             PauseAnimation { duration: (2 - index) * 180 }
                         }
                     }

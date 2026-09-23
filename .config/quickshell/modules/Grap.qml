@@ -49,6 +49,10 @@ FloatingWindow {
     }
     function scopeDir() { return scopeRoot() }
     property var results: []
+    property var contentResults: []
+    property var fileResults: []
+    property int findGen: 0
+    property string lastElapsed: ""
     property bool searching: false
     property string status: ""
     property int selected: 0
@@ -77,6 +81,7 @@ FloatingWindow {
         target: "grap"
         function toggle(): void { root.open = !root.open }
         function close(): void { root.open = false }
+        function search(q: string): void { root.open = true; Qt.callLater(function(){ searchField.text = q; root.queueSearch(q) }) }
     }
 
     // ---------- verified Nerd Font glyphs (AGENTS section 2) ----------
@@ -149,6 +154,8 @@ FloatingWindow {
         root.scopeLabel = p.label
         if (p.pattern.trim().length < 2) {
             root.results = []
+            root.contentResults = []
+            root.fileResults = []
             root.truncated = false
             root.status = p.label !== "" ? "in " + p.label + " — keep typing" : ""
             return
@@ -162,6 +169,7 @@ FloatingWindow {
         if (root.searching) {
             root.queued = true
             root.queuedQuery = text
+            root.startFindFor(text)
             return
         }
         root.searching = true
@@ -180,6 +188,36 @@ FloatingWindow {
         searchProc.running = true
     }
 
+    function mergeResults() {
+        var files = root.fileResults.slice(0, 30)
+        var content = root.contentResults.slice(0, Math.max(0, 150 - files.length))
+        root.results = files.concat(content)
+        if (root.selected >= root.results.length) root.selected = 0
+        root.hovered = -1
+        root.truncated = root.fileResults.length > 30 || root.contentResults.length > (150 - files.length)
+        var where = root.scopeLabel !== "" ? "in " + root.scopeLabel + " · " : ""
+        var t = root.lastElapsed !== "" ? " · " + root.lastElapsed + "s" : ""
+        if (root.results.length === 0) root.status = where + "no matches" + t
+        else root.status = where + files.length + " files + " + content.length + " hits" + t
+    }
+
+    // filename search (find) — runs alongside grep, fixed-strings so
+    // 2-char queries can't blow up as regex; fd preferred, find fallback
+    function startFindFor(text) {
+        var p = root.parseScope(text)
+        if (p.pattern.trim().length < 2) return
+        if (!/^[A-Za-z0-9@._+~\/ -]+$/.test(p.pattern)) return
+        root.findGen += 1
+        var g = root.findGen
+        var dir = p.dir.replace(/'/g, "'\\''")
+        var pat = p.pattern.replace(/'/g, "'\\''")
+        var glob = p.pattern.replace(/[*?\[\\]/g, "")
+        if (glob.trim() === "") return
+        findProc.gen = g
+        findProc.command = ["sh", "-c", "fd -H -t f -F --max-results 30 --exclude .git --exclude node_modules --exclude .cache --exclude .mozilla --exclude Trash '" + pat + "' '" + dir + "' 2>/dev/null || find '" + dir + "' \\( -path '*/.git/*' -o -path '*/node_modules/*' -o -path '*/.cache/*' \\) -prune -o -type f -iname '*" + glob + "*' -print 2>/dev/null | head -n 30"]
+        findProc.running = true
+    }
+
     Process {
         id: searchProc
         stdout: StdioCollector {
@@ -187,15 +225,14 @@ FloatingWindow {
             onStreamFinished: {
                 var elapsed = ((Date.now() - root.searchStart) / 1000).toFixed(2)
                 var out = []
-                var cut = false
                 var lines = text.split("\n")
                 for (var i = 0; i < lines.length; i++) {
                     var ln = lines[i]
                     if (ln === "") continue
                     var m = /^(.+?):(\d+):(\d+):(.*)$/.exec(ln)
                     if (!m) continue
-                    if (out.length >= 150) { cut = true; break }
-                    out.push({ file: m[1], line: parseInt(m[2], 10), col: parseInt(m[3], 10), snippet: m[4].trim() })
+                    if (out.length >= 150) break
+                    out.push({ file: m[1], line: parseInt(m[2], 10), col: parseInt(m[3], 10), snippet: m[4].trim(), isFile: false })
                 }
                 // drain-then-apply: a queued query always wins over these results
                 var hasQueued = root.queued
@@ -206,13 +243,9 @@ FloatingWindow {
                     root.startSearch(next)
                     return
                 }
-                root.results = out
-                root.truncated = cut
-                root.selected = 0
-                root.hovered = -1
-                var where = root.scopeLabel !== "" ? "in " + root.scopeLabel + " · " : ""
-                root.status = out.length === 0 ? where + "no matches · " + elapsed + "s"
-                    : where + out.length + (cut ? "+" : "") + " matches · " + elapsed + "s"
+                root.contentResults = out
+                root.lastElapsed = elapsed
+                root.mergeResults()
             }
         }
         stderr: StdioCollector {
@@ -223,7 +256,26 @@ FloatingWindow {
             }
         }
     }
-    Timer { id: debounce; interval: 300; onTriggered: root.startSearch(root.query) }
+    Process {
+        id: findProc
+        property int gen: 0
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: {
+                if (findProc.gen !== root.findGen) return
+                var out = []
+                var lines = text.split("\n")
+                for (var i = 0; i < lines.length && out.length < 30; i++) {
+                    var ln = lines[i].trim()
+                    if (ln === "") continue
+                    out.push({ file: ln, line: 1, col: 1, snippet: "", isFile: true })
+                }
+                root.fileResults = out
+                root.mergeResults()
+            }
+        }
+    }
+    Timer { id: debounce; interval: 300; onTriggered: { root.startSearch(root.query); root.startFindFor(root.query) } }
 
     function openResult(r) {
         if (!r) return
@@ -249,6 +301,9 @@ FloatingWindow {
             root.query = ""
             searchField.text = ""
             root.results = []
+            root.contentResults = []
+            root.fileResults = []
+            root.lastElapsed = ""
             root.status = ""
             root.scopeLabel = ""
             root.selected = 0
@@ -343,7 +398,7 @@ FloatingWindow {
                             id: searchField
                             Layout.fillWidth: true
                             Layout.alignment: Qt.AlignVCenter
-                            placeholderText: "Grep home…  (@path to scope)"
+                            placeholderText: "Grep + find home…  (@path to scope)"
                             placeholderTextColor: colors.alpha(colors.outline, 0.5)
                             color: colors.foreground
                             font.family: colors.fontSans
@@ -456,6 +511,7 @@ FloatingWindow {
                             if (modelData.key === "case") root.caseSensitive = !root.caseSensitive
                             else root.regexMode = !root.regexMode
                             root.startSearch(root.query)
+                            root.startFindFor(root.query)
                         } }
                     }
                 }
@@ -549,8 +605,9 @@ FloatingWindow {
                                     Layout.fillWidth: true
                                 }
                             }
-                            // line 2 — snippet with the hit highlighted
+                            // line 2 — snippet with the hit highlighted (content hits only)
                             RowLayout {
+                                visible: modelData.isFile !== true
                                 Layout.fillWidth: true
                                 spacing: 0
                                 Text {
@@ -582,6 +639,14 @@ FloatingWindow {
                                 }
                             }
                         }
+                        Rectangle {
+                            visible: modelData.isFile === true
+                            Layout.preferredWidth: 38; Layout.preferredHeight: 18; radius: 9
+                            color: colors.alpha(colors.tertiary, 0.16)
+                            border.width: 1; border.color: colors.alpha(colors.tertiary, 0.4)
+                            Layout.alignment: Qt.AlignVCenter
+                            Text { anchors.centerIn: parent; text: "FILE"; color: colors.tertiary; font.family: colors.fontSans; font.pixelSize: 7; font.weight: Font.Bold; font.letterSpacing: 1 }
+                        }
                         Text {
                             text: "→"
                             color: rowRoot.active ? colors.primary : colors.alpha(colors.outline, 0.35)
@@ -602,76 +667,6 @@ FloatingWindow {
                 }
             }
 
-            // idle / empty state
-            ColumnLayout {
-                visible: root.results.length === 0
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                Layout.minimumHeight: 150
-                spacing: 6
-                Item { Layout.fillHeight: true }
-                Text {
-                    text: root.glyphs.search
-                    color: colors.alpha(colors.outline, 0.35)
-                    font.family: colors.fontSans
-                    font.pixelSize: 26
-                    Layout.alignment: Qt.AlignHCenter
-                }
-                Text {
-                    text: root.searching ? "searching…" : (root.query.trim().length < 2 ? "type 2+ characters" : "no matches")
-                    color: colors.alpha(colors.outline, 0.65)
-                    font.family: colors.fontSans
-                    font.pixelSize: 10
-                    Layout.alignment: Qt.AlignHCenter
-                }
-                Text {
-                    visible: !root.searching && root.query.trim().length < 2
-                    text: "EXAMPLES"
-                    color: colors.alpha(colors.outline, 0.5)
-                    font.family: colors.fontSans
-                    font.pixelSize: 7
-                    font.weight: Font.Bold
-                    font.letterSpacing: 1.3
-                    Layout.alignment: Qt.AlignHCenter
-                    Layout.topMargin: 4
-                }
-                RowLayout {
-                    visible: !root.searching && root.query.trim().length < 2
-                    Layout.alignment: Qt.AlignHCenter
-                    spacing: 6
-                    Repeater {
-                        model: [ "colors.css hypr", "@dotfiles matugen", "Pictures .png" ]
-                        delegate: Rectangle {
-                            required property var modelData
-                            Layout.preferredHeight: 22
-                            Layout.preferredWidth: Math.max(30, exT.implicitWidth + 18)
-                            radius: 11
-                            color: exMa.containsMouse ? colors.alpha(colors.surfaceVariant, 0.35) : colors.alpha(colors.surface, 0.5)
-                            border.width: 1
-                            border.color: colors.alpha(colors.outline, 0.12)
-                            Text {
-                                id: exT
-                                anchors.centerIn: parent
-                                text: modelData
-                                color: colors.alpha(colors.outline, 0.8)
-                                font.family: colors.fontSans
-                                font.pixelSize: 9
-                            }
-                            MouseArea {
-                                id: exMa
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                onClicked: {
-                                    searchField.text = modelData
-                                    root.queueSearch(modelData)
-                                    searchField.forceActiveFocus()
-                                }
-                            }
-                        }
-                    }
-                }
-                Item { Layout.fillHeight: true }
-            }
 
             Text {
                 text: "↑↓ MOVE  ·  ↵ NANO  ·  ^O ZED  ·  ^Y COPY  ·  ESC CLOSE"

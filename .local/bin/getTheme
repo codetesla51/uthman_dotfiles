@@ -70,6 +70,13 @@ pkill -SIGUSR1 -x kitty 2>/dev/null & true
 gen-zed-theme 2>/dev/null & true
 syncLimusicTheme 2>/dev/null & true
 
+# Zed only reads theme files at startup (no hot-reload): if it's running,
+# say so — re-select Matugen via Ctrl+K Ctrl+T to apply the new colors.
+if pgrep -x zed >/dev/null 2>&1; then
+    echo "Zed is running: press Ctrl+K Ctrl+T and re-select Matugen (Zed reads theme files at startup only)"
+    command -v notify-send >/dev/null 2>&1 && notify-send "Theme updated" "Re-select Matugen in Zed (Ctrl+K Ctrl+T)" 2>/dev/null & true
+fi
+
 # Firefox reacts to userChrome.css only from a real file inside the profile
 # chrome dir (a symlink is silently skipped by its sandboxed UI process).
 # Copy the freshly-generated theme in; it shows after the next restart.

@@ -35,6 +35,16 @@ FloatingWindow {
     property real installPct: 0
     property string installLog: ""
     property string installMode: "" // "install" or "remove" or "update"
+    property bool installFailed: false
+    property bool installDone: false
+    property int installExit: 0
+    property string installPhase: ""
+    property string installSummary: ""
+    property string installError: ""
+    property int transCur: 0
+    property int transTot: 0
+    property real dlFrac: 0
+    property double installT0: 0
     property string lastChecked: ""
     property string sudoPass: "" // cached after PassPrompt result, cleared after 5 min
     property string pendingAction: "" // "install" | "remove" | "update" | "updateAll"
@@ -257,26 +267,25 @@ FloatingWindow {
             searchResults = merged.slice(0,60)
         }
         searching = false
-        // fetch download sizes for visible results (batched)
-        if(searchResults.length>0) fetchSizes(searchResults.slice(0,20))
+        // fetch download sizes for visible results (batched, single call each)
+        if(searchResults.length>0) fetchSizes(searchResults.slice(0,30))
     }
     function fetchSizes(pkgs){
         if(!pkgs || pkgs.length===0) return
         var offNames=[], aurNames=[]
         for(var i=0;i<pkgs.length;i++){
             var n=pkgs[i].name
-            if(sizeMap.hasOwnProperty(n)) continue
+            if(!n || sizeMap.hasOwnProperty(n)) continue
+            if(!/^[A-Za-z0-9@._+-]+$/.test(n)) continue
             if(pkgs[i].source==="AUR") aurNames.push(n)
             else offNames.push(n)
         }
         if(offNames.length>0){
-            var q=offNames.join(" ").replace(/'/g,"'\\''")
-            sizeProcOff.command=["sh","-c","for p in "+q+"; do pacman -Si \"$p\" 2>/dev/null | awk '/^Name/{n=\$3} /^Download Size/{print n\"|\"\$4\" \"\$5}' ; done"]
+            sizeProcOff.command=["sh","-c","$HOME/.config/quickshell/scripts/pkg-sizes.sh off "+offNames.join(" ")]
             sizeProcOff.running=true
         }
         if(aurNames.length>0){
-            var q2=aurNames.join(" ").replace(/'/g,"'\\''")
-            sizeProcAur.command=["sh","-c","for p in "+q2+"; do yay -Si \"$p\" 2>/dev/null | awk '/^Name/{n=\$3} /^Download Size/{print n\"|\"\$4\" \"\$5} /^Installed Size/{if(!d) print n\"|\"\$4\" \"\$5}' ; done"]
+            sizeProcAur.command=["sh","-c","$HOME/.config/quickshell/scripts/pkg-sizes.sh aur "+aurNames.join(" ")]
             sizeProcAur.running=true
         }
     }
@@ -405,12 +414,26 @@ FloatingWindow {
         else if(a==="update") root.startUpdate(false)
         else if(a==="updateAll") root.startUpdate(true)
     }
+    function resetInstallState(mode) {
+        installMode=mode
+        installLog=""; installPct=0.05; installing=true
+        installFailed=false; installDone=false; installExit=0
+        installPhase="Starting"; installSummary=""; installError=""
+        transCur=0; transTot=0; dlFrac=0
+        installT0=Date.now()
+    }
+    function quickInstall(pkg) {
+        if(!pkg || installing) return
+        if(!isSelected(pkg.name)) toggleSelect(pkg)
+        tab=1
+        startInstall()
+    }
     function startInstall() {
         if(needPass("install")) return
         var cmd=buildInstallCmd()
         if(!cmd) return
-        installMode="install"
-        installLog=""; installPct=0.05; installing=true
+        resetInstallState("install")
+        installLog=":: Installing "+selectedList.length+" package(s)\n"
         installProc.command=["sh","-c", cmd]
         installProc.running=true
     }
@@ -418,8 +441,8 @@ FloatingWindow {
         if(needPass("remove")) return
         var cmd=buildRemoveCmd()
         if(!cmd) return
-        installMode="remove"
-        installLog=""; installPct=0.05; installing=true
+        resetInstallState("remove")
+        installLog=":: Removing "+uninstallCount+" package(s)\n"
         installProc.command=["sh","-c", cmd]
         installProc.running=true
     }
@@ -427,10 +450,88 @@ FloatingWindow {
         if(needPass(all ? "updateAll" : "update")) return
         var cmd=buildUpdateCmd(all)
         if(!cmd) return
-        installMode="update"
-        installLog=""; installPct=0.05; installing=true
+        resetInstallState("update")
+        installLog=":: Updating\n"
         installProc.command=["sh","-c", cmd]
         installProc.running=true
+    }
+    function noteInstallLine(line) {
+        if(!line) return
+        installLog += line + "\n"
+        if(installLog.length>12000) installLog = installLog.slice(-12000)
+        var low=line.toLowerCase()
+        // error collection (shown on failure, does not stop the run)
+        if(low.indexOf("error:")!==-1 || low.indexOf("failed")!==-1 || low.indexOf("conflicting files")!==-1 || low.indexOf("could not satisfy")!==-1 || low.indexOf("invalid or corrupted")!==-1 || low.indexOf("permission denied")!==-1 || low.indexOf("incorrect password")!==-1 || low.indexOf("sorry, try again")!==-1 || low.indexOf("target not found")!==-1 || low.indexOf("authentication failure")!==-1) {
+            if(installError==="") installError=line.trim().slice(0,220)
+        }
+        // phase detection — keeps label truthful during long yay builds
+        if(line.indexOf("___AUR_START___")!==-1) { installPhase="AUR packages"; transCur=0; transTot=0; dlFrac=0 }
+        else if(low.indexOf("making package")!==-1 || low.indexOf("retrieving sources")!==-1 || low.indexOf("building")!==-1 || line.indexOf("==>")!==-1) {
+            installPhase="Building AUR"
+            if(installPct<0.9) installPct=Math.min(0.9, installPct+0.01)
+        }
+        else if(low.indexOf("resolving dependencies")!==-1) { installPhase="Resolving"; if(installPct<0.08) installPct=0.08 }
+        else if(low.indexOf("looking for conflicting")!==-1) { installPhase="Checking conflicts"; if(installPct<0.12) installPct=0.12 }
+        else if(low.indexOf("checking keyring")!==-1 || low.indexOf("checking package integrity")!==-1 || low.indexOf("checking for file conflicts")!==-1 || low.indexOf("checking available disk")!==-1 || low.indexOf("loading package")!==-1) { installPhase="Checking"; if(installPct<0.15) installPct=0.15 }
+        else if(low.indexOf("total download size")!==-1) { installPhase="Downloading" }
+        // transaction progress ( 1/5 )
+        var m=line.match(/\(\s*(\d+)\s*\/\s*(\d+)\s*\)/)
+        if(m) {
+            var cur=parseInt(m[1]); var tot=parseInt(m[2])
+            if(tot>0 && cur>0) {
+                transCur=cur; transTot=tot; dlFrac=0
+                installPhase="Installing "+cur+"/"+tot
+                var cand=0.2+0.75*((cur-1)/tot)
+                if(cand>installPct) installPct=cand
+            }
+            return
+        }
+        var pm=line.match(/(\d{1,3})(?:\.\d+)?\s*%/)
+        if(pm) {
+            var dl=parseInt(pm[1])/100
+            if(dl<0) dl=0
+            if(dl>1) dl=1
+            installPhase = transTot>0 ? ("Installing "+transCur+"/"+transTot) : "Downloading"
+            if(transTot>0 && transCur>0) {
+                if(dl>dlFrac) dlFrac=dl
+                var c2=0.2+0.75*((transCur-1+dlFrac)/transTot)
+                if(c2>installPct) installPct=c2
+            } else {
+                // pre-transaction downloads: many files each 0-100%, so nudge forward to stay alive
+                var absP=0.08+dl*0.15
+                if(absP>installPct) installPct=absP
+                else if(installPct<0.35) installPct=Math.min(0.35, installPct+0.008)
+            }
+        }
+    }
+    function finishInstall(code) {
+        installExit=code
+        installDone=true
+        var secs=Math.max(1, Math.round((Date.now()-installT0)/1000))
+        if(code===0 && installError==="") {
+            installFailed=false
+            installPct=1.0
+            installPhase="Done"
+            installSummary="Completed in "+secs+"s"
+            installLog += "\n— done ("+secs+"s) —\n"
+        } else {
+            installFailed=true
+            installPhase="Failed"
+            if(lowIsAuth(installLog)) {
+                installSummary="sudo auth failed (exit "+code+") — retry, password cleared"
+                sudoPass=""
+            } else if(installError!=="") {
+                installSummary="Failed (exit "+code+") — "+installError
+            } else {
+                installSummary="Failed (exit "+code+") — see log"
+            }
+            installLog += "\n— failed (exit "+code+", "+secs+"s) —\n"
+        }
+        refreshTimer.restart()
+    }
+    function lowIsAuth(log) {
+        var l=log.toLowerCase()
+        return l.indexOf("incorrect password")!==-1 || l.indexOf("sorry, try again")!==-1 || l.indexOf("no password was provided")!==-1 || l.indexOf("authentication failure")!==-1
     }
 
 
@@ -584,41 +685,15 @@ FloatingWindow {
         running: false
         stdout: SplitParser {
             splitMarker: "\n"
-            onRead: function(line){
-                root.installLog += line + "\n"
-                // progress sync: transaction steps "( 1/5)" AND pacman/yay download bars "NN%" — keep the bar monotonic so downloads visibly move it
-                var m=line.match(/\(\s*(\d+)\s*\/\s*(\d+)\s*\)/)
-                if(m){
-                    var cur=parseInt(m[1]); var tot=parseInt(m[2])
-                    if(tot>0 && cur/tot>root.installPct) root.installPct = cur/tot
-                } else {
-                    var pm=line.match(/(\d{1,3})(?:\.\d+)?\s*%/)
-                    if(pm){
-                        var pct=parseInt(pm[1])/100
-                        if(pct>root.installPct && pct<1) root.installPct=pct
-                    }
-                }
-                if(line.indexOf("checking")!==-1) { if(root.installPct<0.15) root.installPct=0.15 }
-                else if(line.indexOf("resolving")!==-1) { if(root.installPct<0.10) root.installPct=0.10 }
-                // auto scroll: handled via Flickable contentY binding in log view
-                if(root.installLog.length>8000) root.installLog = root.installLog.slice(-8000)
-            }
+            onRead: function(line){ root.noteInstallLine(line) }
         }
         stderr: SplitParser {
             splitMarker: "\n"
-            onRead: function(line){ root.installLog += line + "\n" }
+            onRead: function(line){ root.noteInstallLine(line) }
         }
-        onRunningChanged: {
-            if(!running && root.installing){
-                // finished
-                root.installPct = 1.0
-                root.installLog += "\n— done —\n"
-                // refresh lists after a short delay, don't auto-close
-                refreshTimer.restart()
-            }
-        }
+        onExited: function(code){ if(root.installing) root.finishInstall(code) }
     }
-    Timer { id: refreshTimer; interval: 1200; onTriggered: { root.installing=false; root.refreshInstalled(); root.refreshUpdates() } }
+    Timer { id: refreshTimer; interval: 1200; onTriggered: { root.refreshInstalled(); root.refreshUpdates() } }
     Timer { id: searchDebounce; interval: 380; onTriggered: if(root.query.trim().length>=1) searchProc.running=true; else {searchResults=[]; searching=false} }
 
     // card
@@ -636,11 +711,14 @@ FloatingWindow {
         }
         Keys.onPressed: function(e){
             if(root.installing) return
+            if(e.key===Qt.Key_Slash && root.tab===0){ searchField.forceActiveFocus(); e.accepted=true; return }
+            if(e.key===Qt.Key_Tab && root.tab===0){ searchField.forceActiveFocus(); e.accepted=true; return }
             if(root.tab===0 && root.searchResults.length>0){
                 if(e.key===Qt.Key_Down){ root.searchNav=Math.min(root.searchNav+1, root.searchResults.length-1); searchList.positionViewAtIndex(root.searchNav, ListView.Contain); e.accepted=true }
                 else if(e.key===Qt.Key_Up){ root.searchNav=Math.max(root.searchNav-1,0); searchList.positionViewAtIndex(root.searchNav, ListView.Contain); e.accepted=true }
                 else if(e.key===Qt.Key_Return || e.key===Qt.Key_Enter){ var p=root.searchResults[root.searchNav]; if(p) root.toggleSelect(p); e.accepted=true }
                 else if(e.key===Qt.Key_Space){ var q=root.searchResults[root.searchNav]; if(q) root.toggleSelect(q); e.accepted=true }
+                else if(e.key===Qt.Key_D){ var d=root.searchResults[root.searchNav]; if(d) root.quickInstall(d); e.accepted=true }
             } else if(root.tab===2 && root.installedFiltered.length>0){
                 if(e.key===Qt.Key_Down){ root.instNav=Math.min(root.instNav+1, root.installedFiltered.length-1); instList.positionViewAtIndex(root.instNav, ListView.Contain); e.accepted=true }
                 else if(e.key===Qt.Key_Up){ root.instNav=Math.max(root.instNav-1,0); instList.positionViewAtIndex(root.instNav, ListView.Contain); e.accepted=true }
@@ -772,7 +850,7 @@ FloatingWindow {
                             TextField {
                                 id: searchField
                                 Layout.fillWidth: true
-                                placeholderText: "Search pacman + AUR…  (e.g. firefox, neovim)"
+                                placeholderText: "Search pacman + AUR…  (Esc unfocus • D installs hovered)"
                                 placeholderTextColor: colors.alpha(colors.outline, 0.45)
                                 color: colors.foreground
                                 font.family: colors.fontSans; font.pixelSize: 12
@@ -780,10 +858,12 @@ FloatingWindow {
                                 selectByMouse: true
                                 onTextChanged: { root.query=text; searchDebounce.restart() }
                                 Keys.onPressed: function(e){
-                                    if(e.key===Qt.Key_Escape){ root.open=false; e.accepted=true }
+                                    if(e.key===Qt.Key_Escape){ card.forceActiveFocus(); e.accepted=true }
+                                    else if(e.key===Qt.Key_Tab){ card.forceActiveFocus(); e.accepted=true }
                                     else if(e.key===Qt.Key_Down){ if(root.searchResults.length>0){ root.searchNav=Math.min(root.searchNav+1, root.searchResults.length-1); searchList.positionViewAtIndex(root.searchNav, ListView.Contain); e.accepted=true } }
                                     else if(e.key===Qt.Key_Up){ if(root.searchResults.length>0){ root.searchNav=Math.max(root.searchNav-1,0); searchList.positionViewAtIndex(root.searchNav, ListView.Contain); e.accepted=true } }
                                     else if(e.key===Qt.Key_Return || e.key===Qt.Key_Enter || e.key===Qt.Key_Space){ var p=root.searchResults[root.searchNav]; if(p){ root.toggleSelect(p)} else if(root.searchResults.length>0) root.toggleSelect(root.searchResults[0]); e.accepted=true }
+                                    else if(e.key===Qt.Key_D && e.modifiers===Qt.ControlModifier){ var dd=root.searchResults[root.searchNav]; if(dd) root.quickInstall(dd); else if(root.searchResults.length>0) root.quickInstall(root.searchResults[0]); e.accepted=true }
                                 }
                             }
                             // spinner / clear
@@ -806,7 +886,7 @@ FloatingWindow {
                     RowLayout {
                         Layout.fillWidth: true
                         spacing: 8
-                        Text { text: root.searching ? "Searching…" : root.query.trim()==="" ? "Type to search official repos + AUR" : root.searchResults.length+" results  •  click checkbox to queue"; color: colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 9; Layout.fillWidth:true; elide: Text.ElideRight }
+                        Text { text: root.searching ? "Searching…" : root.query.trim()==="" ? "Type to search official + AUR  •  Esc unfocuses for D  •  / refocuses" : root.searchResults.length+" results  •  Esc unfocus  •  D quick-installs hovered  •  sizes auto-load"; color: colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 9; Layout.fillWidth:true; elide: Text.ElideRight }
                         Text { visible: root.selectedList.length>0; text: root.selectedList.length+" queued → Queue tab"; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold }
                     }
 
@@ -825,7 +905,7 @@ FloatingWindow {
                             required property var modelData
                             required property int index
                             width: searchList.width
-                            height: 64
+                            height: 70
                             radius: 12
                             color: modelData.name && root.isSelected(modelData.name) ? colors.alpha(colors.primary, 0.14) : index===root.searchNav ? colors.alpha(colors.primary, 0.08) : maS.containsMouse ? colors.alpha(colors.surfaceVariant, 0.28) : colors.alpha(colors.surface, 0.45)
                             border.width:1
@@ -849,13 +929,14 @@ FloatingWindow {
                                     RowLayout {
                                         Layout.fillWidth: true
                                         spacing: 8
-                                        Text { text: modelData.name; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.Bold; elide: Text.ElideRight; Layout.fillWidth: false }
+                                        Text { text: modelData.name; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 12; font.weight: Font.Bold; elide: Text.ElideRight; Layout.fillWidth: false }
                                         Text { text: modelData.version; color: colors.alpha(colors.outline, 0.7); font.family: colors.fontSans; font.pixelSize: 9 }
                                         Rectangle {
-                                            visible: (sizeMap[modelData.name]||"")!==""
-                                            Layout.preferredWidth: sTxt.implicitWidth+10; Layout.preferredHeight: 18; radius: 9
-                                            color: colors.alpha(colors.outline,0.10)
-                                            Text { id: sTxt; anchors.centerIn: parent; text: sizeMap[modelData.name]||""; color: colors.alpha(colors.outline,0.75); font.family: colors.fontSans; font.pixelSize: 8 }
+                                            visible: (sizeMap[modelData.name]||"")!=="" || sizeProcOff.running || sizeProcAur.running
+                                            Layout.preferredWidth: sTxt.implicitWidth+12; Layout.preferredHeight: 20; radius: 10
+                                            color: (sizeMap[modelData.name]||"")!=="" ? colors.alpha(colors.primary, 0.14) : colors.alpha(colors.outline, 0.08)
+                                            border.width:1; border.color: (sizeMap[modelData.name]||"")!=="" ? colors.alpha(colors.primary, 0.30) : colors.alpha(colors.outline, 0.15)
+                                            Text { id: sTxt; anchors.centerIn: parent; text: sizeMap[modelData.name]||"…"; color: (sizeMap[modelData.name]||"")!=="" ? colors.primary : colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold }
                                         }
                                         Rectangle {
                                             Layout.preferredWidth: srcTxt.implicitWidth+10; Layout.preferredHeight: 18; radius: 9
@@ -875,6 +956,15 @@ FloatingWindow {
                                 }
                             }
                             MouseArea { id: maS; anchors.fill: parent; hoverEnabled:true; onEntered: if(root.allowHover) root.searchNav=index; onPositionChanged: if(!root.allowHover) root.allowHover=true; onClicked: root.toggleSelect(modelData) }
+                            Rectangle {
+                                anchors.right: parent.right; anchors.rightMargin: 10; anchors.verticalCenter: parent.verticalCenter
+                                width: 34; height: 28; radius: 9
+                                visible: index===root.searchNav || maS.containsMouse
+                                color: dMa.containsMouse ? colors.alpha(colors.primary, 0.30) : colors.alpha(colors.primary, 0.16)
+                                border.width:1; border.color: colors.alpha(colors.primary, 0.45)
+                                Text { anchors.centerIn: parent; text: "D"; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 10; font.weight: Font.ExtraBold }
+                                MouseArea { id: dMa; anchors.fill: parent; hoverEnabled:true; onClicked: function(e){ root.quickInstall(modelData) } }
+                            }
                         }
                         Text {
                             anchors.centerIn: parent
@@ -931,7 +1021,8 @@ FloatingWindow {
                                 spacing: 10
                                 Rectangle { width: 8; height: 8; radius:4; color: modelData.source==="AUR"?colors.tertiary:colors.secondary }
                                 Text { text: modelData.name; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.Bold; Layout.fillWidth: true; elide: Text.ElideRight }
-                                Text { text: modelData.version; color: colors.alpha(colors.outline,0.65); font.family: colors.fontSans; font.pixelSize: 9 }
+                                Text { text: sizeMap[modelData.name]||modelData.version; color: colors.alpha(colors.outline,0.65); font.family: colors.fontSans; font.pixelSize: 9 }
+                                Text { visible: (sizeMap[modelData.name]||"")!==""; text: modelData.version; color: colors.alpha(colors.outline,0.45); font.family: colors.fontSans; font.pixelSize: 8 }
                                 Rectangle {
                                     width: 44; height: 22; radius: 8
                                     color: modelData.source==="AUR"?colors.alpha(colors.tertiary,0.18):colors.alpha(colors.secondary,0.18)
@@ -961,23 +1052,29 @@ FloatingWindow {
                         // animated progress bar — glass + shimmer
                         Rectangle {
                             Layout.fillWidth: true
-                            height: 10
-                            radius: 5
+                            height: 12
+                            radius: 6
                             color: colors.alpha(colors.surfaceVariant, 0.35)
                             clip: true
                             Rectangle {
                                 id: progFill
                                 width: parent.width * root.installPct
                                 height: parent.height
-                                radius: 5
-                                color: colors.primary
+                                radius: 6
+                                color: root.installFailed ? colors.error : colors.primary
                                 Behavior on width { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
                             }
                         }
                         RowLayout {
                             Layout.fillWidth: true
-                            Text { text: root.installMode==="install" ? "Installing…" : root.installMode==="remove" ? "Removing…" : "Updating…"; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 10; font.weight: Font.Bold; Layout.fillWidth:true }
-                            Text { text: Math.round(root.installPct*100)+"%"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 10; font.weight: Font.Bold }
+                            Text { text: root.installDone ? (root.installFailed ? "Failed" : "Done") : (root.installPhase!=="" ? root.installPhase : (root.installMode==="install" ? "Installing…" : root.installMode==="remove" ? "Removing…" : "Updating…")); color: root.installFailed ? colors.error : colors.primary; font.family: colors.fontSans; font.pixelSize: 10; font.weight: Font.Bold; Layout.fillWidth:true; elide: Text.ElideRight }
+                            Text { text: root.installDone && !root.installFailed ? "100%" : Math.round(root.installPct*100)+"%"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 10; font.weight: Font.Bold }
+                        }
+                        Text {
+                            visible: root.installDone && root.installSummary!==""
+                            text: root.installSummary
+                            color: root.installFailed ? colors.error : colors.alpha(colors.outline, 0.75)
+                            font.family: colors.fontSans; font.pixelSize: 9; Layout.fillWidth: true; wrapMode: Text.Wrap
                         }
                         // live log — scrollable, monospaced, not raw fullscreen dump
                         Rectangle {
@@ -1014,11 +1111,18 @@ FloatingWindow {
                             Layout.fillWidth: true
                             Item { Layout.fillWidth: true }
                             Rectangle {
-                                visible: !installProc.running
+                                visible: installProc.running
                                 width: 90; height: 28; radius: 9
+                                color: cancelMa.containsMouse ? colors.alpha(colors.error,0.18) : colors.alpha(colors.surface,0.6); border.width:1; border.color: colors.alpha(colors.error,0.4)
+                                Text { anchors.centerIn: parent; text: "Cancel"; color: colors.error; font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold }
+                                MouseArea { id: cancelMa; anchors.fill: parent; hoverEnabled:true; onClicked: installProc.running=false }
+                            }
+                            Rectangle {
+                                visible: !installProc.running
+                                width: 110; height: 28; radius: 9
                                 color: colors.alpha(colors.surface,0.6); border.width:1; border.color: colors.alpha(colors.outline,0.15)
-                                Text { anchors.centerIn: parent; text: "Close"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold }
-                                MouseArea { anchors.fill: parent; onClicked: {root.installing=false; root.installPct=0; root.installLog=""} }
+                                Text { anchors.centerIn: parent; text: root.installFailed ? "Dismiss" : "Done — Close"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold }
+                                MouseArea { anchors.fill: parent; onClicked: { if(!root.installFailed && root.installMode==="install") root.clearQueue(); root.installing=false; root.installDone=false; root.installFailed=false; root.installPct=0; root.installLog=""; root.installSummary=""; root.installPhase="" } }
                             }
                         }
                     }
@@ -1038,7 +1142,7 @@ FloatingWindow {
                             anchors.centerIn: parent
                             spacing: 8
                             Text { text: "󰄠"; color: root.selectedList.length===0?colors.alpha(colors.outline,0.6):colors.primary; font.family: colors.fontSans; font.pixelSize: 14 }
-                            Text { text: "Install  ("+root.selectedList.length+")"; color: root.selectedList.length===0?colors.alpha(colors.outline,0.6):colors.primary; font.family: colors.fontSans; font.pixelSize: 12; font.weight: Font.ExtraBold }
+                            Text { text: "Install  ("+root.selectedList.length+")"+(totalQueuedSizeStr ? "  •  "+totalQueuedSizeStr : ""); color: root.selectedList.length===0?colors.alpha(colors.outline,0.6):colors.primary; font.family: colors.fontSans; font.pixelSize: 12; font.weight: Font.ExtraBold }
                             Text { visible: root.selectedList.length>0; text: "— pacman for repo, yay for AUR"; color: colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 8 }
                         }
                         MouseArea { id: installMa; anchors.fill: parent; hoverEnabled:true; enabled: root.selectedList.length>0; onClicked: root.startInstall() }
@@ -1080,7 +1184,7 @@ FloatingWindow {
                                         if(e.key===Qt.Key_Down){ if(root.installedFiltered.length>0){ root.instNav=Math.min(root.instNav+1, root.installedFiltered.length-1); instList.positionViewAtIndex(root.instNav, ListView.Contain); e.accepted=true } }
                                         else if(e.key===Qt.Key_Up){ if(root.installedFiltered.length>0){ root.instNav=Math.max(root.instNav-1,0); instList.positionViewAtIndex(root.instNav, ListView.Contain); e.accepted=true } }
                                         else if(e.key===Qt.Key_Return || e.key===Qt.Key_Enter || e.key===Qt.Key_Space){ var r=root.installedFiltered[root.instNav]; if(r) root.toggleUninstall(r); e.accepted=true }
-                                        else if(e.key===Qt.Key_Escape){ root.open=false; e.accepted=true }
+                                        else if(e.key===Qt.Key_Escape || e.key===Qt.Key_Tab){ card.forceActiveFocus(); e.accepted=true }
                                     }
                                 }
                                 Text { visible: instField.text!==""; text: "󰅖"; color: colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 12; MouseArea { anchors.fill: parent; onClicked: instField.text="" } }
@@ -1121,8 +1225,9 @@ FloatingWindow {
                         Rectangle {
                             Layout.fillWidth: true; height: 8; radius: 4
                             color: colors.alpha(colors.surfaceVariant,0.35)
-                            Rectangle { width: parent.width*root.installPct; height: parent.height; radius:4; color: colors.error; Behavior on width { NumberAnimation { duration: 250 } } }
+                            Rectangle { width: parent.width*root.installPct; height: parent.height; radius:4; color: root.installFailed ? colors.error : colors.primary; Behavior on width { NumberAnimation { duration: 250 } } }
                         }
+                        Text { text: root.installDone ? (root.installFailed ? "Failed — "+root.installSummary : "Done — "+root.installSummary) : (root.installPhase!=="" ? root.installPhase+"  •  "+Math.round(root.installPct*100)+"%" : "Removing…"); color: root.installFailed ? colors.error : colors.primary; font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold; Layout.fillWidth: true; elide: Text.ElideRight }
                         Rectangle {
                             Layout.fillWidth: true; Layout.preferredHeight: 140; radius: 10
                             color: colors.alpha(colors.surface,0.6); border.width:1; border.color: colors.alpha(colors.outline,0.12)
@@ -1133,6 +1238,17 @@ FloatingWindow {
                                 ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
                                 onContentHeightChanged: if(contentHeight>height) contentY = Math.max(0, contentHeight-height)
                                 Text { id: rmLog; width: parent.width; text: root.installLog; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 9; wrapMode: Text.Wrap }
+                            }
+                        }
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Item { Layout.fillWidth: true }
+                            Rectangle {
+                                visible: !installProc.running
+                                width: 110; height: 28; radius: 9
+                                color: colors.alpha(colors.surface,0.6); border.width:1; border.color: colors.alpha(colors.outline,0.15)
+                                Text { anchors.centerIn: parent; text: root.installFailed ? "Dismiss" : "Done — Close"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold }
+                                MouseArea { anchors.fill: parent; onClicked: { root.uninstallMap=({}); root.installing=false; root.installDone=false; root.installFailed=false; root.installPct=0; root.installLog=""; root.installSummary=""; root.installPhase="" } }
                             }
                         }
                     }
@@ -1224,8 +1340,9 @@ FloatingWindow {
                         Rectangle {
                             Layout.fillWidth: true; height: 8; radius: 4
                             color: colors.alpha(colors.surfaceVariant,0.35)
-                            Rectangle { width: parent.width*root.installPct; height: parent.height; radius:4; color: colors.primary; Behavior on width { NumberAnimation { duration:250 } } }
+                            Rectangle { width: parent.width*root.installPct; height: parent.height; radius:4; color: root.installFailed ? colors.error : colors.primary; Behavior on width { NumberAnimation { duration:250 } } }
                         }
+                        Text { text: root.installDone ? (root.installFailed ? "Failed — "+root.installSummary : "Done — "+root.installSummary) : (root.installPhase!=="" ? root.installPhase+"  •  "+Math.round(root.installPct*100)+"%" : "Updating…"); color: root.installFailed ? colors.error : colors.primary; font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold; Layout.fillWidth: true; elide: Text.ElideRight }
                         Rectangle {
                             Layout.fillWidth: true; Layout.preferredHeight: 160; radius:10
                             color: colors.alpha(colors.surface,0.6); border.width:1; border.color: colors.alpha(colors.outline,0.12)
@@ -1237,6 +1354,17 @@ FloatingWindow {
                                 ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
                                 onContentHeightChanged: if(contentHeight>height) contentY=Math.max(0,contentHeight-height)
                                 Text { id: updLog; width: parent.width; text: root.installLog; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 9; wrapMode: Text.Wrap }
+                            }
+                        }
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Item { Layout.fillWidth: true }
+                            Rectangle {
+                                visible: !installProc.running
+                                width: 110; height: 28; radius: 9
+                                color: colors.alpha(colors.surface,0.6); border.width:1; border.color: colors.alpha(colors.outline,0.15)
+                                Text { anchors.centerIn: parent; text: root.installFailed ? "Dismiss" : "Done — Close"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold }
+                                MouseArea { anchors.fill: parent; onClicked: { root.updateSelected=({}); root.installing=false; root.installDone=false; root.installFailed=false; root.installPct=0; root.installLog=""; root.installSummary=""; root.installPhase="" } }
                             }
                         }
                     }
@@ -1326,7 +1454,7 @@ FloatingWindow {
 
             // footer hint
             Text {
-                text: "↑↓ navigate  •  Space/Enter toggle  •  Esc closes  •  Hyprland window — drag & float"
+                text: "Esc unfocus • D quick-install hovered • / search • Space toggle • Esc again closes"
                 color: colors.alpha(colors.outline, 0.42)
                 font.family: colors.fontSans; font.pixelSize: 8
                 Layout.alignment: Qt.AlignHCenter

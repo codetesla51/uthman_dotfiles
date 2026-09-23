@@ -11,12 +11,14 @@ with desaturation and slightly lower lightness to avoid eye strain on dark bg.
 
 import json
 import os
+import re
 import sys
 
 BASE_NEW = os.path.expanduser("~/.config/theme/current/matugen-base.json")
 BASE_OLD = os.path.expanduser("~/.config/omarchy/current/theme/matugen-base.json")
 BASE = BASE_NEW if os.path.exists(BASE_NEW) else BASE_OLD
 OUT = os.path.expanduser("~/.config/zed/themes/matugen.json")
+SETTINGS = os.path.expanduser("~/.config/zed/settings.json")
 
 
 def hex2rgb(hexv):
@@ -82,6 +84,14 @@ def hue_from(hexv, target_hue_deg, ds=-0.10, dl=-0.06):
 
 def c(color):
     return {"color": color, "font_style": None, "font_weight": None}
+
+
+def load_jsonc(path):
+    """Zed settings are JSONC (trailing commas). Strip those so stdlib parses."""
+    with open(path) as f:
+        text = f.read()
+    text = re.sub(r",(\s*[}\]])", r"\1", text)
+    return json.loads(text)
 
 
 def main():
@@ -310,6 +320,17 @@ def main():
         json.dump(theme, f, indent=2)
     print(f"Wrote {OUT}")
     print(f"  error={error_red} warning={warning_yellow} success={success_green}")
+
+    # Zed only reads theme files at startup, but it live-reloads
+    # settings.json — mirror the palette into theme_overrides so a
+    # running Zed re-skins on every wallpaper switch, no restart.
+    if os.path.exists(SETTINGS):
+        settings = load_jsonc(SETTINGS)
+        settings.setdefault("theme_overrides", {})["Matugen"] = style
+        with open(SETTINGS, "w") as f:
+            json.dump(settings, f, indent=2)
+            f.write("\n")
+        print(f"Mirrored palette into {SETTINGS} (theme_overrides.Matugen)")
 
 
 if __name__ == "__main__":

@@ -19,6 +19,38 @@ PanelWindow {
     readonly property bool open: root.hovered && root.hasPlayer
     readonly property string artUrl: root.hasPlayer ? root.hiResArt(root.player.trackArtUrl) : ""
 
+    // progressive art: paint the fast low-res original immediately, swap in
+    // hi-res the moment it arrives. A failed hi-res is invisible (low-res
+    // stays); only a dead original retries, then hides.
+    property string artSource: ""
+    property bool artDead: false
+    property int artAttempts: 0
+    function origArt() { return (root.hasPlayer && root.player.trackArtUrl) || "" }
+    onArtUrlChanged: { root.artDead = false; root.artAttempts = 0; root.artSource = root.origArt() }
+    Component.onCompleted: root.artSource = root.origArt()
+    Timer {
+        id: artRetry
+        interval: 2000
+        onTriggered: {
+            if (cardArt.status === Image.Ready) return
+            root.artAttempts += 1
+            root.artSource = ""
+            root.artSource = root.origArt()
+        }
+    }
+    // hidden hi-res preloader — never shown directly, only promotes artSource
+    Image {
+        id: hiResPreloader
+        visible: false
+        asynchronous: true
+        cache: true
+        source: root.artUrl
+        onStatusChanged: {
+            if (status === Image.Ready && source === root.artUrl && root.artUrl !== "")
+                root.artSource = root.artUrl
+        }
+    }
+
     // MPRIS hands us the URL the PARENT handed IT — and limusic (YoutubeMusic)
     // hands over a **w120-h120** / w84-h84 thumbnail, which is exactly why the
     // art looks soft the moment we fill a 300px card with it. Google's CDN
@@ -70,9 +102,10 @@ PanelWindow {
 
         // track art fills the card, sunk into the glass so the frost owns it
         Image {
-            visible: root.artUrl !== ""
+            id: cardArt
+            visible: root.artSource !== "" && !root.artDead
             anchors.fill: parent
-            source: root.artUrl
+            source: root.artSource
             sourceSize: Qt.size(640, 640)
             fillMode: Image.PreserveAspectCrop
             asynchronous: true
@@ -80,6 +113,11 @@ PanelWindow {
             mipmap: true
             smooth: true
             opacity: 0.75
+            onStatusChanged: {
+                if (status !== Image.Error) return
+                if (root.artAttempts >= 1) root.artDead = true
+                else artRetry.restart()
+            }
         }
 
         // overlay: top sheen for the glass read, then the scrim the text sits on

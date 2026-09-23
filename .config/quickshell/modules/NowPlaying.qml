@@ -17,6 +17,24 @@ Item {
     readonly property string artUrl: hasPlayer ? (player.trackArtUrl || "") : ""
     property color trackColor: colors.primary
 
+    // remote art flakes (slow CDN / 404) — imperative source so retries
+    // actually reload; dead art falls back to the music icon, never a blank box
+    property string artSource: ""
+    property bool artDead: false
+    property int artAttempts: 0
+    onArtUrlChanged: { root.artSource = root.artUrl; root.artDead = false; root.artAttempts = 0 }
+    Component.onCompleted: root.artSource = root.artUrl
+    Timer {
+        id: artRetry
+        interval: 2000
+        onTriggered: {
+            if (artImg.status === Image.Ready) return
+            root.artAttempts += 1
+            root.artSource = ""
+            root.artSource = root.artUrl
+        }
+    }
+
     implicitWidth: row.implicitWidth + 8
     implicitHeight: 30
 
@@ -51,12 +69,16 @@ Item {
         width: 32; height: 32
         visible: false
         asynchronous: true
+        cache: true
         fillMode: Image.PreserveAspectCrop
-        source: root.artUrl
+        source: root.artSource
         onStatusChanged: {
             if (status === Image.Ready) {
                 artCanvas.pendingUrl = source
                 artCanvas.loadImage(source)
+            } else if (status === Image.Error) {
+                if (root.artAttempts >= 2) root.artDead = true
+                else artRetry.restart()
             }
         }
     }
@@ -79,7 +101,7 @@ Item {
         // (Rectangle.clip is unreliable for rounding — same OpacityMask trick as the card)
         Rectangle {
             id: artFrame
-            visible: root.hasPlayer && player.trackArtUrl !== ""
+            visible: root.hasPlayer && player.trackArtUrl !== "" && !root.artDead
             width: 26; height: 26; radius: 6
             color: colors.alpha(colors.surface, 0.5)
             border.width: 1
@@ -89,14 +111,17 @@ Item {
                 maskSource: Rectangle { width: artFrame.width; height: artFrame.height; radius: artFrame.radius }
             }
             Image {
+                id: artImg
                 anchors.fill: parent
-                source: root.hasPlayer ? player.trackArtUrl : ""
+                source: root.artSource
                 fillMode: Image.PreserveAspectCrop
                 asynchronous: true
+                cache: true
+                onStatusChanged: if (status === Image.Error && root.artAttempts >= 2) root.artDead = true
             }
         }
         Rectangle {
-            visible: !root.hasPlayer || player.trackArtUrl === ""
+            visible: !root.hasPlayer || player.trackArtUrl === "" || root.artDead
             width: 26; height: 26; radius: 6
             color: colors.alpha(colors.surface, 0.5)
             border.width: 1

@@ -1,8 +1,8 @@
 import Quickshell
 import QtQuick
 
-// Bell button — far-right of bar. Shows unread history count badge,
-// click toggles the notification center drawer.
+// Bell button — right edge of the center island. A quiet dot marks unread
+// notifications; the fixed footprint keeps the bar from shifting with counts.
 Item {
     id: root
 
@@ -15,7 +15,7 @@ Item {
     scale: hovered ? 1.12 : 1
     Behavior on scale { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
 
-    implicitWidth: label.implicitWidth + (historyCount > 0 ? 26 : 24)
+    implicitWidth: label.implicitWidth + 24
     implicitHeight: 30
 
     // flat inside the trapezium — state lives in icon color only
@@ -34,23 +34,25 @@ Item {
             font.pixelSize: 13
         }
 
-        // count badge
-        Rectangle {
+        // quiet unread marker — solid dot with an outer cut ring, punched
+        // out of the bell's top-right corner (ring sits outside the dot)
+        Item {
             visible: root.historyCount > 0
-            anchors { right: parent.right; top: parent.top; margins: 3 }
-            width: countText.implicitWidth + 6
-            height: 12
-            radius: 6
-            color: colors.error
+            anchors { right: label.right; top: label.top; rightMargin: -4; topMargin: -4 }
+            width: 10
+            height: 10
 
-            Text {
-                id: countText
-                anchors.centerIn: parent
-                text: root.historyCount > 99 ? "99" : root.historyCount
+            Rectangle {
+                anchors.fill: parent
+                radius: 5
                 color: colors.background
-                font.family: colors.fontSans
-                font.pixelSize: 8
-                font.weight: Font.Bold
+            }
+            Rectangle {
+                anchors.centerIn: parent
+                width: 6
+                height: 6
+                radius: 3
+                color: colors.error
             }
         }
 

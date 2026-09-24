@@ -163,6 +163,78 @@ PanelWindow {
                     onToggleRequested: ntfy.togglePanel()
                 }
             }
+
+            // island number line — short ruled segment under the row, two glow
+            // dots travelling within the island. No MouseArea: clicks pass through.
+            Item {
+                id: islandLine
+                anchors { left: parent.left; right: parent.right; top: parent.top }
+                anchors.leftMargin: island.inset + 8
+                anchors.rightMargin: island.inset + 8
+                anchors.topMargin: 0
+                height: 11
+                clip: true
+
+                Rectangle {
+                    y: 5
+                    width: parent.width
+                    height: 1
+                    color: colors.alpha(colors.primary, 0.30)
+                }
+
+                Repeater {
+                    model: Math.max(0, Math.floor(parent.width / 28))
+                    Rectangle {
+                        x: index * 28
+                        y: 4
+                        width: 1
+                        height: 3
+                        color: colors.alpha(colors.primary, 0.30)
+                    }
+                }
+
+                Repeater {
+                    model: 2
+                    Item {
+                        width: 11
+                        height: 11
+
+                        Rectangle {
+                            anchors.centerIn: parent
+                            width: 11
+                            height: 11
+                            radius: 5.5
+                            color: colors.alpha(colors.primary, 0.10)
+                        }
+                        Rectangle {
+                            anchors.centerIn: parent
+                            width: 7
+                            height: 7
+                            radius: 3.5
+                            color: colors.alpha(colors.primary, 0.25)
+                        }
+                        Rectangle {
+                            anchors.centerIn: parent
+                            width: 4
+                            height: 4
+                            radius: 2
+                            color: colors.alpha(colors.primary, 0.95)
+                        }
+
+                        SequentialAnimation on x {
+                            loops: Animation.Infinite
+                            PauseAnimation { duration: index * 1500 }
+                            NumberAnimation {
+                                from: -11
+                                to: islandLine.width + 11
+                                duration: 3000
+                                easing.type: Easing.Linear
+                            }
+                            PauseAnimation { duration: (1 - index) * 1500 }
+                        }
+                    }
+                }
+            }
         }
 
         RowLayout {
@@ -193,5 +265,6 @@ PanelWindow {
             }
             Battery { colors: bar.colors; onOpenRequested: batPanel.open = !batPanel.open }
         }
+
     }
 }

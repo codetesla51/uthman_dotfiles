@@ -37,8 +37,20 @@ PanelWindow {
         for(var i=0;i<walls.length;i++) if(walls[i].path===path) { currentIndex=i; break }
         applyTimer.restart()
     }
-    function next(){ if(walls.length===0) return; currentIndex = (currentIndex+1)%walls.length; }
-    function prev(){ if(walls.length===0) return; currentIndex = (currentIndex-1+walls.length)%walls.length; }
+    function next(){ if(walls.length===0) return; currentIndex = (currentIndex+1)%walls.length; userMoved() }
+    function prev(){ if(walls.length===0) return; currentIndex = (currentIndex-1+walls.length)%walls.length; userMoved() }
+    // auto-apply: moving the highlight applies the wallpaper once you stop
+    // (650ms debounce — matugen recolor is too heavy to fire per tick).
+    // Only user moves arm it; list reloads and programmatic sets never do.
+    property bool autoArmed: false
+    function userMoved(){ autoArmed = true; autoTimer.restart() }
+    Timer { id: autoTimer; interval: 650; onTriggered: {
+        if(!root.open || !root.autoArmed) return
+        root.autoArmed = false
+        if(root.walls.length===0) return
+        var w = root.walls[root.currentIndex]
+        if(w && w.path !== root.currentWall) root.setWall(w.path)
+    } }
 
     // ---- orbital ring ----
     readonly property int slots: Math.min(walls.length, 12)
@@ -73,16 +85,17 @@ PanelWindow {
     }
     Process {
         id: listProc
-        command: ["sh","-c","(find ~/dotfiles/wallpapers \\( -type f -o -type l \\) \\( -name '*.jpg' -o -name '*.png' -o -name '*.jpeg' \\) 2>/dev/null; find ~/.config/theme/current -maxdepth 1 -type f \\( -name '*.jpg' -o -name '*.png' -o -name '*.jpeg' \\) 2>/dev/null; find ~/.config/theme/themes/snow_black/backgrounds -type f \\( -name '*.jpg' -o -name '*.png' -o -name '*.jpeg' \\) 2>/dev/null; find ~/.config/omarchy/themes/snow_black/backgrounds -type f \\( -name '*.jpg' -o -name '*.png' -o -name '*.jpeg' \\) 2>/dev/null; find ~/.config/omarchy/backgrounds -maxdepth 1 -type f \\( -name '*.jpg' -o -name '*.png' \\) 2>/dev/null) | head -n 300"]
+        command: ["sh","-c","(find ~/dotfiles/wallpapers \\( -type f -o -type l \\) \\( -name '*.jpg' -o -name '*.png' -o -name '*.jpeg' \\) 2>/dev/null; find ~/.config/theme/current -maxdepth 1 -type f \\( -name '*.jpg' -o -name '*.png' -o -name '*.jpeg' \\) 2>/dev/null; find ~/.config/theme/themes/snow_black/backgrounds -type f \\( -name '*.jpg' -o -name '*.png' -o -name '*.jpeg' \\) 2>/dev/null; find ~/.config/omarchy/themes/snow_black/backgrounds -type f \\( -name '*.jpg' -o -name '*.png' -o -name '*.jpeg' \\) 2>/dev/null; find ~/.config/omarchy/backgrounds -maxdepth 1 -type f \\( -name '*.jpg' -o -name '*.png' \\) 2>/dev/null) | head -n 300 | $HOME/.local/bin/mkthumbs"]
         stdout: StdioCollector {
             waitForEnd: true
             onStreamFinished: {
                 var lines=text.trim().split("\n")
                 var arr=[]
                 for(var i=0;i<lines.length;i++){
-                    var p=lines[i].trim()
+                    var parts=lines[i].trim().split("|")
+                    var p=(parts.length>1 ? parts[1] : parts[0]).trim()
                     if(!p) continue
-                    arr.push({name:p.split("/").pop(), path:p})
+                    arr.push({name:p.split("/").pop(), path:p, thumb:(parts.length>2 && parts[2]) ? parts[2] : p})
                 }
                 root.walls=arr
             }
@@ -199,10 +212,13 @@ PanelWindow {
                         }
                         Image {
                             anchors.fill: parent
-                            source: walls.length>0 ? "file://"+walls[currentIndex].path : ""
+                            property bool thumbFailed: false
+                            source: walls.length>0 ? ("file://" + (thumbFailed ? walls[currentIndex].path : (walls[currentIndex].thumb || walls[currentIndex].path))) : ""
+                            onStatusChanged: if (status === Image.Error && !thumbFailed) thumbFailed = true
                             fillMode: Image.PreserveAspectCrop
                             asynchronous: true
                             cache: true
+                            sourceSize: Qt.size(600, 600)
                         }
                     }
                     // border
@@ -263,10 +279,13 @@ PanelWindow {
                             Image {
                                 anchors.fill: parent
                                 opacity: 0.87
-                                source: root.walls.length > 0 ? "file://" + root.walls[sat.wIdx].path : ""
+                                property bool thumbFailed: false
+                                source: root.walls.length > 0 ? ("file://" + (thumbFailed ? root.walls[sat.wIdx].path : (root.walls[sat.wIdx].thumb || root.walls[sat.wIdx].path))) : ""
+                                onStatusChanged: if (status === Image.Error && !thumbFailed) thumbFailed = true
                                 fillMode: Image.PreserveAspectCrop
                                 asynchronous: true
                                 cache: true
+                                sourceSize: Qt.size(128, 128)
                             }
                         }
                         Shape {
@@ -284,7 +303,7 @@ PanelWindow {
                             id: maS
                             anchors.fill: parent
                             hoverEnabled: true
-                            onClicked: root.currentIndex = sat.wIdx
+                            onClicked: { root.currentIndex = sat.wIdx; root.userMoved() }
                             onDoubleClicked: root.setWall(root.walls[sat.wIdx].path)
                         }
                     }

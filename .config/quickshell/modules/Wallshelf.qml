@@ -167,7 +167,7 @@ FloatingWindow {
                     if(parts.length < 3 || !parts[1]) continue
                     var p = parts[1]
                     var name = p.split("/").pop()
-                    files.push({path: p, name: name, size: parts[2]})
+                    files.push({path: p, name: name, thumb: parts[2] || p, size: parts[3] || parts[2]})
                 }
                 root.localFiles = files
                 root.scanningLocal = false
@@ -176,7 +176,7 @@ FloatingWindow {
     }
     function refreshLocal(){
         root.scanningLocal = true
-        localProc.command = ["sh","-c","find '"+root.linkDir+"' '"+root.cacheDir+"' -type f \\( -iname '*.jpg' -o -iname '*.png' -o -iname '*.jpeg' -o -iname '*.webp' \\) -printf '%T@|%p|%k\\n' 2>/dev/null | sort -rn | head -n 300"]
+        localProc.command = ["sh","-c","find '"+root.linkDir+"' '"+root.cacheDir+"' -type f \\( -iname '*.jpg' -o -iname '*.png' -o -iname '*.jpeg' -o -iname '*.webp' \\) -printf '%T@|%p\\n' 2>/dev/null | sort -rn | head -n 300 | $HOME/.local/bin/mkthumbs"]
         localProc.running = true
     }
 
@@ -663,6 +663,7 @@ FloatingWindow {
                         fillMode: Image.PreserveAspectCrop
                         asynchronous: true
                         cache: true
+                        sourceSize: Qt.size(360, 260)
                     }
                     // selected tint
                     Rectangle {
@@ -726,16 +727,19 @@ FloatingWindow {
                 model: root.localFiles
                 delegate: Rectangle {
                     width: GridView.view.cellWidth - 8; height: 122; radius: 12
+                    property bool thumbFailed: false
                     color: colors.alpha(colors.background, 0.55)
                     border.width: 1; border.color: colors.alpha(colors.outline, 0.12)
                     scale: localMa.containsMouse ? 1.05 : 1.0
                     Behavior on scale { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
                     Image {
                         anchors.fill: parent; anchors.margins: 3
-                        source: "file://" + modelData.path
+                        source: thumbFailed ? ("file://" + modelData.path) : ("file://" + modelData.thumb)
+                        onStatusChanged: if (status === Image.Error && !thumbFailed) thumbFailed = true
                         fillMode: Image.PreserveAspectCrop
                         asynchronous: true
-                        cache: false
+                        cache: true
+                        sourceSize: Qt.size(360, 260)
                     }
                     Rectangle {
                         anchors.left: parent.left; anchors.bottom: parent.bottom; anchors.margins: 7
@@ -787,6 +791,7 @@ FloatingWindow {
                     fillMode: Image.PreserveAspectFit
                     asynchronous: true
                     cache: false
+                    sourceSize: Qt.size(1920, 1080)
                 }
                 RowLayout {
                     visible: root.pvTags.length > 0

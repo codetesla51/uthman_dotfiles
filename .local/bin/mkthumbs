@@ -1,0 +1,34 @@
+#!/bin/sh
+# mkthumbs — ensure tiny JPEG thumbnails exist for wallpaper files.
+# Reads "mtime|path" lines on stdin (or paths as args), prints
+# "mtime|path|thumb|sizeK" with thumb=$HOME/.cache/wallshelf/thumbs/<sha1>.jpg
+# Skips work when the thumb is newer than the source, so repeat runs are instant.
+set -u
+thumbdir="$HOME/.cache/wallshelf/thumbs"
+mkdir -p "$thumbdir" 2>/dev/null
+gen_one() {
+    mtime="$1"; p="$2"
+    [ -n "$p" ] || return 0
+    id=$(printf '%s' "$p" | sha1sum | cut -d' ' -f1)
+    thumb="$thumbdir/$id-720.jpg"
+    if [ ! -s "$thumb" ] || [ "$p" -nt "$thumb" ]; then
+        vipsthumbnail "$p" --size 720 -o "$thumb[Q=85,strip]" >/dev/null 2>&1 || thumb=""
+    fi
+    if [ -n "$thumb" ] && [ -s "$thumb" ]; then
+        size=$(($(stat -c '%s' "$p" 2>/dev/null || echo 0) / 1024))
+        printf '%s|%s|%s|%s\n' "$mtime" "$p" "$thumb" "$size"
+    else
+        size=$(($(stat -c '%s' "$p" 2>/dev/null || echo 0) / 1024))
+        printf '%s|%s||%s\n' "$mtime" "$p" "$size"
+    fi
+}
+if [ "$#" -gt 0 ]; then
+    for p in "$@"; do gen_one "" "$p"; done
+else
+    while IFS= read -r line; do
+        case "$line" in
+            *"|"*) gen_one "${line%%|*}" "${line#*|}" ;;
+            *) gen_one "" "$line" ;;
+        esac
+    done
+fi

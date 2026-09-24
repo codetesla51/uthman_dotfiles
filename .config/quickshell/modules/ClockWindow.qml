@@ -12,10 +12,10 @@ FloatingWindow {
     property bool open: false
 
     title: "Clock"
-    implicitWidth: 300
-    implicitHeight: 230
-    minimumSize: Qt.size(280, 210)
-    maximumSize: Qt.size(320, 250)
+    implicitWidth: 360
+    implicitHeight: 320
+    minimumSize: Qt.size(340, 300)
+    maximumSize: Qt.size(390, 350)
     color: "transparent"
     visible: root.open
 
@@ -29,6 +29,11 @@ FloatingWindow {
 
     function dayFrac() {
         return (clock.hours * 3600 + clock.minutes * 60 + clock.seconds) / 86400
+    }
+    function hourFill(i) {
+        if (i < clock.hours) return 1
+        if (i > clock.hours) return 0
+        return (clock.minutes * 60 + clock.seconds) / 3600
     }
     function dayPct() {
         return Math.floor(root.dayFrac() * 100)
@@ -44,10 +49,24 @@ FloatingWindow {
         var m = Math.floor((total % 3600) / 60)
         return h + "h " + (m < 10 ? "0" + m : m) + "m left"
     }
-    function hourFill(i) {
-        if (i < clock.hours) return 1
-        if (i > clock.hours) return 0
-        return (clock.minutes * 60 + clock.seconds) / 3600
+    function yearPct() {
+        var n = new Date()
+        var start = new Date(n.getFullYear(), 0, 1)
+        var end = new Date(n.getFullYear() + 1, 0, 1)
+        return Math.floor((n - start) / (end - start) * 100)
+    }
+    function monthFill(i) {
+        var n = new Date()
+        var m = n.getMonth()
+        if (i < m) return 1
+        if (i > m) return 0
+        var dim = new Date(n.getFullYear(), m + 1, 0).getDate()
+        return n.getDate() / dim
+    }
+    function yearLeft() {
+        var n = new Date()
+        var end = new Date(n.getFullYear(), 11, 31, 23, 59, 59)
+        return Math.ceil((end - n) / 86400000)
     }
 
     Rectangle {
@@ -100,32 +119,7 @@ FloatingWindow {
                         font.weight: Font.Medium
                     }
                 }
-                Rectangle {
-                    Layout.alignment: Qt.AlignVCenter
-                    width: 26
-                    height: 26
-                    radius: 13
-                    color: closeMa.containsMouse ? colors.alpha(colors.primary, 0.2) : colors.alpha(colors.primary, 0.15)
-                    border.width: 1
-                    border.color: colors.alpha(colors.primary, 0.3)
-                    scale: closeMa.containsMouse ? 1.06 : 1.0
-                    Behavior on scale { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
-                    Text {
-                        anchors.centerIn: parent
-                        text: "󰅖"
-                        color: colors.primary
-                        font.family: colors.fontSans
-                        font.pixelSize: 12
-                    }
-                    MouseArea {
-                        id: closeMa
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        onClicked: root.open = false
-                    }
-                }
             }
-
             Rectangle { Layout.fillWidth: true; height: 1; color: colors.alpha(colors.outline, 0.12) }
 
             RowLayout {
@@ -136,7 +130,7 @@ FloatingWindow {
                     text: root.hhmm
                     color: colors.primary
                     font.family: "Iceberg"
-                    font.pixelSize: 38
+                    font.pixelSize: 44
                     font.weight: Font.Normal
                     font.letterSpacing: 2
                     Layout.alignment: Qt.AlignVCenter
@@ -238,6 +232,70 @@ FloatingWindow {
                 }
                 Text {
                     text: root.leftStr()
+                    color: colors.tertiary
+                    font.family: colors.fontSans
+                    font.pixelSize: 10
+                    font.weight: Font.ExtraBold
+                    Layout.alignment: Qt.AlignHCenter
+                }
+            }
+
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: 5
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 6
+                    Text {
+                        text: "YEAR — " + root.now.getFullYear()
+                        color: colors.alpha(colors.outline, 0.55)
+                        font.family: colors.fontSans
+                        font.pixelSize: 7
+                        font.weight: Font.Bold
+                        font.letterSpacing: 1.3
+                        Layout.alignment: Qt.AlignVCenter
+                    }
+                    Item { Layout.fillWidth: true }
+                    Text {
+                        text: "YEAR " + root.yearPct() + "%"
+                        color: colors.alpha(colors.primary, 0.75)
+                        font.family: colors.fontSans
+                        font.pixelSize: 7
+                        font.weight: Font.Bold
+                        Layout.alignment: Qt.AlignVCenter
+                    }
+                }
+                RowLayout {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 12
+                    spacing: 2
+                    Repeater {
+                        model: 12
+                        delegate: Item {
+                            required property int index
+                            readonly property real f: root.monthFill(index)
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            Rectangle {
+                                anchors.fill: parent
+                                radius: 3
+                                color: colors.alpha(colors.outline, 0.12)
+                            }
+                            Rectangle {
+                                anchors.left: parent.left
+                                anchors.right: parent.right
+                                anchors.bottom: parent.bottom
+                                height: parent.height * f
+                                radius: 3
+                                visible: f > 0
+                                color: index < root.now.getMonth() ? colors.primary : colors.tertiary
+                                opacity: index < root.now.getMonth() ? 0.85 : 1.0
+                            }
+                        }
+                    }
+                }
+                Text {
+                    text: root.yearLeft() + " DAYS LEFT"
                     color: colors.tertiary
                     font.family: colors.fontSans
                     font.pixelSize: 10

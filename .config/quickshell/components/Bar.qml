@@ -268,7 +268,6 @@ PanelWindow {
                 onToggleDndRequested: ntfy.toggleDnd()
             }
             Memory { colors: bar.colors; onOpenRequested: sysMon.open = true }
-            Temp { colors: bar.colors }
             Cpu { colors: bar.colors; onOpenRequested: sysMon.open = true }
             Network {
                 colors: bar.colors

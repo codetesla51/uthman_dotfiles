@@ -23,8 +23,8 @@ FloatingWindow {
 
     // ---------- verified Nerd Font glyphs (AGENTS section 2) ----------
     readonly property var glyphs: ({
-        arch: "󰌃", kernel: "󰒅", cpu: "󰻠", mem: "󰍛",
-        gpu: "󰎮", pkg: "󰏖", clock: "󰅐", dl: "󰇚", ul: "󰕒"
+        arch: "", kernel: "󰘚", cpu: "󰻠", mem: "󰍛",
+        gpu: "󰢮", pkg: "󰏖", clock: "󰅐", dl: "󰇚", ul: "󰕒"
     })
     readonly property var accents: [colors.primary, colors.secondary, colors.tertiary]
 
@@ -59,8 +59,8 @@ FloatingWindow {
     Rectangle {
         id: card
         anchors.fill: parent
-        radius: 18
-        color: colors.alpha(colors.background, 0.92)
+        radius: 16
+        color: colors.alpha(colors.surface, 0.4)
         border.width: 1
         border.color: colors.alpha(colors.outline, 0.12)
         scale: root.open ? 1 : 0.96
@@ -73,13 +73,28 @@ FloatingWindow {
             anchors.margins: 16
             spacing: 10
 
-            // -- header: who + uptime chip --
+            // -- header: chip icon + who + uptime chip --
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 8
+                spacing: 10
+                Rectangle {
+                    width: 26
+                    height: 26
+                    radius: 13
+                    color: colors.alpha(colors.primary, 0.15)
+                    border.width: 1
+                    border.color: colors.alpha(colors.primary, 0.3)
+                    Text {
+                        anchors.centerIn: parent
+                        text: root.glyphs.arch
+                        color: colors.primary
+                        font.family: colors.fontSans
+                        font.pixelSize: 13
+                    }
+                }
                 Text {
-                    text: root.glyphs.arch + "  uthman@" + (root.host !== "" ? root.host : "arch")
-                    color: colors.primary
+                    text: "uthman@" + (root.host !== "" ? root.host : "arch")
+                    color: colors.foreground
                     font.family: colors.fontSans
                     font.pixelSize: 15
                     font.weight: Font.ExtraBold

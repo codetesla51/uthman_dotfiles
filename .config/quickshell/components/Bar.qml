@@ -164,8 +164,8 @@ PanelWindow {
                 }
             }
 
-            // island number line — short ruled segment under the row, two glow
-            // dots travelling within the island. No MouseArea: clicks pass through.
+            // island number line — short ruled segment crowning the island, two
+            // glow dots travelling within it. No MouseArea: clicks pass through.
             Item {
                 id: islandLine
                 anchors { left: parent.left; right: parent.right; top: parent.top }
@@ -179,7 +179,13 @@ PanelWindow {
                     y: 5
                     width: parent.width
                     height: 1
-                    color: colors.alpha(colors.primary, 0.30)
+                    gradient: Gradient {
+                        orientation: Gradient.Horizontal
+                        GradientStop { position: 0.0; color: "transparent" }
+                        GradientStop { position: 0.18; color: colors.alpha(colors.primary, 0.30) }
+                        GradientStop { position: 0.82; color: colors.alpha(colors.primary, 0.30) }
+                        GradientStop { position: 1.0; color: "transparent" }
+                    }
                 }
 
                 Repeater {
@@ -189,7 +195,7 @@ PanelWindow {
                         y: 4
                         width: 1
                         height: 3
-                        color: colors.alpha(colors.primary, 0.30)
+                        color: colors.alpha(colors.primary, 0.16)
                     }
                 }
 
@@ -199,26 +205,35 @@ PanelWindow {
                         width: 11
                         height: 11
 
+                        // trailer dot runs dimmer — comet feel, lead dot burns
+                        readonly property real glow: index === 0 ? 1.0 : 0.55
+
                         Rectangle {
                             anchors.centerIn: parent
                             width: 11
                             height: 11
                             radius: 5.5
-                            color: colors.alpha(colors.primary, 0.10)
+                            color: colors.alpha(colors.primary, 0.10 * glow)
                         }
                         Rectangle {
                             anchors.centerIn: parent
                             width: 7
                             height: 7
                             radius: 3.5
-                            color: colors.alpha(colors.primary, 0.25)
+                            color: colors.alpha(colors.primary, 0.25 * glow)
                         }
                         Rectangle {
                             anchors.centerIn: parent
                             width: 4
                             height: 4
                             radius: 2
-                            color: colors.alpha(colors.primary, 0.95)
+                            color: colors.alpha(colors.primary, 0.95 * glow)
+
+                            SequentialAnimation on opacity {
+                                loops: Animation.Infinite
+                                NumberAnimation { from: 0.7; to: 1.0; duration: 900; easing.type: Easing.InOutSine }
+                                NumberAnimation { from: 1.0; to: 0.7; duration: 900; easing.type: Easing.InOutSine }
+                            }
                         }
 
                         SequentialAnimation on x {

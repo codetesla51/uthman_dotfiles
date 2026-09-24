@@ -10,7 +10,9 @@ Rectangle {
 
     Palette { id: pal }
 
-    property int sessionIndex: sessionModel.lastIndex
+    // sessionModel fills in asynchronously. Bind through count so the default
+    // resolves to the real last session once it arrives instead of a stale -1.
+    property int sessionIndex: sessionModel.count > 0 ? sessionModel.lastIndex : 0
     property string failMsg: ""
     property bool loggingIn: false
     property string loginUser: userModel.lastUser !== "" ? userModel.lastUser : "uthman"
@@ -27,10 +29,10 @@ Rectangle {
             pwField.focus = true
             return
         }
-        // sessionModel loads async — clamp to a valid index at click time
-        // so a correct password can't hang on a stale index.
+        // clamp to a valid index at click time so a correct password can't hang
+        // on a stale index (or on an empty model)
         if (sessionIndex < 0 || sessionIndex >= sessionModel.count)
-            sessionIndex = sessionModel.lastIndex
+            sessionIndex = sessionModel.count > 0 ? sessionModel.lastIndex : 0
         failMsg = ""
         loggingIn = true
         sddm.login(root.loginUser, pwField.text, sessionIndex)
@@ -207,43 +209,67 @@ Rectangle {
         height: 76
         color: "transparent"
 
-        Row {
+        // SESSION caption — direct child of the bar, so anchoring is legal here
+        Text {
+            id: sessCaption
             anchors.left: parent.left
             anchors.leftMargin: 28
             anchors.verticalCenter: parent.verticalCenter
-            spacing: 10
+            text: "SESSION"
+            color: root.faint
+            font.family: "Iceland"
+            font.pixelSize: 14
+            font.weight: Font.Bold
+            font.letterSpacing: 2
+        }
 
-            Text {
-                anchors.verticalCenter: parent.verticalCenter
-                text: "SESSION"
-                color: root.faint
-                font.family: "Iceland"
-                font.pixelSize: 14
-                font.weight: Font.Bold
-                font.letterSpacing: 2
-            }
-            Repeater {
-                model: sessionModel
-                delegate: Rectangle {
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: sessLabel.implicitWidth + 28
-                    height: 34
-                    radius: 17
-                    color: index === root.sessionIndex ? Qt.rgba(pal.primary.r, pal.primary.g, pal.primary.b, 0.2) : "transparent"
-                    border.width: 1
-                    border.color: index === root.sessionIndex ? pal.primary : root.edge
-                    Text {
-                        id: sessLabel
-                        anchors.centerIn: parent
-                        text: model.name
-                        color: index === root.sessionIndex ? pal.primary : root.dim
-                        font.family: "Iceland"
-                        font.pixelSize: 16
-                    }
-                    MouseArea {
-                        anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: root.sessionIndex = index
+        // Session picker. Deliberately a ListView and not Row + Repeater:
+        // a Row refuses to lay out children that use anchors (it logs
+        // "Row will not function"), which is what pushed the old pills out of
+        // place and made every click on them miss.
+        ListView {
+            id: sessList
+            anchors.left: sessCaption.right
+            anchors.leftMargin: 14
+            anchors.right: powerBox.left
+            anchors.rightMargin: 18
+            anchors.verticalCenter: parent.verticalCenter
+            height: 40
+            orientation: ListView.Horizontal
+            spacing: 10
+            model: sessionModel
+            currentIndex: root.sessionIndex
+            boundsBehavior: Flickable.StopAtBounds
+            clip: true
+            onCurrentIndexChanged: positionViewAtIndex(currentIndex, ListView.Contain)
+
+            delegate: Rectangle {
+                width: sessLabel.implicitWidth + 28
+                height: 38
+                radius: 19
+                color: index === root.sessionIndex
+                       ? Qt.rgba(pal.primary.r, pal.primary.g, pal.primary.b, 0.2)
+                       : (sessMouse.containsMouse ? root.field : "transparent")
+                border.width: 1
+                border.color: index === root.sessionIndex ? pal.primary : root.edge
+                Behavior on color { ColorAnimation { duration: 120 } }
+
+                Text {
+                    id: sessLabel
+                    anchors.centerIn: parent
+                    text: model.name
+                    color: index === root.sessionIndex ? pal.primary : root.dim
+                    font.family: "Iceland"
+                    font.pixelSize: 16
+                }
+                MouseArea {
+                    id: sessMouse
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: {
+                        root.sessionIndex = index
+                        pwField.focus = true
                     }
                 }
             }
@@ -274,46 +300,6 @@ Rectangle {
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
                     onClicked: sddm.suspend()
-                }
-            }
-            Rectangle {
-                width: 40
-                height: 40
-                radius: 20
-                color: rebMouse.containsMouse ? root.field : "transparent"
-                Text {
-                    anchors.centerIn: parent
-                    text: ""
-                    color: root.dim
-                    font.family: "FiraCode Nerd Font"
-                    font.pixelSize: 18
-                }
-                MouseArea {
-                    id: rebMouse
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: sddm.reboot()
-                }
-            }
-            Rectangle {
-                width: 40
-                height: 40
-                radius: 20
-                color: powMouse.containsMouse ? root.field : "transparent"
-                Text {
-                    anchors.centerIn: parent
-                    text: ""
-                    color: root.dim
-                    font.family: "FiraCode Nerd Font"
-                    font.pixelSize: 18
-                }
-                MouseArea {
-                    id: powMouse
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: sddm.powerOff()
                 }
             }
         }

@@ -2,6 +2,9 @@
 # shot [area|full|ocr] — screenshot via grim+slurp. Area (default) saves to
 # ~/Pictures/Screenshots and copies to clipboard. Full skips selection.
 # OCR pipes through tesseract.
+# Never stack overlays: repeated/stuck keypresses used to re-run this script,
+# each one leaving a waiting slurp on screen until the display went white.
+pkill -x slurp 2>/dev/null; sleep 0.1
 DIR=~/Pictures/Screenshots
 mkdir -p "$DIR"
 if [[ "$1" == "full" ]]; then
@@ -9,7 +12,10 @@ if [[ "$1" == "full" ]]; then
   grim "$FILE" && wl-copy < "$FILE" && notify-send -u low 'Screenshot saved' "$FILE" 2>/dev/null
   exit $?
 fi
-GEO=$(slurp) || exit 0
+# Hard cap: a region pick that is never completed must not sit on screen forever
+# (it grabs the pointer, so the whole session is unusable until it dies).
+GEO=$(timeout 20 slurp) || exit 0
+[ -n "$GEO" ] || exit 0
 if [[ "$1" == "ocr" ]]; then
   command -v tesseract >/dev/null || { notify-send -u critical 'shot' 'tesseract not installed' 2>/dev/null; exit 1; }
   grim -g "$GEO" - | tesseract stdin stdout 2>/dev/null | wl-copy && { notify-send -u low 'shot' 'Text copied to clipboard' 2>/dev/null; exit 0; }

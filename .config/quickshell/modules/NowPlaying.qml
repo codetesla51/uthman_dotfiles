@@ -83,16 +83,6 @@ Item {
         }
     }
 
-    // pill backdrop tinted by track color — no border, no visible edges
-    Rectangle {
-        anchors.fill: row
-        anchors.leftMargin: -12; anchors.rightMargin: -12
-        anchors.topMargin: -8; anchors.bottomMargin: -4
-        radius: 16
-        color: root.hasPlayer ? colors.alpha(root.trackColor, 0.09) : "transparent"
-        Behavior on color { ColorAnimation { duration: 400; easing.type: Easing.OutCubic } }
-    }
-
     RowLayout {
         id: row
         anchors.centerIn: parent

@@ -1,69 +1,24 @@
 # dotfiles
 
-Arch Linux, Hyprland, Quickshell, Matugen. One rice where the wallpaper sets the palette and everything else follows.
+Arch Linux, Hyprland, Quickshell, Matugen. Wallpaper sets the palette, everything else follows.
 
 ![screenshot](./assets/screenshots/screenshot-1.png)
 ![screenshot](./assets/screenshots/screenshot-2.png)
 ![screenshot](./assets/screenshots/screenshot-3.png)
 
-## What this is
-
-A complete, daily-driven Arch Linux desktop. Hyprland composes, a Quickshell shell written from scratch draws the bar and all panels, and Matugen recolors everything from the wallpaper. Companion daemons (screen time tracker, phone bridge, QEMU launcher) live in their own repos and plug into the shell. Everything here is stow-managed, so a fresh machine reproduces with two commands.
-
-## Why it exists
-
-Stock Wayland parts (Waybar, SwayNC, rofi menus, static SDDM themes) each solve one slice and never agree on theme, behavior, or keybinds. This repo replaces that patchwork with one QML codebase and one palette pipeline. A new feature means one new module file, not a new daemon plus a new config format plus a new theming hack. It is opinionated on purpose: one compositor, one shell language, one theme source.
-
-## Why not use the alternatives
-
-Omarchy (which this setup borrows vendor defaults from) is excellent if you want a maintained, batteries-included Hyprland layer. These dotfiles are the opposite trade: full ownership of every pixel and keybind, at the cost of maintaining it yourself. If you want Waybar, take Waybar. It has a larger community and more widgets. The shell here exists because Waybar cannot do a trapezoid island with album-art UI, hover transport controls, or panels that share one live palette object. If you want a prebuilt rice, this is not that. It is a working system with sharp edges, documented below.
-
-## Features
-
-* Glassmorphic top bar with a trapezoid island (clock, NowPlaying with hover transport, notification bell) flanked by system pills. `SUPER ALT SPACE` flips it into a floating capsule
-* 50 Quickshell modules: wifi manager with speedtest, system monitor, package manager, PDF library, wallpaper storefront, ADB phone bridge, power menu, clipboard manager, control center, QEMU-adjacent helpers, and more
-* Own notification stack: the shell owns `org.freedesktop.Notifications`, with toasts, action buttons, screenshot saving, a history drawer, DND, and per-app Phosphor icons
-* Screen time tracker (separate Go daemon): samples the focused window, keeps a heatmap, top apps, and week bars. The control center reads the same daemon, so both views always agree
-* Wallpaper-driven theming: one `matugen image` call recolors the bar, apps, login screen, editor, and terminal with no restarts
-* WatchCat hotspot watchdog (per-process metering against a daily cap, notify-only)
-* Snapper timeline snapshots with a documented bare-metal rollback path
-* Phosphor icons plus Nerd Font glyphs, verified against the installed font files
-* Every panel closes with `Esc`; every list moves with arrow keys
-
-## Quick start
-
-You need Arch Linux, `yay`, and a GPU with working Wayland drivers.
-
-Install the dependencies. The installer warns about anything missing but does not abort, so you can install in rounds and re-run it.
+## Fresh machine
 
 ```bash
 yay -S hyprland quickshell kitty matugen starship zsh lsd zoxide fzf \
        cava btop rofi swayosd hyprlock hypridle hyprsunset sddm \
        xdg-desktop-portal-hyprland uwsm cliphist wl-clipboard \
        ttf-jetbrainsmono-nerd ttf-firacode-nerd inter-font
-```
-
-Clone and install. `install.sh` symlinks every config into place with stow, so `~/dotfiles` stays the single source of truth and every edit is git-tracked.
-
-```bash
 git clone https://github.com/codetesla51/uthman_dotfiles.git ~/dotfiles
-cd ~/dotfiles
-chmod +x install.sh
-./install.sh
+cd ~/dotfiles && chmod +x install.sh && ./install.sh
+set-wallpaper ~/Pictures/your-wallpaper.jpg
 ```
 
-Set a wallpaper. This one command swaps the image and regenerates the entire palette live across bar, apps, and login screen.
-
-```bash
-set-wallpaper ~/Pictures/your-wallpaper.jpg   # ~/.local/bin/set-wallpaper
-getTheme                                      # ~/.local/bin/getTheme, prints current palette
-```
-
-Log out, pick Hyprland at the SDDM greeter, log in. `SUPER+K` opens the searchable keybind cheatsheet if you get lost.
-
-> [!WARNING]
-> Reboot once after the first install. The SDDM theme installs to `/usr/share/sddm/themes/` (needs root) and several user services only start on a fresh login.
-
+Reboot once after the first install (SDDM theme lands in `/usr/share/sddm/themes/`, user services start on fresh login). Lost after that: `SUPER+K` is the keybind cheatsheet.
 ## How theming works
 
 Matugen reads the wallpaper, builds a Material You palette, and fills variables in each template. One command recolors everything with no restarts:
@@ -333,11 +288,3 @@ reboot
 `@home` is a separate subvolume, so even a full `@` rollback never touches your files. If you only need one file back, mount `@home` and copy it to a USB stick without chrooting at all.
 
 **Know before it happens.** Root TTY login needs the root password; if root was never given one (locked `!` account), Ladder 1's `passwd` path doesn't exist and you go straight to Ladder 2. Worth verifying now, while nothing is broken: `sudo passwd -S root` should not report `L`.
-
-## Credits
-
-* [Matugen](https://github.com/InioX/matugen): Material You generation
-* [Hyprland](https://hyprland.org) · [Quickshell](https://quickshell.outfoxxed.me) · [Walker](https://github.com/abenz1267/walker)
-* [Starship](https://starship.rs) · [FiraCode / JetBrainsMono Nerd Fonts](https://www.nerdfonts.com) · [Phosphor Icons](https://phosphoricons.com)
-* [Limine](https://limine-bootloader.org) · [Snapper](http://snapper.io) · [Wallhaven](https://wallhaven.cc) (wallpaper source)
-* [Bubble Tea](https://charm.sh) for the QEMU launcher TUI

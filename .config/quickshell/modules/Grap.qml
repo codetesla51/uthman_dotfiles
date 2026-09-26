@@ -413,6 +413,7 @@ FloatingWindow {
                                 else if (e.key === Qt.Key_Return || e.key === Qt.Key_Enter) { root.openResult(root.results[root.selected]); e.accepted = true }
                                 else if (e.key === Qt.Key_Y && (e.modifiers & Qt.ControlModifier)) { root.copyResult(root.results[root.selected]); e.accepted = true }
                                 else if (e.key === Qt.Key_O && (e.modifiers & Qt.ControlModifier)) { root.openInZed(root.results[root.selected]); e.accepted = true }
+                                else if (e.key === Qt.Key_U && (e.modifiers & Qt.ControlModifier)) { searchField.text = ""; root.queueSearch(""); e.accepted = true }
                                 else if (e.key === Qt.Key_PageDown) { root.selected = Math.min(root.selected + 5, root.results.length - 1); root.hovered = -1; resultList.positionViewAtIndex(root.selected, ListView.Contain); e.accepted = true }
                                 else if (e.key === Qt.Key_PageUp) { root.selected = Math.max(root.selected - 5, 0); root.hovered = -1; resultList.positionViewAtIndex(root.selected, ListView.Contain); e.accepted = true }
                             }
@@ -437,6 +438,17 @@ FloatingWindow {
                         }
                     }
                 }
+            }
+
+            // meta whisper — counts + scope + time; collapses when empty
+            Text {
+                visible: root.status !== ""
+                Layout.fillWidth: true
+                text: root.status
+                color: colors.alpha(colors.outline, 0.6)
+                font.family: colors.fontSans; font.pixelSize: 9
+                elide: Text.ElideRight
+                maximumLineCount: 1
             }
 
             // toolbar — scope chips (left) · option chips (right)

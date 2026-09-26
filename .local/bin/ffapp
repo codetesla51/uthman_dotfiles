@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# ffapp — open a URL in a chromeless per-site Firefox window (Chrome --app style).
+# usage: ffapp <name> <url> [title-regex]
+# Each app gets its own profile under ~/.mozilla/firefox/apps.<name>, so apps
+# keep separate cookies and run beside the main browser and each other
+# (--no-remote: a second process on the same profile would hit the profile
+# lock, so sharing one profile across apps is not an option).
+# If the app is already open (and title-regex matches its window), focus it
+# instead of opening a duplicate.
+set -euo pipefail
+
+APP=${1:?usage: ffapp <name> <url> [title-regex]}
+URL=${2:?usage: ffapp <name> <url> [title-regex]}
+MATCH=${3:-}
+
+PROFDIR="$HOME/.mozilla/firefox/apps.$APP"
+
+focus_match() {
+    [ -n "$MATCH" ] || return 1
+    command -v hyprctl >/dev/null || return 1
+    command -v jq >/dev/null || return 1
+    local addr
+    addr=$(hyprctl clients -j 2>/dev/null \
+        | jq -r --arg m "$MATCH" '.[] | select((.title // "") | test($m; "i")) | .address' \
+        | head -1)
+    [ -n "$addr" ] && [ "$addr" != "null" ] || return 1
+    hyprctl dispatch focuswindow "address:$ADDR" >/dev/null
+}
+
+# Profile locked = this app already has an instance. Never launch into a
+# locked profile (Firefox would pop a profile-in-use error); focus instead.
+# A lock with no firefox process behind it is stale — launch and let Firefox
+# clear it.
+if [ -L "$PROFDIR/lock" ] && pgrep -x firefox >/dev/null; then
+    focus_match || true
+    exit 0
+fi
+focus_match && exit 0
+
+# First run: provision the profile. userChrome.css must be a real file, not a
+# symlink — Firefox's sandboxed UI process silently skips symlinked chrome.
+mkdir -p "$PROFDIR/chrome"
+cp -f "$HOME/firefox/app-userChrome.css" "$PROFDIR/chrome/userChrome.css"
+if [ ! -f "$PROFDIR/user.js" ]; then
+    { cat "$HOME/firefox/user.js"
+      printf '%s\n' 'user_pref("browser.shell.checkDefaultBrowser", false);'
+      printf '%s\n' 'user_pref("browser.aboutwelcome.enabled", false);'
+      printf '%s\n' 'user_pref("browser.sessionstore.resume_from_crash", false);'
+    } > "$PROFDIR/user.js"
+fi
+
+exec uwsm-app -- firefox --no-remote -profile "$PROFDIR" --new-window "$URL"

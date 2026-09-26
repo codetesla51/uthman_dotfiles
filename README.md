@@ -28,7 +28,7 @@ Omarchy (which this setup borrows vendor defaults from) is excellent if you want
 * WatchCat hotspot watchdog (per-process metering against a daily cap, notify-only)
 * Snapper timeline snapshots with a documented bare-metal rollback path
 * Phosphor icons plus Nerd Font glyphs, verified against the installed font files
-* Every panel closes with `Esc`, every list moves with `hjkl` or arrows
+* Every panel closes with `Esc`; every list moves with arrow keys
 
 ## Quick start
 
@@ -147,7 +147,7 @@ Overlays are `PanelWindow` layer-shell popups. Larger tools are regular Hyprland
 | `PhoneBridge` | ADB phone bridge: drag-send files, clipboard push, remote browser + pull, ring, screenshot | `SUPER ALT+K` |
 | `ThemePanel` | Wallpaper slideshow with preview, applies via `set-wallpaper` | `SUPER+E` |
 | `PowerMenu` | Lock, logout, suspend, reboot, shutdown | `SUPER+Escape` |
-| `ClipboardPanel` | Clipboard history with image previews (cliphist backend) | `SUPER CTRL+V` |
+| `ClipboardPanel` | Clipboard manager (Hyprland window): history with image previews (cliphist backend) plus a Sticky shelf of pinned snippets in LocalStorage, fired with `SUPER ALT 1-9` | `SUPER CTRL+V` (window), `SUPER CTRL+P` (pin current clipboard from anywhere) |
 | `KeybindsPanel` | Searchable, executable keybind cheatsheet | `SUPER+K` |
 | `FastFetchWindow` | System info card | `SUPER+N` |
 | `ScreenTime` | App-usage heatmap and top apps, Go daemon backend | `SUPER ALT+T` |
@@ -156,9 +156,8 @@ Overlays are `PanelWindow` layer-shell popups. Larger tools are regular Hyprland
 | `ClockWindow` | Detached clock card | bar clock click |
 | `MediaOsd` | Volume/brightness/mic overlay | Fn keys |
 | `PassPrompt` | System password prompt (`SUDO_ASKPASS` backend) | privileged panel actions |
-| `QuickNotes` | Scratch idea capture | IPC |
 
-Retired but still on disk, unwired: `CalendarPanel` (pomodoro moved into ControlCenter) and the standalone `AudioVisualizer` window (visualizer lives in ControlCenter now). `WhatsApp` is PARKED, not retired: kept with session intact but unwired and unused over ban caution. WhatsApp pings come from PhoneBridge shade polling meanwhile. `NetRate` and `WeatherIcon` are shared helpers, not surfaces. If you rewire a retired file, update `PLUGINS.md` and the cheatsheet entry with it.
+Unwired but still on disk: `QuickNotes` (scratch idea capture; nothing instantiates it, so its `notes` target is never served and the panel never opens) and `WhatsApp` (PARKED, not retired: kept with session intact but commented out of `Bar.qml` and unused over ban caution; WhatsApp pings come from PhoneBridge shade polling meanwhile). `NetRate` and `WeatherIcon` are shared helpers, not surfaces. If you rewire an unwired file, update `PLUGINS.md` and the cheatsheet entry with it.
 
 `PhoneBridge.md` next to the module documents the ADB backend contract. `PLUGINS.md` is the registry of every module, its IPC target, and its bind. Keep both current when you change a module.
 
@@ -207,9 +206,9 @@ The daemon samples in 12s chunks, flags "hot" processes (over 500 KB/s for 10s+)
 | `SUPER+E` / `SUPER+I` / `SUPER ALT+N` | Theme / packages / PDF library |
 | `SUPER CTRL+Space` | Wallpaper store |
 | `SUPER ALT+P` / `T` / `K` / `D` / `Y` | Control center / screen time / phone / drives / WatchCat |
-| `SUPER ALT+O` / `SUPER ALT+`,` | Workspace overview / notification center |
+| `SUPER ALT+O` / `SUPER+,` | Workspace overview / notification center |
 | `SUPER+,` / `SUPER SHIFT+,` | Notifications / do-not-disturb |
-| `SUPER CTRL+V` / `SUPER+N` | Clipboard / system info |
+| `SUPER CTRL+V` / `SUPER CTRL+P` / `SUPER+N` | Clipboard window / pin clipboard to sticky shelf / system info |
 | `SUPER ALT+Space` / `SUPER SHIFT+Space` | Island style / bar sides |
 | `SUPER+Escape` / `SUPER SHIFT+Q/R` | Power menu / shutdown / reboot |
 | `SUPER+arrows`, `SUPER+1-0` | Focus, workspaces |
@@ -219,7 +218,7 @@ The full list lives in `.config/hypr/bindings.conf` (vendored defaults alongside
 
 ## Helper scripts
 
-`~/.local/bin/` (stowed from this repo) holds the CLI surface: `set-wallpaper`, `getTheme`, `shot`, `record`, `utpdf`, `filemanager`, `vol`, `bright`, `nightlight`, `lock`, `phone-pair`, `qemu-launch`, and more. These are what binds, panels, and muscle memory call.
+`~/.local/bin/` (stowed from this repo) holds the CLI surface: `set-wallpaper`, `getTheme`, `shot`, `record`, `utpdf`, `vol`, `bright`, `nightlight`, `lock`, `phone-pair`, `qemu-launch`, and more. These are what binds, panels, and muscle memory call.
 
 ## Structure
 
@@ -243,7 +242,7 @@ The full list lives in `.config/hypr/bindings.conf` (vendored defaults alongside
 │   ├── matugen/              # config.toml + templates (btop, gtk, rofi, nvim, zed, sddm, zathura, …)
 │   ├── kitty/kitty.conf      # sources theme/current/kitty.conf
 │   ├── systemd/user/         # helper services
-├── .local/bin/             # set-wallpaper, getTheme, record, shot, filemanager, …
+├── .local/bin/             # set-wallpaper, getTheme, record, shot, …
 ├── sddm/elarun-custom/     # login theme source → /usr/share/sddm/themes/
 ├── firefox/user.js         # enables userChrome.css theming
 ├── wallpapers/             # local only, git-ignored, never committed
@@ -305,6 +304,35 @@ snapper create -d "before i break things"
 snapper undochange 82..0 /etc          # un-break one directory
 snapper status 82..0                  # preview what changed first
 ```
+
+## Locked out (passwords, login, screen lock)
+
+Three ladders, in order. This disk is **not encrypted** (plain btrfs on `/dev/sda2`, ESP on `/dev/sda1`), so a forgotten password is an inconvenience, never data loss. There is no scenario here where snapshots can't reach your files as long as you can boot an ISO.
+
+**Ladder 1: a TTY.** `CTRL ALT F3` through `F6` (SDDM owns `tty1`, so do not fight it there). Log in as your user or as root and fix it directly:
+
+```bash
+passwd uthman                  # forgotten user password (as root)
+loginctl unlock-sessions       # stuck at the hyprlock screen
+snapper rollback 80            # broke it with an update, see above
+```
+
+SDDM login-looping but the TTY works almost always means the Hyprland session dies on start: check `~/.config/hypr/` for the last edit and `journalctl --user -xe` for the crash line before rolling anything back.
+
+**Ladder 2: no TTY at all, or both passwords lost.** Boot an Arch ISO. `sudo` on this machine requires a password (no `NOPASSWD` backdoor outside the scoped `nethogs` rule), so if no password works anywhere, the ISO is the backstop, not a trick:
+
+```bash
+# from the ISO (by-UUID so a renamed disk can't fool you):
+mount -o subvol=@ /dev/disk/by-uuid/600e2481-86c4-40a8-9c2a-a287f3fc1c64 /mnt
+mount -o subvol=@home /dev/disk/by-uuid/600e2481-86c4-40a8-9c2a-a287f3fc1c64 /mnt/home
+arch-chroot /mnt
+passwd uthman                  # or: snapper list + snapper rollback 80
+reboot
+```
+
+`@home` is a separate subvolume, so even a full `@` rollback never touches your files. If you only need one file back, mount `@home` and copy it to a USB stick without chrooting at all.
+
+**Know before it happens.** Root TTY login needs the root password; if root was never given one (locked `!` account), Ladder 1's `passwd` path doesn't exist and you go straight to Ladder 2. Worth verifying now, while nothing is broken: `sudo passwd -S root` should not report `L`.
 
 ## Credits
 

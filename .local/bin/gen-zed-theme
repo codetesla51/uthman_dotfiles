@@ -86,6 +86,22 @@ def c(color):
     return {"color": color, "font_style": None, "font_weight": None}
 
 
+# ── Translucency ────────────────────────────────────────────────
+# Zed's window surface is transparent (background.appearance below), so these
+# alpha bytes let Hyprland's decoration.blur show through. Only backgrounds get
+# an alpha; text, borders, and terminal.ansi.* stay fully opaque or they render
+# as washed-out smears.
+BG_A = "b3"      # base surfaces — 70%, you see a bit of wallpaper
+LOW_A = "d9"     # overlays on the base — 85%, keeps them readable
+RAISED_A = "b3"  # raised surfaces — 70%, lighter so they still read as raised
+SELECT_A = "cc"  # search/read-highlight — 80%
+
+
+def a(hexv, alpha):
+    """Append an alpha byte to a wallpaper-derived color (Zed accepts #rrggbbaa)."""
+    return hexv + alpha
+
+
 def load_jsonc(path):
     """Zed settings are JSONC (trailing commas). Strip those so stdlib parses."""
     with open(path) as f:
@@ -159,12 +175,16 @@ def main():
     bright_white = fg
 
     style = {
-        "background": bg,
+        # Non-opaque makes Zed's Wayland surface translucent (renderer alpha),
+        # so Hyprland's decoration.blur shows through. Zed's own "blurred"
+        # mode needs the KDE blur protocol and is a no-op here.
+        "background.appearance": "transparent",
+        "background": a(bg, BG_A),
         "border": border,
         "border.variant": select,
-        "elevated_surface.background": raised,
-        "surface.background": raised,
-        "element.background": raised,
+        "elevated_surface.background": a(raised, RAISED_A),
+        "surface.background": a(raised, RAISED_A),
+        "element.background": a(raised, RAISED_A),
         "element.hover": select,
         "element.active": primary_c,
         "element.selected": select,
@@ -172,83 +192,84 @@ def main():
         "text.muted": muted,
         "text.placeholder": faint,
         "text.accent": primary,
-        "status_bar.background": bg,
-        "title_bar.background": bg,
-        "title_bar.inactive_background": low,
-        "toolbar.background": bg,
-        "tab_bar.background": bg,
-        "tab.inactive_background": bg,
-        "tab.active_background": raised,
-        "panel.background": bg,
+        "status_bar.background": a(bg, BG_A),
+        "title_bar.background": a(bg, BG_A),
+        "title_bar.inactive_background": a(low, LOW_A),
+        "toolbar.background": a(bg, BG_A),
+        "tab_bar.background": a(bg, BG_A),
+        "tab.inactive_background": a(bg, BG_A),
+        "tab.active_background": a(raised, RAISED_A),
+        "panel.background": a(bg, BG_A),
         "panel.focused_border": primary,
         "pane.focused_border": primary,
         "scrollbar.thumb.background": faint,
         "scrollbar.thumb.hover_background": muted,
         "scrollbar.thumb.border": border,
-        "scrollbar.track.background": bg,
+        "scrollbar.track.background": a(bg, BG_A),
         # ── Diagnostics & git – fixed semantics ──
         "error": error_red,
-        "error.background": low,
+        "error.background": a(low, LOW_A),
         "error.border": error_red,
         "warning": warning_yellow,
-        "warning.background": low,
+        "warning.background": a(low, LOW_A),
         "warning.border": warning_yellow,
         "hint": hint_green,
-        "hint.background": low,
+        "hint.background": a(low, LOW_A),
         "hint.border": hint_green,
         "info": info_blue,
-        "info.background": low,
+        "info.background": a(low, LOW_A),
         "info.border": info_blue,
         "success": success_green,
-        "success.background": low,
+        "success.background": a(low, LOW_A),
         "success.border": success_green,
         "created": success_green,
-        "created.background": low,
+        "created.background": a(low, LOW_A),
         "created.border": success_green,
         "modified": warning_yellow,
-        "modified.background": low,
+        "modified.background": a(low, LOW_A),
         "modified.border": warning_yellow,
         "deleted": error_red,
-        "deleted.background": low,
+        "deleted.background": a(low, LOW_A),
         "deleted.border": error_red,
         "renamed": info_blue,
-        "renamed.background": low,
+        "renamed.background": a(low, LOW_A),
         "renamed.border": info_blue,
         "conflict": warning_yellow,
-        "conflict.background": low,
+        "conflict.background": a(low, LOW_A),
         "conflict.border": warning_yellow,
         "ignored": muted,
-        "ignored.background": bg,
+        "ignored.background": a(bg, BG_A),
         "ignored.border": faint,
         "hidden": muted,
-        "hidden.background": bg,
+        "hidden.background": a(bg, BG_A),
         "hidden.border": faint,
         "unreachable": muted,
-        "unreachable.background": bg,
+        "unreachable.background": a(bg, BG_A),
         "unreachable.border": faint,
         "predictive": faint,
-        "predictive.background": low,
+        "predictive.background": a(low, LOW_A),
         "predictive.border": faint,
         # ── Editor ──
         "editor.foreground": fg,
-        "editor.background": bg,
-        "editor.gutter.background": bg,
-        "editor.subheader.background": bg,
-        "editor.active_line.background": low,
-        "editor.highlighted_line.background": raised,
+        "editor.background": a(bg, BG_A),
+        "editor.gutter.background": a(bg, BG_A),
+        "editor.subheader.background": a(bg, BG_A),
+        "editor.active_line.background": a(low, LOW_A),
+        "editor.highlighted_line.background": a(raised, RAISED_A),
         "editor.line_number": muted,
         "editor.active_line_number": primary,
         "editor.wrap_guide": faint,
         "editor.active_wrap_guide": muted,
-        "editor.document_highlight.read_background": select,
+        "editor.document_highlight.read_background": a(select, SELECT_A),
         "editor.document_highlight.write_background": primary_c,
         "link_text.hover": primary,
-        "search.match_background": select,
+        "search.match_background": a(select, SELECT_A),
         # ── Terminal ──
-        "terminal.background": bg,
+        "terminal.background": a(bg, BG_A),
         "terminal.foreground": fg,
         "terminal.bright_foreground": fg,
         "terminal.dim_foreground": muted,
+        # ansi colors are text, never translucent
         "terminal.ansi.black": terminal_black,
         "terminal.ansi.bright_black": bright_black,
         "terminal.ansi.red": terminal_red,

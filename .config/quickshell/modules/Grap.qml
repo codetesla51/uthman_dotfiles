@@ -334,55 +334,16 @@ FloatingWindow {
             anchors.margins: 14
             spacing: 8
 
-            // header — glyph chip + wordmark + hit counter + status + close
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: 10
-                Rectangle {
-                    Layout.preferredWidth: 26; Layout.preferredHeight: 26; radius: 13
-                    color: colors.alpha(colors.primary, 0.15)
-                    border.width: 1; border.color: colors.alpha(colors.primary, 0.3)
-                    Text { anchors.centerIn: parent; text: root.glyphs.search; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 12 }
-                    Layout.alignment: Qt.AlignVCenter
-                }
-                Text { text: "GRAP"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 12; font.weight: Font.ExtraBold; font.letterSpacing: 1.3; Layout.alignment: Qt.AlignVCenter }
-                // hit counter — ExtraBold number plus a letter-spaced label
-                Rectangle {
-                    visible: root.results.length > 0
-                    Layout.preferredHeight: 20
-                    Layout.preferredWidth: cntRow.implicitWidth + 16
-                    radius: 10
-                    color: colors.alpha(colors.primary, 0.12)
-                    border.width: 1; border.color: colors.alpha(colors.primary, 0.28)
-                    Layout.alignment: Qt.AlignVCenter
-                    Row {
-                        id: cntRow
-                        anchors.centerIn: parent
-                        spacing: 4
-                        Text { text: root.results.length + (root.truncated ? "+" : ""); color: colors.primary; font.family: colors.fontSans; font.pixelSize: 10; font.weight: Font.ExtraBold; anchors.verticalCenter: parent.verticalCenter }
-                        Text { text: "HITS"; color: colors.alpha(colors.outline, 0.65); font.family: colors.fontSans; font.pixelSize: 7; font.weight: Font.Bold; font.letterSpacing: 1.3; anchors.verticalCenter: parent.verticalCenter }
-                    }
-                }
-                Item { Layout.fillWidth: true }
-                Text { text: root.status; color: colors.alpha(colors.outline, 0.6); font.family: colors.fontSans; font.pixelSize: 9; Layout.alignment: Qt.AlignVCenter }
-                Rectangle {
-                    width: 28; height: 28; radius: 14
-                    color: closeMa.containsMouse ? colors.alpha(colors.surfaceVariant, 0.6) : colors.alpha(colors.surface, 0.6)
-                    border.width: 1; border.color: colors.alpha(colors.outline, 0.15)
-                    Text { anchors.centerIn: parent; text: root.glyphs.close; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 12 }
-                    MouseArea { id: closeMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.open = false }
-                }
-            }
+            // v2: header removed — hero search + meta whisper carry identity and status.
+            // No X button per house rule; Esc closes.
 
-            Rectangle { Layout.fillWidth: true; height: 1; color: colors.alpha(colors.outline, 0.12) }
-
-            // search field
+            // hero search — the panel IS this input
             RowLayout {
                 Layout.fillWidth: true
                 spacing: 8
                 Rectangle {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 44
+                    Layout.preferredHeight: 56
                     radius: 12
                     color: colors.alpha(colors.surface, 0.6)
                     border.width: 1
@@ -393,7 +354,27 @@ FloatingWindow {
                         anchors.leftMargin: 12
                         anchors.rightMargin: 10
                         spacing: 8
-                        Text { text: root.glyphs.search; color: colors.alpha(colors.outline, 0.8); font.family: colors.fontSans; font.pixelSize: 13; Layout.alignment: Qt.AlignVCenter }
+                        Text { text: root.glyphs.search; color: colors.alpha(colors.outline, 0.8); font.family: colors.fontSans; font.pixelSize: 15; Layout.alignment: Qt.AlignVCenter }
+                        // @path crumb — lives in the hero now; click drops the prefix
+                        Rectangle {
+                            visible: root.explicitScope
+                            Layout.preferredHeight: 24
+                            Layout.preferredWidth: Math.min(Math.max(30, crumbTxt.implicitWidth + 30), 180)
+                            radius: 12
+                            color: colors.alpha(colors.secondary, 0.14)
+                            border.width: 1; border.color: colors.alpha(colors.secondary, 0.35)
+                            Layout.alignment: Qt.AlignVCenter
+                            Text {
+                                id: crumbTxt
+                                anchors.centerIn: parent
+                                width: Math.min(crumbTxt.implicitWidth, 152)
+                                elide: Text.ElideRight
+                                text: root.glyphs.folder + "  " + root.scopeLabel
+                                color: colors.secondary
+                                font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.DemiBold
+                            }
+                            MouseArea { anchors.fill: parent; hoverEnabled: true; onClicked: root.clearScopePrefix() }
+                        }
                         TextField {
                             id: searchField
                             Layout.fillWidth: true
@@ -402,14 +383,15 @@ FloatingWindow {
                             placeholderTextColor: colors.alpha(colors.outline, 0.5)
                             color: colors.foreground
                             font.family: colors.fontSans
-                            font.pixelSize: 12
+                            font.pixelSize: 14
+                            font.weight: Font.DemiBold
                             background: null
                             selectByMouse: true
                             onTextChanged: root.queueSearch(text)
                             Keys.onPressed: function(e){
                                 if (e.key === Qt.Key_Down) { root.selected = Math.min(root.selected + 1, root.results.length - 1); root.hovered = -1; resultList.positionViewAtIndex(root.selected, ListView.Contain); e.accepted = true }
                                 else if (e.key === Qt.Key_Up) { root.selected = Math.max(root.selected - 1, 0); root.hovered = -1; resultList.positionViewAtIndex(root.selected, ListView.Contain); e.accepted = true }
-                                else if (e.key === Qt.Key_Escape) { root.open = false; e.accepted = true }
+                                else if (e.key === Qt.Key_Escape) { if (searchField.text !== "") { searchField.text = ""; root.queueSearch("") } else root.open = false; e.accepted = true }
                                 else if (e.key === Qt.Key_Return || e.key === Qt.Key_Enter) { root.openResult(root.results[root.selected]); e.accepted = true }
                                 else if (e.key === Qt.Key_Y && (e.modifiers & Qt.ControlModifier)) { root.copyResult(root.results[root.selected]); e.accepted = true }
                                 else if (e.key === Qt.Key_O && (e.modifiers & Qt.ControlModifier)) { root.openInZed(root.results[root.selected]); e.accepted = true }
@@ -455,48 +437,42 @@ FloatingWindow {
             RowLayout {
                 Layout.fillWidth: true
                 spacing: 6
-                Repeater {
-                    model: [ { key: "home", label: "~", glyph: root.glyphs.home },
-                             { key: "dotfiles", label: "dotfiles", glyph: root.glyphs.folder },
-                             { key: "config", label: ".config", glyph: root.glyphs.gear } ]
-                    delegate: Rectangle {
-                        required property var modelData
-                        readonly property bool on: !root.explicitScope && root.scopeKey === modelData.key
-                        Layout.preferredHeight: 22
-                        Layout.preferredWidth: Math.max(30, srow.implicitWidth + 18)
-                        radius: 11
-                        color: on ? colors.alpha(colors.primary, 0.15)
-                                  : (srowMa.containsMouse ? colors.alpha(colors.surfaceVariant, 0.35) : colors.alpha(colors.surface, 0.5))
-                        border.width: 1
-                        border.color: on ? colors.alpha(colors.primary, 0.4) : colors.alpha(colors.outline, 0.12)
-                        Behavior on color { ColorAnimation { duration: 120 } }
-                        Row {
-                            id: srow
-                            anchors.centerIn: parent
-                            spacing: 4
-                            Text { text: modelData.glyph; color: parent.parent.on ? colors.primary : colors.alpha(colors.outline, 0.75); font.family: colors.fontSans; font.pixelSize: 10; anchors.verticalCenter: parent.verticalCenter }
-                            Text { text: modelData.label; color: parent.parent.on ? colors.foreground : colors.alpha(colors.outline, 0.75); font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.DemiBold; anchors.verticalCenter: parent.verticalCenter }
-                        }
-                        MouseArea { id: srowMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.setScope(modelData.key) }
-                    }
-                }
-                // @path scope — shown while the query carries one; click to drop it
+                // segmented scope — one strip, not three chips
                 Rectangle {
-                    visible: root.explicitScope
-                    Layout.preferredHeight: 22
-                    Layout.preferredWidth: Math.max(30, csRow.implicitWidth + 18)
-                    radius: 11
-                    color: colors.alpha(colors.tertiary, 0.14)
-                    border.width: 1; border.color: colors.alpha(colors.tertiary, 0.35)
+                    Layout.preferredHeight: 26
+                    Layout.preferredWidth: segRow.implicitWidth + 6
+                    Layout.alignment: Qt.AlignVCenter
+                    radius: 13
+                    color: colors.alpha(colors.surface, 0.55)
+                    border.width: 1; border.color: colors.alpha(colors.outline, 0.1)
                     Row {
-                        id: csRow
+                        id: segRow
                         anchors.centerIn: parent
-                        spacing: 4
-                        Text { text: root.glyphs.folder; color: colors.tertiary; font.family: colors.fontSans; font.pixelSize: 10; anchors.verticalCenter: parent.verticalCenter }
-                        Text { text: root.scopeLabel; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.DemiBold; anchors.verticalCenter: parent.verticalCenter }
-                        Text { text: root.glyphs.close; color: csMa.containsMouse ? colors.foreground : colors.alpha(colors.outline, 0.7); font.family: colors.fontSans; font.pixelSize: 9; anchors.verticalCenter: parent.verticalCenter }
+                        spacing: 2
+                        Repeater {
+                            model: [ { key: "home", label: "~", glyph: root.glyphs.home },
+                                     { key: "dotfiles", label: "dotfiles", glyph: root.glyphs.folder },
+                                     { key: "config", label: ".config", glyph: root.glyphs.gear } ]
+                            delegate: Rectangle {
+                                required property var modelData
+                                readonly property bool on: !root.explicitScope && root.scopeKey === modelData.key
+                                width: Math.max(34, segTxt.implicitWidth + 20)
+                                height: 22
+                                radius: 11
+                                color: on ? colors.alpha(colors.primary, 0.15)
+                                          : (segMa.containsMouse ? colors.alpha(colors.surfaceVariant, 0.35) : "transparent")
+                                Behavior on color { ColorAnimation { duration: 120 } }
+                                Text {
+                                    id: segTxt
+                                    anchors.centerIn: parent
+                                    text: modelData.glyph + " " + modelData.label
+                                    color: on ? colors.primary : colors.alpha(colors.outline, 0.75)
+                                    font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.DemiBold
+                                }
+                                MouseArea { id: segMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.setScope(modelData.key) }
+                            }
+                        }
                     }
-                    MouseArea { id: csMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.clearScopePrefix() }
                 }
                 Item { Layout.fillWidth: true }
                 // option chips — Aa = case-sensitive, .* = regex mode
@@ -539,6 +515,21 @@ FloatingWindow {
                 spacing: 6
                 model: root.results
                 currentIndex: root.selected
+                // FILES / CONTENT groups — the model is files-first, isFile splits it
+                section.property: "isFile"
+                section.criteria: ViewSection.FullString
+                section.delegate: Item {
+                    width: resultList.width
+                    height: 22
+                    Text {
+                        anchors.left: parent.left
+                        anchors.leftMargin: 4
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: section === "true" ? "FILES" : "CONTENT"
+                        color: colors.alpha(colors.outline, 0.55)
+                        font.family: colors.fontSans; font.pixelSize: 7; font.weight: Font.Bold; font.letterSpacing: 1.3
+                    }
+                }
                 interactive: true
                 boundsBehavior: Flickable.StopAtBounds
                 ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
@@ -549,23 +540,15 @@ FloatingWindow {
                     readonly property bool active: index === root.selected || index === root.hovered
                     readonly property var parts: root.hlParts(modelData.snippet, root.activePattern)
                     width: resultList.width
-                    height: 58
+                    // rows size to content — the fixed 58px is what kept breaking
+                    height: Math.max(48, rowCol.implicitHeight + 16)
                     radius: 12
                     clip: true
                     color: active ? colors.alpha(colors.primary, 0.13) : colors.alpha(colors.surfaceVariant, 0.16)
                     border.width: 1
                     border.color: active ? colors.alpha(colors.primary, 0.32) : colors.alpha(colors.outline, 0.08)
                     Behavior on color { ColorAnimation { duration: 120 } }
-                    // accent rail on the active row
-                    Rectangle {
-                        width: 2
-                        height: parent.height - 16
-                        anchors.left: parent.left
-                        anchors.leftMargin: 3
-                        anchors.verticalCenter: parent.verticalCenter
-                        radius: 1
-                        color: rowRoot.active ? colors.primary : "transparent"
-                    }
+                    // v2: side rails removed — the file chip carries the accent
                     RowLayout {
                         anchors.fill: parent
                         anchors.leftMargin: 12
@@ -586,9 +569,10 @@ FloatingWindow {
                             }
                         }
                         ColumnLayout {
+                            id: rowCol
                             Layout.fillWidth: true
                             Layout.alignment: Qt.AlignVCenter
-                            spacing: 0
+                            spacing: 2
                             // line 1 — name : line  ·  ~/dir
                             RowLayout {
                                 Layout.fillWidth: true
@@ -680,14 +664,61 @@ FloatingWindow {
             }
 
 
-            Text {
-                text: "↑↓ MOVE  ·  ↵ NANO  ·  ^O ZED  ·  ^Y COPY  ·  ESC CLOSE"
-                color: colors.alpha(colors.outline, 0.45)
-                font.family: colors.fontSans
-                font.pixelSize: 7
-                font.weight: Font.Bold
-                font.letterSpacing: 1.3
+            // empty state — fills the void before the first search
+            Item {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                visible: root.results.length === 0
+                ColumnLayout {
+                    anchors.centerIn: parent
+                    spacing: 3
+                    Text {
+                        text: "Type at least 2 characters"
+                        color: colors.alpha(colors.outline, 0.55)
+                        font.family: colors.fontSans; font.pixelSize: 10
+                        Layout.alignment: Qt.AlignHCenter
+                    }
+                    Text {
+                        text: "@path  scopes one directory"
+                        color: colors.alpha(colors.outline, 0.4)
+                        font.family: colors.fontSans; font.pixelSize: 9
+                        Layout.alignment: Qt.AlignHCenter
+                    }
+                }
+            }
+
+            // footer — kbd hints, no X per house rule
+            Row {
+                spacing: 12
                 Layout.alignment: Qt.AlignHCenter
+                Repeater {
+                    model: [ { k: "↑↓", a: "move" }, { k: "↵", a: "nano" }, { k: "^O", a: "zed" }, { k: "^Y", a: "copy" }, { k: "^U", a: "clear" }, { k: "esc", a: "clear/close" } ]
+                    delegate: Row {
+                        required property var modelData
+                        spacing: 4
+                        Rectangle {
+                            width: Math.max(22, kbdTxt.implicitWidth + 10)
+                            height: 16
+                            radius: 4
+                            color: colors.alpha(colors.surfaceVariant, 0.5)
+                            border.width: 1; border.color: colors.alpha(colors.outline, 0.12)
+                            anchors.verticalCenter: parent.verticalCenter
+                            Text {
+                                id: kbdTxt
+                                anchors.centerIn: parent
+                                text: modelData.k
+                                color: colors.secondary
+                                font.family: colors.fontSans; font.pixelSize: 7; font.weight: Font.Bold
+                            }
+                        }
+                        Text {
+                            text: modelData.a
+                            color: colors.alpha(colors.outline, 0.45)
+                            font.family: colors.fontSans; font.pixelSize: 7; font.weight: Font.Bold; font.letterSpacing: 1.3
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                    }
+                }
             }
         }
     }

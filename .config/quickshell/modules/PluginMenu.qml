@@ -88,9 +88,11 @@ PanelWindow {
         width: 580
         height: 560
         radius: 20
-        color: colors.alpha(colors.background, 0.78)
+        // glass: blur-behind comes from the qs-plugins layerrule — 0.78 was
+        // opaque enough to hide it. 0.5 lets the frosted depth through.
+        color: colors.alpha(colors.surface, 0.5)
         border.width: 1
-        border.color: colors.alpha(colors.outline, 0.15)
+        border.color: colors.alpha(colors.primary, 0.14)
         scale: root.open ? 1 : 0.96
         opacity: root.open ? 1 : 0
         Behavior on scale { NumberAnimation { duration: 240; easing.type: Easing.OutCubic } }
@@ -101,56 +103,14 @@ PanelWindow {
             anchors.margins: 18
             spacing: 12
 
-            // header — chip + label + count + close
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: 10
-                Rectangle {
-                    Layout.preferredWidth: 26; Layout.preferredHeight: 26; radius: 13
-                    color: colors.alpha(colors.primary, 0.15)
-                    border.width: 1; border.color: colors.alpha(colors.primary, 0.3)
-                    Text { anchors.centerIn: parent; text: ""; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 12 }
-                    Layout.alignment: Qt.AlignVCenter
-                }
-                Text {
-                    text: "PLUGINS"
-                    color: colors.primary
-                    font.family: colors.fontSans
-                    font.pixelSize: 13
-                    font.weight: Font.ExtraBold
-                    font.letterSpacing: 2
-                    Layout.alignment: Qt.AlignVCenter
-                }
-                Rectangle {
-                    Layout.preferredWidth: countTxt.implicitWidth + 16; Layout.preferredHeight: 20; radius: 10
-                    color: colors.alpha(colors.primary, 0.14)
-                    border.width: 1; border.color: colors.alpha(colors.primary, 0.3)
-                    Text { id: countTxt; anchors.centerIn: parent; text: root.filtered.length + " plugins"; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold }
-                    Layout.alignment: Qt.AlignVCenter
-                }
-                Item { Layout.fillWidth: true }
-                Rectangle {
-                    width: 28; height: 28; radius: 14
-                    color: closeMa.containsMouse ? colors.alpha(colors.surfaceVariant, 0.6) : colors.alpha(colors.surface, 0.6)
-                    border.width: 1; border.color: colors.alpha(colors.outline, 0.15)
-                    Text { anchors.centerIn: parent; text: "󰅖"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 12 }
-                    MouseArea { id: closeMa; anchors.fill: parent; hoverEnabled: true; onClicked: { root.open = false; root.query = "" } }
-                }
-            }
+            // v2: header row deleted — hero search + whisper line carry identity.
+            // No X per house rule; Esc / click-outside close. Redundant
+            // "EXTRAS & UTILITIES" label deleted with it.
 
-            Text {
-                text: "EXTRAS & UTILITIES"
-                color: colors.alpha(colors.outline, 0.55)
-                font.family: colors.fontSans
-                font.pixelSize: 7
-                font.weight: Font.Bold
-                font.letterSpacing: 1.3
-            }
-
-            // search
+            // hero search — the panel IS this input
             Rectangle {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 48
+                Layout.preferredHeight: 56
                 radius: 12
                 color: colors.alpha(colors.surface, 0.6)
                 border.width: 1
@@ -170,7 +130,8 @@ PanelWindow {
                         placeholderTextColor: colors.alpha(colors.outline, 0.5)
                         color: colors.foreground
                         font.family: colors.fontSans
-                        font.pixelSize: 13
+                        font.pixelSize: 14
+                        font.weight: Font.DemiBold
                         background: null
                         selectByMouse: true
                         onTextChanged: root.query = text
@@ -197,6 +158,16 @@ PanelWindow {
                 }
             }
 
+            // whisper — count when idle, position when filtering
+            Text {
+                Layout.fillWidth: true
+                text: root.query === "" ? root.plugins.length + " plugins" : root.filtered.length + " of " + root.plugins.length
+                color: colors.alpha(colors.outline, 0.6)
+                font.family: colors.fontSans; font.pixelSize: 9
+                elide: Text.ElideRight
+                maximumLineCount: 1
+            }
+
             // grid — 2-col bento cards with glyph + name + desc + arrow
             GridView {
                 id: grid
@@ -206,7 +177,7 @@ PanelWindow {
                 model: root.filtered
                 currentIndex: root.selected
                 boundsBehavior: Flickable.StopAtBounds
-                cellWidth: Math.floor(width / 2)
+                cellWidth: width / 2
                 cellHeight: 112
                 ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
 
@@ -221,14 +192,13 @@ PanelWindow {
                         anchors.fill: parent
                         anchors.margins: 5
                         radius: 14
-                        y: (index === root.selected || tileMa.containsMouse) ? -2 : 0
-                        scale: (index === root.selected || tileMa.containsMouse) ? 1.03 : 1
+                        // one hover language: tint + slight scale. The y-lift is gone.
+                        scale: (index === root.selected || tileMa.containsMouse) ? 1.02 : 1
                         color: (index === root.selected || tileMa.containsMouse) ? colors.alpha(colors.primary, 0.14)
                                             : colors.alpha(colors.surfaceVariant, 0.18)
                         border.width: 1
                         border.color: (index === root.selected || tileMa.containsMouse) ? colors.alpha(colors.primary, 0.35)
                                                                : colors.alpha(colors.outline, 0.08)
-                        Behavior on y { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
                         Behavior on scale { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
                         Behavior on color { ColorAnimation { duration: 140 } }
 
@@ -305,13 +275,38 @@ PanelWindow {
                 }
             }
 
-            // footer hint
-            Text {
-                text: "↑↓←→ navigate  •  ↵ open  •  esc close"
-                color: colors.alpha(colors.outline, 0.45)
-                font.family: colors.fontSans
-                font.pixelSize: 8
+            // footer — kbd hints, same language as Grap
+            Row {
+                spacing: 12
                 Layout.alignment: Qt.AlignHCenter
+                Repeater {
+                    model: [ { k: "↑↓←→", a: "move" }, { k: "↵", a: "open" }, { k: "esc", a: "close" } ]
+                    delegate: Row {
+                        required property var modelData
+                        spacing: 4
+                        Rectangle {
+                            width: Math.max(22, kbdTxt.implicitWidth + 10)
+                            height: 16
+                            radius: 4
+                            color: colors.alpha(colors.surfaceVariant, 0.5)
+                            border.width: 1; border.color: colors.alpha(colors.outline, 0.12)
+                            anchors.verticalCenter: parent.verticalCenter
+                            Text {
+                                id: kbdTxt
+                                anchors.centerIn: parent
+                                text: modelData.k
+                                color: colors.secondary
+                                font.family: colors.fontSans; font.pixelSize: 7; font.weight: Font.Bold
+                            }
+                        }
+                        Text {
+                            text: modelData.a
+                            color: colors.alpha(colors.outline, 0.45)
+                            font.family: colors.fontSans; font.pixelSize: 7; font.weight: Font.Bold; font.letterSpacing: 1.3
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                    }
+                }
             }
         }
 

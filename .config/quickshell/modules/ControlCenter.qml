@@ -124,13 +124,49 @@ FloatingWindow {
         }
     }
 
-    // pet full behavior — reuse actual pet module assets, not just walking
+    // pet — lives only inside this card. It has a ~90px box, so anything that
+    // needs to travel or climb is meaningless here: no Walk/Run/Dash, no wall or
+    // ceiling grabs, no fall physics. The pool below is what the room allows.
     property var petActions: ({})
     property string petAssetsBase: Quickshell.env("HOME") + "/.config/quickshell/modules/pet/assets/"
     property string petCurrentAction: "Stand"
     property var petCurrentFrames: ["shime1.png","shime1a.png"]
     property int petFrameIdx: 0
     property bool petFacingRight: false
+    property string petBubble: ""
+    // in-place only — the sprite swaps frames where it stands, nothing moves
+    readonly property var petCalm: ["Stand","Sit","SitWithLegsUp","SitAndDangleLegs","WatchAction","WatchLoop","Sprawl","BePet","BePetDangleLegs","PetAction","PetActionDangleLegs"]
+    // bouncy in-place set — used while music plays
+    readonly property var petLively: ["PoseAction","EatBerryAction","ThrowNeedleAction","ThrowIe","Divide1","Grapple1","Grapple2","Grapple3","Grapple4"]
+    readonly property var petMusicLines: ["♪ bop!","this slaps","on beat","*nod*","ooh nice","keep it up"]
+    property var petPool: ["Stand"]
+    function rebuildPool() {
+        var want = (isPlaying && petLively.length) ? petCalm.concat(petLively) : petCalm
+        var out = []
+        for (var i=0;i<want.length;i++) if (petActions[want[i]] && petActions[want[i]].length) out.push(want[i])
+        petPool = out.length ? out : ["Stand"]
+    }
+    // music just started (or stopped) — react, don't wait for the next roll
+    onIsPlayingChanged: {
+        rebuildPool()
+        if (isPlaying && hasPlayer) {
+            var l = petMusicLines[Math.floor(Math.random()*petMusicLines.length)]
+            petBubble = hasPlayer && player.trackTitle ? l : l
+            var p = petPool[Math.floor(Math.random()*petPool.length)]
+            petCurrentAction = p
+            petCurrentFrames = petActions[p] || ["shime1.png"]
+            petFrameIdx = 0
+        } else {
+            petBubble = ""
+        }
+    }
+    function petReact() {
+        petCurrentAction = (petActions["PetAction"] && petCurrentAction !== "PetAction") ? "PetAction" : "PoseAction"
+        petCurrentFrames = petActions[petCurrentAction] || ["shime1.png"]
+        petFrameIdx = 0
+        petFacingRight = !petFacingRight
+        petBubble = isPlaying ? petMusicLines[Math.floor(Math.random()*petMusicLines.length)] : "heh"
+    }
     property var topActivities: [
         {app: "kitty", secs: 5400},
         {app: "firefox", secs: 3200},
@@ -253,24 +289,35 @@ FloatingWindow {
 
     onOpenChanged: if(open) { ghUserProc.running=true; weatherProc.running=true; root.calOffset=0; root.rebuildCal(); root.loadTopActivities(); root.loadActivityLast7(); Qt.callLater(function(){ card.forceActiveFocus() }) }
 
-    // pet actions loader — full behavior
+    // pet action set — only the in-place ones, see petCalm/petLively
     FileView {
         id: petActionsFile
         path: Quickshell.env("HOME") + "/.config/quickshell/modules/pet/config/pet-actions.json"
         printErrors: false
         onLoaded: {
-            try { var d=JSON.parse(text()); root.petActions=d; var k=Object.keys(d); if(k.length>0){ var first=k[0]; root.petCurrentAction=first; root.petCurrentFrames=d[first] } } catch(e){}
+            try {
+                root.petActions = JSON.parse(text())
+                rebuildPool()
+                if (root.petActions[root.petCurrentAction]) root.petCurrentFrames = root.petActions[root.petCurrentAction]
+            } catch(e){}
         }
     }
     Timer { interval: 2600; running: root.open; repeat: true; onTriggered: {
-        var keys=Object.keys(root.petActions); if(keys.length===0) return
-        var pick=keys[Math.floor(Math.random()*keys.length)]
-        root.petCurrentAction=pick; root.petCurrentFrames=root.petActions[pick]||["shime1.png"]; root.petFrameIdx=0
+        if (root.petPool.length === 0) return
+        var pick = root.petPool[Math.floor(Math.random()*root.petPool.length)]
+        root.petCurrentAction = pick
+        root.petCurrentFrames = root.petActions[pick] || ["shime1.png"]
+        root.petFrameIdx = 0
         root.petFacingRight = Math.random()>0.5
+        // while music plays, murmur about it now and then
+        if (root.isPlaying && Math.random() < 0.4) {
+            root.petBubble = root.petMusicLines[Math.floor(Math.random()*root.petMusicLines.length)]
+        }
     } }
     Timer { interval: 180; running: root.open; repeat: true; onTriggered: {
         if(root.petCurrentFrames.length>0) root.petFrameIdx=(root.petFrameIdx+1)%root.petCurrentFrames.length
     } }
+    Timer { interval: 4000; running: root.open; repeat: true; onTriggered: { if (root.petBubble !== "") root.petBubble = "" } }
 
     // visualizer feed — cava raw ascii, runs only while control center is open
     Process {
@@ -763,59 +810,95 @@ FloatingWindow {
                 Layout.preferredHeight: 126
                 spacing: 6
                 Rectangle {
+                    id: petCard
                     Layout.fillWidth: true; Layout.fillHeight: true
                     radius: 16
                     color: colors.alpha(colors.surface, 0.4)
-                    border.width: 1; border.color: colors.alpha(colors.outline, 0.14)
+                    border.width: 1
+                    border.color: petHover.hovered ? colors.alpha(colors.primary, 0.32) : colors.alpha(colors.outline, 0.14)
                     clip: true
-                    ColumnLayout {
-                        anchors.fill: parent; anchors.margins: 10; spacing: 3
-                        RowLayout {
-                            Layout.fillWidth: true
-                            Text { text: "PET — HORNET"; Layout.alignment: Qt.AlignVCenter; color: colors.alpha(colors.outline,0.55); font.family: colors.fontSans; font.pixelSize: 7; font.weight: Font.Bold; font.letterSpacing: 1.2 }
-                            Item { Layout.fillWidth: true }
-                        }
-                        Item {
-                            Layout.fillWidth: true; Layout.fillHeight: true
+                    Behavior on border.color { ColorAnimation { duration: 180 } }
+
+                    // stage — a glass well inset in the card, pet stands on its floor line
+                    Item {
+                        anchors.fill: parent
+                        anchors.margins: 10
+                        anchors.topMargin: 24
+                        anchors.bottomMargin: 22
+                        Rectangle {
+                            id: petWell
+                            anchors.fill: parent
+                            radius: 12
+                            gradient: Gradient {
+                                GradientStop { position: 0.0; color: colors.alpha(colors.surfaceVariant, 0.28) }
+                                GradientStop { position: 1.0; color: colors.alpha(colors.background, 0.08) }
+                            }
+                            border.width: 1
+                            border.color: root.isPlaying ? colors.alpha(colors.primary, 0.30) : colors.alpha(colors.outline, 0.10)
+                            Behavior on border.color { ColorAnimation { duration: 500 } }
+                            // music lights the stage — slow breathe, never a strobe
                             Rectangle {
                                 anchors.centerIn: parent
-                                width: 96; height: 96; radius: 48
-                                color: colors.alpha(colors.primary, 0.05)
-                                Rectangle {
-                                    anchors.centerIn: parent
-                                    width: 70; height: 70; radius: 35
-                                    color: colors.alpha(colors.primary, 0.07)
+                                width: 66; height: 66; radius: 33
+                                color: colors.alpha(colors.primary, 0.10)
+                                visible: root.isPlaying
+                                SequentialAnimation on scale {
+                                    running: root.open && root.isPlaying; loops: Animation.Infinite
+                                    NumberAnimation { from: 0.88; to: 1.08; duration: 1100; easing.type: Easing.InOutSine }
+                                    NumberAnimation { from: 1.08; to: 0.88; duration: 1100; easing.type: Easing.InOutSine }
+                                }
+                                SequentialAnimation on opacity {
+                                    running: root.open && root.isPlaying; loops: Animation.Infinite
+                                    NumberAnimation { from: 0.45; to: 1; duration: 1100; easing.type: Easing.InOutSine }
+                                    NumberAnimation { from: 1; to: 0.45; duration: 1100; easing.type: Easing.InOutSine }
                                 }
                             }
-                            Image {
-                                id: alivePet
-                                anchors.centerIn: parent
-                                anchors.verticalCenterOffset: -4
-                                source: "file://" + root.petAssetsBase + (root.petCurrentFrames[root.petFrameIdx] || "shime1.png")
-                                width: 90; height: 90
-                                fillMode: Image.PreserveAspectFit
-                                smooth: false
-                                mirror: root.petFacingRight
-                                SequentialAnimation on y {
-                                    running: root.open; loops: Animation.Infinite
-                                    NumberAnimation { from: 0; to: -3; duration: 550; easing.type: Easing.InOutSine }
-                                    NumberAnimation { from: -3; to: 0; duration: 550; easing.type: Easing.InOutSine }
-                                }
-                            }
-                            Rectangle {
-                                anchors.horizontalCenter: parent.horizontalCenter
-                                anchors.bottom: parent.bottom; anchors.bottomMargin: 10
-                                width: 58; height: 6; radius: 3
-                                color: colors.alpha(colors.background, 0.35)
-                                border.width: 1; border.color: colors.alpha(colors.primary, 0.12)
-                            }
-                            MouseArea { anchors.fill: parent; onClicked: Quickshell.execDetached(["quickshell","-p", Quickshell.env("HOME")+"/.config/quickshell","ipc","call","pet","pet"]) }
                         }
-                        RowLayout {
-                            Layout.alignment: Qt.AlignHCenter; spacing: 5
-                            Rectangle { width: 6; height: 6; radius: 3; color: colors.primary }
-                            Text { text: "ALIVE"; color: colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 6; font.weight: Font.Bold; font.letterSpacing: 1 }
+                        // floor line the pet stands on
+                        Rectangle {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            anchors.bottom: parent.bottom
+                            anchors.bottomMargin: 6
+                            width: 50; height: 4; radius: 2
+                            color: colors.alpha(colors.background, 0.42)
                         }
+                        Image {
+                            id: alivePet
+                            anchors.centerIn: parent
+                            anchors.verticalCenterOffset: -6
+                            source: "file://" + root.petAssetsBase + (root.petCurrentFrames[root.petFrameIdx] || "shime1.png")
+                            width: 72; height: 72
+                            fillMode: Image.PreserveAspectFit
+                            smooth: false
+                            mirror: root.petFacingRight
+                            SequentialAnimation on y {
+                                running: root.open; loops: Animation.Infinite
+                                NumberAnimation { from: 0; to: -3; duration: 550; easing.type: Easing.InOutSine }
+                                NumberAnimation { from: -3; to: 0; duration: 550; easing.type: Easing.InOutSine }
+                            }
+                        }
+                        MouseArea { id: petHover; anchors.fill: parent; hoverEnabled: true; onClicked: root.petReact() }
+                    }
+
+                    Text {
+                        anchors.top: parent.top; anchors.left: parent.left; anchors.right: parent.right
+                        anchors.margins: 10
+                        text: "PET — HORNET"
+                        color: colors.alpha(colors.outline, 0.55)
+                        font.family: colors.fontSans; font.pixelSize: 7; font.weight: Font.Bold; font.letterSpacing: 1.2
+                        elide: Text.ElideRight
+                    }
+
+                    // status — no dot; state reads from the text plus the lit stage
+                    Text {
+                        anchors.bottom: parent.bottom; anchors.left: parent.left; anchors.right: parent.right
+                        anchors.margins: 10
+                        horizontalAlignment: Text.AlignHCenter
+                        text: root.petBubble !== "" ? root.petBubble : (root.isPlaying ? "PLAYING" : "IDLE")
+                        color: root.petBubble !== "" ? colors.alpha(colors.primary, 0.92)
+                              : (root.isPlaying ? colors.alpha(colors.primary, 0.78) : colors.alpha(colors.outline, 0.5))
+                        font.family: colors.fontSans; font.pixelSize: 7; font.weight: Font.Bold; font.letterSpacing: 1
+                        elide: Text.ElideRight
                     }
                 }
                 Rectangle {

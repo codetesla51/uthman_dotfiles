@@ -67,21 +67,10 @@ PanelWindow {
         function onOpenChanged() { if (sysLoader.item && !sysLoader.item.open) sysOpen = false }
     }
 
-    // BatteryPanel (300 lines) — Battery pill + `battery` bind
-    property bool batOpen: false
-    IpcHandler { target: "battery"; function toggle(): void { batOpen = !batOpen } }
-    function toggleBat() { if (batLoader.item) batLoader.item.open = !batLoader.item.open; else batOpen = true }
-    Loader {
-        id: batLoader
-        active: batOpen
-        asynchronous: true
-        source: "../modules/BatteryPanel.qml"
-        onLoaded: { item.colors = palette; item.open = true }
-    }
-    Connections {
-        target: batLoader.item
-        function onOpenChanged() { if (batLoader.item && !batLoader.item.open) batOpen = false }
-    }
+    // BatteryPanel stays resident: opened constantly, and lazy-loading it
+    // caused a first-paint white flash on open (surface maps before the
+    // card finishes its entrance). ~10MB to never see that again.
+    BatteryPanel { id: batPanel; colors: palette }
 
     // ClipboardPanel (577 lines) — `clipboard` bind. `sticky` too: the shelf
     // binds (SUPER ALT 1-4) must fire snippets with no window, so the proxy
@@ -514,7 +503,7 @@ PanelWindow {
                 colors: bar.colors
                 onOpenRequested: toggleWatchCat()
             }
-            Battery { colors: bar.colors; onOpenRequested: toggleBat() }
+            Battery { colors: bar.colors; onOpenRequested: batPanel.open = !batPanel.open }
         }
 
     }

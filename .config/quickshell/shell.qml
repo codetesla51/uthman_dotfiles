@@ -1,5 +1,6 @@
 import Quickshell
 import Quickshell.Io
+import QtQuick
 import "components"
 import "modules"
 
@@ -16,6 +17,10 @@ ShellRoot {
     AppLauncher { colors: barPalette }
     PassPrompt { colors: barPalette }
     GitHubPoller {}
+    // LockScreen PARKED (2026-10-03): quickshell WlSessionLock stranded the
+    // session on first test (missing PAM respond + focus). hyprlock owns
+    // locking again; revisit only with a timed auto-rescue test harness.
+    // LockScreen {}
 
     // ---- lazy heavies: Loader + IPC proxy, zero RAM while closed ----
     // Esc/click-outside inside each panel sets its own open=false; the

@@ -1,0 +1,96 @@
+#!/bin/bash
+# shell-splash — 技 draws itself top-to-bottom, then the prompt. Art is
+# pre-rendered braille with NO background codes (plain glyphs + spaces),
+# so transparent terminals show through. Cache: ~/.cache/term-art/kanji.txt.
+# .zshrc owns SPLASH_DONE; -t 1 keeps us off pipes.
+[[ -t 1 ]] || exit 0
+
+ART="$HOME/.cache/term-art/kanji.txt"
+[[ -s "$ART" ]] || exit 0
+
+mapfile -t ROWS < "$ART"
+TOTAL=${#ROWS[@]}
+FRAMES=7
+PER=$(( (TOTAL + FRAMES - 1) / FRAMES ))
+
+# dynamic rice gradient: foreground (top) -> outline (bottom), read fresh
+# every shell so a wallpaper switch re-tints the art. Falls back to bone/olive.
+hex_of() { grep -m1 "^\$$1 =" "$HOME/.config/theme/current/colors.conf" 2>/dev/null | grep -oE '[0-9a-fA-F]{6}' | head -1; }
+TOP_HEX=$(hex_of foreground); [[ -n "$TOP_HEX" ]] || TOP_HEX="ebe1da"
+BOT_HEX=$(hex_of outline);    [[ -n "$BOT_HEX" ]] || BOT_HEX="a39487"
+TR=$((16#${TOP_HEX:0:2})); TG=$((16#${TOP_HEX:2:2})); TB=$((16#${TOP_HEX:4:2}))
+BR=$((16#${BOT_HEX:0:2})); BG=$((16#${BOT_HEX:2:2})); BB=$((16#${BOT_HEX:4:2}))
+RST=$'\e[0m'
+
+printf '\e[?25l'
+# bloom order: center rows first, expanding outward — deterministic, no shuf
+MID=$(( TOTAL / 2 ))
+ORDER=()
+for ((d=0; d<=MID; d++)); do
+    (( MID-d >= 0 )) && ORDER+=($((MID-d)))
+    (( MID+d < TOTAL && d > 0 )) && ORDER+=($((MID+d)))
+done
+shown=0
+for ((f=1; f<=FRAMES; f++)); do
+    count=$(( f * TOTAL / FRAMES ))
+    (( shown > 0 )) && printf '\e[%dA\r' "$TOTAL"
+    declare -A ON=()
+    for ((k=0; k<count; k++)); do ON[${ORDER[k]}]=1; done
+    for ((i=0; i<TOTAL; i++)); do
+        if [[ -n "${ON[$i]}" ]]; then
+            row="${ROWS[i]}"
+            nc=${#row}
+            for ((j=0; j<nc; j++)); do
+                # diagonal factor, inlined (a $( ) per cell would fork ~2000×)
+                rt=$(( TOTAL > 1 ? i * 1000 / (TOTAL - 1) : 0 ))
+                ct=$(( nc > 1 ? j * 1000 / (nc - 1) : 0 ))
+                t=$(( (rt + ct) / 2 ))
+                r=$(( (TR * (1000 - t) + BR * t) / 1000 ))
+                g=$(( (TG * (1000 - t) + BG * t) / 1000 ))
+                b=$(( (TB * (1000 - t) + BB * t) / 1000 ))
+                printf '\e[38;2;%d;%d;%dm%s' "$r" "$g" "$b" "${row:$j:1}"
+            done
+            printf '%s\n' "$RST"
+        else
+            printf '\n'
+        fi
+    done
+    shown=$TOTAL
+    sleep 0.07
+done
+printf '\e[?25h'
+
+# ---- beside the art: typewriter quote, italic + author ----
+QCOL=38          # quote starts this many columns right of the margin
+QW=44            # wrap width
+QFILE="$HOME/.config/hypr/scripts/quotes.txt"
+if [[ -f "$QFILE" ]]; then
+    line=$(shuf -n 1 "$QFILE")
+    body=${line% — *}; auth=${line##* — }
+    [[ "$body" == "$line" ]] && auth=""
+    mapfile -t QL < <(printf '%s' "$body" | fold -s -w $QW)
+    # cap at 4 lines so the block fits the 16-row art
+    QL=("${QL[@]:0:4}")
+    n=${#QL[@]}
+    (( ${#auth} > 0 )) && n=$((n + 1))
+    start=$(( (TOTAL - n) / 2 ))
+    (( start < 0 )) && start=0
+    printf '\e[%dA' "$TOTAL"          # back to art top
+    IT=$'\e[3m'; DIM=$'\e[2m'; RST=$'\e[0m'
+    r=$start
+    li=0
+    for q in "${QL[@]}"; do
+        printf '\e[%dB\r\e[%dC%s' "$((r))" "$QCOL" "$IT"
+        r=0
+        for ((c=0; c<${#q}; c++)); do printf '%s' "${q:$c:1}"; sleep 0.014; done
+        printf '%s' "$RST"
+        r=1
+        li=$((li + 1))
+    done
+    if [[ -n "$auth" ]]; then
+        printf '\e[%dB\r\e[%dC%s%s  — %s%s' "$r" "$QCOL" "$DIM" "$IT" "$auth" "$RST"
+        r=1
+        li=$((li + 1))
+    fi
+    printf '\e[%dB\r' "$((TOTAL - start - li))"
+fi

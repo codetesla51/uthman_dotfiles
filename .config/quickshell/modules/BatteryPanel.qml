@@ -109,7 +109,7 @@ PanelWindow {
     color: "transparent"
     visible: root.open
     focusable: true
-    // NOTE: no IpcHandler here — Bar.qml owns target "battery" and lazy-loads this.
+    IpcHandler { target: "battery"; function toggle(): void { root.open = !root.open } }
 
     // see WifiPanel: card.onVisibleChanged never fires on window toggle.
     onOpenChanged: if (root.open) { slide.x = card.width + 8; slideIn.restart() }
@@ -133,6 +133,11 @@ PanelWindow {
         focus: root.open
         Keys.onEscapePressed: root.open=false
         transform: Translate { id: slide }
+        // fade with the slide: first paint after a lazy load can be one
+        // frame of garbage (unmapped surface, unsettled height) — opacity
+        // hides it so the open reads as a single smooth motion
+        opacity: root.open ? 1 : 0
+        Behavior on opacity { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
         Component.onCompleted: slide.x=width+8
         ParallelAnimation { id: slideIn; NumberAnimation { target: slide; property: "x"; from: card.width+8; to:0; duration: 250; easing.type: Easing.OutCubic } }
 

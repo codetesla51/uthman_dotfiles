@@ -107,3 +107,14 @@ export LIBVA_DRIVER_NAME=iHD
 export PATH="$HOME/.cargo/bin:$PATH"
 [[ -f ~/azure.sh ]] && source ~/azure.sh
 alias snapper="sudo -A snapper"
+
+# Atuin — replaces fzf's Ctrl+R with sqlite-backed history (init last so its
+# ^R binding wins over fzf key-bindings sourced above).
+eval "$(atuin init zsh)"
+
+# 技 splash for the outermost shell only. Flag lives here: the script runs
+# as a child and can't export back into this shell.
+if [[ -z "$SPLASH_DONE" ]]; then
+  export SPLASH_DONE=1
+  ~/.local/bin/shell-splash
+fi

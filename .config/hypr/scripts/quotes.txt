@@ -123,3 +123,39 @@
 "I exist as I am, that is enough." — Walt Whitman
 "Keep your face always toward the sunshine, and shadows will fall behind you." — Walt Whitman
 "I am large, I contain multitudes." — Walt Whitman
+"Nobody exists on purpose. Nobody belongs anywhere. Everybody's gonna die." — Rick Sanchez
+"Wubba lubba dub dub." — Rick Sanchez
+"To live is to risk it all." — Rick Sanchez
+"Weddings are basically funerals with cake." — Rick Sanchez
+"Your boos mean nothing. I've seen what makes you cheer." — Rick Sanchez
+"Sometimes science is more art than science." — Rick Sanchez
+"Don't break an arm jerking yourself off." — Rick Sanchez
+"Lemme check my list of powers and weaknesses: ability to do anything, but only whenever I want." — Rick Sanchez
+"Being nice is something stupid people do to hedge their bets." — Rick Sanchez
+"Get your shit together. Get it all together and put it in a backpack." — Rick Sanchez
+"Listen, Morty, I hate to break it to you, but what people call love is just a chemical reaction." — Rick Sanchez
+"Existence is pain to a meeseeks." — Mr. Meeseeks
+"I'm Mr. Meeseeks! Look at me!" — Mr. Meeseeks
+"Life is a cruel, cruel teacher. She loves to give you the test first and the lesson later." — Unknown
+"He who fights with monsters should look to it that he himself does not become a monster." — Friedrich Nietzsche
+"God is dead. God remains dead. And we have killed him." — Friedrich Nietzsche
+"To live is to suffer, to survive is to find some meaning in the suffering." — Friedrich Nietzsche
+"The universe is a cruel, uncaring void. The key to being happy isn't a search for meaning." — Unknown
+"We are all just monkeys with permissions." — Unknown
+"Hope is the first step on the road to disappointment." — Unknown
+"The darkest nights produce the brightest stars." — John Green
+"In the middle of difficulty lies opportunity." — Albert Einstein
+"Monsters are real, and ghosts are real too. They live inside us, and sometimes, they win." — Stephen King
+"The oldest and strongest emotion of mankind is fear." — H.P. Lovecraft
+"There is no friend as loyal as a book." — Ernest Hemingway
+"Move fast and break things. Unless you are breaking stuff, you are not moving fast enough." — Mark Zuckerberg
+"Programs must be written for people to read, and only incidentally for machines to execute." — Harold Abelson
+"Any fool can write code that a computer can understand. Good programmers write code that humans can understand." — Martin Fowler
+"First, solve the problem. Then, write the code." — John Johnson
+"The best error message is the one that never shows up." — Thomas Fuchs
+"Software is a gas: it expands to fill its container." — Nathan Myhrvold
+"A good programmer is someone who always looks both ways before crossing a one-way street." — Doug Linder
+"Walking on water and developing software from a specification are easy if both are frozen." — Edward V. Berard
+"Deleted code is debugged code." — Jeff Sickel
+"It's harder to read code than to write it." — Joel Spolsky
+"Code is like humor. When you have to explain it, it's bad." — Cory House

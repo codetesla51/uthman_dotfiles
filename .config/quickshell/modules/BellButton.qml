@@ -45,7 +45,7 @@ Item {
             Rectangle {
                 anchors.fill: parent
                 radius: 5
-                color: colors.background
+                color: "transparent"
             }
             Rectangle {
                 anchors.centerIn: parent

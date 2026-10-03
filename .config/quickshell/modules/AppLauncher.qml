@@ -27,14 +27,17 @@ PanelWindow {
     property bool allowHover: false
     Component.onCompleted: loadStores()
     onOpenChanged: {
-        if (open) { search.text = ""; selected = -1; allowHover = false; Qt.callLater(function(){ search.forceActiveFocus() }) }
+        if (open) { search.text = ""; selected = filtered.length > 0 ? 0 : -1; allowHover = false; Qt.callLater(function(){ search.forceActiveFocus() }) }
     }
     // no timer — hover enables on first mouse move only, so open doesn't auto-highlight
 
     // denylist — system junk the user never launches; edit this array to hide more
     readonly property var denylist: ["rofi","kvantum","qv4l2","qt5ct","qt6ct","v4l2 test","logseq","printer","assistant","ava","btop","htop","xterm","uxterm","kvantummanager"]
+    // usage ranking is fully automatic: every launch bumps count + timestamp,
+    // and the score blends both (log-scaled count + recency bonus). No manual
+    // starring — the system learns purely from what you actually open.
     property var usageMap: ({})
-    property var favSet: ({})
+    property var usageLast: ({})
 
     readonly property var allApps: DesktopEntries.applications.values.filter(e => {
         if (e.noDisplay) return false
@@ -49,28 +52,35 @@ PanelWindow {
         var d = db()
         d.transaction(function(tx){
             tx.executeSql('CREATE TABLE IF NOT EXISTS usage(id TEXT PRIMARY KEY, count INTEGER)')
-            tx.executeSql('CREATE TABLE IF NOT EXISTS favs(id TEXT PRIMARY KEY)')
-            var r = tx.executeSql('SELECT * FROM usage'); var m={}; for(var i=0;i<r.rows.length;i++) m[r.rows.item(i).id]=r.rows.item(i).count; usageMap=m
-            var f = tx.executeSql('SELECT * FROM favs'); var s2={}; for(var j=0;j<f.rows.length;j++) s2[f.rows.item(j).id]=true; favSet=s2
+            try { tx.executeSql('ALTER TABLE usage ADD COLUMN last INTEGER DEFAULT 0') } catch(e) {}
+            var r = tx.executeSql('SELECT * FROM usage'); var m={}; var l={}
+            for(var i=0;i<r.rows.length;i++){ m[r.rows.item(i).id]=r.rows.item(i).count; try{ l[r.rows.item(i).id]=r.rows.item(i).last||0 }catch(e2){} }
+            usageMap=m; usageLast=l
         })
     }
-    function bumpUsage(id){
-        var d=db(); d.transaction(function(tx){ tx.executeSql('INSERT OR REPLACE INTO usage VALUES(?, COALESCE((SELECT count FROM usage WHERE id=?),0)+1)', [id,id]) })
-        var m=JSON.parse(JSON.stringify(usageMap)); m[id]=(m[id]||0)+1; usageMap=m
+    // learned rank: log count (204 launches ≈ 15, 20 ≈ 9, 0 = 0) plus a
+    // recency kick — opened today +6, this week +3. Stale giants still lose
+    // to what you actually touched recently.
+    function usageScore(id){
+        var c = usageMap[id]||0
+        var s = Math.log2(1+c)*2
+        var age = Date.now() - (usageLast[id]||0)
+        if (age < 86400000) s += 6
+        else if (age < 604800000) s += 3
+        return s
     }
-    function toggleFav(id){
-        var d=db(); var isFav=favSet[id]
-        d.transaction(function(tx){ if(isFav) tx.executeSql('DELETE FROM favs WHERE id=?',[id]); else tx.executeSql('INSERT INTO favs VALUES(?)',[id]) })
-        var s2=JSON.parse(JSON.stringify(favSet)); if(isFav) delete s2[id]; else s2[id]=true; favSet=s2
+    function bumpUsage(id){
+        var now = Date.now()
+        var d=db(); d.transaction(function(tx){ tx.executeSql('INSERT OR REPLACE INTO usage VALUES(?, COALESCE((SELECT count FROM usage WHERE id=?),0)+1, ?)', [id,id,now]) })
+        var m=JSON.parse(JSON.stringify(usageMap)); m[id]=(m[id]||0)+1; usageMap=m
+        var l=JSON.parse(JSON.stringify(usageLast)); l[id]=now; usageLast=l
     }
     readonly property var filtered: {
         var q = search.text.trim().toLowerCase()
         if (q === "") {
             var copy=allApps.slice()
             copy.sort(function(a,b){
-                var fa=favSet[a.id]?1:0, fb=favSet[b.id]?1:0
-                if(fa!==fb) return fb-fa
-                var ca=usageMap[a.id]||0, cb=usageMap[b.id]||0
+                var ca=usageScore(a.id), cb=usageScore(b.id)
                 if(ca!==cb) return cb-ca
                 return a.name.localeCompare(b.name)
             })
@@ -88,14 +98,14 @@ PanelWindow {
             else if (e.name.toLowerCase().includes(q)) score = 1
             else if (e.genericName.toLowerCase().includes(q)) score = 2
             else score = 3
-            // boost favorites and frequent
-            if (favSet[e.id]) score -= 10
-            score -= Math.min(5, (usageMap[e.id]||0)*0.5)
+            // learned rank does the work: name match sets the tier,
+            // usage score (uncapped log + recency) orders within it
+            score -= usageScore(e.id) / 2
             scored.push({e:e, score:score})
         }
         scored.sort(function(a,b){
             if (a.score!==b.score) return a.score-b.score
-            var ca=usageMap[a.e.id]||0, cb=usageMap[b.e.id]||0
+            var ca=usageScore(a.e.id), cb=usageScore(b.e.id)
             if (ca!==cb) return cb-ca
             return a.e.name.localeCompare(b.e.name)
         })
@@ -127,10 +137,10 @@ PanelWindow {
     Rectangle {
         id: card
         anchors.centerIn: parent
-        width: 560
+        width: 750
         height: Math.min(520, col.implicitHeight + 28)
         radius: 18
-        color: colors.alpha(colors.background, 0.78)
+        color: colors.alpha(colors.surface, 0.52)
         border.width: 1
         border.color: colors.alpha(colors.outline, 0.15)
         opacity: root.open ? 1 : 0
@@ -140,17 +150,85 @@ PanelWindow {
         Keys.onEscapePressed: root.open = false
         focus: root.open
 
-        ColumnLayout {
+        RowLayout {
             id: col
             anchors { left: parent.left; right: parent.right; top: parent.top; margins: 14 }
-            spacing: 10
+            spacing: 12
+
+            // brand rail — Hollow Knight mask, live caption under it
+            Item {
+                Layout.preferredWidth: 168
+                Layout.fillHeight: true
+                clip: true
+                ColumnLayout {
+                    anchors.centerIn: parent
+                    spacing: 10
+                    Image {
+                        // solid-white bake: the source PNG is faint low-alpha
+                        // line art that reads black on the card — this one is
+                        // opaque white wherever the art is.
+                        // Flex sizing: the card shrinks on empty results, so
+                        // the art scales down with it instead of breaking.
+                        source: Quickshell.env("HOME") + "/.config/quickshell/assets/hk-mask-white.png"
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        Layout.maximumWidth: 130
+                        Layout.maximumHeight: root.filtered.length > 0 ? 210 : 84
+                        Layout.minimumHeight: 30
+                        fillMode: Image.PreserveAspectFit
+                        asynchronous: true
+                        Layout.alignment: Qt.AlignHCenter
+                        opacity: root.open ? 1 : 0
+                        scale: root.open ? 1 : 0.92
+                        Behavior on opacity { NumberAnimation { duration: 350; easing.type: Easing.OutCubic } }
+                        Behavior on scale { NumberAnimation { duration: 380; easing.type: Easing.OutCubic } }
+                    }
+                    Text {
+                        // live caption: follows the highlighted app. Hidden
+                        // on empty results — nothing to follow, saves rail.
+                        visible: root.filtered.length > 0
+                        text: (root.selected >= 0 && root.selected < root.filtered.length && root.filtered[root.selected])
+                            ? root.filtered[root.selected].name : "技"
+                        color: colors.primary
+                        font.family: colors.fontSans
+                        font.pixelSize: 11
+                        font.weight: Font.Bold
+                        elide: Text.ElideRight
+                        Layout.maximumWidth: 160
+                        Layout.alignment: Qt.AlignHCenter
+                    }
+                    Text {
+                        text: "HOLLOW"
+                        color: colors.alpha(colors.outline, 0.55)
+                        font.family: colors.fontSans
+                        font.pixelSize: 8
+                        font.weight: Font.Bold
+                        font.letterSpacing: 3
+                        Layout.alignment: Qt.AlignHCenter
+                    }
+                }
+            }
+
+            // hairline between brand and search
+            Rectangle {
+                Layout.preferredWidth: 1
+                Layout.fillHeight: true
+                Layout.topMargin: 8
+                Layout.bottomMargin: 8
+                color: colors.alpha(colors.outline, 0.15)
+            }
+
+            ColumnLayout {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                spacing: 10
 
             // search bar
             Rectangle {
                 Layout.fillWidth: true
                 height: 48
                 radius: 12
-                color: colors.alpha(colors.surface, 0.6)
+                color: colors.alpha(colors.surface, 0.42)
                 border.width: 1
                 border.color: search.activeFocus ? colors.alpha(colors.primary, 0.5) : colors.alpha(colors.outline, 0.15)
                 Behavior on border.color { ColorAnimation { duration: 150 } }
@@ -217,7 +295,7 @@ PanelWindow {
             ListView {
                 id: resultList
                 Layout.fillWidth: true
-                Layout.preferredHeight: Math.min(7*54, root.filtered.length*54)
+                Layout.preferredHeight: Math.min(7*50, root.filtered.length*50)
                 visible: root.filtered.length > 0
                 clip: true
                 model: root.filtered
@@ -228,20 +306,33 @@ PanelWindow {
                 boundsBehavior: Flickable.StopAtBounds
                 ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
                 delegate: Item {
+                    id: rowRoot
                     required property var modelData
                     required property int index
                     width: resultList.width
-                    height: 54
+                    height: 50
+                    // cascade in on creation (also gently re-fades recycled rows)
+                    property bool shown: false
+                    opacity: shown ? 1 : 0
+                    Behavior on opacity { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
+                    transform: Translate { id: dip; y: shown ? 0 : 10; Behavior on y { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } } }
+                    Component.onCompleted: cascadeTimer.restart()
+                    Timer {
+                        id: cascadeTimer
+                        interval: Math.min(rowRoot.index, 11) * 28
+                        onTriggered: rowRoot.shown = true
+                    }
                     Rectangle {
                         anchors.fill: parent
                         anchors.leftMargin: 2
                         anchors.rightMargin: 2
                         radius: 10
-                        scale: (index === root.selected || ma.containsMouse) ? 1.02 : 1
-                        color: index === root.selected ? colors.alpha(colors.primary, 0.18) : ma.containsMouse ? colors.alpha(colors.surfaceVariant, 0.25) : "transparent"
+                        // NOTE: no scale here on purpose — 1.02 overflowed the
+                        // highlight past the list width on hover. Feedback is
+                        // color + border + the left accent bar below.
+                        color: index === root.selected ? colors.alpha(colors.primary, 0.15) : ma.containsMouse ? colors.alpha(colors.primary, 0.08) : "transparent"
                         border.width: index === root.selected ? 1 : 0
                         border.color: colors.alpha(colors.primary, 0.4)
-                        Behavior on scale { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
                         Behavior on color { ColorAnimation { duration: 120 } }
 
                         RowLayout {
@@ -257,6 +348,8 @@ PanelWindow {
                             color: colors.alpha(colors.primary, 0.10)
                             border.width: 1
                             border.color: colors.alpha(colors.primary, 0.15)
+                            scale: index === root.selected ? 1.14 : 1
+                            Behavior on scale { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
                             Image {
                                 id: appIcon
                                 anchors.fill: parent
@@ -311,7 +404,6 @@ PanelWindow {
                                 Layout.fillWidth: true
                             }
                         }
-
                     }
 
                     MouseArea {
@@ -337,15 +429,27 @@ PanelWindow {
                 Layout.bottomMargin: 16
             }
 
-            // footer hint
-            Text {
-                text: "↑↓ navigate  •  ↵ launch  •  esc close"
-                color: colors.alpha(colors.outline, 0.45)
-                font.family: colors.fontSans
-                font.pixelSize: 8
-                Layout.alignment: Qt.AlignHCenter
+            // footer hint + live count
+            RowLayout {
+                Layout.fillWidth: true
                 Layout.topMargin: 2
+                Text {
+                    text: "↑↓ navigate  •  ↵ launch  •  esc close"
+                    color: colors.alpha(colors.outline, 0.45)
+                    font.family: colors.fontSans
+                    font.pixelSize: 8
+                }
+                Item { Layout.fillWidth: true }
+                Text {
+                    visible: root.filtered.length > 0
+                    text: root.filtered.length + (root.filtered.length === 1 ? " app" : " apps")
+                    color: colors.alpha(colors.outline, 0.45)
+                    font.family: colors.fontSans
+                    font.pixelSize: 8
+                    font.weight: Font.Bold
+                }
             }
+            } // mainCol, then col RowLayout
         }
     }
 }

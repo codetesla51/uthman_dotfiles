@@ -1,0 +1,209 @@
+#!/usr/bin/env python3
+"""Keep a small XCursor theme synchronized with the active Matugen palette.
+
+The base is the unmodified Bibata Modern Ice XCursor theme. Its grayscale
+pixels are recolored in-place, so the result remains compatible with XWayland
+and GTK while the compositor gets a fresh Matugen-tinted pointer.
+"""
+
+from __future__ import annotations
+
+import fcntl
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+THEME_NAME = "Matugen-Cursor"
+SIZE = 20
+HOME = Path.home()
+BASE = HOME / ".local/share/icons/Bibata-Modern-Ice"
+OUTPUT = HOME / ".local/share/icons" / THEME_NAME
+COLORS = HOME / ".config/theme/current/colors.conf"
+LOCK = HOME / ".cache/matugen-cursor.lock"
+FALLBACK = "#aab6bc"
+
+COLOR_RE = re.compile(r"^\s*\$(\w+)\s*=\s*rgb\(([0-9a-fA-F]{6})\)\s*$", re.MULTILINE)
+
+
+def read_palette() -> dict[str, str]:
+    try:
+        text = COLORS.read_text()
+    except OSError:
+        return {}
+    return {name: value.lower() for name, value in COLOR_RE.findall(text)}
+
+
+def hex_rgb(value: str) -> tuple[int, int, int]:
+    value = value.lstrip("#")
+    return tuple(int(value[i : i + 2], 16) for i in (0, 2, 4))  # type: ignore[return-value]
+
+
+def rgb_hex(rgb: tuple[int, int, int]) -> str:
+    return "#" + "".join(f"{max(0, min(255, round(channel))):02x}" for channel in rgb)
+
+
+def relative_luminance(rgb: tuple[int, int, int]) -> float:
+    channels = []
+    for value in rgb:
+        value /= 255
+        channels.append(value / 12.92 if value <= 0.04045 else ((value + 0.055) / 1.055) ** 2.4)
+    return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2]
+
+
+def contrast(a: tuple[int, int, int], b: tuple[int, int, int]) -> float:
+    light, dark = sorted((relative_luminance(a), relative_luminance(b)), reverse=True)
+    return (light + 0.05) / (dark + 0.05)
+
+
+def blend(a: tuple[int, int, int], b: tuple[int, int, int], amount: float) -> tuple[int, int, int]:
+    return tuple(round(x + (y - x) * amount) for x, y in zip(a, b))  # type: ignore[return-value]
+
+
+def cursor_color(palette: dict[str, str]) -> tuple[int, int, int]:
+    """Use Matugen's tertiary accent, preserving its color when readable."""
+    background = hex_rgb(palette.get("background", "#131314"))
+    foreground = hex_rgb(palette.get("foreground", "#e4e2e1"))
+    base = hex_rgb(palette.get("tertiary", palette.get("primary", FALLBACK)))
+
+    # Matugen runs in dark mode here, so the normal path keeps tertiary exact.
+    # If a future palette has poor contrast, move toward the foreground until
+    # the pointer remains readable instead of silently falling back to primary.
+    if contrast(base, background) < 3.0:
+        for amount in (0.25, 0.5, 0.75, 1.0):
+            candidate = blend(base, foreground, amount)
+            if contrast(candidate, background) >= 3.0:
+                return candidate
+    return base
+
+
+def recolor_xcursor(path: Path, target: tuple[int, int, int]) -> None:
+    """Recolor grayscale BGRA-premultiplied pixels in an XCursor file."""
+    data = bytearray(path.read_bytes())
+    if data[:4] != b"Xcur":
+        return
+
+    try:
+        toc_count = int.from_bytes(data[12:16], "little")
+        positions = [
+            int.from_bytes(data[16 + index * 12 + 8 : 16 + index * 12 + 12], "little")
+            for index in range(toc_count)
+        ]
+    except (IndexError, ValueError):
+        return
+
+    for index, start in enumerate(positions):
+        end = positions[index + 1] if index + 1 < len(positions) else len(data)
+        if start + 40 > end:
+            continue
+
+        image_type = int.from_bytes(data[start + 4 : start + 8], "little")
+        if image_type != 0xFFFD0002:
+            continue
+
+        header_size = int.from_bytes(data[start : start + 4], "little")
+        width = int.from_bytes(data[start + 16 : start + 20], "little")
+        height = int.from_bytes(data[start + 20 : start + 24], "little")
+        pixel_start = start + 4 + header_size
+        pixel_end = min(end, pixel_start + width * height * 4)
+        if width <= 0 or height <= 0 or pixel_start >= pixel_end:
+            continue
+
+        for offset in range(pixel_start, pixel_end - 3, 4):
+            blue, green, red, alpha = data[offset : offset + 4]
+            if alpha == 0:
+                continue
+            # Bibata Ice is grayscale. Preserve any unexpected non-gray pixels.
+            if max(blue, green, red) - min(blue, green, red) > 6:
+                continue
+            intensity = max(blue, green, red)
+            data[offset : offset + 3] = bytes(
+                (
+                    round(target[2] * intensity / 255),
+                    round(target[1] * intensity / 255),
+                    round(target[0] * intensity / 255),
+                )
+            )
+
+    path.write_bytes(data)
+
+
+def write_theme_files(theme: Path, color: tuple[int, int, int]) -> None:
+    (theme / "cursors").mkdir(parents=True, exist_ok=True)
+    shutil.copy2(BASE / "index.theme", theme / "index.theme")
+    (theme / "cursor.theme").write_text(
+        "[Icon Theme]\nName=Matugen-Cursor\nInherits=Matugen-Cursor\n",
+        encoding="utf-8",
+    )
+    (theme / "SOURCE.txt").write_text(
+        "Generated locally from Bibata Modern Ice.\n"
+        "The active color is derived from Matugen's tertiary accent.\n"
+        "Base license: GPL-3.0 (see the repository's cursor-theme package).\n",
+        encoding="utf-8",
+    )
+    (theme / ".matugen-color").write_text(rgb_hex(color) + "\n", encoding="utf-8")
+
+
+def generate(color: tuple[int, int, int]) -> None:
+    if not BASE.is_dir():
+        print(f"cursor base missing: {BASE}", file=sys.stderr)
+        return
+
+    parent = OUTPUT.parent
+    parent.mkdir(parents=True, exist_ok=True)
+    temporary = Path(tempfile.mkdtemp(prefix=".matugen-cursor-", dir=parent))
+    try:
+        shutil.copytree(BASE / "cursors", temporary / "cursors", symlinks=True)
+        for source in (temporary / "cursors").rglob("*"):
+            if source.is_symlink() or not source.is_file():
+                continue
+            recolor_xcursor(source, color)
+
+        write_theme_files(temporary, color)
+        if OUTPUT.exists() or OUTPUT.is_symlink():
+            if OUTPUT.is_symlink() or OUTPUT.is_file():
+                OUTPUT.unlink()
+            else:
+                shutil.rmtree(OUTPUT)
+        os.replace(temporary, OUTPUT)
+    finally:
+        if temporary.exists():
+            shutil.rmtree(temporary, ignore_errors=True)
+
+
+def apply() -> None:
+    if os.environ.get("HYPRLAND_INSTANCE_SIGNATURE") and shutil.which("hyprctl"):
+        # Round-trip through the base theme first: Hyprland caches cursor
+        # surfaces per theme name, so re-setting an unchanged name is a
+        # visual no-op even though the files were regenerated. Touching a
+        # different theme drops the cache, the second call shows fresh art.
+        subprocess.run(["hyprctl", "setcursor", BASE.name, str(SIZE)], check=False)
+        subprocess.run(["hyprctl", "setcursor", THEME_NAME, str(SIZE)], check=False)
+    if shutil.which("gsettings"):
+        subprocess.run(
+            ["gsettings", "set", "org.gnome.desktop.interface", "cursor-theme", THEME_NAME],
+            check=False,
+        )
+        subprocess.run(
+            ["gsettings", "set", "org.gnome.desktop.interface", "cursor-size", str(SIZE)],
+            check=False,
+        )
+
+
+def main() -> int:
+    LOCK.parent.mkdir(parents=True, exist_ok=True)
+    with LOCK.open("w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        color = cursor_color(read_palette())
+        stamp = OUTPUT / ".matugen-color"
+        if not stamp.is_file() or stamp.read_text().strip() != rgb_hex(color):
+            generate(color)
+        apply()
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -16,14 +16,14 @@ PanelWindow {
     color: "transparent"
     visible: root.open
     focusable: true
-    IpcHandler { target: "keybinds"; function toggle(): void { root.open = !root.open } }
+    // NOTE: no IpcHandler here — Bar.qml owns target "keybinds" and lazy-loads this.
 
     onOpenChanged: if(open){ slide.y = 20; slideIn.restart(); filter=""; searchField.text=""; searchField.forceActiveFocus() }
 
     property var binds: [
         {key:"SUPER + Return", desc:"Terminal", cat:"Apps", disp:"exec", arg:"uwsm-app -- kitty"},
         {key:"SUPER + Space", desc:"Launch apps", cat:"Apps", disp:"exec", arg:"quickshell -p ~/.config/quickshell ipc call launcher toggle"},
-        {key:"SUPER Shift + F", desc:"File manager", cat:"Apps", disp:"exec", arg:"uwsm-app -- nautilus"},
+        {key:"SUPER Shift + F", desc:"File manager", cat:"Apps", disp:"exec", arg:"uwsm-app -- thunar"},
         {key:"SUPER Shift + B", desc:"Browser", cat:"Apps", disp:"exec", arg:"xdg-open https://google.com"},
         {key:"SUPER Shift + N", desc:"Editor (Zed)", cat:"Apps", disp:"exec", arg:"uwsm-app -- zed"},
         {key:"SUPER Shift + M", desc:"Music (Spotify)", cat:"Apps", disp:"exec", arg:"uwsm-app -- spotify"},

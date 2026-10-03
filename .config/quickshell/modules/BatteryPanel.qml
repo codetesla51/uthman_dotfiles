@@ -109,7 +109,7 @@ PanelWindow {
     color: "transparent"
     visible: root.open
     focusable: true
-    IpcHandler { target: "battery"; function toggle(): void { root.open = !root.open } }
+    // NOTE: no IpcHandler here — Bar.qml owns target "battery" and lazy-loads this.
 
     // see WifiPanel: card.onVisibleChanged never fires on window toggle.
     onOpenChanged: if (root.open) { slide.x = card.width + 8; slideIn.restart() }

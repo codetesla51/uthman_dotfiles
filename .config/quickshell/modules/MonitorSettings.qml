@@ -10,7 +10,24 @@ import QtQuick.Controls
 FloatingWindow {
     id: root
 
-    property var colors
+    // Fallback palette so colors.* reads never throw during startup:
+    // the external `colors` assignment lands after our bindings first
+    // evaluate, and one throw aborts setup of the whole shell.
+    QtObject {
+        id: fallback
+        property color background: "#17130f"
+        property color foreground: "#ebe1da"
+        property color primary: "#f3bc87"
+        property color secondary: "#dfc1a8"
+        property color tertiary: "#9bcee3"
+        property color error: "#ffb4ab"
+        property color surface: "#17130f"
+        property color on_surface: "#efe5df"
+        property color surfaceVariant: "#50453b"
+        property color outline: "#a39487"
+        function alpha(c, a) { return Qt.rgba(c.r, c.g, c.b, a) }
+    }
+    property var colors: fallback
     property bool open: false
     property var monitors: []
     property int selected: 0
@@ -24,7 +41,10 @@ FloatingWindow {
     color: "transparent"
     visible: root.open
 
-    IpcHandler { target: "monitors"; function toggle(): void { root.open = !root.open; if (root.open) load() } }
+    // NOTE: no IpcHandler here on purpose. shell.qml owns target "monitors"
+    // and lazy-loads this module; a second handler for the same target wins
+    // nothing and logs "registered but will not be used".
+    onOpenChanged: { if (open) load() }
 
     Process {
         id: loadProc
@@ -147,9 +167,11 @@ FloatingWindow {
                 Item { Layout.fillWidth: true }
             }
 
-            // scale — the one real control: a group of boxes, pick one
-            RowLayout {
-                Layout.fillWidth: true
+            // scale — the one real control: a group of boxes, pick one.
+            // Plain Row with explicit sizes: a RowLayout here let the boxes
+            // grow past the card edge and cut the 2.00 box off.
+            // 6*52 + 5*5 = 337 < 396 usable. No layout engine, no drift.
+            Row {
                 spacing: 5
                 Repeater {
                     model: root.scaleSteps
@@ -158,8 +180,8 @@ FloatingWindow {
                         required property int index
                         readonly property bool on: index === root.scaleIdx()
 
-                        Layout.preferredWidth: 52
-                        Layout.preferredHeight: 44
+                        width: 52
+                        height: 44
                         radius: 9
                         color: on ? "transparent" : colors.alpha(colors.surfaceVariant, 0.3)
                         border.width: 1
@@ -210,54 +232,62 @@ FloatingWindow {
                 Layout.preferredHeight: 40
                 spacing: 0
 
+                // Plain Item cell, so inner content may use anchors — the rule
+                // is only "no anchors.* on children OF a layout", and the
+                // anchors.verticalCenter ColumnLayout that was here (child
+                // of a RowLayout) blew the whole row's geometry out.
                 Item {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    RowLayout {
-                        anchors.fill: parent
-                        spacing: 6
-                        ColumnLayout {
-                            anchors.verticalCenter: parent.verticalCenter
-                            spacing: 2
-                            Text {
-                                text: "ROT"
-                                color: colors.alpha(colors.outline, 0.55)
-                                font.family: colors.fontSans
-                                font.pixelSize: 7
-                                font.weight: Font.Bold
-                                font.letterSpacing: 1.3
-                            }
+                    ColumnLayout {
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: 3
+                        Text {
+                            text: "ROT"
+                            color: colors.alpha(colors.outline, 0.55)
+                            font.family: colors.fontSans
+                            font.pixelSize: 7
+                            font.weight: Font.Bold
+                            font.letterSpacing: 1.3
+                        }
+                        // Plain Row, explicit sizes — same reason as the
+                        // scale boxes above: no layout engine, no drift.
+                        Row {
+                            spacing: 6
                             Text {
                                 text: mon ? (mon.transform * 90) + "°" : "—"
                                 color: colors.alpha(colors.foreground, 0.9)
                                 font.family: colors.fontSans
                                 font.pixelSize: 12
                                 font.weight: Font.Bold
+                                anchors.verticalCenter: parent.verticalCenter
                             }
-                        }
-                        Rectangle {
-                            Layout.preferredWidth: 52
-                            Layout.preferredHeight: 22
-                            radius: 11
-                            color: rotMa.containsMouse ? colors.alpha(colors.primary, 0.15) : colors.alpha(colors.surfaceVariant, 0.3)
-                            border.width: 1
-                            border.color: colors.alpha(colors.outline, 0.12)
-                            y: rotMa.containsMouse ? -2 : 0
-                            Behavior on y { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
-                            Behavior on color { ColorAnimation { duration: 140 } }
-                            Text {
-                                anchors.centerIn: parent
-                                text: "turn"
-                                color: colors.alpha(colors.foreground, 0.8)
-                                font.family: colors.fontSans
-                                font.pixelSize: 9
-                                font.weight: Font.Bold
-                            }
-                            MouseArea {
-                                id: rotMa
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                onClicked: root.rotate()
+                            Rectangle {
+                                width: 52
+                                height: 22
+                                radius: 11
+                                color: rotMa.containsMouse ? colors.alpha(colors.primary, 0.15) : colors.alpha(colors.surfaceVariant, 0.3)
+                                border.width: 1
+                                border.color: colors.alpha(colors.outline, 0.12)
+                                y: rotMa.containsMouse ? -2 : 0
+                                Behavior on y { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
+                                Behavior on color { ColorAnimation { duration: 140 } }
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: "turn"
+                                    color: colors.alpha(colors.foreground, 0.8)
+                                    font.family: colors.fontSans
+                                    font.pixelSize: 9
+                                    font.weight: Font.Bold
+                                }
+                                MouseArea {
+                                    id: rotMa
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    onClicked: root.rotate()
+                                }
                             }
                         }
                     }
@@ -269,8 +299,10 @@ FloatingWindow {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     ColumnLayout {
-                        anchors.fill: parent
-                        spacing: 2
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: 3
                         Text {
                             text: "MODE"
                             color: colors.alpha(colors.outline, 0.55)
@@ -297,8 +329,10 @@ FloatingWindow {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     ColumnLayout {
-                        anchors.fill: parent
-                        spacing: 2
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: 3
                         Text {
                             text: "STATE"
                             color: colors.alpha(colors.outline, 0.55)

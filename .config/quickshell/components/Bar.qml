@@ -29,22 +29,259 @@ PanelWindow {
 
     NotificationCenter { id: ntfy; colors: palette }
 
-    WifiPanel { id: wifiPanel; colors: palette }
-    SystemMonitor { id: sysMon; colors: palette }
-    BatteryPanel { id: batPanel; colors: palette }
-    ClipboardPanel { id: clipPanel; colors: palette }
-    ThemePanel { id: themePanel; colors: palette }
-    FastFetchWindow { id: fastFetch; colors: palette }
-    ClockWindow { id: clockWin; colors: palette }
-    ScreenTime { id: screenTime; colors: palette }
-    PhoneBridge { id: phoneLink; colors: palette }
+    // ---- lazy popups: Loader + IPC proxy, zero RAM while closed ----
+    // Pattern: bool owns visibility, proxy IpcHandler owns the IPC target
+    // (panel files must NOT register the same target — see MonitorSettings
+    // lesson), Loader instantiates on open, Connections unloads on close.
+    // Bar pills call toggleX()/showX(); Hyprland binds call `ipc call <target> toggle`.
+
+    // WifiPanel (1183 lines, heaviest) — Network pill + `wifi` bind
+    property bool wifiOpen: false
+    IpcHandler { target: "wifi"; function toggle(): void { wifiOpen = !wifiOpen } }
+    function toggleWifi() { if (wifiLoader.item) wifiLoader.item.open = !wifiLoader.item.open; else wifiOpen = true }
+    Loader {
+        id: wifiLoader
+        active: wifiOpen
+        asynchronous: true
+        source: "../modules/WifiPanel.qml"
+        onLoaded: { item.colors = palette; item.open = true }
+    }
+    Connections {
+        target: wifiLoader.item
+        function onOpenChanged() { if (wifiLoader.item && !wifiLoader.item.open) wifiOpen = false }
+    }
+
+    // SystemMonitor (544 lines) — Memory/Cpu pills + `sysmon` bind
+    property bool sysOpen: false
+    IpcHandler { target: "sysmon"; function toggle(): void { sysOpen = !sysOpen } }
+    function showSysMon() { if (sysLoader.item) sysLoader.item.open = true; else sysOpen = true }
+    Loader {
+        id: sysLoader
+        active: sysOpen
+        asynchronous: true
+        source: "../modules/SystemMonitor.qml"
+        onLoaded: { item.colors = palette; item.open = true }
+    }
+    Connections {
+        target: sysLoader.item
+        function onOpenChanged() { if (sysLoader.item && !sysLoader.item.open) sysOpen = false }
+    }
+
+    // BatteryPanel (300 lines) — Battery pill + `battery` bind
+    property bool batOpen: false
+    IpcHandler { target: "battery"; function toggle(): void { batOpen = !batOpen } }
+    function toggleBat() { if (batLoader.item) batLoader.item.open = !batLoader.item.open; else batOpen = true }
+    Loader {
+        id: batLoader
+        active: batOpen
+        asynchronous: true
+        source: "../modules/BatteryPanel.qml"
+        onLoaded: { item.colors = palette; item.open = true }
+    }
+    Connections {
+        target: batLoader.item
+        function onOpenChanged() { if (batLoader.item && !batLoader.item.open) batOpen = false }
+    }
+
+    // ClipboardPanel (577 lines) — `clipboard` bind. `sticky` too: the shelf
+    // binds (SUPER ALT 1-4) must fire snippets with no window, so the proxy
+    // runs the action headless — load, act, unload, never setting open.
+    property bool clipOpen: false
+    property string stickyAction: ""  // "copy:N" | "pin" | "clear" | ""
+    IpcHandler { target: "clipboard"; function toggle(): void { clipOpen = !clipOpen } function close(): void { clipOpen = false } }
+    IpcHandler {
+        target: "sticky"
+        function copy(slot: string): void { stickyCopy(slot) }
+        function pin(): void { stickyPin() }
+        function clearAll(): void { stickyClear() }
+    }
+    function stickyCopy(slot) {
+        if (clipLoader.item) clipLoader.item.copyStickyBySlot(slot)
+        else { stickyAction = "copy:" + slot; clipOpen = true }
+    }
+    function stickyPin() {
+        if (clipLoader.item) clipLoader.item.addStickyFromClipboard()
+        else { stickyAction = "pin"; clipOpen = true }
+    }
+    function stickyClear() {
+        if (clipLoader.item) clipLoader.item.clearStickies()
+        else { stickyAction = "clear"; clipOpen = true }
+    }
+    Loader {
+        id: clipLoader
+        active: clipOpen
+        asynchronous: true
+        source: "../modules/ClipboardPanel.qml"
+        onLoaded: {
+            item.colors = palette
+            if (stickyAction !== "") {
+                var a = stickyAction; stickyAction = ""
+                if (a === "pin") item.addStickyFromClipboard()
+                else if (a === "clear") item.clearStickies()
+                else if (a.indexOf("copy:") === 0) item.copyStickyBySlot(a.slice(5))
+                clipOpen = false
+            } else {
+                item.open = true
+            }
+        }
+    }
+    Connections {
+        target: clipLoader.item
+        function onOpenChanged() { if (clipLoader.item && !clipLoader.item.open) clipOpen = false }
+    }
+
+    // ThemePanel (361 lines) — `theme` bind
+    property bool themeOpen: false
+    IpcHandler { target: "theme"; function toggle(): void { themeOpen = !themeOpen } }
+    Loader {
+        id: themeLoader
+        active: themeOpen
+        asynchronous: true
+        source: "../modules/ThemePanel.qml"
+        onLoaded: { item.colors = palette; item.open = true }
+    }
+    Connections {
+        target: themeLoader.item
+        function onOpenChanged() { if (themeLoader.item && !themeLoader.item.open) themeOpen = false }
+    }
+
+    // FastFetchWindow (191 lines) — `fastfetch` bind
+    property bool fetchOpen: false
+    IpcHandler { target: "fastfetch"; function toggle(): void { fetchOpen = !fetchOpen } }
+    Loader {
+        id: fetchLoader
+        active: fetchOpen
+        asynchronous: true
+        source: "../modules/FastFetchWindow.qml"
+        onLoaded: { item.colors = palette; item.open = true }
+    }
+    Connections {
+        target: fetchLoader.item
+        function onOpenChanged() { if (fetchLoader.item && !fetchLoader.item.open) fetchOpen = false }
+    }
+
+    // ClockWindow (308 lines) — Clock pin + `clockwin` bind
+    property bool clockOpen: false
+    IpcHandler { target: "clockwin"; function toggle(): void { clockOpen = !clockOpen } }
+    function toggleClockWin() { if (clockLoader.item) clockLoader.item.open = !clockLoader.item.open; else clockOpen = true }
+    Loader {
+        id: clockLoader
+        active: clockOpen
+        asynchronous: true
+        source: "../modules/ClockWindow.qml"
+        onLoaded: { item.colors = palette; item.open = true }
+    }
+    Connections {
+        target: clockLoader.item
+        function onOpenChanged() { if (clockLoader.item && !clockLoader.item.open) clockOpen = false }
+    }
+
+    // ScreenTime (211 lines) — `screentime` bind
+    property bool stOpen: false
+    IpcHandler { target: "screentime"; function toggle(): void { stOpen = !stOpen } }
+    Loader {
+        id: stLoader
+        active: stOpen
+        asynchronous: true
+        source: "../modules/ScreenTime.qml"
+        onLoaded: { item.colors = palette; item.open = true }
+    }
+    Connections {
+        target: stLoader.item
+        function onOpenChanged() { if (stLoader.item && !stLoader.item.open) stOpen = false }
+    }
+    // PhoneBridge (1216 lines, 18 Process) lazy: IPC-only, never pill-wired.
+    // NOTE: inbox/notif watchers now start on first open, not bar startup.
+    property bool phoneOpen: false
+    IpcHandler { target: "phonebridge"; function toggle(): void { phoneOpen = !phoneOpen } }
+    Loader {
+        id: phoneLoader
+        active: phoneOpen
+        asynchronous: true
+        source: "../modules/PhoneBridge.qml"
+        onLoaded: { item.colors = palette; item.open = true }
+    }
+    Connections {
+        target: phoneLoader.item
+        function onOpenChanged() { if (phoneLoader.item && !phoneLoader.item.open) phoneOpen = false }
+    }
     // WhatsApp PARKED (ban caution, 2026-09-17): kept on disk, unwired so no daemon spawns.
     // WhatsApp { id: waPanel; colors: palette }
-    PluginMenu { id: pluginMenu; colors: palette }
-    KeybindsPanel { id: keybindsPanel; colors: palette }
-    DriveHealth { id: driveHealth; colors: palette }
-    WatchCatPanel { id: watchCat; colors: palette }
-    FailWatchPanel { id: failWatch; colors: palette }
+    // PluginMenu (324 lines) — `plugins` bind
+    property bool pluginsOpen: false
+    IpcHandler { target: "plugins"; function toggle(): void { pluginsOpen = !pluginsOpen } }
+    Loader {
+        id: pluginsLoader
+        active: pluginsOpen
+        asynchronous: true
+        source: "../modules/PluginMenu.qml"
+        onLoaded: { item.colors = palette; item.open = true }
+    }
+    Connections {
+        target: pluginsLoader.item
+        function onOpenChanged() { if (pluginsLoader.item && !pluginsLoader.item.open) pluginsOpen = false }
+    }
+
+    // KeybindsPanel (260 lines) — `keybinds` bind
+    property bool keysOpen: false
+    IpcHandler { target: "keybinds"; function toggle(): void { keysOpen = !keysOpen } }
+    Loader {
+        id: keysLoader
+        active: keysOpen
+        asynchronous: true
+        source: "../modules/KeybindsPanel.qml"
+        onLoaded: { item.colors = palette; item.open = true }
+    }
+    Connections {
+        target: keysLoader.item
+        function onOpenChanged() { if (keysLoader.item && !keysLoader.item.open) keysOpen = false }
+    }
+
+    // DriveHealth (739 lines) — `drives` bind (+ `dbg` stays in panel)
+    property bool drivesOpen: false
+    IpcHandler { target: "drives"; function toggle(): void { drivesOpen = !drivesOpen } }
+    Loader {
+        id: drivesLoader
+        active: drivesOpen
+        asynchronous: true
+        source: "../modules/DriveHealth.qml"
+        onLoaded: { item.colors = palette; item.open = true }
+    }
+    Connections {
+        target: drivesLoader.item
+        function onOpenChanged() { if (drivesLoader.item && !drivesLoader.item.open) drivesOpen = false }
+    }
+
+    // WatchCatPanel (333 lines) — WatchCat pill + `watchcat` bind
+    property bool wcOpen: false
+    IpcHandler { target: "watchcat"; function toggle(): void { wcOpen = !wcOpen } }
+    function toggleWatchCat() { if (wcLoader.item) wcLoader.item.open = !wcLoader.item.open; else wcOpen = true }
+    Loader {
+        id: wcLoader
+        active: wcOpen
+        asynchronous: true
+        source: "../modules/WatchCatPanel.qml"
+        onLoaded: { item.colors = palette; item.open = true }
+    }
+    Connections {
+        target: wcLoader.item
+        function onOpenChanged() { if (wcLoader.item && !wcLoader.item.open) wcOpen = false }
+    }
+
+    // FailWatchPanel (320 lines) — `failwatch` bind
+    property bool fwOpen: false
+    IpcHandler { target: "failwatch"; function toggle(): void { fwOpen = !fwOpen } }
+    Loader {
+        id: fwLoader
+        active: fwOpen
+        asynchronous: true
+        source: "../modules/FailWatchPanel.qml"
+        onLoaded: { item.colors = palette; item.open = true }
+    }
+    Connections {
+        target: fwLoader.item
+        function onOpenChanged() { if (fwLoader.item && !fwLoader.item.open) fwOpen = false }
+    }
     MediaOsd { id: mediaOsd; colors: palette }
 
     // bar sides toggle — SUPER SHIFT SPACE leaves middle island
@@ -141,7 +378,7 @@ PanelWindow {
                     id: clockItem
                     colors: bar.colors
                     // smaller clock when NowPlaying is focus — keep time but de-emphasized
-                    onPinRequested: clockWin.open = !clockWin.open
+                    onPinRequested: toggleClockWin()
                 }
                 // NowPlaying focus — big centered, fills available width
                 NowPlaying {
@@ -267,17 +504,17 @@ PanelWindow {
                 dnd: ntfy.dnd
                 onToggleDndRequested: ntfy.toggleDnd()
             }
-            Memory { colors: bar.colors; onOpenRequested: sysMon.open = true }
-            Cpu { colors: bar.colors; onOpenRequested: sysMon.open = true }
+            Memory { colors: bar.colors; onOpenRequested: showSysMon() }
+            Cpu { colors: bar.colors; onOpenRequested: showSysMon() }
             Network {
                 colors: bar.colors
-                onOpenRequested: wifiPanel.open = !wifiPanel.open
+                onOpenRequested: toggleWifi()
             }
             WatchCat {
                 colors: bar.colors
-                onOpenRequested: watchCat.open = !watchCat.open
+                onOpenRequested: toggleWatchCat()
             }
-            Battery { colors: bar.colors; onOpenRequested: batPanel.open = !batPanel.open }
+            Battery { colors: bar.colors; onOpenRequested: toggleBat() }
         }
 
     }

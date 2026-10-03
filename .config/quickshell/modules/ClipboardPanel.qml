@@ -29,20 +29,7 @@ FloatingWindow {
     color: "transparent"
     visible: root.open
 
-    IpcHandler {
-        target: "clipboard"
-        function toggle(): void { root.open = !root.open }
-        function close(): void { root.open = false }
-    }
-    IpcHandler {
-        target: "sticky"
-        // fire a sticky by 1-based slot: `ipc call sticky copy 3`
-        // (param must be typed — untyped params aren't callable over IPC)
-        function copy(slot: string): void { root.copyStickyBySlot(slot) }
-        // pin current clipboard content without opening the window
-        function pin(): void { root.addStickyFromClipboard() }
-        function clearAll(): void { root.clearStickies() }
-    }
+    // NOTE: no IpcHandler here — Bar.qml owns targets "clipboard" and "sticky".
 
     function refresh(){
         listProc.running = true

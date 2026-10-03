@@ -32,7 +32,7 @@ FloatingWindow {
     color: "transparent"
     visible: root.open
 
-    IpcHandler { target: "watchcat"; function toggle(): void { root.open = !root.open } }
+    // NOTE: no IpcHandler here — Bar.qml owns target "watchcat" and lazy-loads this.
 
     // ---- poll daemon live.json while open ----
     property bool liveBusy: false

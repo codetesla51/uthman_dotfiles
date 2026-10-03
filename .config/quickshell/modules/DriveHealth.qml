@@ -74,7 +74,7 @@ FloatingWindow {
     maximumSize: Qt.size(760, 700)
     color: "transparent"
     visible: root.open
-    IpcHandler { target: "drives"; function toggle(): void { root.open = !root.open } }
+    // NOTE: no IpcHandler here — Bar.qml owns target "drives" and lazy-loads this.
 
     function fmtGb(b) { return (b / 1073741824).toFixed(1) + "G" }
     function fmtHours(h) {

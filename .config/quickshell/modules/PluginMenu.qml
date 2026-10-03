@@ -43,11 +43,6 @@ PanelWindow {
                 out.push(plugins[i])
         return out
     }
-    function accents(i) {
-        var a = [colors.primary, colors.secondary, colors.tertiary]
-        return a[i % 3]
-    }
-
     function launch(target) {
         Quickshell.execDetached(["quickshell", "-p", Quickshell.env("HOME") + "/.config/quickshell",
                                  "ipc", "call", target, "toggle"])
@@ -62,7 +57,7 @@ PanelWindow {
     focusable: true
     WlrLayershell.namespace: "qs-plugins"
 
-    IpcHandler { target: "plugins"; function toggle(): void { root.open = !root.open } }
+    // NOTE: no IpcHandler here — Bar.qml owns target "plugins" and lazy-loads this.
 
     onOpenChanged: {
         if (open) {
@@ -137,8 +132,8 @@ PanelWindow {
                         selectByMouse: true
                         onTextChanged: root.query = text
                         Keys.onPressed: function(e){
-                            if (e.key === Qt.Key_Down) { root.selected = Math.min(root.selected + 2, root.filtered.length - 1); e.accepted = true }
-                            else if (e.key === Qt.Key_Up) { root.selected = Math.max(root.selected - 2, 0); e.accepted = true }
+                            if (e.key === Qt.Key_Down) { root.selected = Math.min(root.selected + 1, root.filtered.length - 1); list.positionViewAtIndex(root.selected, ListView.Contain); e.accepted = true }
+                            else if (e.key === Qt.Key_Up) { root.selected = Math.max(root.selected - 1, 0); list.positionViewAtIndex(root.selected, ListView.Contain); e.accepted = true }
                             else if (e.key === Qt.Key_Escape) { root.open = false; root.query = ""; e.accepted = true }
                             else if (e.key === Qt.Key_Return || e.key === Qt.Key_Enter) {
                                 var it = root.filtered[root.selected]
@@ -169,55 +164,56 @@ PanelWindow {
                 maximumLineCount: 1
             }
 
-            // grid — 2-col bento cards with glyph + name + desc + arrow
-            GridView {
-                id: grid
+            // list — single-column rows, same language as Grap results.
+            // The 2-col grid died here: orphan last tile, ±2 arrow jumps,
+            // rainbow per-index accents. One column, one accent, ±1 moves.
+            ListView {
+                id: list
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 clip: true
                 model: root.filtered
                 currentIndex: root.selected
                 boundsBehavior: Flickable.StopAtBounds
-                cellWidth: width / 2
-                cellHeight: 112
+                spacing: 6
                 ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
 
                 delegate: Item {
                     required property var modelData
                     required property int index
-                    width: grid.cellWidth
-                    height: grid.cellHeight
+                    width: list.width
+                    height: 60
+                    readonly property bool active: index === root.selected || tileMa.containsMouse
 
                     Rectangle {
                         id: tile
                         anchors.fill: parent
-                        anchors.margins: 5
-                        radius: 14
-                        // one hover language: tint + slight scale. The y-lift is gone.
-                        scale: (index === root.selected || tileMa.containsMouse) ? 1.02 : 1
-                        color: (index === root.selected || tileMa.containsMouse) ? colors.alpha(colors.primary, 0.14)
+                        radius: 12
+                        // one hover language: tint + slight scale, no lift
+                        scale: active ? 1.01 : 1
+                        color: active ? colors.alpha(colors.primary, 0.14)
                                             : colors.alpha(colors.surfaceVariant, 0.18)
                         border.width: 1
-                        border.color: (index === root.selected || tileMa.containsMouse) ? colors.alpha(colors.primary, 0.35)
+                        border.color: active ? colors.alpha(colors.primary, 0.35)
                                                                : colors.alpha(colors.outline, 0.08)
                         Behavior on scale { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
                         Behavior on color { ColorAnimation { duration: 140 } }
 
                         RowLayout {
                             anchors.fill: parent
-                            anchors.leftMargin: 12
-                            anchors.rightMargin: 12
+                            anchors.leftMargin: 10
+                            anchors.rightMargin: 14
                             spacing: 12
                             Rectangle {
-                                width: 38; height: 38; radius: 19
-                                color: colors.alpha(root.accents(index), 0.16)
+                                width: 36; height: 36; radius: 10
+                                color: colors.alpha(colors.primary, active ? 0.2 : 0.12)
                                 border.width: 1
-                                border.color: colors.alpha(root.accents(index), 0.45)
+                                border.color: colors.alpha(colors.primary, active ? 0.5 : 0.3)
                                 Layout.alignment: Qt.AlignVCenter
                                 Text {
                                     anchors.centerIn: parent
                                     text: modelData.glyph
-                                    color: root.accents(index)
+                                    color: colors.primary
                                     font.family: colors.fontSans
                                     font.pixelSize: 15
                                     font.weight: Font.ExtraBold
@@ -231,7 +227,7 @@ PanelWindow {
                                     text: modelData.name
                                     color: colors.foreground
                                     font.family: colors.fontSans
-                                    font.pixelSize: 11
+                                    font.pixelSize: 12
                                     font.weight: Font.DemiBold
                                     elide: Text.ElideRight
                                     Layout.fillWidth: true
@@ -240,16 +236,16 @@ PanelWindow {
                                     text: modelData.desc
                                     color: colors.alpha(colors.outline, 0.7)
                                     font.family: colors.fontSans
-                                    font.pixelSize: 8
+                                    font.pixelSize: 9
                                     elide: Text.ElideRight
                                     Layout.fillWidth: true
                                 }
                             }
                             Text {
-                                text: "→"
-                                color: (index === root.selected || tileMa.containsMouse) ? colors.primary : colors.alpha(colors.outline, 0.5)
+                                text: active ? "→" : (index + 1 < 10 ? "0" + (index + 1) : "" + (index + 1))
+                                color: active ? colors.primary : colors.alpha(colors.outline, 0.35)
                                 font.family: colors.fontSans
-                                font.pixelSize: 14
+                                font.pixelSize: active ? 14 : 10
                                 font.weight: Font.Bold
                                 Layout.alignment: Qt.AlignVCenter
                             }
@@ -268,8 +264,8 @@ PanelWindow {
 
                 Text {
                     anchors.centerIn: parent
-                    visible: grid.count === 0
-                    text: root.plugins.length === 0 ? "no plugins installed yet" : "no match"
+                    visible: list.count === 0
+                    text: root.plugins.length === 0 ? "no plugins installed yet" : "no match — try another name"
                     color: colors.alpha(colors.outline, 0.5)
                     font.family: colors.fontSans
                     font.pixelSize: 10
@@ -281,7 +277,7 @@ PanelWindow {
                 spacing: 12
                 Layout.alignment: Qt.AlignHCenter
                 Repeater {
-                    model: [ { k: "↑↓←→", a: "move" }, { k: "↵", a: "open" }, { k: "esc", a: "close" } ]
+                    model: [ { k: "↑↓", a: "move" }, { k: "↵", a: "open" }, { k: "esc", a: "close" } ]
                     delegate: Row {
                         required property var modelData
                         spacing: 4
@@ -313,10 +309,10 @@ PanelWindow {
 
         Keys.onPressed: function(e){
             if (e.key === Qt.Key_Escape) { root.open = false; root.query = ""; e.accepted = true }
-            else if (e.key === Qt.Key_Left) { root.selected = Math.max(root.selected - 1, 0); grid.positionViewAtIndex(root.selected, GridView.Contain); e.accepted = true }
-            else if (e.key === Qt.Key_Right) { root.selected = Math.min(root.selected + 1, root.filtered.length - 1); grid.positionViewAtIndex(root.selected, GridView.Contain); e.accepted = true }
-            else if (e.key === Qt.Key_Up) { root.selected = Math.max(root.selected - 2, 0); grid.positionViewAtIndex(root.selected, GridView.Contain); e.accepted = true }
-            else if (e.key === Qt.Key_Down) { root.selected = Math.min(root.selected + 2, root.filtered.length - 1); grid.positionViewAtIndex(root.selected, GridView.Contain); e.accepted = true }
+            else if (e.key === Qt.Key_Left) { root.selected = Math.max(root.selected - 1, 0); list.positionViewAtIndex(root.selected, ListView.Contain); e.accepted = true }
+            else if (e.key === Qt.Key_Right) { root.selected = Math.min(root.selected + 1, root.filtered.length - 1); list.positionViewAtIndex(root.selected, ListView.Contain); e.accepted = true }
+            else if (e.key === Qt.Key_Up) { root.selected = Math.max(root.selected - 1, 0); list.positionViewAtIndex(root.selected, ListView.Contain); e.accepted = true }
+            else if (e.key === Qt.Key_Down) { root.selected = Math.min(root.selected + 1, root.filtered.length - 1); list.positionViewAtIndex(root.selected, ListView.Contain); e.accepted = true }
             else if (e.key === Qt.Key_Return || e.key === Qt.Key_Enter) {
                 var it = root.filtered[root.selected]
                 if (it) root.launch(it.target)

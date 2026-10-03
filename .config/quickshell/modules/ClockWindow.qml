@@ -19,7 +19,7 @@ FloatingWindow {
     color: "transparent"
     visible: root.open
 
-    IpcHandler { target: "clockwin"; function toggle(): void { root.open = !root.open } }
+    // NOTE: no IpcHandler here — Bar.qml owns target "clockwin" and lazy-loads this.
 
     SystemClock { id: clock; precision: SystemClock.Seconds }
 

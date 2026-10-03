@@ -17,7 +17,7 @@ FloatingWindow {
     color: "transparent"
     visible: root.open
 
-    IpcHandler { target: "screentime"; function toggle(): void { root.open = !root.open } }
+    // NOTE: no IpcHandler here — Bar.qml owns target "screentime" and lazy-loads this.
 
     // data comes from the `screentime` backend (Go daemon): `screentime --export all`
     // -> { cells[105]{secs,future}, last7[]{display,secs,today}, total_secs }

@@ -23,7 +23,7 @@ PanelWindow {
     visible: root.open
     focusable: true
     WlrLayershell.namespace: "qs-theme"
-    IpcHandler { target: "theme"; function toggle(): void { root.open = !root.open } }
+    // NOTE: no IpcHandler here — Bar.qml owns target "theme" and lazy-loads this.
 
     function refresh(){
         currentProc.running = true

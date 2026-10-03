@@ -88,7 +88,7 @@ FloatingWindow {
     visible: root.open
 
 
-    IpcHandler { target: "sysmon"; function toggle(): void { root.open = !root.open } }
+    // NOTE: no IpcHandler here — Bar.qml owns target "sysmon" and lazy-loads this.
 
     // stats-only — no kill, just cool graphs
 

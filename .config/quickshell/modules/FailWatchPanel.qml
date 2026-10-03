@@ -35,7 +35,7 @@ FloatingWindow {
     color: "transparent"
     visible: root.open
 
-    IpcHandler { target: "failwatch"; function toggle(): void { root.open = !root.open } }
+    // NOTE: no IpcHandler here — Bar.qml owns target "failwatch" and lazy-loads this.
 
     function pollLive() {
         if (root.liveBusy) return

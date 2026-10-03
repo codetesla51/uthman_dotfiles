@@ -19,7 +19,7 @@ FloatingWindow {
     color: "transparent"
     visible: root.open
 
-        IpcHandler { target: "fastfetch"; function toggle(): void { root.open = !root.open } }
+        // NOTE: no IpcHandler here — Bar.qml owns target "fastfetch" and lazy-loads this.
 
     // ---------- verified Nerd Font glyphs (AGENTS section 2) ----------
     readonly property var glyphs: ({

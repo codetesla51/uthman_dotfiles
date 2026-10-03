@@ -118,10 +118,7 @@ PanelWindow {
     WlrLayershell.namespace: "qs-wifi"
     WlrLayershell.layer: WlrLayer.Overlay
 
-    IpcHandler {
-        target: "wifi"
-        function toggle(): void { root.open = !root.open }
-    }
+    // NOTE: no IpcHandler here — Bar.qml owns target "wifi" and lazy-loads this.
 
     // entrance animation lives here, not on the card: the card's own `visible`
     // never changes when this window toggles, so card.onVisibleChanged never fires

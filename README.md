@@ -161,7 +161,7 @@ The daemon samples in 12s chunks, flags "hot" processes (over 500 KB/s for 10s+)
 | `SUPER+,` / `SUPER SHIFT+,` | Notifications / do-not-disturb |
 | `SUPER CTRL+V` / `SUPER CTRL+P` / `SUPER+N` | Clipboard window / pin clipboard to sticky shelf / system info |
 | `SUPER ALT+Space` / `SUPER SHIFT+Space` | Island style / bar sides |
-| `SUPER+Escape` / `SUPER SHIFT+Q/R` | Power menu / shutdown / reboot |
+| `SUPER+Escape` / `SUPER SHIFT+Q` | Power menu / shutdown (reboot lives in the power menu) |
 | `SUPER+arrows`, `SUPER+1-0` | Focus, workspaces |
 | Fn row | Volume/brightness/mic via the quickshell OSD |
 
@@ -170,6 +170,21 @@ The full list lives in `.config/hypr/bindings.conf` (vendored defaults alongside
 ## Helper scripts
 
 `~/.local/bin/` (stowed from this repo) holds the CLI surface: `set-wallpaper`, `getTheme`, `shot`, `record`, `utpdf`, `vol`, `bright`, `nightlight`, `lock`, `phone-pair`, `qemu-launch`, and more. These are what binds, panels, and muscle memory call.
+
+## Tools
+
+What runs the desktop day to day, and where each piece lives:
+
+| Tool | Job | Wiring |
+|------|-----|--------|
+| `awww` | Wallpaper daemon + transitions | `autostart.conf` launches the daemon; `set-wallpaper` switches with a 0.7s `wave` (instant `none` at login) |
+| `matugen` + `matugen-cursor` | Theme colors + matching cursor | `getTheme` regenerates on wallpaper switch; cursor round-trips through Bibata so Hyprland drops its cache — no logout needed |
+| `atuin` | Shell history (SQLite, per-directory smart) | `eval "$(atuin init zsh)"` last in `.zshrc`, owns `Ctrl+R`; fully offline, `atuin register` for sync |
+| `shell-splash` | 技 terminal greeting | `.zshrc` runs it for the outermost shell only; braille art dissolves in with a rice gradient re-read from `colors.conf` every launch |
+| `fastfetch` | System info with the 技 logo | `config.jsonc` points at `kanji.txt` (gradient baked from the current rice) |
+| `chafa` + PIL | Art pipeline behind the splash/logo | 技 rendered from Noto CJK → alpha-mask → braille; Hollow Knight mask baked solid-white for the launcher rail |
+| `hyprlock` | Screen lock | `hypridle` + `SUPER+L`; fade entrance, pill input, mask art configurable in `hyprlock.conf` |
+| `quickshell` | Bar, island, all panels | `shell.qml` root; bar popups lazy-load (battery stays resident); registry in `PLUGINS.md`, rules in `AGENTS.md` |
 
 ## Structure
 

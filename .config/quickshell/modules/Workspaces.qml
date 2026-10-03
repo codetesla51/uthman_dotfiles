@@ -1,4 +1,6 @@
+import Quickshell
 import Quickshell.Hyprland
+import Quickshell.Io
 import QtQuick
 
 // Workspaces — segmented control pill (waybar style.css parity).
@@ -17,6 +19,20 @@ Item {
         for (var j = 0; j < wsList.length; j++)
             if (wsList[j].id > 0) ids[wsList[j].id] = true
         return Object.keys(ids).map(Number).sort(function(a, b) { return a - b })
+    }
+
+    // style flag — true: kanji numerals (一二三…), false: the glyph dots.
+    // flip live: quickshell -p ~/.config/quickshell ipc call workspaces toggleStyle
+    property bool useKanji: true
+    IpcHandler {
+        target: "workspaces"
+        function toggleStyle(): void { root.useKanji = !root.useKanji }
+        function kanjiStyle(on: bool): void { root.useKanji = on }
+    }
+    function kanji(n) {
+        var digits = ["", "一", "二", "三", "四", "五", "六", "七", "八", "九", "十"]
+        if (n >= 1 && n <= 10) return digits[n]
+        return String(n)
     }
 
     implicitWidth: btnRow.implicitWidth + 10
@@ -86,8 +102,9 @@ Item {
                     Text {
                         id: label
                         anchors.centerIn: parent
-                        text: btn.isActive ? "󰮯"
-                             : (!btn.isEmpty ? "󰊠" : "󰑊")
+                        text: root.useKanji ? root.kanji(btn.wsId)
+                             : (btn.isActive ? "󰮯"
+                                : (!btn.isEmpty ? "󰊠" : "󰑊"))
                         color: btn.isActive || btn.isUrgent ? colors.background
                              : btn.hovered ? colors.foreground
                              : btn.isEmpty ? colors.alpha(colors.outline, 0.35)

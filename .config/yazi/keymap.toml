@@ -1,0 +1,29 @@
+[[manager.prepend_keymap]]
+on   = "E"
+run  = "open --interactive"
+desc = "Open with…"
+
+[[manager.prepend_keymap]]
+on   = "Y"
+run  = "yank"
+desc = "Yank (copy) paths"
+
+[[manager.prepend_keymap]]
+on   = ["g", "h"]
+run  = "cd ~"
+desc = "Go home"
+
+[[manager.prepend_keymap]]
+on   = ["g", "d"]
+run  = "cd ~/dotfiles"
+desc = "Go dotfiles"
+
+[[manager.prepend_keymap]]
+on   = ["g", "v"]
+run  = "cd ~/Videos"
+desc = "Go videos"
+
+[[manager.prepend_keymap]]
+on   = "."
+run  = "hidden toggle"
+desc = "Toggle hidden files"

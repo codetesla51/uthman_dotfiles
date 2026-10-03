@@ -58,6 +58,9 @@ if [[ $? -ne 0 ]]; then
     exit 1
 fi
 
+# Keep the pointer palette synchronized with Matugen before apps reload.
+"$HOME/.local/bin/matugen-cursor" || echo "Warning: cursor theme update failed" >&2
+
 echo "Applying colors..."
 
 # Fire every reload in parallel so nothing flashes sequentially.

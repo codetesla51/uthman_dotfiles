@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<actions>
+<action>
+	<icon>utilities-terminal</icon>
+	<name>Open Kitty Here</name>
+	<submenu></submenu>
+	<unique-id>1780000000000000-1</unique-id>
+	<command>kitty --directory %f</command>
+	<description>Open kitty in this folder</description>
+	<range></range>
+	<patterns>*</patterns>
+	<startup-notify/>
+	<directories/>
+</action>
+<action>
+	<icon>text-editor</icon>
+	<name>Open in Neovim</name>
+	<submenu></submenu>
+	<unique-id>1780000000000000-2</unique-id>
+	<command>kitty -e nvim %f</command>
+	<description>Edit file in Neovim</description>
+	<range></range>
+	<patterns>*</patterns>
+	<startup-notify/>
+	<audio-files/>
+	<image-files/>
+	<other-files/>
+	<text-files/>
+	<video-files/>
+</action>
+<action>
+	<icon>edit-copy</icon>
+	<name>Copy Path</name>
+	<submenu></submenu>
+	<unique-id>1780000000000000-3</unique-id>
+	<command>sh -c 'printf "%s" %F | wl-copy'</command>
+	<description>Copy full path to clipboard</description>
+	<range></range>
+	<patterns>*</patterns>
+	<startup-notify/>
+	<audio-files/>
+	<image-files/>
+	<other-files/>
+	<text-files/>
+	<video-files/>
+	<directories/>
+</action>
+<action>
+	<icon>preferences-desktop-wallpaper</icon>
+	<name>Set as Wallpaper</name>
+	<submenu></submenu>
+	<unique-id>1780000000000000-4</unique-id>
+	<command>sh -c '$HOME/.local/bin/set-wallpaper %f'</command>
+	<description>Apply as wallpaper (runs matugen recolor)</description>
+	<range></range>
+	<patterns>*.jpg;*.jpeg;*.png;*.webp</patterns>
+	<startup-notify/>
+	<image-files/>
+</action>
+</actions>

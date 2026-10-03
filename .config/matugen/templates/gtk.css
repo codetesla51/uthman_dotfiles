@@ -75,13 +75,38 @@
 * {
     outline: none;
     -gtk-outline-radius: 8px;
+    -gtk-icon-palette: success @secondary, warning @tertiary, error @error;
 }
 
 window, .window,
-dialog, messagedialog {
+dialog, messagedialog,
+assistant, printdialog {
     background-color: @background;
     color: @foreground;
     border-radius: 12px;
+}
+
+/* ── No white, ever: every scrollable/text surface defaults dark ── */
+viewport,
+scrolledwindow viewport,
+stack,
+paned,
+layout,
+textview.view,
+textview text {
+    background-color: @background;
+    color: @foreground;
+}
+
+textview.view selection,
+textview text selection {
+    background-color: alpha(@primary, 0.35);
+    color: @foreground;
+}
+
+dialog viewport,
+messagedialog viewport {
+    background-color: transparent;
 }
 
 window:backdrop {
@@ -109,8 +134,8 @@ menubar,
     color: @headerbar_fg_color;
     border-bottom: 1px solid alpha(@outline, 0.15);
     box-shadow: none;
-    padding: 3px 8px;
-    min-height: 34px;
+    padding: 6px 12px;
+    min-height: 40px;
 }
 
 headerbar:backdrop {
@@ -133,9 +158,9 @@ headerbar button {
     border: none;
     border-radius: 8px;
     color: alpha(@foreground, 0.7);
-    min-height: 26px;
-    min-width: 26px;
-    padding: 3px 8px;
+    min-height: 30px;
+    min-width: 30px;
+    padding: 5px 10px;
     transition: 150ms ease;
 }
 
@@ -161,9 +186,9 @@ button {
     border: 1px solid alpha(@outline, 0.15);
     border-radius: 8px;
     color: @foreground;
-    min-height: 26px;
-    padding: 4px 10px;
-    font-size: 11px;
+    min-height: 32px;
+    padding: 7px 14px;
+    font-size: 12px;
     transition: 150ms ease;
     box-shadow: none;
 }
@@ -244,9 +269,9 @@ entry {
     border: 1px solid alpha(@outline, 0.2);
     border-radius: 8px;
     color: @foreground;
-    min-height: 28px;
-    padding: 4px 8px;
-    font-size: 11px;
+    min-height: 32px;
+    padding: 6px 12px;
+    font-size: 12px;
     caret-color: @primary;
     transition: 150ms ease;
 }
@@ -281,12 +306,12 @@ iconview,
 gridview {
     background-color: transparent;
     color: @foreground;
-    font-size: 11px;
+    font-size: 12px;
 }
 
 listview row,
 listboxrow {
-    padding: 4px 8px;
+    padding: 7px 12px;
     border-radius: 8px;
     transition: 150ms ease;
 }
@@ -312,8 +337,8 @@ treeview header button:hover {
     background: transparent;
     border: none;
     color: alpha(@foreground, 0.55);
-    padding: 3px 6px;
-    font-size: 10px;
+    padding: 8px 10px;
+    font-size: 11px;
     font-weight: bold;
 }
 
@@ -340,8 +365,8 @@ placesview,
 .sidebar row,
 placessidebar row,
 navigation-sidebar row {
-    padding: 5px 8px;
-    font-size: 11px;
+    padding: 8px 12px;
+    font-size: 12px;
     border-radius: 8px;
     transition: 150ms ease;
 }
@@ -379,8 +404,8 @@ notebook header {
 }
 
 notebook tab {
-    padding: 5px 12px;
-    font-size: 11px;
+    padding: 8px 16px;
+    font-size: 12px;
     color: alpha(@foreground, 0.6);
     border: none;
     transition: 150ms ease;
@@ -409,14 +434,14 @@ popover.background {
     background-color: @surface;
     border: 1px solid alpha(@outline, 0.15);
     border-radius: 12px;
-    padding: 4px;
+    padding: 6px;
     box-shadow: 0 4px 24px alpha(#000000, 0.35);
 }
 
 menuitem,
 .menuitem {
-    padding: 5px 10px;
-    font-size: 11px;
+    padding: 7px 12px;
+    font-size: 12px;
     border-radius: 8px;
     color: @foreground;
     transition: 150ms ease;
@@ -449,8 +474,8 @@ radiobutton radio {
     background: alpha(@surface_variant, 0.3);
     border: 1px solid alpha(@outline, 0.3);
     border-radius: 4px;
-    min-height: 14px;
-    min-width: 14px;
+    min-height: 16px;
+    min-width: 16px;
     transition: 150ms ease;
 }
 
@@ -481,8 +506,8 @@ scale slider {
     background: @background;
     border: 2px solid @primary;
     border-radius: 50%;
-    min-height: 14px;
-    min-width: 14px;
+    min-height: 16px;
+    min-width: 16px;
 }
 
 levelbar block {
@@ -542,27 +567,57 @@ progressbar text {
     font-size: 10px;
 }
 
-/* ── Scrollbars ──────────────────────────────────────────── */
+/* ── Scrollbars: slim, floating, glow on hover ──────────── */
 scrollbar {
     background: transparent;
     border: none;
 }
 
+scrollbar trough {
+    background: transparent;
+    border: none;
+}
+
 scrollbar slider {
-    background: alpha(@outline, 0.3);
-    border-radius: 4px;
+    background: alpha(@outline, 0.28);
+    border: none;
+    border-radius: 99px;
     min-width: 6px;
-    min-height: 30px;
-    margin: 2px;
+    min-height: 40px;
+    margin: 3px;
     transition: 150ms ease;
 }
 
 scrollbar slider:hover {
-    background: alpha(@outline, 0.5);
+    background: alpha(@primary, 0.55);
+    min-width: 8px;
+}
+
+scrollbar slider:active,
+scrollbar slider.dragging {
+    background: @primary;
+    min-width: 8px;
+}
+
+scrollbar button,
+scrollbar arrow {
+    min-width: 0;
+    min-height: 0;
+    padding: 0;
+    margin: 0;
+    background: transparent;
+    border: none;
+    color: transparent;
 }
 
 scrollbar.overlay-indicator:not(.dragging):not(.hovering) slider {
     background: alpha(@outline, 0.35);
+    min-width: 4px;
+}
+
+scrollbar.overlay-indicator.dragging slider,
+scrollbar.overlay-indicator.hovering slider {
+    min-width: 8px;
 }
 
 /* ── Tooltip / infobar / status / search ─────────────────── */
@@ -571,8 +626,8 @@ tooltip {
     border: 1px solid alpha(@outline, 0.2);
     border-radius: 8px;
     color: @foreground;
-    padding: 4px 8px;
-    font-size: 11px;
+    padding: 6px 10px;
+    font-size: 12px;
 }
 
 infobar {
@@ -596,8 +651,8 @@ infobar.error {
 }
 
 statusbar {
-    padding: 2px 8px;
-    font-size: 10px;
+    padding: 5px 12px;
+    font-size: 11px;
     color: alpha(@foreground, 0.65);
 }
 
@@ -625,7 +680,7 @@ paned > separator {
 
 /* ── File chooser (portal upload dialog) ─────────────────── */
 filechooser {
-    font-family: "JetBrainsMono Nerd Font Mono";
+    font-family: "Inter";
 }
 
 filechooser pathbar button:checked {
@@ -656,7 +711,7 @@ nautilus-window listview,
 nautilus-window entry,
 nautilus-window button,
 nautilus-window label {
-    font-family: "JetBrainsMono Nerd Font Mono";
+    font-family: "Inter";
 }
 
 nautilus-window headerbar {
@@ -706,7 +761,7 @@ nautilus-window statusbar {
 /* ── File chooser base: no white anywhere ────────────────── */
 filechooser,
 filechooser dialog {
-    font-family: "JetBrainsMono Nerd Font Mono";
+    font-family: "Inter";
     background-color: {{ colors.surface.default.hex }};
     color: {{ colors.on_background.default.hex }};
 }
@@ -738,11 +793,180 @@ navigation-sidebar row:selected label {
     color: {{ colors.primary.default.hex }};
 }
 
-filechooser placessidebar label,
-filechooser .sidebar label {
-    color: {{ colors.on_background.default.hex }};
+/* ── File chooser sidebar: same pill design as Thunar ───── */
+filechooser placessidebar,
+filechooser .sidebar {
+    background-color: shade(@surface, 1.18);
 }
 
-filechooser placessidebar row:selected label {
-    color: {{ colors.primary.default.hex }};
+filechooser placessidebar row,
+filechooser .sidebar row {
+    padding: 8px 12px;
+    margin: 1px 6px;
+    border-radius: 10px;
+    border: 1px solid transparent;
+}
+
+filechooser placessidebar row:hover,
+filechooser .sidebar row:hover {
+    background-color: alpha(@surface_variant, 0.35);
+}
+
+filechooser placessidebar row:selected,
+filechooser .sidebar row:selected {
+    background-color: alpha(@primary, 0.30);
+    border-color: alpha(@primary, 0.45);
+}
+
+filechooser placessidebar label,
+filechooser .sidebar label {
+    color: @foreground;
+}
+
+filechooser placessidebar row:selected label,
+filechooser .sidebar row:selected label {
+    color: @primary;
+}
+
+/* ── Thunar file manager ──────────────────────────────── */
+/* Generic toolbar/menubar/sidebar/statusbar rules above already apply
+   (Thunar is GTK3); these refine Thunar-only nodes. Unknown selectors
+   are inert, so this degrades gracefully across Thunar versions. */
+.thunar,
+ThunarWindow {
+    font-family: "Inter";
+    background-color: @background;
+    color: @foreground;
+}
+
+.thunar toolbar {
+    background-color: @toolbar_bg_color;
+    border-bottom: 1px solid alpha(@outline, 0.15);
+    box-shadow: inset 0 -1px 0 alpha(@primary, 0.22);
+    padding: 8px 12px;
+}
+
+.thunar toolbar button {
+    background: transparent;
+    border: none;
+    border-radius: 10px;
+    padding: 6px 10px;
+    min-height: 34px;
+    min-width: 34px;
+    color: alpha(@foreground, 0.75);
+}
+
+.thunar toolbar button:hover {
+    background: alpha(@primary, 0.14);
+    color: @foreground;
+}
+
+.thunar toolbar button:active,
+.thunar toolbar button:checked {
+    background: alpha(@primary, 0.22);
+    color: @primary;
+}
+
+.thunar menubar {
+    background-color: @surface;
+}
+
+.thunar entry {
+    border-radius: 12px;
+    min-height: 36px;
+    background: alpha(@surface_variant, 0.35);
+}
+
+.thunar .linked.path-bar button,
+.thunar .path-bar button {
+    background: transparent;
+    border: none;
+    border-radius: 10px;
+    padding: 7px 12px;
+    color: alpha(@foreground, 0.75);
+}
+
+.thunar .linked.path-bar button:hover,
+.thunar .path-bar button:hover {
+    background: alpha(@surface_variant, 0.5);
+    color: @foreground;
+}
+
+.thunar .linked.path-bar button:checked,
+.thunar .path-bar button:checked {
+    background: alpha(@primary, 0.22);
+    color: @primary;
+}
+
+.thunar treeview.view,
+.thunar iconview.view {
+    background-color: @background;
+    color: @foreground;
+    padding: 6px;
+}
+
+.thunar .sidebar,
+.thunar placessidebar {
+    background-color: @sidebar_bg_color;
+}
+
+.thunar .sidebar row,
+.thunar placessidebar row {
+    padding: 9px 12px;
+    margin: 1px 6px;
+    border-radius: 10px;
+    border: 1px solid transparent;
+}
+
+.thunar .sidebar row:hover,
+.thunar placessidebar row:hover {
+    background-color: alpha(@surface_variant, 0.35);
+}
+
+.thunar .sidebar row:selected,
+.thunar placessidebar row:selected {
+    background-color: alpha(@primary, 0.20);
+    border-color: alpha(@primary, 0.35);
+    color: @primary;
+}
+
+.thunar XfceHeading {
+    background-color: transparent;
+    border: none;
+    color: alpha(@foreground, 0.55);
+    font-size: 9px;
+    font-weight: bold;
+    letter-spacing: 1.5px;
+    padding: 10px 12px 4px;
+}
+
+.thunar treeview.view:selected,
+.thunar iconview.view:selected {
+    background-color: alpha(@primary, 0.28);
+    color: @primary;
+    border-radius: 8px;
+}
+
+.thunar treeview.view:hover,
+.thunar iconview.view:hover {
+    background-color: alpha(@surface_variant, 0.35);
+}
+
+.thunar scrolledwindow.frame {
+    border: none;
+}
+
+.thunar statusbar {
+    background-color: transparent;
+    border-top: 1px solid alpha(@outline, 0.12);
+    color: alpha(@foreground, 0.65);
+    padding: 5px 12px;
+}
+
+.thunar notebook tab:checked {
+    color: @primary;
+}
+
+.thunar spinner:checked {
+    color: @primary;
 }

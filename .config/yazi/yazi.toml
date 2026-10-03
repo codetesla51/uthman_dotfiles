@@ -1,0 +1,48 @@
+# yazi — dark, dense, keyboard-first. Matches the rice: no fluff.
+[mgr]
+linemode       = "size"
+show_hidden    = false
+show_symlink   = true
+sort_by        = "natural"
+sort_dir_first = true
+sort_reverse   = false
+scrolloff      = 5
+
+[preview]
+wrap          = "no"
+max_width     = 600
+max_height    = 900
+image_filter  = "lanczos"
+image_quality = 75
+
+[opener]
+edit = [
+  { run = 'nvim %s', block = true, desc = "Edit", for = "linux" },
+]
+open = [
+  { run = 'xdg-open %s', desc = "Open", for = "linux" },
+]
+play = [
+  { run = 'mpv %s', orphan = true, desc = "Play", for = "linux" },
+]
+view = [
+  { run = 'loupe %s', orphan = true, desc = "View image", for = "linux" },
+]
+
+[open]
+rules = [
+  { mime = "image/*", use = [ "view", "open" ] },
+  { mime = "video/*", use = [ "play", "open" ] },
+  { mime = "audio/*", use = [ "play", "open" ] },
+  { mime = "application/pdf", use = [ "open" ] },
+  { mime = "text/*", use = [ "edit", "open" ] },
+  { mime = "inode/directory", use = [ "open" ] },
+  { url = "*", use = [ "open" ] },
+]
+
+[tasks]
+image_alloc = 536870912
+image_bound = [ 1200, 800 ]
+
+[input]
+cursor_blink = false

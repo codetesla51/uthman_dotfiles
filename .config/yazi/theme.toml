@@ -1,0 +1,88 @@
+# amber bento — matches matugen (bg #151310, primary #e3c19a)
+[mgr]
+cwd             = { fg = "#e3c19a", bold = true }
+find_keyword    = { fg = "#b6c8e0", bold = true, underline = true }
+find_position   = { fg = "#b6c8e0", bold = true }
+marker_copied   = { fg = "#b6c8e0", bg = "#b6c8e0" }
+marker_cut      = { fg = "#ffb4ab", bg = "#ffb4ab" }
+marker_selected = { fg = "#e3c19a", bg = "#e3c19a" }
+border_symbol   = "rounded"
+border_style    = { fg = "#4e453c" }
+
+[tabs]
+active    = { fg = "#151310", bg = "#e3c19a", bold = true }
+inactive  = { fg = "#a09489", bg = "#25221f" }
+sep_inner = { open = "", close = "" }
+sep_outer = { open = "", close = "" }
+
+[mode]
+normal_main = { fg = "#151310", bg = "#e3c19a", bold = true }
+normal_alt  = { fg = "#e3c19a", bg = "#25221f" }
+select_main = { fg = "#151310", bg = "#ffb4ab", bold = true }
+select_alt  = { fg = "#ffb4ab", bg = "#25221f" }
+unset_main  = { fg = "#151310", bg = "#ffb4ab", bold = true }
+unset_alt   = { fg = "#ffb4ab", bg = "#25221f" }
+
+[indicator]
+current = { fg = "#151310", bg = "#e3c19a" }
+preview = { underline = true }
+
+[status]
+overall         = { fg = "#e8e1dc", bg = "#25221f" }
+sep_left        = { open = "", close = "" }
+sep_right       = { open = "", close = "" }
+perm_type       = { fg = "#b6c8e0" }
+perm_read       = { fg = "#e3c19a" }
+perm_write      = { fg = "#ffb4ab" }
+perm_exec       = { fg = "#b6c8e0" }
+progress_label  = { fg = "#e3c19a", bold = true }
+progress_normal = { fg = "#4e453c", bg = "#25221f" }
+progress_error  = { fg = "#ffb4ab", bg = "#25221f" }
+
+[which]
+border = { fg = "#e3c19a" }
+cand   = { fg = "#e3c19a", bold = true }
+rest   = { fg = "#a09489" }
+desc   = { fg = "#b6c8e0" }
+
+[confirm]
+border  = { fg = "#e3c19a" }
+title   = { fg = "#e3c19a", bold = true }
+btn_yes = { reversed = true }
+
+[spot]
+border = { fg = "#4e453c" }
+title  = { fg = "#e3c19a", bold = true }
+
+[notify]
+title_info  = { fg = "#b6c8e0", bold = true }
+title_warn  = { fg = "#e3c19a", bold = true }
+title_error = { fg = "#ffb4ab", bold = true }
+
+[pick]
+border = { fg = "#e3c19a" }
+active = { fg = "#e3c19a", bold = true }
+
+[input]
+border   = { fg = "#e3c19a" }
+title    = { fg = "#e3c19a", bold = true }
+value    = { fg = "#e8e1dc" }
+selected = { reversed = true }
+
+[tasks]
+border  = { fg = "#e3c19a" }
+hovered = { fg = "#e3c19a", bold = true }
+
+[help]
+border  = { fg = "#e3c19a" }
+chord   = { fg = "#e3c19a", bold = true }
+hovered = { reversed = true, bold = true }
+
+[filetype]
+rules = [
+  { mime = "image/*", fg = "#e3c19a" },
+  { mime = "{audio,video}/*", fg = "#b6c8e0" },
+  { mime = "application/{zip,rar,7z*,tar,gzip,xz,zstd,bzip*,lzma}", fg = "#ffb4ab" },
+  { mime = "application/{pdf,doc,rtf}", fg = "#b6c8e0" },
+  { mime = "inode/directory", fg = "#e3c19a", bold = true },
+]

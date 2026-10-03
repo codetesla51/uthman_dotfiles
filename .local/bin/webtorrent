@@ -1,0 +1,2 @@
+#!/bin/sh
+exec node "$HOME/.local/lib/node_modules/webtorrent-cli/bin/cmd.js" "$@"

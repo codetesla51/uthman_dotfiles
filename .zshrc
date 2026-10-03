@@ -18,11 +18,11 @@ setopt HIST_VERIFY
 # zoxide-jump them, and the handler covers its job fuzzily.
 
 # ── Aliases ───────────────────────────────────────────────────
-alias ls='lsd'
-alias ll='lsd -l'
-alias la='lsd -la'
-alias lt='lsd --tree'
-alias l='lsd -lA'
+alias ls='eza'
+alias ll='eza -l'
+alias la='eza -la'
+alias lt='eza --tree'
+alias l='eza -lA'
 
 # dev
 alias g='git'
@@ -107,6 +107,17 @@ export LIBVA_DRIVER_NAME=iHD
 export PATH="$HOME/.cargo/bin:$PATH"
 [[ -f ~/azure.sh ]] && source ~/azure.sh
 alias snapper="sudo -A snapper"
+
+# yazi: `y` quits into the directory you land on; plain `yazi` doesn't.
+function y() {
+    local tmp="$(mktemp -t yazi-cwd.XXXXXX)"
+    yazi "$@" --cwd-file="$tmp"
+    if cwd="$(cat -- "$tmp")" && [ -n "$cwd" ] && [ "$cwd" != "$PWD" ]; then
+        builtin cd -- "$cwd"
+    fi
+    rm -f -- "$tmp"
+}
+export EDITOR="nvim"
 
 # Atuin — replaces fzf's Ctrl+R with sqlite-backed history (init last so its
 # ^R binding wins over fzf key-bindings sourced above).

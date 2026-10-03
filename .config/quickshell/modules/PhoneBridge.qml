@@ -173,15 +173,37 @@ FloatingWindow {
     // The daemon owns pairing state (~/.config/phonebridge/config.ini, written
     // by ~/phonebridge/init.sh). If nothing is attached we ask it to connect
     // to the remembered target; first-time Wi-Fi needs `adb tcpip 5555` once.
+    // The daemon bounds every adb call (connect 8s), and the watchdog below
+    // is the backstop for a wedged daemon: without it a hung discovery leaves
+    // busy=true forever and the panel looks frozen instead of unreachable.
+    property int discoveryStart: 0
     function connectTo(addr) {
         connectProc.command = addr ? [root.daemon, "connect", addr] : [root.daemon, "connect"]
+        root.discoveryStart = Date.now()
+        root.say("Connecting…")
+        discoveryWatchdog.restart()
         connectProc.running = true
     }
 
     function refreshDevices() {
         if (root.busy) return
         root.busy = true
+        root.discoveryStart = Date.now()
+        discoveryWatchdog.restart()
         listProc.running = true
+    }
+
+    Timer {
+        id: discoveryWatchdog
+        interval: 15000
+        repeat: false
+        onTriggered: {
+            var killed = false
+            if (connectProc.running) { connectProc.running = false; killed = true }
+            if (listProc.running) { listProc.running = false; killed = true }
+            if (root.busy) root.busy = false
+            if (killed && !root.connected) root.say("Phone not answering — same WiFi as the laptop?")
+        }
     }
 
     Process {
@@ -190,6 +212,7 @@ FloatingWindow {
         stdout: StdioCollector {
             waitForEnd: true
             onStreamFinished: {
+                discoveryWatchdog.stop()
                 root.busy = false
                 var found = []
                 try { found = JSON.parse(text) } catch (e) {}
@@ -219,6 +242,7 @@ FloatingWindow {
             }
         }
         onExited: {
+            discoveryWatchdog.stop()
             if (root.busy) {
                 root.busy = false
                 if (!root.connected) root.say("No phone pair — run ~/phonebridge/init.sh (cable once for tcpip 5555)")
@@ -231,6 +255,7 @@ FloatingWindow {
         stdout: StdioCollector {
             waitForEnd: true
             onStreamFinished: {
+                discoveryWatchdog.stop()
                 var ok = false
                 try { ok = JSON.parse(text).status === "ok" } catch (e) {}
                 if (ok) root.refreshDevices()
@@ -238,6 +263,7 @@ FloatingWindow {
             }
         }
         onExited: function (code) {
+            discoveryWatchdog.stop()
             if (code === 127) root.say("adb not installed — sudo pacman -S android-tools")
             else if (code !== 0 && !root.connected) root.say("Phone not answering — cable once for tcpip?")
         }

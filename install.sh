@@ -29,7 +29,7 @@ header "Checking dependencies..."
 # Note: notifications are owned by the Quickshell shell (org.freedesktop.Notifications),
 # and the app launcher is the local rofi shim ~/.local/bin/walker-dmenu — so neither
 # walker, mako nor swaync is a real dependency.
-DEPS=(hyprland quickshell kitty matugen starship zsh lsd zoxide fzf cava btop stow hyprlock hypridle hyprsunset wl-clipboard cliphist rofi)
+DEPS=(hyprland quickshell kitty matugen starship zsh lsd zoxide fzf cava btop stow hyprlock hypridle hyprsunset wl-clipboard cliphist rofi thunar tumbler thunar-archive-plugin thunar-volman file-roller catfish ffmpegthumbnailer poppler-glib)
 MISSING=()
 
 for dep in "${DEPS[@]}"; do

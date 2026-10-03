@@ -67,8 +67,8 @@ FloatingWindow {
         function close(): void { root.open = false }
     }
 
-    onOpenChanged: if(open){ root.refreshAll(); Qt.callLater(function(){ bg.forceActiveFocus() }) }
-    onTabChanged: if(open) Qt.callLater(function(){ bg.forceActiveFocus() })
+    onOpenChanged: if(open){ root.refreshVisible(); Qt.callLater(function(){ bg.forceActiveFocus() }) }
+    onTabChanged: if(open){ root.ensureTab(root.tab); Qt.callLater(function(){ bg.forceActiveFocus() }) }
 
     function ago(ts){
         var t = Date.parse(ts)
@@ -121,242 +121,325 @@ FloatingWindow {
     Timer { id: statusLife; interval: 5000; onTriggered: root.statusMsg = "" }
     // background poller — light (notifs + runs only), always on so new
     // arrivals notify-send even while the dash is closed
+    // Background poller — light (notifs + runs only). No triggeredOnStart:
+    // every open calls refreshAll() which already includes pollLight(),
+    // so starting fired would fetch notifs+runs twice on first open.
     Timer {
         id: pollTimer
         interval: 300000
         running: true
         repeat: true
-        triggeredOnStart: true
+        triggeredOnStart: false
         onTriggered: root.pollLight()
     }
 
+    // ---- freshness: paint cache instantly, fetch each tab's group behind ----
+    // Overview (contrib/user/repos) changes slowly → 30 min TTL; inbox/pulls
+    // and light (notifs+runs) → 5 min. R / refresh button forces everything.
+    property double lastLight: 0
+    property double lastOverview: 0
+    property double lastInbox: 0
+    property double lastPulls: 0
+    readonly property double ttlFast: 300000
+    readonly property double ttlSlow: 1800000
+    // loading tracks in-flight search/notif procs; onExited fires exactly
+    // once per start so netDone() balances netStart() with no double-count.
+    property int pendingNet: 0
+    function netStart(){ root.pendingNet++; root.loading = true }
+    function netDone(){ if(root.pendingNet > 0) root.pendingNet--; if(root.pendingNet === 0) root.loading = false }
+
     function pollLight(){
-        notifProc.command = ["gh", "api", "notifications", "--paginate"]
-        notifProc.running = true
+        root.lastLight = Date.now()
+        netStart(); notifProc.running = true
         root.runsLoading = true
-        runsProc.command = [Quickshell.env("HOME") + "/.config/quickshell/scripts/gh-runs.sh"]
         runsProc.running = true
     }
-    function refreshAll(){
-        root.loading = true
-        root.statusMsg = ""
-        root.pollLight()
-        prProc.command = ["gh", "search", "prs", "--author=@me", "--state=open", "--json", "number,title,url,updatedAt", "--limit", "20"]
-        prProc.running = true
-        issProc.command = ["gh", "search", "issues", "--assignee=@me", "--state=open", "--json", "number,title,url,updatedAt", "--limit", "20"]
-        issProc.running = true
-        revProc.command = ["gh", "search", "prs", "--review-requested=@me", "--state=open", "--json", "number,title,url,updatedAt", "--limit", "20"]
-        revProc.running = true
+    function refreshOverview(){
+        root.lastOverview = Date.now()
         root.contribLoading = true
         contribProc.running = true
         userProc.running = true
         reposProc.running = true
+    }
+    function refreshInbox(){
+        root.lastInbox = Date.now()
+        netStart(); revProc.running = true
+    }
+    function refreshPulls(){
+        root.lastPulls = Date.now()
+        netStart(); prProc.running = true
+        netStart(); issProc.running = true
+    }
+    function ensureTab(i){
+        var now = Date.now()
+        if(i === 0){ if(now - root.lastOverview > root.ttlSlow) root.refreshOverview() }
+        else if(i === 1){ if(now - root.lastLight > root.ttlFast) root.pollLight(); if(now - root.lastInbox > root.ttlFast) root.refreshInbox() }
+        else if(i === 2){ if(now - root.lastPulls > root.ttlFast) root.refreshPulls() }
+        else if(i === 3){ if(now - root.lastLight > root.ttlFast) root.pollLight() }
+    }
+    function refreshVisible(){
+        var now = Date.now()
+        if(now - root.lastLight > root.ttlFast) root.pollLight()
+        root.ensureTab(root.tab)
+    }
+    function refreshAll(){
+        root.statusMsg = ""
+        root.pollLight()
+        root.refreshOverview()
+        root.refreshInbox()
+        root.refreshPulls()
     }
     function markRead(){
         readProc.command = ["gh", "api", "notifications", "--method", "PUT"]
         readProc.running = true
     }
 
+    // ---- disk cache: stale-while-revalidate ----
+    // Every fetch tees its raw output to ~/.cache/quickshell/github/<name>;
+    // on creation we paint those instantly so open never stares at spinners.
+    Component.onCompleted: cacheProc.running = true
     Process {
-        id: notifProc
-        stdout: StdioCollector {
-            waitForEnd: true
-            onStreamFinished: {
-                try {
-                    var d = JSON.parse(text)
-                    root.notifs = d.map(function(n){
-                        return { repo: (n.repository && n.repository.full_name) || "",
-                                 title: (n.subject && n.subject.title) || "",
-                                 type: (n.subject && n.subject.type) || "",
-                                 url: root.notifUrl(n.subject || {}),
-                                 updated: n.updated_at || "" }
-                    })
-                    var count = d.length
-                    if(root.notifBase < 0){
-                        root.notifBase = count
-                    } else {
-                        if(!root.open && count > root.notifBase){
-                            var fresh = count - root.notifBase
-                            var head = root.notifs.length > 0 ? root.notifs[0].title : ""
-                            root.notify(fresh + " new GitHub notification" + (fresh > 1 ? "s" : ""), head)
-                        }
-                        root.notifBase = count
-                    }
-                } catch(e) { root.say("Notifications failed — gh auth?") }
-                root.loading = false
+        id: cacheProc
+        command: ["sh","-c","mkdir -p $HOME/.cache/quickshell/github; for n in notifs prs issues reviews contrib user repos runs; do printf '@@GIT@%s\\n' \"$n\"; cat $HOME/.cache/quickshell/github/\"$n\" 2>/dev/null; echo; done"]
+        stdout: StdioCollector { waitForEnd: true; onStreamFinished: root.applyCache(text) }
+    }
+    function applyCache(text){
+        var names = ["notifs","prs","issues","reviews","contrib","user","repos","runs"]
+        for(var i = 0; i < names.length; i++){
+            var tag = "@@GIT@" + names[i] + "\n"
+            var a = text.indexOf(tag)
+            if(a < 0) continue
+            var start = a + tag.length
+            var end = text.indexOf("\n@@GIT@", start)
+            var body = (end < 0 ? text.slice(start) : text.slice(start, end)).trim()
+            if(body === "") continue
+            if(names[i] === "runs"){
+                if(body.indexOf("\t") < 0) continue
+                root.applyRuns(body)
+            } else {
+                if(body[0] !== "{" && body[0] !== "[") continue
+                if(names[i] === "notifs") root.applyNotifs(body, true)
+                else if(names[i] === "prs") root.applyPrs(body)
+                else if(names[i] === "issues") root.applyIssues(body)
+                else if(names[i] === "reviews") root.applyReviews(body)
+                else if(names[i] === "contrib") root.applyContrib(body)
+                else if(names[i] === "user") root.applyUser(body)
+                else if(names[i] === "repos") root.applyRepos(body)
             }
         }
-        onExited: function(code){ if(code !== 0){ root.say("gh error — check auth"); root.loading = false } }
+    }
+    function applyNotifs(text, silent){
+        try {
+            var d = JSON.parse(text)
+            root.notifs = d.map(function(n){
+                return { repo: (n.repository && n.repository.full_name) || "",
+                         title: (n.subject && n.subject.title) || "",
+                         type: (n.subject && n.subject.type) || "",
+                         url: root.notifUrl(n.subject || {}),
+                         updated: n.updated_at || "" }
+            })
+            var count = d.length
+            if(root.notifBase < 0){
+                root.notifBase = count
+            } else {
+                if(!silent && !root.open && count > root.notifBase){
+                    var fresh = count - root.notifBase
+                    var head = root.notifs.length > 0 ? root.notifs[0].title : ""
+                    root.notify(fresh + " new GitHub notification" + (fresh > 1 ? "s" : ""), head)
+                }
+                root.notifBase = count
+            }
+        } catch(e) { if(!silent) root.say("Notifications failed — gh auth?") }
+    }
+    function applyPrs(text){
+        try { root.prs = JSON.parse(text) } catch(e) { root.say("PR search failed") }
+    }
+    function applyIssues(text){
+        try { root.issues = JSON.parse(text) } catch(e) { root.say("Issue search failed") }
+    }
+    function applyReviews(text){
+        try { root.reviews = JSON.parse(text) } catch(e) { root.say("Review search failed") }
+    }
+    function applyUser(text){
+        try {
+            var u = JSON.parse(text)
+            root.followers = u.followers || 0
+            root.following = u.following || 0
+            root.publicRepos = u.repos || 0
+            root.publicGists = u.gists || 0
+        } catch(e) {}
+    }
+    function applyRepos(text){
+        try {
+            var repos = JSON.parse(text)
+            var stars = 0
+            for(var i = 0; i < repos.length; i++) stars += repos[i].stargazerCount || 0
+            root.totalStars = stars
+            repos.sort(function(a, b){
+                if((b.stargazerCount || 0) !== (a.stargazerCount || 0)) return (b.stargazerCount || 0) - (a.stargazerCount || 0)
+                if(a.updatedAt < b.updatedAt) return 1
+                if(a.updatedAt > b.updatedAt) return -1
+                return 0
+            })
+            root.topRepos = repos.slice(0, 4)
+        } catch(e) {}
+    }
+    function applyContrib(text){
+        root.contribLoading = false
+        try {
+            var j = JSON.parse(text)
+            var cal = j.data.viewer.contributionsCollection.contributionCalendar
+            root.ghUser = j.data.viewer.login || ""
+            root.contribTotal = cal.totalContributions || 0
+            var weeks = cal.weeks || []
+            root.contribWeeks = weeks
+            var flat = []
+            var days = []
+            for(var w = 0; w < weeks.length; w++){
+                var dd = weeks[w].contributionDays || []
+                for(var k = 0; k < dd.length; k++) days.push(dd[k])
+                for(var i = 0; i < 7; i++){
+                    if(i < dd.length) flat.push({ count: dd[i].contributionCount || 0, future: false, date: dd[i].date })
+                    else flat.push({ count: 0, future: true, date: "" })
+                }
+            }
+            root.flatContrib = flat
+            var best = 0
+            var bestDate = ""
+            for(var b = 0; b < days.length; b++){
+                var c = days[b].contributionCount || 0
+                if(c > best){ best = c; bestDate = days[b].date }
+            }
+            root.contribBest = best
+            root.contribBestDate = bestDate
+            root.contribToday = days.length > 0 ? (days[days.length - 1].contributionCount || 0) : 0
+            var streak = 0
+            var start = days.length - 1
+            if(start >= 0 && (days[start].contributionCount || 0) === 0) start--
+            for(var s = start; s >= 0; s--){
+                if((days[s].contributionCount || 0) > 0) streak++
+                else break
+            }
+            root.contribStreak = streak
+        } catch(e) { root.say("Contributions failed — gh scope?") }
+    }
+    function applyRuns(text){
+        root.runsLoading = false
+        try {
+            var lines = text.trim().split("\n")
+            var all = []
+            for(var i = 0; i < lines.length; i++){
+                var p = lines[i].split("\t")
+                if(p.length < 8 || p[0] === "") continue
+                all.push({ repo: p[0], created: p[1], status: p[2], conclusion: p[3],
+                           workflow: p[4], title: p[5], branch: p[6], url: p[7] })
+            }
+            var run = []
+            var done = []
+            for(var j = 0; j < all.length; j++){
+                if(all[j].status !== "completed") run.push(all[j])
+                else done.push(all[j])
+            }
+            root.runsRunning = run.slice(0, 4)
+            root.runsRecent = done.slice(0, 12)
+            var m = {}
+            for(var k = 0; k < all.length; k++) m[all[k].url] = all[k].status
+            if(!root.runsBase){
+                root.runsMap = m
+                root.runsBase = true
+            } else if(!root.open){
+                for(var n = 0; n < all.length; n++){
+                    var prev = root.runsMap[all[n].url]
+                    if(prev && prev !== "completed" && all[n].status === "completed"){
+                        var ok = all[n].conclusion === "success"
+                        root.notify(ok ? "Workflow passed" : "Workflow " + all[n].conclusion,
+                                    all[n].workflow + " · " + all[n].repo + " (" + all[n].branch + ")",
+                                    !ok)
+                    }
+                }
+                root.runsMap = m
+            } else {
+                root.runsMap = m
+            }
+        } catch(e) { root.say("Actions fetch failed") }
+    }
+
+    Process {
+        id: notifProc
+        command: ["sh","-c","gh api notifications --paginate 2>/dev/null | tee $HOME/.cache/quickshell/github/notifs"]
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: root.applyNotifs(text, false)
+        }
+        onExited: function(code){ if(code !== 0) root.say("gh error — check auth"); root.netDone() }
     }
     Process {
         id: prProc
+        command: ["sh","-c","gh search prs --author=@me --state=open --json number,title,url,updatedAt --limit 20 2>/dev/null | tee $HOME/.cache/quickshell/github/prs"]
         stdout: StdioCollector {
             waitForEnd: true
-            onStreamFinished: {
-                try { root.prs = JSON.parse(text) } catch(e) { root.say("PR search failed") }
-            }
+            onStreamFinished: root.applyPrs(text)
         }
+        onExited: function(code){ root.netDone() }
     }
     Process {
         id: issProc
+        command: ["sh","-c","gh search issues --assignee=@me --state=open --json number,title,url,updatedAt --limit 20 2>/dev/null | tee $HOME/.cache/quickshell/github/issues"]
         stdout: StdioCollector {
             waitForEnd: true
-            onStreamFinished: {
-                try { root.issues = JSON.parse(text) } catch(e) { root.say("Issue search failed") }
-            }
+            onStreamFinished: root.applyIssues(text)
         }
+        onExited: function(code){ root.netDone() }
     }
     Process {
         id: revProc
+        command: ["sh","-c","gh search prs --review-requested=@me --state=open --json number,title,url,updatedAt --limit 20 2>/dev/null | tee $HOME/.cache/quickshell/github/reviews"]
         stdout: StdioCollector {
             waitForEnd: true
-            onStreamFinished: {
-                try { root.reviews = JSON.parse(text) } catch(e) { root.say("Review search failed") }
-            }
+            onStreamFinished: root.applyReviews(text)
         }
+        onExited: function(code){ root.netDone() }
     }
     Process {
         id: readProc
         stdout: StdioCollector { waitForEnd: true }
         onExited: function(code){
-            if(code === 0){ root.notifs = []; root.notifBase = 0; root.say("Inbox zero") }
+            if(code === 0){ root.notifs = []; root.notifBase = 0; root.say("Inbox zero"); Quickshell.execDetached(["sh","-c","mkdir -p $HOME/.cache/quickshell/github; echo '[]' > $HOME/.cache/quickshell/github/notifs"]) }
             else root.say("Mark-read failed — token scope?")
         }
     }
     Process {
         id: contribProc
-        command: ["sh", "-c", "gh api graphql -f query='query{ viewer{ login contributionsCollection{ contributionCalendar{ totalContributions weeks{ contributionDays{ date contributionCount } } } } } }' 2>/dev/null"]
+        command: ["sh", "-c", "gh api graphql -f query='query{ viewer{ login contributionsCollection{ contributionCalendar{ totalContributions weeks{ contributionDays{ date contributionCount } } } } } }' 2>/dev/null | tee $HOME/.cache/quickshell/github/contrib"]
         stdout: StdioCollector {
             waitForEnd: true
-            onStreamFinished: {
-                root.contribLoading = false
-                try {
-                    var j = JSON.parse(text)
-                    var cal = j.data.viewer.contributionsCollection.contributionCalendar
-                    root.ghUser = j.data.viewer.login || ""
-                    root.contribTotal = cal.totalContributions || 0
-                    var weeks = cal.weeks || []
-                    root.contribWeeks = weeks
-                    var flat = []
-                    var days = []
-                    for(var w = 0; w < weeks.length; w++){
-                        var dd = weeks[w].contributionDays || []
-                        for(var k = 0; k < dd.length; k++) days.push(dd[k])
-                        for(var i = 0; i < 7; i++){
-                            if(i < dd.length) flat.push({ count: dd[i].contributionCount || 0, future: false, date: dd[i].date })
-                            else flat.push({ count: 0, future: true, date: "" })
-                        }
-                    }
-                    root.flatContrib = flat
-                    var best = 0
-                    var bestDate = ""
-                    for(var b = 0; b < days.length; b++){
-                        var c = days[b].contributionCount || 0
-                        if(c > best){ best = c; bestDate = days[b].date }
-                    }
-                    root.contribBest = best
-                    root.contribBestDate = bestDate
-                    root.contribToday = days.length > 0 ? (days[days.length - 1].contributionCount || 0) : 0
-                    var streak = 0
-                    var start = days.length - 1
-                    if(start >= 0 && (days[start].contributionCount || 0) === 0) start--
-                    for(var s = start; s >= 0; s--){
-                        if((days[s].contributionCount || 0) > 0) streak++
-                        else break
-                    }
-                    root.contribStreak = streak
-                } catch(e) { root.say("Contributions failed — gh scope?") }
-            }
+            onStreamFinished: root.applyContrib(text)
         }
         onExited: function(code){ if(code !== 0){ root.contribLoading = false } }
     }
     Process {
         id: runsProc
+        command: ["sh","-c","$HOME/.config/quickshell/scripts/gh-runs.sh 2>/dev/null | tee $HOME/.cache/quickshell/github/runs"]
         stdout: StdioCollector {
             waitForEnd: true
-            onStreamFinished: {
-                root.runsLoading = false
-                try {
-                    var lines = text.trim().split("\n")
-                    var all = []
-                    for(var i = 0; i < lines.length; i++){
-                        var p = lines[i].split("\t")
-                        if(p.length < 8 || p[0] === "") continue
-                        all.push({ repo: p[0], created: p[1], status: p[2], conclusion: p[3],
-                                   workflow: p[4], title: p[5], branch: p[6], url: p[7] })
-                    }
-                    var run = []
-                    var done = []
-                    for(var j = 0; j < all.length; j++){
-                        if(all[j].status !== "completed") run.push(all[j])
-                        else done.push(all[j])
-                    }
-                    root.runsRunning = run.slice(0, 4)
-                    root.runsRecent = done.slice(0, 12)
-                    if(!root.runsBase){
-                        var m0 = {}
-                        for(var k = 0; k < all.length; k++) m0[all[k].url] = all[k].status
-                        root.runsMap = m0
-                        root.runsBase = true
-                    } else if(!root.open){
-                        for(var n = 0; n < all.length; n++){
-                            var prev = root.runsMap[all[n].url]
-                            if(prev && prev !== "completed" && all[n].status === "completed"){
-                                var ok = all[n].conclusion === "success"
-                                root.notify(ok ? "Workflow passed" : "Workflow " + all[n].conclusion,
-                                            all[n].workflow + " · " + all[n].repo + " (" + all[n].branch + ")",
-                                            !ok)
-                            }
-                        }
-                        var m1 = {}
-                        for(var q = 0; q < all.length; q++) m1[all[q].url] = all[q].status
-                        root.runsMap = m1
-                    } else {
-                        var m2 = {}
-                        for(var z = 0; z < all.length; z++) m2[all[z].url] = all[z].status
-                        root.runsMap = m2
-                    }
-                } catch(e) { root.say("Actions fetch failed") }
-            }
+            onStreamFinished: root.applyRuns(text)
         }
         onExited: function(code){ if(code !== 0){ root.runsLoading = false } }
     }
     Process {
         id: userProc
-        command: ["gh", "api", "user", "--jq", "{followers: .followers, following: .following, repos: .public_repos, gists: .public_gists}"]
+        command: ["sh","-c","gh api user --jq '{followers: .followers, following: .following, repos: .public_repos, gists: .public_gists}' 2>/dev/null | tee $HOME/.cache/quickshell/github/user"]
         stdout: StdioCollector {
             waitForEnd: true
-            onStreamFinished: {
-                try {
-                    var u = JSON.parse(text)
-                    root.followers = u.followers || 0
-                    root.following = u.following || 0
-                    root.publicRepos = u.repos || 0
-                    root.publicGists = u.gists || 0
-                } catch(e) {}
-            }
+            onStreamFinished: root.applyUser(text)
         }
     }
     Process {
         id: reposProc
-        command: ["gh", "repo", "list", "--limit", "50", "--json", "nameWithOwner,stargazerCount,updatedAt"]
+        command: ["sh","-c","gh repo list --limit 50 --json nameWithOwner,stargazerCount,updatedAt 2>/dev/null | tee $HOME/.cache/quickshell/github/repos"]
         stdout: StdioCollector {
             waitForEnd: true
-            onStreamFinished: {
-                try {
-                    var repos = JSON.parse(text)
-                    var stars = 0
-                    for(var i = 0; i < repos.length; i++) stars += repos[i].stargazerCount || 0
-                    root.totalStars = stars
-                    repos.sort(function(a, b){
-                        if((b.stargazerCount || 0) !== (a.stargazerCount || 0)) return (b.stargazerCount || 0) - (a.stargazerCount || 0)
-                        if(a.updatedAt < b.updatedAt) return 1
-                        if(a.updatedAt > b.updatedAt) return -1
-                        return 0
-                    })
-                    root.topRepos = repos.slice(0, 4)
-                } catch(e) {}
-            }
+            onStreamFinished: root.applyRepos(text)
         }
     }
 

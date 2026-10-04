@@ -200,7 +200,7 @@ PanelWindow {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
                         Layout.maximumWidth: 130
-                        Layout.maximumHeight: root.filtered.length > 0 ? 210 : 84
+                        Layout.maximumHeight: root.filtered.length > 1 ? 210 : 84
                         Layout.minimumHeight: 30
                         fillMode: Image.PreserveAspectFit
                         asynchronous: true

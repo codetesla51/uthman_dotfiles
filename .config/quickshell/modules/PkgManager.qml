@@ -102,7 +102,7 @@ FloatingWindow {
     minimumSize: Qt.size(860, 520)
     maximumSize: Qt.size(1200, 800)
     color: "transparent"
-    visible: root.open
+    visible: root.open || closeAnim.running
 
     IpcHandler { target: "pkgman"; function toggle(): void { root.open = !root.open }
         function showSearch(): void { root.tab=0; root.open=true }
@@ -115,7 +115,7 @@ FloatingWindow {
     // alias for walker/rofi desktop entry
     IpcHandler { target: "packages"; function toggle(): void { root.open = !root.open } }
 
-    onOpenChanged: if (open) { refreshInstalled(); refreshUpdates(); searchNav=0; instNav=0; updNav=0; allowHover=false; if(root.tab===0) Qt.callLater(function(){ searchField.forceActiveFocus() }) }
+    onOpenChanged: if (open) { refreshInstalled(); refreshUpdates(); searchNav=0; instNav=0; updNav=0; allowHover=false; if(root.tab===0) Qt.callLater(function(){ searchField.forceActiveFocus() }); openAnim.restart() } else closeAnim.restart()
     onTabChanged: { searchNav=0; instNav=0; updNav=0; allowHover=false; if(open) { if(tab===0) Qt.callLater(function(){ searchField.forceActiveFocus() }); else if(tab===2) Qt.callLater(function(){ instField.forceActiveFocus() }); else card.forceActiveFocus() } }
     onSearchResultsChanged: searchNav=0
     onInstalledFilteredChanged: instNav=0
@@ -701,9 +701,9 @@ FloatingWindow {
         id: card
         anchors.fill: parent
         radius: 20
-        color: colors.alpha(colors.background, 0.72)
+        color: colors.alpha(colors.surface, 0.52)
         border.width: 1
-        border.color: colors.alpha(colors.primary, 0.12)
+        border.color: colors.alpha(colors.outline, 0.15)
         focus: root.open
         Keys.onEscapePressed: {
             if(root.installing) return
@@ -728,6 +728,19 @@ FloatingWindow {
                 else if(e.key===Qt.Key_Up){ root.updNav=Math.max(root.updNav-1,0); updList.positionViewAtIndex(root.updNav, ListView.Contain); e.accepted=true }
                 else if(e.key===Qt.Key_Return || e.key===Qt.Key_Enter || e.key===Qt.Key_Space){ var u=root.updatesList[root.updNav]; if(u) root.toggleUpdate(u); e.accepted=true }
             }
+        }
+
+        // bezier pair — open pops with overshoot bounce (fast), close hurries
+        // out with none. Same curves as the notification drawer.
+        ParallelAnimation {
+            id: openAnim
+            NumberAnimation { target: card; property: "opacity"; from: 0; to: 1; duration: 220; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
+            NumberAnimation { target: card; property: "scale"; from: 0.94; to: 1; duration: 280; easing.type: Easing.Bezier; easing.bezierCurve: [0.34, 1.35, 0.64, 1] }
+        }
+        ParallelAnimation {
+            id: closeAnim
+            NumberAnimation { target: card; property: "opacity"; to: 0; duration: 160; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
+            NumberAnimation { target: card; property: "scale"; to: 0.94; duration: 180; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
         }
 
         ColumnLayout {

@@ -107,17 +107,18 @@ PanelWindow {
     anchors { top:true; bottom:true; left:true; right:true }
     exclusionMode: ExclusionMode.Ignore
     color: "transparent"
-    visible: root.open
+    visible: root.open || closeAnim.running
     focusable: true
     IpcHandler { target: "battery"; function toggle(): void { root.open = !root.open } }
 
-    // see WifiPanel: card.onVisibleChanged never fires on window toggle.
-    onOpenChanged: if (root.open) { slide.x = card.width + 8; slideIn.restart() }
+    // drawer motion lives in openAnim/closeAnim below (bezier pair).
+    // Close plays out before the window hides (visible binds running).
+    onOpenChanged: if (root.open) openAnim.restart(); else closeAnim.restart()
 
+    // click-outside catcher (invisible — no dim backdrop, card floats over desktop)
     Rectangle {
         anchors.fill: parent
-        color: colors.alpha(colors.background, root.open?0.25:0)
-        Behavior on color { ColorAnimation { duration: 200 } }
+        color: "transparent"
         MouseArea { anchors.fill: parent; onClicked: root.open=false }
     }
 
@@ -128,18 +129,35 @@ PanelWindow {
         width: 400
         height: Math.min(620, col.implicitHeight+28)
         radius: 16
-        color: colors.alpha(colors.background,0.96)
-        border.width: 1; border.color: colors.alpha(colors.outline,0.25)
+        color: colors.alpha(colors.surface, 0.52)
+        border.width: 1; border.color: colors.alpha(colors.outline, 0.15)
         focus: root.open
         Keys.onEscapePressed: root.open=false
-        transform: Translate { id: slide }
+        transform: [
+            Translate { id: slide },
+            Scale { id: cardScale; origin.x: card.width; origin.y: 0 }
+        ]
         // fade with the slide: first paint after a lazy load can be one
         // frame of garbage (unmapped surface, unsettled height) — opacity
         // hides it so the open reads as a single smooth motion
-        opacity: root.open ? 1 : 0
-        Behavior on opacity { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
         Component.onCompleted: slide.x=width+8
-        ParallelAnimation { id: slideIn; NumberAnimation { target: slide; property: "x"; from: card.width+8; to:0; duration: 250; easing.type: Easing.OutCubic } }
+        // bezier pair — open pops in with overshoot bounce (fast), close
+        // hurries out the same path with no overshoot. Same curve family
+        // as the notification drawer.
+        ParallelAnimation {
+            id: openAnim
+            NumberAnimation { target: slide; property: "x"; from: card.width + 8; to: 0; duration: 280; easing.type: Easing.Bezier; easing.bezierCurve: [0.34, 1.35, 0.64, 1] }
+            NumberAnimation { target: card; property: "opacity"; from: 0; to: 1; duration: 220; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
+            NumberAnimation { target: cardScale; property: "xScale"; from: 0.96; to: 1; duration: 280; easing.type: Easing.Bezier; easing.bezierCurve: [0.34, 1.35, 0.64, 1] }
+            NumberAnimation { target: cardScale; property: "yScale"; from: 0.96; to: 1; duration: 280; easing.type: Easing.Bezier; easing.bezierCurve: [0.34, 1.35, 0.64, 1] }
+        }
+        ParallelAnimation {
+            id: closeAnim
+            NumberAnimation { target: slide; property: "x"; to: card.width + 8; duration: 220; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
+            NumberAnimation { target: card; property: "opacity"; to: 0; duration: 180; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
+            NumberAnimation { target: cardScale; property: "xScale"; to: 0.96; duration: 220; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
+            NumberAnimation { target: cardScale; property: "yScale"; to: 0.96; duration: 220; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
+        }
 
         ColumnLayout {
             id: col

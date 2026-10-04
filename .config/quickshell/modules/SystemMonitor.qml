@@ -85,7 +85,9 @@ FloatingWindow {
     minimumSize: Qt.size(700, 480)
     maximumSize: Qt.size(1000, 700)
     color: "transparent"
-    visible: root.open
+    visible: root.open || closeAnim.running
+
+    onOpenChanged: { if (open) openAnim.restart(); else closeAnim.restart() }
 
 
     // NOTE: no IpcHandler here — Bar.qml owns target "sysmon" and lazy-loads this.
@@ -96,10 +98,22 @@ FloatingWindow {
         id: card
         anchors.fill: parent
         radius: 20
-        color: colors.alpha(colors.background, 0.65)
+        color: colors.alpha(colors.surface, 0.52)
         border.width: 1
-        border.color: colors.alpha(colors.primary, 0.12)
+        border.color: colors.alpha(colors.outline, 0.15)
         focus: root.open
+        // bezier pair — open pops with overshoot bounce (fast), close hurries
+        // out with none. Same curves as the notification drawer.
+        ParallelAnimation {
+            id: openAnim
+            NumberAnimation { target: card; property: "opacity"; from: 0; to: 1; duration: 220; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
+            NumberAnimation { target: card; property: "scale"; from: 0.94; to: 1; duration: 280; easing.type: Easing.Bezier; easing.bezierCurve: [0.34, 1.35, 0.64, 1] }
+        }
+        ParallelAnimation {
+            id: closeAnim
+            NumberAnimation { target: card; property: "opacity"; to: 0; duration: 160; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
+            NumberAnimation { target: card; property: "scale"; to: 0.94; duration: 180; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
+        }
         Keys.onEscapePressed: root.open = false
         Keys.onPressed: function(e){
             if(e.key === Qt.Key_K && (e.modifiers & Qt.ShiftModifier) === 0){ root.killHovered(false); e.accepted = true }

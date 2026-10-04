@@ -14,7 +14,6 @@ ShellRoot {
     // and GitHubPoller (tiny: 2 procs + timer; keeps notify-send + cache warm
     // while GitHubDash itself stays lazy-unloaded).
     PowerMenu { colors: barPalette }
-    AppLauncher { colors: barPalette }
     PassPrompt { colors: barPalette }
     GitHubPoller {}
     // LockScreen PARKED (2026-10-03): quickshell WlSessionLock stranded the

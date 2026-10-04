@@ -27,8 +27,9 @@ Item {
     function togglePanel() { panelOpen = !panelOpen }
     function toggleDnd() { dnd = !dnd }
 
-    // see WifiPanel: drawer.onVisibleChanged never fires on window toggle.
-    onPanelOpenChanged: if (panelOpen) { drawerSlide.x = drawer.width + 8; slideIn.restart() }
+    // drawer motion lives in openAnim/closeAnim below (bezier pair).
+    // Close plays out before the window hides (visible binds running).
+    onPanelOpenChanged: if (panelOpen) openAnim.restart(); else closeAnim.restart()
 
     function addToArchive(n) {
         let acts = []
@@ -226,7 +227,7 @@ Item {
     // unpredictably (the catcher ended up ABOVE the drawer eating its clicks).
     PanelWindow {
         id: panelWindow
-        visible: root.panelOpen
+        visible: root.panelOpen || closeAnim.running
         anchors { top: true; bottom: true; left: true; right: true }
         exclusionMode: ExclusionMode.Ignore
         color: "transparent"
@@ -254,19 +255,35 @@ Item {
             width: 380
             height: 520
             radius: 16
-            color: colors.alpha(colors.background, 0.78)
+            color: colors.alpha(colors.surface, 0.52)
             border.width: 1
             border.color: colors.alpha(colors.outline, 0.15)
 
             // ESC closes any open panel (convention for all future panels)
             Keys.onEscapePressed: root.panelOpen = false
 
-            transform: Translate { id: drawerSlide }
+            transform: [
+                Translate { id: drawerSlide },
+                Scale { id: drawerScale; origin.x: drawer.width; origin.y: 0 }
+            ]
             Component.onCompleted: drawerSlide.x = width + 8
 
+            // bezier pair — open pops in with overshoot bounce (fast), close
+            // hurries out the same path with no overshoot. Same curve family
+            // as the bar; [0.34, 1.35, 0.64, 1] is the bounce.
             ParallelAnimation {
-                id: slideIn
-                NumberAnimation { target: drawerSlide; property: "x"; from: drawer.width + 8; to: 0; duration: 250; easing.type: Easing.OutCubic }
+                id: openAnim
+                NumberAnimation { target: drawerSlide; property: "x"; from: drawer.width + 8; to: 0; duration: 280; easing.type: Easing.Bezier; easing.bezierCurve: [0.34, 1.35, 0.64, 1] }
+                NumberAnimation { target: drawer; property: "opacity"; from: 0; to: 1; duration: 220; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
+                NumberAnimation { target: drawerScale; property: "xScale"; from: 0.96; to: 1; duration: 280; easing.type: Easing.Bezier; easing.bezierCurve: [0.34, 1.35, 0.64, 1] }
+                NumberAnimation { target: drawerScale; property: "yScale"; from: 0.96; to: 1; duration: 280; easing.type: Easing.Bezier; easing.bezierCurve: [0.34, 1.35, 0.64, 1] }
+            }
+            ParallelAnimation {
+                id: closeAnim
+                NumberAnimation { target: drawerSlide; property: "x"; to: drawer.width + 8; duration: 220; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
+                NumberAnimation { target: drawer; property: "opacity"; to: 0; duration: 180; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
+                NumberAnimation { target: drawerScale; property: "xScale"; to: 0.96; duration: 220; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
+                NumberAnimation { target: drawerScale; property: "yScale"; to: 0.96; duration: 220; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
             }
 
             ColumnLayout {

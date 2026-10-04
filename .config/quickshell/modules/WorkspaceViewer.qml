@@ -23,7 +23,7 @@ PanelWindow {
     property var colors
     property bool open: false
 
-    visible: root.open                    // fully gone when closed
+    visible: root.open || closeAnim.running
     anchors { top: true; bottom: true; left: true; right: true }
     exclusionMode: ExclusionMode.Ignore
     color: "transparent"
@@ -110,7 +110,7 @@ PanelWindow {
         target: Hyprland
         function onRawEvent(event) { if (root.open) root.refresh() }
     }
-    onOpenChanged: if (root.open) { root.refresh(); card.forceActiveFocus() }
+    onOpenChanged: { if (root.open) { root.refresh(); card.forceActiveFocus(); openAnim.restart() } else closeAnim.restart() }
 
     function jumpTo(id: int): void {
         Hyprland.dispatch("workspace " + id)
@@ -125,11 +125,10 @@ PanelWindow {
         Hyprland.dispatch("workspace " + ids[(cur + dir + ids.length) % ids.length])
     }
 
-    // dimmed backdrop — click to dismiss
+    // click-outside catcher (invisible — no dim backdrop, card floats over desktop)
     Rectangle {
         anchors.fill: parent
-        color: colors.alpha(colors.background, root.open ? 0.55 : 0)
-        Behavior on color { ColorAnimation { duration: 200 } }
+        color: "transparent"
         MouseArea { anchors.fill: parent; onClicked: root.open = false }
     }
 
@@ -140,14 +139,23 @@ PanelWindow {
         width: 960
         height: 84 + root.rows * root.cellH + (root.rows - 1) * 14
         radius: 20
-        color: colors.alpha(colors.background, 0.97)
+        color: colors.alpha(colors.surface, 0.52)
         border.width: 1
-        border.color: colors.alpha(colors.outline, 0.3)
-        opacity: root.open ? 1 : 0
-        scale: root.open ? 1 : 0.92
+        border.color: colors.alpha(colors.outline, 0.15)
         focus: root.open
-        Behavior on opacity { NumberAnimation { duration: 180 } }
-        Behavior on scale { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
+
+        // bezier pair — open pops with overshoot bounce (fast), close hurries
+        // out with none. Same curves as the notification drawer.
+        ParallelAnimation {
+            id: openAnim
+            NumberAnimation { target: card; property: "opacity"; from: 0; to: 1; duration: 220; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
+            NumberAnimation { target: card; property: "scale"; from: 0.94; to: 1; duration: 280; easing.type: Easing.Bezier; easing.bezierCurve: [0.34, 1.35, 0.64, 1] }
+        }
+        ParallelAnimation {
+            id: closeAnim
+            NumberAnimation { target: card; property: "opacity"; to: 0; duration: 160; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
+            NumberAnimation { target: card; property: "scale"; to: 0.94; duration: 180; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
+        }
 
         Keys.onEscapePressed: root.open = false
         Keys.onLeftPressed: root.cycle(-1)

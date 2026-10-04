@@ -35,7 +35,7 @@ FloatingWindow {
     minimumSize: Qt.size(360, 480)
     maximumSize: Qt.size(460, 620)
     color: "transparent"
-    visible: root.open
+    visible: root.open || closeAnim.running
 
     IpcHandler {
         target: "pomodoro"
@@ -43,7 +43,7 @@ FloatingWindow {
         function close(): void { root.open = false }
     }
 
-    onOpenChanged: if(open) Qt.callLater(function(){ bg.forceActiveFocus() })
+    onOpenChanged: { if(open){ Qt.callLater(function(){ bg.forceActiveFocus() }); openAnim.restart() } else closeAnim.restart() }
 
     function todayStr(){ return Qt.formatDate(new Date(), "yyyy-MM-dd") }
     function phaseSecs(p){ return p === "focus" ? root.workSecs : (p === "short" ? root.shortSecs : root.longSecs) }
@@ -185,15 +185,28 @@ FloatingWindow {
         id: bg
         anchors.fill: parent
         radius: 16
-        color: colors.alpha(colors.surface, 0.4)
+        color: colors.alpha(colors.surface, 0.52)
         border.width: 1
-        border.color: colors.alpha(colors.outline, 0.14)
+        border.color: colors.alpha(colors.outline, 0.15)
         focus: true
         Keys.onEscapePressed: root.open = false
         Keys.onPressed: function(e){
             if(e.key === Qt.Key_Space){ root.toggleRun(); e.accepted = true }
             else if(e.key === Qt.Key_R){ root.seconds = root.total; root.running = false; root.stateSave(); e.accepted = true }
             else if(e.key === Qt.Key_N){ root.skipPhase(); e.accepted = true }
+        }
+
+        // bezier pair — open pops with overshoot bounce (fast), close hurries
+        // out with none. Same curves as the notification drawer.
+        ParallelAnimation {
+            id: openAnim
+            NumberAnimation { target: bg; property: "opacity"; from: 0; to: 1; duration: 220; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
+            NumberAnimation { target: bg; property: "scale"; from: 0.94; to: 1; duration: 280; easing.type: Easing.Bezier; easing.bezierCurve: [0.34, 1.35, 0.64, 1] }
+        }
+        ParallelAnimation {
+            id: closeAnim
+            NumberAnimation { target: bg; property: "opacity"; to: 0; duration: 160; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
+            NumberAnimation { target: bg; property: "scale"; to: 0.94; duration: 180; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
         }
 
         ColumnLayout {

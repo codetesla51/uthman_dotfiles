@@ -17,7 +17,7 @@ FloatingWindow {
     minimumSize: Qt.size(470, 280)
     maximumSize: Qt.size(560, 340)
     color: "transparent"
-    visible: root.open
+    visible: root.open || closeAnim.running
 
         // NOTE: no IpcHandler here — Bar.qml owns target "fastfetch" and lazy-loads this.
 
@@ -29,7 +29,7 @@ FloatingWindow {
     readonly property var accents: [colors.primary, colors.secondary, colors.tertiary]
 
     Timer { interval: 6000; running: root.open; repeat: true; onTriggered: infoProc.running = true }
-    onOpenChanged: if (open) infoProc.running = true
+    onOpenChanged: { if (open) { infoProc.running = true; openAnim.restart() } else closeAnim.restart() }
 
     // ---------- data ----------
     property string host: ""
@@ -60,13 +60,20 @@ FloatingWindow {
         id: card
         anchors.fill: parent
         radius: 16
-        color: colors.alpha(colors.surface, 0.4)
+        color: colors.alpha(colors.surface, 0.52)
         border.width: 1
-        border.color: colors.alpha(colors.outline, 0.12)
-        scale: root.open ? 1 : 0.96
-        opacity: root.open ? 1 : 0
-        Behavior on scale { NumberAnimation { duration: 240; easing.type: Easing.OutCubic } }
-        Behavior on opacity { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
+        border.color: colors.alpha(colors.outline, 0.15)
+        // bezier pair — open pops with overshoot bounce, close hurries out
+        ParallelAnimation {
+            id: openAnim
+            NumberAnimation { target: card; property: "opacity"; from: 0; to: 1; duration: 220; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
+            NumberAnimation { target: card; property: "scale"; from: 0.94; to: 1; duration: 280; easing.type: Easing.Bezier; easing.bezierCurve: [0.34, 1.35, 0.64, 1] }
+        }
+        ParallelAnimation {
+            id: closeAnim
+            NumberAnimation { target: card; property: "opacity"; to: 0; duration: 160; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
+            NumberAnimation { target: card; property: "scale"; to: 0.94; duration: 180; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
+        }
 
         ColumnLayout {
             anchors.fill: parent

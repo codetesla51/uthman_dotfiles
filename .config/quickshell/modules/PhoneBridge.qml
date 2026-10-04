@@ -78,7 +78,7 @@ FloatingWindow {
     minimumSize: Qt.size(360, 400)
     maximumSize: Qt.size(460, 520)
     color: "transparent"
-    visible: root.open
+    visible: root.open || closeAnim.running
 
     IpcHandler { target: "phonebridge"; function toggle(): void { root.open = !root.open } }
 
@@ -206,6 +206,22 @@ FloatingWindow {
         }
     }
 
+    // auto-reconnect: phone rebooted, walked out of WiFi range, adbd dozed —
+    // keep knocking with a backoff (10s → 60s cap) instead of waiting for a
+    // manual retry. Resets the moment a device answers. Only while open.
+    property int reconnectDelay: 10
+    Timer {
+        id: reconnectTimer
+        interval: 10000
+        running: root.open && !root.connected && !root.busy
+        repeat: true
+        onTriggered: {
+            root.reconnectDelay = Math.min(60, root.reconnectDelay + 10)
+            reconnectTimer.interval = root.reconnectDelay * 1000
+            root.refreshDevices()
+        }
+    }
+
     Process {
         id: listProc
         command: [root.daemon, "devices"]
@@ -228,6 +244,8 @@ FloatingWindow {
                         root.connected = true
                         root.say("Connected to " + root.deviceName)
                     }
+                    root.reconnectDelay = 10
+                    reconnectTimer.interval = 10000
                     root.refreshBattery()
                     if (root.remoteRows.length === 0) root.listRemote()
                     return
@@ -341,7 +359,7 @@ FloatingWindow {
 
 
     Timer { interval: 15000; running: root.open; repeat: true; triggeredOnStart: false; onTriggered: { root.refreshDevices(); root.refreshBattery() } }
-    onOpenChanged: { if (open) { root.refreshDevices(); root.refreshBattery(); remoteList.focus = true } }
+    onOpenChanged: { if (open) { root.refreshDevices(); root.refreshBattery(); remoteList.focus = true; openAnim.restart() } else closeAnim.restart() }
 
     // ================= send =================
     function queueFiles(paths) {
@@ -756,13 +774,21 @@ FloatingWindow {
         anchors.fill: parent
         radius: 16
         clip: true
-        color: colors.alpha(colors.surface, 0.4)
+        color: colors.alpha(colors.surface, 0.52)
         border.width: 1
-        border.color: colors.alpha(colors.outline, 0.14)
-        scale: root.open ? 1 : 0.96
-        opacity: root.open ? 1 : 0
-        Behavior on scale { NumberAnimation { duration: 240; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] } }
-        Behavior on opacity { NumberAnimation { duration: 200; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] } }
+        border.color: colors.alpha(colors.outline, 0.15)
+        // bezier pair — open pops with overshoot bounce (fast), close hurries
+        // out with none. Same curves as the notification drawer.
+        ParallelAnimation {
+            id: openAnim
+            NumberAnimation { target: card; property: "opacity"; from: 0; to: 1; duration: 220; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
+            NumberAnimation { target: card; property: "scale"; from: 0.94; to: 1; duration: 280; easing.type: Easing.Bezier; easing.bezierCurve: [0.34, 1.35, 0.64, 1] }
+        }
+        ParallelAnimation {
+            id: closeAnim
+            NumberAnimation { target: card; property: "opacity"; to: 0; duration: 160; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
+            NumberAnimation { target: card; property: "scale"; to: 0.94; duration: 180; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
+        }
 
         ColumnLayout {
             anchors.fill: parent

@@ -6,10 +6,8 @@ import QtQuick.Layouts
 import QtQuick.Shapes
 import "../modules"
 
-// Glassmorphic floating island bar — mirrors waybar style.css:
-// transparent canvas, side margins 8, individual glass pills.
-// Window starts at y=0 and is 54 tall so the center island tab can hang
-// flush from the physical screen top; the pill line itself sits at y 6..46.
+// Center trapezoid island tab (\_____/) hanging flush from the screen
+// top — 8px rounded bottom corners, no border.
 PanelWindow {
     id: bar
 
@@ -29,43 +27,23 @@ PanelWindow {
 
     NotificationCenter { id: ntfy; colors: palette }
 
-    // ---- lazy popups: Loader + IPC proxy, zero RAM while closed ----
-    // Pattern: bool owns visibility, proxy IpcHandler owns the IPC target
-    // (panel files must NOT register the same target — see MonitorSettings
-    // lesson), Loader instantiates on open, Connections unloads on close.
-    // Bar pills call toggleX()/showX(); Hyprland binds call `ipc call <target> toggle`.
+    // ---- resident panels: every popup stays loaded, zero RAM saved but
+    // zero first-paint white flash (the battery lesson — lazy Loaders
+    // stall the first frames while the tree builds). Panels self-gate
+    // their timers/watchers on open, so idle cost is RAM only.
+    // Bar owns each IPC target directly on the instance (panels must NOT
+    // register the same target — see MonitorSettings lesson). Bar pills
+    // call toggleX()/showX(); Hyprland binds call `ipc call <target> toggle`.
 
     // WifiPanel (1183 lines, heaviest) — Network pill + `wifi` bind
-    property bool wifiOpen: false
-    IpcHandler { target: "wifi"; function toggle(): void { wifiOpen = !wifiOpen } }
-    function toggleWifi() { if (wifiLoader.item) wifiLoader.item.open = !wifiLoader.item.open; else wifiOpen = true }
-    Loader {
-        id: wifiLoader
-        active: wifiOpen
-        asynchronous: true
-        source: "../modules/WifiPanel.qml"
-        onLoaded: { item.colors = palette; item.open = true }
-    }
-    Connections {
-        target: wifiLoader.item
-        function onOpenChanged() { if (wifiLoader.item && !wifiLoader.item.open) wifiOpen = false }
-    }
+    WifiPanel { id: wifiPanel; colors: palette }
+    IpcHandler { target: "wifi"; function toggle(): void { wifiPanel.open = !wifiPanel.open } }
+    function toggleWifi() { wifiPanel.open = !wifiPanel.open }
 
     // SystemMonitor (544 lines) — Memory/Cpu pills + `sysmon` bind
-    property bool sysOpen: false
-    IpcHandler { target: "sysmon"; function toggle(): void { sysOpen = !sysOpen } }
-    function showSysMon() { if (sysLoader.item) sysLoader.item.open = true; else sysOpen = true }
-    Loader {
-        id: sysLoader
-        active: sysOpen
-        asynchronous: true
-        source: "../modules/SystemMonitor.qml"
-        onLoaded: { item.colors = palette; item.open = true }
-    }
-    Connections {
-        target: sysLoader.item
-        function onOpenChanged() { if (sysLoader.item && !sysLoader.item.open) sysOpen = false }
-    }
+    SystemMonitor { id: sysPanel; colors: palette }
+    IpcHandler { target: "sysmon"; function toggle(): void { sysPanel.open = !sysPanel.open } }
+    function showSysMon() { sysPanel.open = true }
 
     // BatteryPanel stays resident: opened constantly, and lazy-loading it
     // caused a first-paint white flash on open (surface maps before the
@@ -73,204 +51,62 @@ PanelWindow {
     BatteryPanel { id: batPanel; colors: palette }
 
     // ClipboardPanel (577 lines) — `clipboard` bind. `sticky` too: the shelf
-    // binds (SUPER ALT 1-4) must fire snippets with no window, so the proxy
-    // runs the action headless — load, act, unload, never setting open.
-    property bool clipOpen: false
-    property string stickyAction: ""  // "copy:N" | "pin" | "clear" | ""
-    IpcHandler { target: "clipboard"; function toggle(): void { clipOpen = !clipOpen } function close(): void { clipOpen = false } }
+    // binds (SUPER ALT 1-4) fire snippets with no window — always loaded
+    // now, so the actions run directly, never opening the panel.
+    ClipboardPanel { id: clipPanel; colors: palette }
+    IpcHandler { target: "clipboard"; function toggle(): void { clipPanel.open = !clipPanel.open } function close(): void { clipPanel.open = false } }
     IpcHandler {
         target: "sticky"
-        function copy(slot: string): void { stickyCopy(slot) }
-        function pin(): void { stickyPin() }
-        function clearAll(): void { stickyClear() }
-    }
-    function stickyCopy(slot) {
-        if (clipLoader.item) clipLoader.item.copyStickyBySlot(slot)
-        else { stickyAction = "copy:" + slot; clipOpen = true }
-    }
-    function stickyPin() {
-        if (clipLoader.item) clipLoader.item.addStickyFromClipboard()
-        else { stickyAction = "pin"; clipOpen = true }
-    }
-    function stickyClear() {
-        if (clipLoader.item) clipLoader.item.clearStickies()
-        else { stickyAction = "clear"; clipOpen = true }
-    }
-    Loader {
-        id: clipLoader
-        active: clipOpen
-        asynchronous: true
-        source: "../modules/ClipboardPanel.qml"
-        onLoaded: {
-            item.colors = palette
-            if (stickyAction !== "") {
-                var a = stickyAction; stickyAction = ""
-                if (a === "pin") item.addStickyFromClipboard()
-                else if (a === "clear") item.clearStickies()
-                else if (a.indexOf("copy:") === 0) item.copyStickyBySlot(a.slice(5))
-                clipOpen = false
-            } else {
-                item.open = true
-            }
-        }
-    }
-    Connections {
-        target: clipLoader.item
-        function onOpenChanged() { if (clipLoader.item && !clipLoader.item.open) clipOpen = false }
+        function copy(slot: string): void { clipPanel.copyStickyBySlot(slot) }
+        function pin(): void { clipPanel.addStickyFromClipboard() }
+        function clearAll(): void { clipPanel.clearStickies() }
     }
 
     // ThemePanel (361 lines) — `theme` bind
-    property bool themeOpen: false
-    IpcHandler { target: "theme"; function toggle(): void { themeOpen = !themeOpen } }
-    Loader {
-        id: themeLoader
-        active: themeOpen
-        asynchronous: true
-        source: "../modules/ThemePanel.qml"
-        onLoaded: { item.colors = palette; item.open = true }
-    }
-    Connections {
-        target: themeLoader.item
-        function onOpenChanged() { if (themeLoader.item && !themeLoader.item.open) themeOpen = false }
-    }
+    ThemePanel { id: themePanel; colors: palette }
+    IpcHandler { target: "theme"; function toggle(): void { themePanel.open = !themePanel.open } }
 
     // FastFetchWindow (191 lines) — `fastfetch` bind
-    property bool fetchOpen: false
-    IpcHandler { target: "fastfetch"; function toggle(): void { fetchOpen = !fetchOpen } }
-    Loader {
-        id: fetchLoader
-        active: fetchOpen
-        asynchronous: true
-        source: "../modules/FastFetchWindow.qml"
-        onLoaded: { item.colors = palette; item.open = true }
-    }
-    Connections {
-        target: fetchLoader.item
-        function onOpenChanged() { if (fetchLoader.item && !fetchLoader.item.open) fetchOpen = false }
-    }
+    FastFetchWindow { id: fetchPanel; colors: palette }
+    IpcHandler { target: "fastfetch"; function toggle(): void { fetchPanel.open = !fetchPanel.open } }
 
     // ClockWindow (308 lines) — Clock pin + `clockwin` bind
-    property bool clockOpen: false
-    IpcHandler { target: "clockwin"; function toggle(): void { clockOpen = !clockOpen } }
-    function toggleClockWin() { if (clockLoader.item) clockLoader.item.open = !clockLoader.item.open; else clockOpen = true }
-    Loader {
-        id: clockLoader
-        active: clockOpen
-        asynchronous: true
-        source: "../modules/ClockWindow.qml"
-        onLoaded: { item.colors = palette; item.open = true }
-    }
-    Connections {
-        target: clockLoader.item
-        function onOpenChanged() { if (clockLoader.item && !clockLoader.item.open) clockOpen = false }
-    }
+    ClockWindow { id: clockPanel; colors: palette }
+    IpcHandler { target: "clockwin"; function toggle(): void { clockPanel.open = !clockPanel.open } }
+    function toggleClockWin() { clockPanel.open = !clockPanel.open }
 
     // ScreenTime (211 lines) — `screentime` bind
-    property bool stOpen: false
-    IpcHandler { target: "screentime"; function toggle(): void { stOpen = !stOpen } }
-    Loader {
-        id: stLoader
-        active: stOpen
-        asynchronous: true
-        source: "../modules/ScreenTime.qml"
-        onLoaded: { item.colors = palette; item.open = true }
-    }
-    Connections {
-        target: stLoader.item
-        function onOpenChanged() { if (stLoader.item && !stLoader.item.open) stOpen = false }
-    }
-    // PhoneBridge (1216 lines, 18 Process) lazy: IPC-only, never pill-wired.
-    // NOTE: inbox/notif watchers now start on first open, not bar startup.
-    property bool phoneOpen: false
-    IpcHandler { target: "phonebridge"; function toggle(): void { phoneOpen = !phoneOpen } }
-    Loader {
-        id: phoneLoader
-        active: phoneOpen
-        asynchronous: true
-        source: "../modules/PhoneBridge.qml"
-        onLoaded: { item.colors = palette; item.open = true }
-    }
-    Connections {
-        target: phoneLoader.item
-        function onOpenChanged() { if (phoneLoader.item && !phoneLoader.item.open) phoneOpen = false }
-    }
+    ScreenTime { id: stPanel; colors: palette }
+    IpcHandler { target: "screentime"; function toggle(): void { stPanel.open = !stPanel.open } }
+    // PhoneBridge (1216 lines, 18 Process) — IPC-only, never pill-wired.
+    // Panel owns target "phonebridge" itself, so NO Bar proxy here.
+    // NOTE: inbox/notif watchers start on first open, not bar startup.
+    PhoneBridge { id: phonePanel; colors: palette }
     // WhatsApp PARKED (ban caution, 2026-09-17): kept on disk, unwired so no daemon spawns.
     // WhatsApp { id: waPanel; colors: palette }
-    // PluginMenu (324 lines) — `plugins` bind
-    property bool pluginsOpen: false
-    IpcHandler { target: "plugins"; function toggle(): void { pluginsOpen = !pluginsOpen } }
-    Loader {
-        id: pluginsLoader
-        active: pluginsOpen
-        asynchronous: true
-        source: "../modules/PluginMenu.qml"
-        onLoaded: { item.colors = palette; item.open = true }
-    }
-    Connections {
-        target: pluginsLoader.item
-        function onOpenChanged() { if (pluginsLoader.item && !pluginsLoader.item.open) pluginsOpen = false }
-    }
+    // Launcher lives here (not shell.qml) so Bar pills/IPC can reach it —
+    // and `plugins` (PluginMenu scrapped, all ten ride the launcher now).
+    AppLauncher { id: launcherPanel; colors: palette }
+    IpcHandler { target: "plugins"; function toggle(): void { launcherPanel.open = !launcherPanel.open } }
 
-    // KeybindsPanel (260 lines) — `keybinds` bind
-    property bool keysOpen: false
-    IpcHandler { target: "keybinds"; function toggle(): void { keysOpen = !keysOpen } }
-    Loader {
-        id: keysLoader
-        active: keysOpen
-        asynchronous: true
-        source: "../modules/KeybindsPanel.qml"
-        onLoaded: { item.colors = palette; item.open = true }
-    }
-    Connections {
-        target: keysLoader.item
-        function onOpenChanged() { if (keysLoader.item && !keysLoader.item.open) keysOpen = false }
-    }
+    // KeybindsPanel resident (battery treatment): lazy first-paint flashed
+    // white — the list build stalls the first frames. Opened constantly,
+    // so ~3MB resident to never see it again.
+    KeybindsPanel { id: keysPanel; colors: palette }
+    IpcHandler { target: "keybinds"; function toggle(): void { keysPanel.open = !keysPanel.open } }
 
     // DriveHealth (739 lines) — `drives` bind (+ `dbg` stays in panel)
-    property bool drivesOpen: false
-    IpcHandler { target: "drives"; function toggle(): void { drivesOpen = !drivesOpen } }
-    Loader {
-        id: drivesLoader
-        active: drivesOpen
-        asynchronous: true
-        source: "../modules/DriveHealth.qml"
-        onLoaded: { item.colors = palette; item.open = true }
-    }
-    Connections {
-        target: drivesLoader.item
-        function onOpenChanged() { if (drivesLoader.item && !drivesLoader.item.open) drivesOpen = false }
-    }
+    DriveHealth { id: drivesPanel; colors: palette }
+    IpcHandler { target: "drives"; function toggle(): void { drivesPanel.open = !drivesPanel.open } }
 
     // WatchCatPanel (333 lines) — WatchCat pill + `watchcat` bind
-    property bool wcOpen: false
-    IpcHandler { target: "watchcat"; function toggle(): void { wcOpen = !wcOpen } }
-    function toggleWatchCat() { if (wcLoader.item) wcLoader.item.open = !wcLoader.item.open; else wcOpen = true }
-    Loader {
-        id: wcLoader
-        active: wcOpen
-        asynchronous: true
-        source: "../modules/WatchCatPanel.qml"
-        onLoaded: { item.colors = palette; item.open = true }
-    }
-    Connections {
-        target: wcLoader.item
-        function onOpenChanged() { if (wcLoader.item && !wcLoader.item.open) wcOpen = false }
-    }
+    WatchCatPanel { id: wcPanel; colors: palette }
+    IpcHandler { target: "watchcat"; function toggle(): void { wcPanel.open = !wcPanel.open } }
+    function toggleWatchCat() { wcPanel.open = !wcPanel.open }
 
     // FailWatchPanel (320 lines) — `failwatch` bind
-    property bool fwOpen: false
-    IpcHandler { target: "failwatch"; function toggle(): void { fwOpen = !fwOpen } }
-    Loader {
-        id: fwLoader
-        active: fwOpen
-        asynchronous: true
-        source: "../modules/FailWatchPanel.qml"
-        onLoaded: { item.colors = palette; item.open = true }
-    }
-    Connections {
-        target: fwLoader.item
-        function onOpenChanged() { if (fwLoader.item && !fwLoader.item.open) fwOpen = false }
-    }
+    FailWatchPanel { id: fwPanel; colors: palette }
+    IpcHandler { target: "failwatch"; function toggle(): void { fwPanel.open = !fwPanel.open } }
     MediaOsd { id: mediaOsd; colors: palette }
 
     // bar sides toggle — SUPER SHIFT SPACE leaves middle island
@@ -306,33 +142,36 @@ PanelWindow {
             Workspaces { colors: bar.colors }
         }
 
+        // Trapezoid tab (\_____/) — soft 8px bottom corners, no border.
+        // Top edge stays flush to the screen.
         Item {
             id: island
             anchors { top: parent.top; horizontalCenter: parent.horizontalCenter }
-            anchors.topMargin: bar.dynamicIsland ? 7 : 0
-            width: islandRow.implicitWidth + (bar.dynamicIsland ? 36 : 40)
-            height: bar.dynamicIsland ? 40 : 54
-            Behavior on anchors.topMargin { NumberAnimation { duration: 320; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] } }
-            Behavior on height { NumberAnimation { duration: 320; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] } }
-            // trapezoid geometry shared by fill + border — fixed rounding
+            anchors.topMargin: 0
+            width: islandRow.implicitWidth + 40
+            height: 54
+            // trapezoid geometry — fixed rounding
             readonly property real inset: 18         // horizontal inset of bottom edge
             readonly property real cr: 8             // bottom corners (showing) — soft radius
-            readonly property real tc: 0             // top corners (screen edge) — sharp, no curve
+            readonly property real tc: 0             // top corners sharp at the screen edge
             readonly property real slantLen: Math.sqrt(inset*inset + (height-cr)*(height-cr))
             readonly property real ux: inset / slantLen
             readonly property real uy: (height-cr) / slantLen
             Behavior on width { NumberAnimation { duration: 380; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] } }
 
-            // Dynamic-Island capsule: floating black glass, no border
+            // Dynamic-Island capsule overlay (SUPER ALT SPACE minimal mode)
             Rectangle {
                 opacity: bar.dynamicIsland ? 1 : 0
                 Behavior on opacity { NumberAnimation { duration: 220; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] } }
-                anchors.fill: parent
+                anchors.centerIn: parent
+                width: islandRow.implicitWidth + 36
+                height: 40
                 radius: height / 2
-                color: colors.alpha(colors.background, 0.82)
+                color: colors.alpha(colors.background, 0.85)
+                border.color: colors.alpha(colors.surfaceVariant, 0.8)
+                border.width: 2
             }
 
-            // trapezoid tab (\_____/) for the classic look
             Shape {
                 opacity: bar.dynamicIsland ? 0 : 1
                 Behavior on opacity { NumberAnimation { duration: 220; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] } }
@@ -341,33 +180,43 @@ PanelWindow {
                 layer.enabled: true
                 layer.samples: 4
                 ShapePath {
-                    fillColor: colors.alpha(colors.surface, 0.60)
+                    // 0.6: frosted, not flat — Hyprland's `blur on, match:namespace qs-bar`
+                    // layerrule blurs the wallpaper behind; this alpha lets it bite
+                    fillColor: colors.alpha(colors.background, 0.6)
                     strokeColor: "transparent"
                     strokeWidth: 0
                     startX: island.tc; startY: 0
                     PathLine { x: island.width - island.tc; y: 0 }
-                    PathQuad { controlX: island.width; controlY: 0; x: island.width - island.ux*island.tc; y: island.uy*island.tc }
+                    // top corners scoop inward (cove) — control sits inside
+                    // the shape, so the curve bites in instead of bulging out
+                    PathQuad { controlX: island.width - island.tc*(1+island.ux)*0.9; controlY: island.uy*island.tc*0.9; x: island.width - island.ux*island.tc; y: island.uy*island.tc }
                     PathLine { x: island.width - island.inset; y: island.height - island.cr }
                     PathQuad { controlX: island.width - island.inset; controlY: island.height; x: island.width - island.inset - island.cr; y: island.height }
                     PathLine { x: island.inset + island.cr; y: island.height }
                     PathQuad { controlX: island.inset; controlY: island.height; x: island.inset; y: island.height - island.cr }
                     PathLine { x: island.ux*island.tc; y: island.uy*island.tc }
-                    PathQuad { controlX: 0; controlY: 0; x: island.tc; y: 0 }
+                    PathQuad { controlX: island.tc*(1+island.ux)*0.9; controlY: island.uy*island.tc*0.9; x: island.tc; y: 0 }
                 }
             }
 
             RowLayout {
                 id: islandRow
                 anchors.centerIn: parent
-                anchors.verticalCenterOffset: bar.dynamicIsland ? 0 : -1
-                Behavior on anchors.verticalCenterOffset { NumberAnimation { duration: 220; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] } }
-                spacing: 12
+                anchors.verticalCenterOffset: -1
+                spacing: 10
                 // clock small left
                 Clock {
                     id: clockItem
                     colors: bar.colors
                     // smaller clock when NowPlaying is focus — keep time but de-emphasized
                     onPinRequested: toggleClockWin()
+                }
+                // hairline dividers — siblings, never children (§4);
+                // 1x14 outline @ 0.28 per the island spec
+                Rectangle {
+                    width: 1; height: 14
+                    color: colors.alpha(colors.outline, 0.28)
+                    Layout.alignment: Qt.AlignVCenter
                 }
                 // NowPlaying focus — big centered, fills available width
                 NowPlaying {
@@ -380,6 +229,11 @@ PanelWindow {
                         if (h) { musicLinger.stop(); bar.musicHover = true }
                         else musicLinger.restart()
                     }
+                }
+                Rectangle {
+                    width: 1; height: 14
+                    color: colors.alpha(colors.outline, 0.28)
+                    Layout.alignment: Qt.AlignVCenter
                 }
                 // bell small right
                 BellButton {

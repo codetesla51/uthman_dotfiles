@@ -21,7 +21,7 @@ FloatingWindow {
     minimumSize: Qt.size(400, 520)
     maximumSize: Qt.size(460, 600)
     color: "transparent"
-    visible: root.open
+    visible: root.open || closeAnim.running
 
     IpcHandler {
         target: "notes"
@@ -70,7 +70,7 @@ FloatingWindow {
     }
 
     Component.onCompleted: loadNotes()
-    onOpenChanged: if (open) { loadNotes(); Qt.callLater(function(){ titleField.forceActiveFocus() }) }
+    onOpenChanged: { if (open) { loadNotes(); Qt.callLater(function(){ titleField.forceActiveFocus() }); openAnim.restart() } else closeAnim.restart() }
 
     // filtered by search
     readonly property var filtered: {
@@ -127,11 +127,24 @@ FloatingWindow {
         id: card
         anchors.fill: parent
         radius: 18
-        color: colors.alpha(colors.background, 0.78)
+        color: colors.alpha(colors.surface, 0.52)
         border.width: 1
         border.color: colors.alpha(colors.outline, 0.15)
         focus: root.open
         Keys.onEscapePressed: root.open = false
+
+        // bezier pair — open pops with overshoot bounce (fast), close hurries
+        // out with none. Same curves as the notification drawer.
+        ParallelAnimation {
+            id: openAnim
+            NumberAnimation { target: card; property: "opacity"; from: 0; to: 1; duration: 220; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
+            NumberAnimation { target: card; property: "scale"; from: 0.94; to: 1; duration: 280; easing.type: Easing.Bezier; easing.bezierCurve: [0.34, 1.35, 0.64, 1] }
+        }
+        ParallelAnimation {
+            id: closeAnim
+            NumberAnimation { target: card; property: "opacity"; to: 0; duration: 160; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
+            NumberAnimation { target: card; property: "scale"; to: 0.94; duration: 180; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
+        }
 
         ColumnLayout {
             anchors.fill: parent

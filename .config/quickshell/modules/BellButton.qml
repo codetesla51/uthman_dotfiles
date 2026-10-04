@@ -15,7 +15,7 @@ Item {
     scale: hovered ? 1.12 : 1
     Behavior on scale { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
 
-    implicitWidth: label.implicitWidth + 24
+    implicitWidth: label.implicitWidth + 32
     implicitHeight: 30
 
     // flat inside the trapezium — state lives in icon color only

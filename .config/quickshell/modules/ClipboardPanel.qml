@@ -27,7 +27,7 @@ FloatingWindow {
     minimumSize: Qt.size(560, 600)
     maximumSize: Qt.size(660, 730)
     color: "transparent"
-    visible: root.open
+    visible: root.open || closeAnim.running
 
     // NOTE: no IpcHandler here — Bar.qml owns targets "clipboard" and "sticky".
 
@@ -145,7 +145,7 @@ FloatingWindow {
     property int navIndex: 0
     property int stickyNav: 0
     property bool allowHover: false
-    onOpenChanged: { if(open){ filter=""; filterField.text=""; navIndex = 0; stickyNav = 0; allowHover = false; refresh(); loadStickies(); Qt.callLater(function(){ filterField.forceActiveFocus() }) } }
+    onOpenChanged: { if(open){ filter=""; filterField.text=""; navIndex = 0; stickyNav = 0; allowHover = false; refresh(); loadStickies(); Qt.callLater(function(){ filterField.forceActiveFocus() }); openAnim.restart() } else closeAnim.restart() }
     onFilterChanged: navIndex = 0
     onEntriesChanged: navIndex = 0
     onStickiesChanged: stickyNav = 0
@@ -206,9 +206,21 @@ FloatingWindow {
         id: card
         anchors.fill: parent
         radius: 16
-        color: colors.alpha(colors.surface, 0.4)
-        border.width:1; border.color: colors.alpha(colors.outline,0.14)
+        color: colors.alpha(colors.surface, 0.52)
+        border.width:1; border.color: colors.alpha(colors.outline, 0.15)
         focus: root.open
+        // bezier pair — open pops with overshoot bounce (fast), close hurries
+        // out with none. Same curves as the notification drawer.
+        ParallelAnimation {
+            id: openAnim
+            NumberAnimation { target: card; property: "opacity"; from: 0; to: 1; duration: 220; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
+            NumberAnimation { target: card; property: "scale"; from: 0.94; to: 1; duration: 280; easing.type: Easing.Bezier; easing.bezierCurve: [0.34, 1.35, 0.64, 1] }
+        }
+        ParallelAnimation {
+            id: closeAnim
+            NumberAnimation { target: card; property: "opacity"; to: 0; duration: 160; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
+            NumberAnimation { target: card; property: "scale"; to: 0.94; duration: 180; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
+        }
         Keys.onEscapePressed: root.open=false
         Keys.onPressed: function(event) {
             if ((event.modifiers & Qt.ControlModifier) && event.key === Qt.Key_P) { root.pinSelected(); event.accepted = true }

@@ -198,6 +198,11 @@ poll.interval = 200; poll.repeat = true
 5. Never add inline `width: 2` twice on the same delegate (duplicate-property error at `[267:37]` style).
 6. Verify via `pkill -x quickshell; setsid quickshell -p ~/.config/quickshell > /tmp/qs-bar.log 2>&1 &` → wait 4s → `grep -E 'ERROR|WARN' /tmp/qs-bar.log` must be empty (ignore accumulated session lines — hard-restart before judging).
 7. `quickshell -p ~/.config/quickshell ipc show` must list the new target.
+8. Every new panel ships the unified glass + bounce pair — no exceptions, no dim overlays:
+   - card fill `colors.alpha(colors.surface, 0.52)`, hairline `border.width: 1; border.color: colors.alpha(colors.outline, 0.15)` (inner tiles keep their own fills; state-driven borders like error stay).
+   - click-catcher stays `"transparent"` — a dim backdrop is never added.
+   - `openAnim`: opacity 0→1 220ms + scale 0.94→1 280ms overshoot bezier `[0.34, 1.35, 0.64, 1]`; `closeAnim`: opacity→0 160ms + scale→0.94 180ms plain `[0.32, 0.72, 0, 1]`. Drawer-style cards slide their axis (Translate + Scale with origin at the anchored edge) instead of center-scaling.
+   - window `visible: root.open || closeAnim.running`, anims restarted from `onOpenChanged` (merge with fetchers/refresh/focus, never replace).
 
 ---
 

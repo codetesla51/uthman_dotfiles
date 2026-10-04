@@ -14,11 +14,14 @@ PanelWindow {
     anchors { top: true; bottom: true; left: true; right: true }
     exclusionMode: ExclusionMode.Ignore
     color: "transparent"
-    visible: root.open
+    visible: root.open || closeAnim.running
     focusable: true
     // NOTE: no IpcHandler here — Bar.qml owns target "keybinds" and lazy-loads this.
 
-    onOpenChanged: if(open){ slide.y = 20; slideIn.restart(); filter=""; searchField.text=""; searchField.forceActiveFocus() }
+    onOpenChanged: {
+        if (open) { filter=""; searchField.text=""; searchField.forceActiveFocus(); list.currentIndex = firstRowIndex(); openAnim.restart() }
+        else closeAnim.restart()
+    }
 
     property var binds: [
         {key:"SUPER + Return", desc:"Terminal", cat:"Apps", disp:"exec", arg:"uwsm-app -- kitty"},
@@ -109,19 +112,43 @@ PanelWindow {
         var q=filter.trim().toLowerCase()
         return binds.filter(function(b){ return b.key.toLowerCase().includes(q) || b.desc.toLowerCase().includes(q) || b.cat.toLowerCase().includes(q) })
     }
+    // grouped model — category header rows interleaved with binds so the
+    // list reads as sections, not a dumb flat dump. Headers carry only
+    // {header}, rows carry the bind.
+    property var grouped: {
+        var out = [], last = ""
+        for (var i = 0; i < filtered.length; i++) {
+            if (filtered[i].cat !== last) { last = filtered[i].cat; out.push({header: last}) }
+            out.push(filtered[i])
+        }
+        return out
+    }
+    function firstRowIndex(){ for (var i=0;i<grouped.length;i++) if(grouped[i].header===undefined) return i; return -1 }
+    function moveSelection(d){
+        var i=list.currentIndex
+        while (true) {
+            i+=d
+            if (i<0) { i=0; break }
+            if (i>=grouped.length) { i=grouped.length-1; break }
+            if (grouped[i].header===undefined) break
+        }
+        list.currentIndex=i; list.positionViewAtIndex(i,ListView.Contain)
+    }
     function executeSelected(){
         var idx=list.currentIndex
-        if(idx<0 || idx>=filtered.length) return
-        var b=filtered[idx]
+        if(idx<0 || idx>=grouped.length) return
+        var b=grouped[idx]
+        if(b.header!==undefined) return
         root.open=false
         if(b.disp==="exec" && b.arg) Quickshell.execDetached(["sh","-c", b.arg])
         else if(b.disp) Quickshell.execDetached(["hyprctl", "dispatch", b.disp, b.arg])
     }
+    onFilteredChanged: list.currentIndex = firstRowIndex()
 
+    // click-outside catcher (invisible — no dim backdrop, card floats over desktop)
     Rectangle {
         anchors.fill: parent
-        color: colors.alpha(colors.background, root.open?0.35:0)
-        Behavior on color { ColorAnimation { duration: 200 } }
+        color: "transparent"
         MouseArea { anchors.fill: parent; onClicked: root.open=false }
     }
 
@@ -131,20 +158,41 @@ PanelWindow {
         width: 640
         height: 520
         radius: 18
-        color: colors.alpha(colors.background,0.97)
-        border.width:1; border.color: colors.alpha(colors.outline,0.25)
+        color: colors.alpha(colors.surface, 0.52)
+        border.width:1; border.color: colors.alpha(colors.outline, 0.15)
         focus: root.open
         Keys.onEscapePressed: root.open=false
         Keys.onReturnPressed: root.executeSelected()
         Keys.onEnterPressed: root.executeSelected()
-        Keys.onDownPressed: { list.currentIndex = Math.min(list.currentIndex+1, filtered.length-1); list.positionViewAtIndex(list.currentIndex, ListView.Contain) }
-        Keys.onUpPressed: { list.currentIndex = Math.max(list.currentIndex-1, 0); list.positionViewAtIndex(list.currentIndex, ListView.Contain) }
+        // type-to-search — keystrokes landing on the card (field not focused)
+        // route straight into the search field
+        Keys.onPressed: function(e){
+            if (searchField.activeFocus) return
+            if (e.text !== "" && e.text.length === 1 && (e.modifiers === Qt.NoModifier || e.modifiers === Qt.ShiftModifier)
+                && e.key !== Qt.Key_Escape && e.key !== Qt.Key_Return && e.key !== Qt.Key_Enter) {
+                searchField.text += e.text
+                searchField.forceActiveFocus()
+                e.accepted = true
+            }
+        }
+        Keys.onDownPressed: root.moveSelection(1)
+        Keys.onUpPressed: root.moveSelection(-1)
         transform: Translate { id: slide }
         Component.onCompleted: slide.y=20
+        // bezier pair — rise settles with overshoot bounce on open, hurries
+        // out plain on close. Card is centered so scale uses the card
+        // property (transformOrigin center) instead of an edge Scale.
         ParallelAnimation {
-            id: slideIn
-            NumberAnimation { target: slide; property: "y"; from:20; to:0; duration:260; easing.type: Easing.OutCubic }
-            NumberAnimation { target: card; property: "opacity"; from:0; to:1; duration:200 }
+            id: openAnim
+            NumberAnimation { target: slide; property: "y"; from: 20; to: 0; duration: 280; easing.type: Easing.Bezier; easing.bezierCurve: [0.34, 1.35, 0.64, 1] }
+            NumberAnimation { target: card; property: "opacity"; from: 0; to: 1; duration: 220; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
+            NumberAnimation { target: card; property: "scale"; from: 0.96; to: 1; duration: 280; easing.type: Easing.Bezier; easing.bezierCurve: [0.34, 1.35, 0.64, 1] }
+        }
+        ParallelAnimation {
+            id: closeAnim
+            NumberAnimation { target: slide; property: "y"; to: 20; duration: 220; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
+            NumberAnimation { target: card; property: "opacity"; to: 0; duration: 180; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
+            NumberAnimation { target: card; property: "scale"; to: 0.96; duration: 220; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
         }
 
         ColumnLayout {
@@ -175,9 +223,9 @@ PanelWindow {
                 color: colors.foreground
                 font.family: colors.fontSans; font.pixelSize: 11
                 background: Rectangle {
-                    radius: 10
-                    color: colors.alpha(colors.surface,0.8)
-                    border.width:1; border.color: searchField.activeFocus?colors.alpha(colors.primary,0.4):colors.alpha(colors.outline,0.15)
+                    radius: 12
+                    color: colors.alpha(colors.surface,0.6)
+                    border.width:1; border.color: searchField.activeFocus?colors.alpha(colors.primary,0.5):colors.alpha(colors.outline,0.15)
                 }
                 onTextChanged: root.filter=text
                 Keys.onReturnPressed: root.executeSelected()
@@ -189,59 +237,79 @@ PanelWindow {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 clip: true
-                model: root.filtered
+                model: root.grouped
                 currentIndex: 0
                 spacing: 4
                 boundsBehavior: Flickable.StopAtBounds
                 ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
-                delegate: Rectangle {
+                delegate: Item {
                     required property var modelData
                     required property int index
+                    readonly property bool isHeader: modelData.header !== undefined
                     width: list.width
-                    height: 44
-                    radius: 10
-                    color: list.currentIndex===index ? colors.alpha(colors.primary,0.10) : ma.containsMouse ? colors.alpha(colors.primary,0.08) : "transparent"
-                    border.width: list.currentIndex===index ? 1 : 0
-                    border.color: colors.alpha(colors.primary,0.2)
-                    RowLayout {
+                    height: isHeader ? 26 : 44
+
+                    // section header — house micro-type
+                    Text {
+                        visible: isHeader
+                        anchors { left: parent.left; verticalCenter: parent.verticalCenter; leftMargin: 12 }
+                        text: isHeader ? modelData.header.toUpperCase() : ""
+                        color: colors.alpha(colors.outline, 0.6)
+                        font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold; font.letterSpacing: 1.5
+                    }
+
+                    Rectangle {
+                        visible: !isHeader
                         anchors.fill: parent
-                        anchors.leftMargin: 12; anchors.rightMargin: 12
-                        spacing: 12
-                        Rectangle {
-                            Layout.preferredWidth: keyText.implicitWidth+16
-                            Layout.preferredHeight: 22
-                            radius: 7
-                            color: colors.alpha(colors.primary,0.12)
-                            border.width:1; border.color: colors.alpha(colors.primary,0.25)
-                            Text {
-                                id: keyText
-                                anchors.centerIn: parent
-                                text: modelData.key
-                                color: colors.primary
-                                font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold
+                        radius: 10
+                        color: list.currentIndex===index ? colors.alpha(colors.primary,0.10) : ma.containsMouse ? colors.alpha(colors.primary,0.08) : "transparent"
+                        border.width: list.currentIndex===index ? 1 : 0
+                        border.color: colors.alpha(colors.primary,0.2)
+                        // one hover language: tint + slight scale, no lift (same as plugins)
+                        scale: (list.currentIndex===index || ma.containsMouse) ? 1.01 : 1
+                        Behavior on scale { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.leftMargin: 12; anchors.rightMargin: 12
+                            spacing: 12
+                            Rectangle {
+                                Layout.preferredWidth: keyText.implicitWidth+16
+                                Layout.preferredHeight: 22
+                                radius: 7
+                                color: colors.alpha(colors.primary,0.12)
+                                border.width:1; border.color: colors.alpha(colors.primary,0.25)
+                                Text {
+                                    id: keyText
+                                    anchors.centerIn: parent
+                                    text: isHeader ? "" : modelData.key
+                                    color: colors.primary
+                                    font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold
+                                }
                             }
-                        }
-                        ColumnLayout {
-                            Layout.fillWidth: true
-                            spacing: 1
-                            Text {
-                                text: modelData.desc
-                                color: colors.foreground
-                                font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.DemiBold
-                                elide: Text.ElideRight
+                            ColumnLayout {
                                 Layout.fillWidth: true
-                            }
-                            Text {
-                                text: modelData.cat
-                                color: colors.alpha(colors.outline,0.6)
-                                font.family: colors.fontSans; font.pixelSize: 8
-                                elide: Text.ElideRight
-                                Layout.fillWidth: true
+                                spacing: 1
+                                Text {
+                                    text: isHeader ? "" : modelData.desc
+                                    color: colors.foreground
+                                    font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.DemiBold
+                                    elide: Text.ElideRight
+                                    Layout.fillWidth: true
+                                }
+                                Text {
+                                    text: isHeader ? "" : modelData.cat
+                                    color: colors.alpha(colors.outline,0.6)
+                                    font.family: colors.fontSans; font.pixelSize: 8
+                                    elide: Text.ElideRight
+                                    Layout.fillWidth: true
+                                }
                             }
                         }
                     }
+
                     MouseArea {
                         id: ma; anchors.fill: parent; hoverEnabled:true
+                        visible: !isHeader
                         onClicked: list.currentIndex=index
                         onDoubleClicked: root.executeSelected()
                     }
@@ -254,6 +322,40 @@ PanelWindow {
                 color: colors.alpha(colors.outline,0.6)
                 font.family: colors.fontSans; font.pixelSize: 11
                 Layout.alignment: Qt.AlignHCenter
+            }
+
+            // footer — kbd hints, same language as plugins
+            Row {
+                spacing: 12
+                Layout.alignment: Qt.AlignHCenter
+                Repeater {
+                    model: [ { k: "↑↓", a: "move" }, { k: "↵", a: "run" }, { k: "esc", a: "close" } ]
+                    delegate: Row {
+                        required property var modelData
+                        spacing: 4
+                        Rectangle {
+                            width: Math.max(22, kbdTxt.implicitWidth + 10)
+                            height: 16
+                            radius: 4
+                            color: colors.alpha(colors.surfaceVariant, 0.5)
+                            border.width: 1; border.color: colors.alpha(colors.outline, 0.12)
+                            anchors.verticalCenter: parent.verticalCenter
+                            Text {
+                                id: kbdTxt
+                                anchors.centerIn: parent
+                                text: modelData.k
+                                color: colors.secondary
+                                font.family: colors.fontSans; font.pixelSize: 7; font.weight: Font.Bold
+                            }
+                        }
+                        Text {
+                            text: modelData.a
+                            color: colors.alpha(colors.outline, 0.45)
+                            font.family: colors.fontSans; font.pixelSize: 7; font.weight: Font.Bold; font.letterSpacing: 1.3
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                    }
+                }
             }
         }
     }

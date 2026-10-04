@@ -67,10 +67,10 @@ FloatingWindow {
     minimumSize: Qt.size(980, 620)
     maximumSize: Qt.size(1100, 720)
     color: "transparent"
-    visible: root.open
+    visible: root.open || closeAnim.running
     IpcHandler { target: "wallshelf"; function toggle(): void { root.open = !root.open } }
 
-    onOpenChanged: if(open){ Qt.callLater(function(){ card.forceActiveFocus() }); if(resultModel.count === 0) search(true) }
+    onOpenChanged: { if(open){ Qt.callLater(function(){ card.forceActiveFocus() }); if(resultModel.count === 0) search(true); openAnim.restart() } else closeAnim.restart() }
     onPreviewIdxChanged: if(root.previewIdx !== -1 && root.tab === "browse") root.fetchPvTags()
 
     // ── config ──
@@ -462,9 +462,9 @@ FloatingWindow {
         id: card
         anchors.fill: parent
         radius: 16
-        color: colors.alpha(colors.surface, 0.4)
+        color: colors.alpha(colors.surface, 0.52)
         border.width: 1
-        border.color: colors.alpha(colors.primary, 0.16)
+        border.color: colors.alpha(colors.outline, 0.15)
         focus: true
         Keys.onEscapePressed: { if(root.previewIdx !== -1) root.previewIdx = -1; else root.open = false }
         Keys.onPressed: function(e){
@@ -490,6 +490,19 @@ FloatingWindow {
             else if(e.key === Qt.Key_Up){ grid.moveCurrentIndexUp(); e.accepted = true }
             else if(e.key === Qt.Key_Down){ grid.moveCurrentIndexDown(); e.accepted = true }
             else if(e.key === Qt.Key_Return || e.key === Qt.Key_Enter){ root.openPreview(grid.currentIndex); e.accepted = true }
+        }
+
+        // bezier pair — open pops with overshoot bounce (fast), close hurries
+        // out with none. Same curves as the notification drawer.
+        ParallelAnimation {
+            id: openAnim
+            NumberAnimation { target: card; property: "opacity"; from: 0; to: 1; duration: 220; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
+            NumberAnimation { target: card; property: "scale"; from: 0.94; to: 1; duration: 280; easing.type: Easing.Bezier; easing.bezierCurve: [0.34, 1.35, 0.64, 1] }
+        }
+        ParallelAnimation {
+            id: closeAnim
+            NumberAnimation { target: card; property: "opacity"; to: 0; duration: 160; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
+            NumberAnimation { target: card; property: "scale"; to: 0.94; duration: 180; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
         }
 
         ColumnLayout {

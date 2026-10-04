@@ -34,7 +34,7 @@ FloatingWindow {
     minimumSize: Qt.size(760, 520)
     maximumSize: Qt.size(1200, 800)
     color: "transparent"
-    visible: root.open
+    visible: root.open || closeAnim.running
 
     IpcHandler {
         target: "pdfviewer"
@@ -43,7 +43,7 @@ FloatingWindow {
         function close(): void { root.open = false }
     }
 
-    onOpenChanged: if(open) Qt.callLater(function(){ bg.forceActiveFocus() })
+    onOpenChanged: if(open) { Qt.callLater(function(){ bg.forceActiveFocus() }); openAnim.restart() } else closeAnim.restart()
     onLibQueryChanged: {
         var q = root.libQuery.trim()
         if(q.length >= 3){ contentDeb.restart() }
@@ -221,9 +221,20 @@ FloatingWindow {
         id: bg
         anchors.fill: parent
         radius: 16
-        color: colors.alpha(colors.surface, 0.4)
+        color: colors.alpha(colors.surface, 0.52)
         border.width: 1
-        border.color: colors.alpha(colors.primary, 0.14)
+        border.color: colors.alpha(colors.outline, 0.15)
+        // bezier pair — open pops with overshoot bounce, close hurries out
+        ParallelAnimation {
+            id: openAnim
+            NumberAnimation { target: bg; property: "opacity"; from: 0; to: 1; duration: 220; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
+            NumberAnimation { target: bg; property: "scale"; from: 0.94; to: 1; duration: 280; easing.type: Easing.Bezier; easing.bezierCurve: [0.34, 1.35, 0.64, 1] }
+        }
+        ParallelAnimation {
+            id: closeAnim
+            NumberAnimation { target: bg; property: "opacity"; to: 0; duration: 160; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
+            NumberAnimation { target: bg; property: "scale"; to: 0.94; duration: 180; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
+        }
         focus: true
         Keys.onEscapePressed: root.open = false
         Keys.onPressed: function(e){

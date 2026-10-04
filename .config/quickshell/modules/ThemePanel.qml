@@ -20,7 +20,7 @@ PanelWindow {
     anchors { top: true; bottom: true; left: true; right: true }
     exclusionMode: ExclusionMode.Ignore
     color: "transparent"
-    visible: root.open
+    visible: root.open || closeAnim.running
     focusable: true
     WlrLayershell.namespace: "qs-theme"
     // NOTE: no IpcHandler here — Bar.qml owns target "theme" and lazy-loads this.
@@ -70,8 +70,9 @@ PanelWindow {
     Timer { id: applyTimer; interval: 900; onTriggered: root.applying = false }
 
 
-    // see WifiPanel: card.onVisibleChanged never fires on window toggle.
-    onOpenChanged: if(open){ slide.y = 20; slideIn.restart(); refresh() }
+    // card motion lives in openAnim/closeAnim below (bezier pair).
+    // Close plays out before the window hides (visible binds running).
+    onOpenChanged: if (open) { refresh(); openAnim.restart() } else closeAnim.restart()
     onWallsChanged: {
         // sync currentIndex to currentWall
         for(var i=0;i<walls.length;i++) if(walls[i].path===currentWall) { currentIndex=i; return }
@@ -114,9 +115,9 @@ PanelWindow {
         width: 720
         height: 640
         radius: 20
-        color: colors.alpha(colors.background, 0.15)
+        color: colors.alpha(colors.surface, 0.52)
         border.width: 1
-        border.color: colors.alpha(colors.outline, 0.12)
+        border.color: colors.alpha(colors.outline, 0.15)
         // frosted glass — blurred current wallpaper INSIDE the card
         Image {
             id: wallSrc
@@ -150,10 +151,20 @@ PanelWindow {
         Keys.onEnterPressed: root.setWall(walls[currentIndex].path)
         transform: Translate { id: slide }
         Component.onCompleted: slide.y=20
+        // bezier pair — rise settles with overshoot bounce on open, hurries
+        // out plain on close. Card is centered so scale uses the card
+        // property (transformOrigin center) instead of an edge Scale.
         ParallelAnimation {
-            id: slideIn
-            NumberAnimation { target: slide; property: "y"; from:20; to:0; duration:260; easing.type: Easing.OutCubic }
-            NumberAnimation { target: card; property: "opacity"; from:0; to:1; duration:200 }
+            id: openAnim
+            NumberAnimation { target: slide; property: "y"; from: 20; to: 0; duration: 280; easing.type: Easing.Bezier; easing.bezierCurve: [0.34, 1.35, 0.64, 1] }
+            NumberAnimation { target: card; property: "opacity"; from: 0; to: 1; duration: 220; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
+            NumberAnimation { target: card; property: "scale"; from: 0.96; to: 1; duration: 280; easing.type: Easing.Bezier; easing.bezierCurve: [0.34, 1.35, 0.64, 1] }
+        }
+        ParallelAnimation {
+            id: closeAnim
+            NumberAnimation { target: slide; property: "y"; to: 20; duration: 220; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
+            NumberAnimation { target: card; property: "opacity"; to: 0; duration: 180; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
+            NumberAnimation { target: card; property: "scale"; to: 0.96; duration: 220; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
         }
         // preview transition
         ParallelAnimation {

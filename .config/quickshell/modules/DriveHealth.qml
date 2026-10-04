@@ -73,7 +73,7 @@ FloatingWindow {
     minimumSize: Qt.size(580, 480)
     maximumSize: Qt.size(760, 700)
     color: "transparent"
-    visible: root.open
+    visible: root.open || closeAnim.running
     // NOTE: no IpcHandler here — Bar.qml owns target "drives" and lazy-loads this.
 
     function fmtGb(b) { return (b / 1073741824).toFixed(1) + "G" }
@@ -303,7 +303,8 @@ FloatingWindow {
             root.lastRSectors = -1
             root.refreshStatic()
             root.refreshSmart()
-        }
+            openAnim.restart()
+        } else closeAnim.restart()
     }
 
     // ===== speed test: 1GB direct-IO write + read in $HOME =====
@@ -375,14 +376,21 @@ FloatingWindow {
         id: card
         anchors.fill: parent
         radius: 16
-        color: colors.alpha(colors.background, 0.78)
+        color: colors.alpha(colors.surface, 0.52)
         border.width: 1
         border.color: colors.alpha(colors.outline, 0.15)
         clip: true
-        scale: root.open ? 1 : 0.94
-        opacity: root.open ? 1 : 0
-        Behavior on scale { NumberAnimation { duration: 280; easing.type: Easing.Bezier; easing.bezierCurve: [0.22, 0.68, 0, 1.08] } }
-        Behavior on opacity { NumberAnimation { duration: 220; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] } }
+        // bezier pair — open pops with overshoot bounce, close hurries out
+        ParallelAnimation {
+            id: openAnim
+            NumberAnimation { target: card; property: "opacity"; from: 0; to: 1; duration: 220; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
+            NumberAnimation { target: card; property: "scale"; from: 0.94; to: 1; duration: 280; easing.type: Easing.Bezier; easing.bezierCurve: [0.34, 1.35, 0.64, 1] }
+        }
+        ParallelAnimation {
+            id: closeAnim
+            NumberAnimation { target: card; property: "opacity"; to: 0; duration: 160; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
+            NumberAnimation { target: card; property: "scale"; to: 0.94; duration: 180; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
+        }
 
         // subtle top glow
         Rectangle {

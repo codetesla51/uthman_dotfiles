@@ -14,7 +14,7 @@ PanelWindow {
     property bool open: false
     property int selected: 0
 
-    visible: root.open
+    visible: root.open || closeAnim.running
     anchors { top:true; bottom:true; left:true; right:true }
     exclusionMode: ExclusionMode.Ignore
     color: "transparent"
@@ -27,7 +27,8 @@ PanelWindow {
     property bool allowHover: false
     Component.onCompleted: loadStores()
     onOpenChanged: {
-        if (open) { search.text = ""; selected = filtered.length > 0 ? 0 : -1; allowHover = false; Qt.callLater(function(){ search.forceActiveFocus() }) }
+        if (open) { search.text = ""; selected = filtered.length > 0 ? 0 : -1; allowHover = false; Qt.callLater(function(){ search.forceActiveFocus() }); openAnim.restart() }
+        else closeAnim.restart()
     }
     // no timer — hover enables on first mouse move only, so open doesn't auto-highlight
 
@@ -39,7 +40,7 @@ PanelWindow {
     property var usageMap: ({})
     property var usageLast: ({})
 
-    readonly property var allApps: DesktopEntries.applications.values.filter(e => {
+    readonly property var storeApps: DesktopEntries.applications.values.filter(e => {
         if (e.noDisplay) return false
         if (!e.icon) return false  // no icon = hidden per user request
         var lowName = (e.name||"").toLowerCase()
@@ -47,6 +48,21 @@ PanelWindow {
         for (var i=0;i<denylist.length;i++) if (lowName.includes(denylist[i]) || lowId.includes(denylist[i])) return false
         return true
     })
+    // quickshell plugins ride the launcher as apps now (PluginMenu
+    // scrapped) — plain data, launch() toggles by qsTarget.
+    readonly property var pluginApps: [
+        { id: "qs-pomodoro", name: "Pomodoro", genericName: "focus timer · stats", comment: "quickshell plugin", keywords: ["plugin", "quickshell"], glyph: "", qsTarget: "pomodoro" },
+        { id: "qs-github", name: "GitHub", genericName: "notifs · PRs · heatmap", comment: "quickshell plugin", keywords: ["plugin", "quickshell"], glyph: "", qsTarget: "github" },
+        { id: "qs-notes", name: "Quick Notes", genericName: "idea capture · draggable", comment: "quickshell plugin", keywords: ["plugin", "quickshell"], glyph: "", qsTarget: "notes" },
+        { id: "qs-screentime", name: "Screen Time", genericName: "usage heatmaps · app ranks", comment: "quickshell plugin", keywords: ["plugin", "quickshell"], glyph: "", qsTarget: "screentime" },
+        { id: "qs-phonebridge", name: "PhoneBridge", genericName: "send & pull files over ADB", comment: "quickshell plugin", keywords: ["plugin", "quickshell"], glyph: "", qsTarget: "phonebridge" },
+        { id: "qs-drives", name: "Drive Health", genericName: "SMART + RAM + speed test", comment: "quickshell plugin", keywords: ["plugin", "quickshell"], glyph: "", qsTarget: "drives" },
+        { id: "qs-monitors", name: "Monitors", genericName: "DPI / scale · rotate · display", comment: "quickshell plugin", keywords: ["plugin", "quickshell"], glyph: "", qsTarget: "monitors" },
+        { id: "qs-failwatch", name: "FailWatch", genericName: "failed units · journal errors", comment: "quickshell plugin", keywords: ["plugin", "quickshell"], glyph: "", qsTarget: "failwatch" },
+        { id: "qs-dict", name: "Dictionary", genericName: "definitions · synonyms · audio", comment: "quickshell plugin", keywords: ["plugin", "quickshell"], glyph: "", qsTarget: "dict" },
+        { id: "qs-grap", name: "Grap", genericName: "instant file search · grep", comment: "quickshell plugin", keywords: ["plugin", "quickshell"], glyph: "", qsTarget: "grap" },
+    ]
+    readonly property var allApps: storeApps.concat(pluginApps)
     function db() { return LocalStorage.openDatabaseSync("qs_launcher", "1.0", "launcher", 100000) }
     function loadStores() {
         var d = db()
@@ -117,20 +133,22 @@ PanelWindow {
         bumpUsage(entry.id)
         root.open = false
         Qt.callLater(function(){
+            // quickshell plugins live in the launcher now: toggle by target.
+            if (entry.qsTarget)
+                Quickshell.execDetached(["quickshell", "-p", Quickshell.env("HOME") + "/.config/quickshell", "ipc", "call", entry.qsTarget, "toggle"])
             // Terminal apps die instantly with no TTY — run them inside
             // kitty (same uwsm-app scope as SUPER+RETURN).
-            if (entry.runInTerminal && entry.command && entry.command.length > 0)
+            else if (entry.runInTerminal && entry.command && entry.command.length > 0)
                 Quickshell.execDetached(["uwsm-app", "--", "kitty", "-e"].concat(entry.command))
             else
                 entry.execute()
         })
     }
 
-    // dim backdrop
+    // click-outside catcher (invisible — no dim backdrop, card floats over desktop)
     Rectangle {
         anchors.fill: parent
-        color: colors.alpha(colors.background, root.open ? 0.45 : 0)
-        Behavior on color { ColorAnimation { duration: 200 } }
+        color: "transparent"
         MouseArea { anchors.fill: parent; onClicked: root.open = false }
     }
 
@@ -143,12 +161,21 @@ PanelWindow {
         color: colors.alpha(colors.surface, 0.52)
         border.width: 1
         border.color: colors.alpha(colors.outline, 0.15)
-        opacity: root.open ? 1 : 0
-        scale: root.open ? 1 : 0.96
-        Behavior on opacity { NumberAnimation { duration: 180 } }
-        Behavior on scale { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
         Keys.onEscapePressed: root.open = false
         focus: root.open
+
+        // bezier pair — open pops with overshoot bounce (fast), close hurries
+        // out with none. Same curves as the notification drawer.
+        ParallelAnimation {
+            id: openAnim
+            NumberAnimation { target: card; property: "opacity"; from: 0; to: 1; duration: 220; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
+            NumberAnimation { target: card; property: "scale"; from: 0.94; to: 1; duration: 280; easing.type: Easing.Bezier; easing.bezierCurve: [0.34, 1.35, 0.64, 1] }
+        }
+        ParallelAnimation {
+            id: closeAnim
+            NumberAnimation { target: card; property: "opacity"; to: 0; duration: 160; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
+            NumberAnimation { target: card; property: "scale"; to: 0.94; duration: 180; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
+        }
 
         RowLayout {
             id: col
@@ -355,6 +382,7 @@ PanelWindow {
                                 anchors.fill: parent
                                 anchors.margins: 5
                                 source: {
+                                    if (modelData.glyph) return ""
                                     if (!modelData.icon) return Quickshell.iconPath("folder")
                                     var ic = modelData.icon
                                     if (ic === "org.gnome.Nautilus") ic = "system-file-manager"
@@ -375,10 +403,10 @@ PanelWindow {
                             Text {
                                 anchors.centerIn: parent
                                 visible: appIcon.status !== Image.Ready
-                                text: modelData.name ? modelData.name.charAt(0).toUpperCase() : "?"
+                                text: modelData.glyph ? modelData.glyph : (modelData.name ? modelData.name.charAt(0).toUpperCase() : "?")
                                 color: colors.primary
-                                font.family: colors.fontSans
-                                font.pixelSize: 13
+                                font.family: modelData.glyph ? "Phosphor" : colors.fontSans
+                                font.pixelSize: modelData.glyph ? 15 : 13
                                 font.weight: Font.ExtraBold
                             }
                         }

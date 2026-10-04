@@ -49,6 +49,10 @@ FloatingWindow {
     property var pvTags: []             // tags of the previewed wall (fetched per open)
     property var localFiles: []
     property bool scanningLocal: false
+    property string currentWallpaper: ""
+    property bool curReady: false
+    property double lastLocalScan: 0
+    property bool debounceReset: false
     readonly property string sortParam: sorting === "latest" ? "date_added" : sorting
     readonly property string catParam: (catGeneral ? "1" : "0") + (catAnime ? "1" : "0") + (catPeople ? "1" : "0")
     readonly property string purParam: "1" + (purSketchy ? "1" : "0") + (purNsfw ? "1" : "0")
@@ -70,7 +74,7 @@ FloatingWindow {
     visible: root.open || closeAnim.running
     IpcHandler { target: "wallshelf"; function toggle(): void { root.open = !root.open } }
 
-    onOpenChanged: { if(open){ Qt.callLater(function(){ card.forceActiveFocus() }); if(resultModel.count === 0) search(true); openAnim.restart() } else closeAnim.restart() }
+    onOpenChanged: { if(open){ Qt.callLater(function(){ card.forceActiveFocus() }); if(resultModel.count === 0) search(true); root.resolveCurrent(); if(root.tab === "downloaded") root.refreshLocalMaybe(); openAnim.restart() } else closeAnim.restart() }
     onPreviewIdxChanged: if(root.previewIdx !== -1 && root.tab === "browse") root.fetchPvTags()
 
     // ── config ──
@@ -171,13 +175,46 @@ FloatingWindow {
                 }
                 root.localFiles = files
                 root.scanningLocal = false
+                root.lastLocalScan = Date.now()
+                root.syncCurrentToLocal()
             }
         }
     }
     function refreshLocal(){
         root.scanningLocal = true
-        localProc.command = ["sh","-c","find '"+root.linkDir+"' '"+root.cacheDir+"' -type f \\( -iname '*.jpg' -o -iname '*.png' -o -iname '*.jpeg' -o -iname '*.webp' \\) -printf '%T@|%p\\n' 2>/dev/null | sort -rn | head -n 300 | $HOME/.local/bin/mkthumbs"]
+        localProc.command = ["sh","-c","find '"+root.linkDir+"' '"+root.cacheDir+"' -path '*/thumbs' -prune -o -type f \\( -iname '*.jpg' -o -iname '*.png' -o -iname '*.jpeg' -o -iname '*.webp' \\) -printf '%T@|%p\\n' 2>/dev/null | sort -rn | head -n 200 | $HOME/.local/bin/mkthumbs"]
         localProc.running = true
+    }
+    function refreshLocalMaybe(){
+        if(root.scanningLocal) return
+        if(root.localFiles.length > 0 && (Date.now() - root.lastLocalScan) < 30000) return
+        root.refreshLocal()
+    }
+    // ── current wallpaper: resolve the awww symlink, scroll the local grid to it ──
+    Process {
+        id: curProc
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: {
+                var t = text.trim()
+                if(t !== ""){ root.currentWallpaper = t; root.curReady = true }
+                root.syncCurrentToLocal()
+            }
+        }
+    }
+    function resolveCurrent(){
+        curProc.command = ["sh","-c","readlink -f ~/.config/theme/current/background 2>/dev/null || readlink -f ~/.config/omarchy/current/background 2>/dev/null"]
+        curProc.running = true
+    }
+    function syncCurrentToLocal(){
+        if(!root.curReady || root.currentWallpaper === "") return
+        if(root.tab !== "downloaded" || !root.localFiles.length) return
+        var idx = 0
+        for(var i=0;i<root.localFiles.length;i++){
+            if(root.localFiles[i].path === root.currentWallpaper){ idx = i; break }
+        }
+        var target = idx  // 0 when nothing matches: graceful fallback, no errors
+        Qt.callLater(function(){ localGrid.currentIndex = target; localGrid.positionViewAtIndex(target, GridView.Center) })
     }
 
     // ── search ──
@@ -202,6 +239,8 @@ FloatingWindow {
         else doFetch(root.pendingUrl)
     }
     Timer { id: rateTimer; onTriggered: root.doFetch(root.pendingUrl) }
+    Timer { id: searchDebounce; interval: 350; onTriggered: { var r = root.debounceReset; root.debounceReset = false; root.search(r) } }
+    function debouncedSearch(reset){ if(reset) root.debounceReset = true; searchDebounce.restart() }
     function doFetch(url){
         if(respCache[url] && (Date.now() - respCache[url].at < 60000)){
             root.applyResults(respCache[url].body)
@@ -441,7 +480,7 @@ FloatingWindow {
             var n = parts[i].trim().replace(/^#/, "").toLowerCase()
             if(n && t.indexOf(n) === -1) t.push(n)
         }
-        if(t.length !== root.tags.length){ root.tags = t; root.search(true) }
+        if(t.length !== root.tags.length){ root.tags = t; root.debouncedSearch(true) }
     }
     function setAsWallpaper(path){
         if(!path) return
@@ -453,6 +492,29 @@ FloatingWindow {
         if(s[w.id]){ delete s[w.id]; root.selCount -= 1 }
         else { s[w.id] = true; root.selCount += 1 }
         root.selected = s
+    }
+    // ── grid keyboard nav: explicit index math on the view's real column count ──
+    function gridCols(view){ return Math.max(1, Math.floor(view.width / view.cellWidth)) }
+    function gridRows(view){ return Math.max(1, Math.floor(view.height / view.cellHeight)) }
+    function gridGo(view, idx, total){
+        if(total <= 0) return
+        idx = Math.max(0, Math.min(total - 1, idx))
+        view.currentIndex = idx
+        view.positionViewAtIndex(idx, GridView.Visible)
+    }
+    function gridKey(view, total, key){
+        var cols = root.gridCols(view)
+        var idx = view.currentIndex < 0 ? 0 : view.currentIndex
+        if(key === Qt.Key_Left) root.gridGo(view, idx - 1, total)
+        else if(key === Qt.Key_Right) root.gridGo(view, idx + 1, total)
+        else if(key === Qt.Key_Up) root.gridGo(view, idx - cols, total)
+        else if(key === Qt.Key_Down) root.gridGo(view, idx + cols, total)
+        else if(key === Qt.Key_Home) root.gridGo(view, 0, total)
+        else if(key === Qt.Key_End) root.gridGo(view, total - 1, total)
+        else if(key === Qt.Key_PageUp) root.gridGo(view, idx - cols * root.gridRows(view), total)
+        else if(key === Qt.Key_PageDown) root.gridGo(view, idx + cols * root.gridRows(view), total)
+        else return false
+        return true
     }
 
     Component.onCompleted: { detectResolution(); refreshDownloaded() }
@@ -470,10 +532,7 @@ FloatingWindow {
         Keys.onPressed: function(e){
             if(root.tab === "downloaded"){
                 if(e.key === Qt.Key_T){ var l = root.localFiles[localGrid.currentIndex]; if(l) root.removeLocal(l.path); e.accepted = true }
-                else if(e.key === Qt.Key_Left){ localGrid.moveCurrentIndexLeft(); e.accepted = true }
-                else if(e.key === Qt.Key_Right){ localGrid.moveCurrentIndexRight(); e.accepted = true }
-                else if(e.key === Qt.Key_Up){ localGrid.moveCurrentIndexUp(); e.accepted = true }
-                else if(e.key === Qt.Key_Down){ localGrid.moveCurrentIndexDown(); e.accepted = true }
+                else if(root.gridKey(localGrid, root.localFiles.length, e.key)) e.accepted = true
                 return
             }
             if(root.previewIdx !== -1){
@@ -485,11 +544,8 @@ FloatingWindow {
             if(e.key === Qt.Key_D){ root.downloadBulk(); e.accepted = true }
             else if(e.key === Qt.Key_T){ var t = root.wAt(grid.currentIndex); if(t) root.removeWall(t); e.accepted = true }
             else if(e.key === Qt.Key_V || e.key === Qt.Key_S){ var v = root.wAt(grid.currentIndex); if(v) root.toggleSelect(v); e.accepted = true }
-            else if(e.key === Qt.Key_Left){ grid.moveCurrentIndexLeft(); e.accepted = true }
-            else if(e.key === Qt.Key_Right){ grid.moveCurrentIndexRight(); e.accepted = true }
-            else if(e.key === Qt.Key_Up){ grid.moveCurrentIndexUp(); e.accepted = true }
-            else if(e.key === Qt.Key_Down){ grid.moveCurrentIndexDown(); e.accepted = true }
             else if(e.key === Qt.Key_Return || e.key === Qt.Key_Enter){ root.openPreview(grid.currentIndex); e.accepted = true }
+            else if(root.gridKey(grid, resultModel.count, e.key)) e.accepted = true
         }
 
         // bezier pair — open pops with overshoot bounce (fast), close hurries
@@ -551,7 +607,7 @@ FloatingWindow {
                         color: root.tab === modelData.k ? colors.alpha(colors.primary, 0.2) : colors.alpha(colors.surface, 0.5)
                         border.width: 1; border.color: root.tab === modelData.k ? colors.alpha(colors.primary, 0.45) : colors.alpha(colors.outline, 0.12)
                         Text { anchors.centerIn: parent; text: modelData.t; color: root.tab === modelData.k ? colors.primary : colors.foreground; font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold; font.letterSpacing: 0.5 }
-                        MouseArea { anchors.fill: parent; hoverEnabled: true; onClicked: { root.tab = modelData.k; if(root.tab === "downloaded") root.refreshLocal() } }
+                        MouseArea { anchors.fill: parent; hoverEnabled: true; onClicked: { root.tab = modelData.k; if(root.tab === "downloaded"){ root.refreshLocalMaybe(); root.syncCurrentToLocal() } } }
                     }
                 }
                 Rectangle {
@@ -592,7 +648,7 @@ FloatingWindow {
                         color: on ? colors.alpha(colors.primary, 0.2) : colors.alpha(colors.surface, 0.5)
                         border.width: 1; border.color: on ? colors.alpha(colors.primary, 0.45) : colors.alpha(colors.outline, 0.12)
                         Text { anchors.centerIn: parent; text: modelData.t; color: on ? colors.primary : colors.foreground; font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold; font.letterSpacing: 0.5 }
-                        MouseArea { anchors.fill: parent; hoverEnabled: true; onClicked: { if(modelData.k === "g") root.catGeneral = !root.catGeneral; else if(modelData.k === "a") root.catAnime = !root.catAnime; else root.catPeople = !root.catPeople; root.search(true) } }
+                        MouseArea { anchors.fill: parent; hoverEnabled: true; onClicked: { if(modelData.k === "g") root.catGeneral = !root.catGeneral; else if(modelData.k === "a") root.catAnime = !root.catAnime; else root.catPeople = !root.catPeople; root.debouncedSearch(true) } }
                     }
                 }
                 Repeater { model: [{k:"s",t:"SFW"},{k:"k",t:"Sketchy"},{k:"n",t:"NSFW"}]
@@ -605,7 +661,7 @@ FloatingWindow {
                             if(modelData.k === "s") return
                             if(root.apiKey === ""){ root.errorMsg = "Sketchy/NSFW need an API key (see wallshelf.json)"; return }
                             if(modelData.k === "k") root.purSketchy = !root.purSketchy; else root.purNsfw = !root.purNsfw
-                            root.search(true)
+                            root.debouncedSearch(true)
                         } }
                     }
                 }
@@ -614,7 +670,7 @@ FloatingWindow {
                         color: root.sorting === modelData.k ? colors.alpha(colors.primary, 0.2) : colors.alpha(colors.surface, 0.5)
                         border.width: 1; border.color: root.sorting === modelData.k ? colors.alpha(colors.primary, 0.45) : colors.alpha(colors.outline, 0.12)
                         Text { anchors.centerIn: parent; text: modelData.t; color: root.sorting === modelData.k ? colors.primary : colors.foreground; font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold; font.letterSpacing: 0.5 }
-                        MouseArea { anchors.fill: parent; hoverEnabled: true; onClicked: { root.sorting = modelData.k; root.search(true) } }
+                        MouseArea { anchors.fill: parent; hoverEnabled: true; onClicked: { root.sorting = modelData.k; root.debouncedSearch(true) } }
                     }
                 }
             }
@@ -631,7 +687,7 @@ FloatingWindow {
                             RowLayout { anchors.fill: parent; anchors.leftMargin: 8; anchors.rightMargin: 5; spacing: 5
                                 Text { text: "#" + modelData; color: colors.tertiary; font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold }
                                 Text { text: "󰅖"; color: colors.alpha(colors.tertiary, 0.8); font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold
-                                    MouseArea { anchors.fill: parent; hoverEnabled: true; onClicked: { var t = root.tags.slice(); t.splice(index, 1); root.tags = t; root.search(true) } } }
+                                    MouseArea { anchors.fill: parent; hoverEnabled: true; onClicked: { var t = root.tags.slice(); t.splice(index, 1); root.tags = t; root.debouncedSearch(true) } } }
                             }
                         }
                     }
@@ -659,6 +715,7 @@ FloatingWindow {
                 Layout.fillWidth: true; Layout.fillHeight: true
                 Layout.preferredHeight: 420
                 clip: true
+                cacheBuffer: 260
                 cellWidth: Math.max(150, Math.floor(grid.width / Math.max(2, Math.floor(grid.width / 178)))); cellHeight: 130
                 model: resultModel
                 keyNavigationWraps: true
@@ -705,7 +762,7 @@ FloatingWindow {
                         color: root.selected[wid] ? colors.alpha(colors.primary, 0.9) : colors.alpha(colors.background, 0.6)
                         border.width: 1; border.color: colors.alpha(colors.primary, 0.6)
                         visible: root.selected[wid] || thumbMa.containsMouse
-                        Text { anchors.centerIn: parent; text: ""; visible: root.selected[wid]; color: colors.alpha(colors.background, 1); font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.ExtraBold }
+                        Text { anchors.centerIn: parent; text: ""; visible: !!root.selected[wid]; color: colors.alpha(colors.background, 1); font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.ExtraBold }
                         MouseArea { anchors.fill: parent; onClicked: root.toggleSelect({id: wid}) }
                     }
                     Rectangle {
@@ -736,6 +793,7 @@ FloatingWindow {
                 Layout.fillWidth: true; Layout.fillHeight: true
                 Layout.preferredHeight: 420
                 clip: true
+                cacheBuffer: 260
                 cellWidth: Math.max(150, Math.floor(localGrid.width / Math.max(2, Math.floor(localGrid.width / 178)))); cellHeight: 130
                 model: root.localFiles
                 delegate: Rectangle {
@@ -780,7 +838,7 @@ FloatingWindow {
                 color: colors.alpha(colors.outline, 0.55); font.family: colors.fontSans; font.pixelSize: 8; Layout.alignment: Qt.AlignHCenter
             }
 
-            Text { visible: root.tab === "browse"; text: "arrows move · v/s select · d download · t delete · enter preview · esc unfocus · click tags to search"; color: colors.alpha(colors.outline, 0.45); font.family: colors.fontSans; font.pixelSize: 7; Layout.alignment: Qt.AlignHCenter }
+            Text { visible: root.tab === "browse"; text: "arrows move · home/end jump · pgup/pgdn page · v/s select · d download · t delete · enter preview · esc unfocus · click tags to search"; color: colors.alpha(colors.outline, 0.45); font.family: colors.fontSans; font.pixelSize: 7; Layout.alignment: Qt.AlignHCenter }
         }
 
         // ── preview overlay ──
@@ -820,7 +878,7 @@ FloatingWindow {
                             MouseArea { id: pvTagMa; anchors.fill: parent; hoverEnabled: true; onClicked: {
                                 var n = String(modelData).replace(/^#/, "").toLowerCase()
                                 var t = root.tags.slice()
-                                if(n && t.indexOf(n) === -1){ t.push(n); root.tags = t; root.search(true) }
+                                if(n && t.indexOf(n) === -1){ t.push(n); root.tags = t; root.debouncedSearch(true) }
                                 root.previewIdx = -1
                             } }
                         }

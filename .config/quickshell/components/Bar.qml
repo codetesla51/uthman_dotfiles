@@ -150,13 +150,12 @@ PanelWindow {
             anchors.topMargin: 0
             width: islandRow.implicitWidth + 40
             height: 54
-            // trapezoid geometry — fixed rounding
+            // trapezoid geometry — rounded bottom corners
             readonly property real inset: 18         // horizontal inset of bottom edge
-            readonly property real cr: 8             // bottom corners (showing) — soft radius
-            readonly property real tc: 0             // top corners sharp at the screen edge
-            readonly property real slantLen: Math.sqrt(inset*inset + (height-cr)*(height-cr))
-            readonly property real ux: inset / slantLen
-            readonly property real uy: (height-cr) / slantLen
+            readonly property real r: 14
+            readonly property real len: Math.sqrt(inset*inset + height*height)
+            readonly property real sx: inset / len
+            readonly property real sy: height / len
             Behavior on width { NumberAnimation { duration: 380; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] } }
 
             // Dynamic-Island capsule overlay (SUPER ALT SPACE minimal mode)
@@ -173,29 +172,50 @@ PanelWindow {
             }
 
             Shape {
+                id: shp
+                readonly property real f: 14   // flare size
+
+                x: -f
+                y: 0
+                width: island.width + 2 * f
+                height: island.height
                 opacity: bar.dynamicIsland ? 0 : 1
                 Behavior on opacity { NumberAnimation { duration: 220; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] } }
-                anchors.fill: parent
                 antialiasing: true
                 layer.enabled: true
                 layer.samples: 4
+
                 ShapePath {
                     // 0.6: frosted, not flat — Hyprland's `blur on, match:namespace qs-bar`
                     // layerrule blurs the wallpaper behind; this alpha lets it bite
                     fillColor: colors.alpha(colors.background, 0.6)
                     strokeColor: "transparent"
                     strokeWidth: 0
-                    startX: island.tc; startY: 0
-                    PathLine { x: island.width - island.tc; y: 0 }
-                    // top corners scoop inward (cove) — control sits inside
-                    // the shape, so the curve bites in instead of bulging out
-                    PathQuad { controlX: island.width - island.tc*(1+island.ux)*0.9; controlY: island.uy*island.tc*0.9; x: island.width - island.ux*island.tc; y: island.uy*island.tc }
-                    PathLine { x: island.width - island.inset; y: island.height - island.cr }
-                    PathQuad { controlX: island.width - island.inset; controlY: island.height; x: island.width - island.inset - island.cr; y: island.height }
-                    PathLine { x: island.inset + island.cr; y: island.height }
-                    PathQuad { controlX: island.inset; controlY: island.height; x: island.inset; y: island.height - island.cr }
-                    PathLine { x: island.ux*island.tc; y: island.uy*island.tc }
-                    PathQuad { controlX: island.tc*(1+island.ux)*0.9; controlY: island.uy*island.tc*0.9; x: island.tc; y: 0 }
+
+                    // every x below is offset by shp.f because the Shape starts at x = -f
+                    startX: 0; startY: 0
+                    PathLine { x: shp.width; y: 0 }
+
+                    // top-right flare
+                    PathQuad { controlX: shp.f + island.width; controlY: 0
+                               x: shp.f + island.width - island.sx * shp.f; y: island.sy * shp.f }
+
+                    // right slant, then rounded bottom corner
+                    PathLine { x: shp.f + island.width - island.inset + island.sx * island.r
+                               y: island.height - island.sy * island.r }
+                    PathQuad { controlX: shp.f + island.width - island.inset; controlY: island.height
+                               x: shp.f + island.width - island.inset - island.r; y: island.height }
+
+                    // bottom edge
+                    PathLine { x: shp.f + island.inset + island.r; y: island.height }
+
+                    // left rounded corner, then slant up
+                    PathQuad { controlX: shp.f + island.inset; controlY: island.height
+                               x: shp.f + island.inset - island.sx * island.r; y: island.height - island.sy * island.r }
+                    PathLine { x: shp.f + island.sx * shp.f; y: island.sy * shp.f }
+
+                    // top-left flare
+                    PathQuad { controlX: shp.f; controlY: 0; x: 0; y: 0 }
                 }
             }
 

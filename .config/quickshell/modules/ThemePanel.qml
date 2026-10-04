@@ -25,9 +25,25 @@ PanelWindow {
     WlrLayershell.namespace: "qs-theme"
     // NOTE: no IpcHandler here — Bar.qml owns target "theme" and lazy-loads this.
 
+    property double lastScan: 0
+    readonly property string cachePath: Quickshell.env("HOME") + "/.cache/quickshell/theme-walls.cache"
+    function parseList(text){
+        var lines=text.trim().split("\n")
+        var arr=[]
+        for(var i=0;i<lines.length;i++){
+            var parts=lines[i].trim().split("|")
+            var p=(parts.length>1 ? parts[1] : parts[0]).trim()
+            if(!p) continue
+            arr.push({name:p.split("/").pop(), path:p, thumb:(parts.length>2 && parts[2]) ? parts[2] : p})
+        }
+        if(arr.length>0) root.walls=arr
+    }
+    Component.onCompleted: cacheProc.running = true
     function refresh(){
         currentProc.running = true
-        listProc.running = true
+        // cached list already paints instantly; heavy scan refreshes behind it
+        var now = Date.now()
+        if (walls.length === 0 || now - lastScan > 30000) { lastScan = now; listProc.running = true }
     }
     function setWall(path){
         applying = true
@@ -85,21 +101,23 @@ PanelWindow {
         stdout: StdioCollector { waitForEnd: true; onStreamFinished: root.currentWall = text.trim() }
     }
     Process {
-        id: listProc
-        command: ["sh","-c","(find ~/dotfiles/wallpapers \\( -type f -o -type l \\) \\( -name '*.jpg' -o -name '*.png' -o -name '*.jpeg' \\) 2>/dev/null; find ~/.config/theme/current -maxdepth 1 -type f \\( -name '*.jpg' -o -name '*.png' -o -name '*.jpeg' \\) 2>/dev/null; find ~/.config/theme/themes/snow_black/backgrounds -type f \\( -name '*.jpg' -o -name '*.png' -o -name '*.jpeg' \\) 2>/dev/null; find ~/.config/omarchy/themes/snow_black/backgrounds -type f \\( -name '*.jpg' -o -name '*.png' -o -name '*.jpeg' \\) 2>/dev/null; find ~/.config/omarchy/backgrounds -maxdepth 1 -type f \\( -name '*.jpg' -o -name '*.png' \\) 2>/dev/null) | head -n 300 | $HOME/.local/bin/mkthumbs"]
+        id: cacheProc
+        command: ["sh","-c","cat \"$HOME/.cache/quickshell/theme-walls.cache\" 2>/dev/null"]
         stdout: StdioCollector {
             waitForEnd: true
             onStreamFinished: {
-                var lines=text.trim().split("\n")
-                var arr=[]
-                for(var i=0;i<lines.length;i++){
-                    var parts=lines[i].trim().split("|")
-                    var p=(parts.length>1 ? parts[1] : parts[0]).trim()
-                    if(!p) continue
-                    arr.push({name:p.split("/").pop(), path:p, thumb:(parts.length>2 && parts[2]) ? parts[2] : p})
-                }
-                root.walls=arr
+                if(text.trim() !== "") root.parseList(text)
+                // pre-warm: refresh thumbs in background even before first open
+                root.lastScan = Date.now(); listProc.running = true
             }
+        }
+    }
+    Process {
+        id: listProc
+        command: ["sh","-c","mkdir -p \"$HOME/.cache/quickshell\"; (find ~/dotfiles/wallpapers \\( -type f -o -type l \\) \\( -name '*.jpg' -o -name '*.png' -o -name '*.jpeg' \\) 2>/dev/null; find ~/.config/theme/current -maxdepth 1 -type f \\( -name '*.jpg' -o -name '*.png' -o -name '*.jpeg' \\) 2>/dev/null; find ~/.config/theme/themes/snow_black/backgrounds -type f \\( -name '*.jpg' -o -name '*.png' -o -name '*.jpeg' \\) 2>/dev/null; find ~/.config/omarchy/themes/snow_black/backgrounds -type f \\( -name '*.jpg' -o -name '*.png' -o -name '*.jpeg' \\) 2>/dev/null; find ~/.config/omarchy/backgrounds -maxdepth 1 -type f \\( -name '*.jpg' -o -name '*.png' \\) 2>/dev/null) | head -n 300 | $HOME/.local/bin/mkthumbs | tee \"$HOME/.cache/quickshell/theme-walls.cache\""]
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: root.parseList(text)
         }
     }
 
@@ -118,11 +136,13 @@ PanelWindow {
         color: colors.alpha(colors.surface, 0.52)
         border.width: 1
         border.color: colors.alpha(colors.outline, 0.15)
-        // frosted glass — blurred current wallpaper INSIDE the card
+        // frosted glass — blurred current wallpaper INSIDE the card.
+        // Capped source: blur hides detail anyway, full-res was pure GPU tax.
         Image {
             id: wallSrc
             anchors.fill: parent
             source: root.currentWall !== "" ? "file://" + root.currentWall : ""
+            sourceSize: Qt.size(480, 270)
             fillMode: Image.PreserveAspectCrop
             asynchronous: true
             visible: false

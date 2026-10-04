@@ -1,96 +1,164 @@
 #!/bin/bash
-# shell-splash — 技 draws itself top-to-bottom, then the prompt. Art is
-# pre-rendered braille with NO background codes (plain glyphs + spaces),
-# so transparent terminals show through. Cache: ~/.cache/term-art/kanji.txt.
+# shell-splash — instant welcome: gradient ASCII-art header + random quote.
+# Single-pass render (no animation, no sleeps) so new shells appear instantly.
+# Small-terminal safe: reads $COLUMNS/$LINES, clamps art and quote to the
+# real width, steps down from side-by-side to stacked to quote-only layouts
+# on narrow/short terminals, and never emits a visible line longer than the
+# width. No network and no slow external calls (local grep/fold/shuf only).
 # .zshrc owns SPLASH_DONE; -t 1 keeps us off pipes.
 [[ -t 1 ]] || exit 0
 
-ART="$HOME/.cache/term-art/kanji.txt"
-[[ -s "$ART" ]] || exit 0
+# ---- terminal size (guarded: empty, non-numeric, or zero falls back) ----
+W=${COLUMNS:-}
+H=${LINES:-}
+[[ $W =~ ^[0-9]+$ ]] || W=$(tput cols 2>/dev/null)
+[[ $H =~ ^[0-9]+$ ]] || H=$(tput lines 2>/dev/null)
+[[ $W =~ ^[0-9]+$ ]] || W=80
+[[ $H =~ ^[0-9]+$ ]] || H=24
+(( W > 0 )) || W=80
+(( H > 0 )) || H=24
 
-mapfile -t ROWS < "$ART"
-TOTAL=${#ROWS[@]}
-FRAMES=7
-PER=$(( (TOTAL + FRAMES - 1) / FRAMES ))
+RST=$'\e[0m'
+IT=$'\e[3m'
+DIM=$'\e[2m'
 
-# dynamic rice gradient: foreground (top) -> outline (bottom), read fresh
-# every shell so a wallpaper switch re-tints the art. Falls back to bone/olive.
+# ---- theme tint (two cheap greps on a local file; bone/olive fallback) ----
 hex_of() { grep -m1 "^\$$1 =" "$HOME/.config/theme/current/colors.conf" 2>/dev/null | grep -oE '[0-9a-fA-F]{6}' | head -1; }
 TOP_HEX=$(hex_of foreground); [[ -n "$TOP_HEX" ]] || TOP_HEX="ebe1da"
 BOT_HEX=$(hex_of outline);    [[ -n "$BOT_HEX" ]] || BOT_HEX="a39487"
 TR=$((16#${TOP_HEX:0:2})); TG=$((16#${TOP_HEX:2:2})); TB=$((16#${TOP_HEX:4:2}))
 BR=$((16#${BOT_HEX:0:2})); BG=$((16#${BOT_HEX:2:2})); BB=$((16#${BOT_HEX:4:2}))
-RST=$'\e[0m'
 
-printf '\e[?25l'
-# bloom order: center rows first, expanding outward — deterministic, no shuf
-MID=$(( TOTAL / 2 ))
-ORDER=()
-for ((d=0; d<=MID; d++)); do
-    (( MID-d >= 0 )) && ORDER+=($((MID-d)))
-    (( MID+d < TOTAL && d > 0 )) && ORDER+=($((MID+d)))
-done
-shown=0
-for ((f=1; f<=FRAMES; f++)); do
-    count=$(( f * TOTAL / FRAMES ))
-    (( shown > 0 )) && printf '\e[%dA\r' "$TOTAL"
-    declare -A ON=()
-    for ((k=0; k<count; k++)); do ON[${ORDER[k]}]=1; done
-    for ((i=0; i<TOTAL; i++)); do
-        if [[ -n "${ON[$i]}" ]]; then
-            row="${ROWS[i]}"
-            nc=${#row}
-            for ((j=0; j<nc; j++)); do
-                # diagonal factor, inlined (a $( ) per cell would fork ~2000×)
-                rt=$(( TOTAL > 1 ? i * 1000 / (TOTAL - 1) : 0 ))
-                ct=$(( nc > 1 ? j * 1000 / (nc - 1) : 0 ))
-                t=$(( (rt + ct) / 2 ))
-                r=$(( (TR * (1000 - t) + BR * t) / 1000 ))
-                g=$(( (TG * (1000 - t) + BG * t) / 1000 ))
-                b=$(( (TB * (1000 - t) + BB * t) / 1000 ))
-                printf '\e[38;2;%d;%d;%dm%s' "$r" "$g" "$b" "${row:$j:1}"
-            done
-            printf '%s\n' "$RST"
-        else
-            printf '\n'
-        fi
-    done
-    shown=$TOTAL
-    sleep 0.07
-done
-printf '\e[?25h'
-
-# ---- beside the art: typewriter quote, italic + author ----
-QCOL=38          # quote starts this many columns right of the margin
-QW=44            # wrap width
-QFILE="$HOME/.config/hypr/scripts/quotes.txt"
-if [[ -f "$QFILE" ]]; then
-    line=$(shuf -n 1 "$QFILE")
-    body=${line% — *}; auth=${line##* — }
-    [[ "$body" == "$line" ]] && auth=""
-    mapfile -t QL < <(printf '%s' "$body" | fold -s -w $QW)
-    # cap at 4 lines so the block fits the 16-row art
-    QL=("${QL[@]:0:4}")
-    n=${#QL[@]}
-    (( ${#auth} > 0 )) && n=$((n + 1))
-    start=$(( (TOTAL - n) / 2 ))
-    (( start < 0 )) && start=0
-    printf '\e[%dA' "$TOTAL"          # back to art top
-    IT=$'\e[3m'; DIM=$'\e[2m'; RST=$'\e[0m'
-    r=$start
-    li=0
-    for q in "${QL[@]}"; do
-        printf '\e[%dB\r\e[%dC%s' "$((r))" "$QCOL" "$IT"
-        r=0
-        for ((c=0; c<${#q}; c++)); do printf '%s' "${q:$c:1}"; sleep 0.014; done
-        printf '%s' "$RST"
-        r=1
-        li=$((li + 1))
-    done
-    if [[ -n "$auth" ]]; then
-        printf '\e[%dB\r\e[%dC%s%s  — %s%s' "$r" "$QCOL" "$DIM" "$IT" "$auth" "$RST"
-        r=1
-        li=$((li + 1))
+# ---- art cache (a missing/empty file just means "quote only") ----
+ART="$HOME/.cache/term-art/kanji.txt"
+ROWS=(); TOTAL=0; ART_W=0; ART_OK=0
+if [[ -s "$ART" ]]; then
+    mapfile -t ROWS < "$ART"
+    TOTAL=${#ROWS[@]}
+    if (( TOTAL > 0 )); then
+        for row in "${ROWS[@]}"; do
+            (( ${#row} > ART_W )) && ART_W=${#row}
+        done
+        (( ART_W > 0 )) && ART_OK=1
     fi
-    printf '\e[%dB\r' "$((TOTAL - start - li))"
 fi
+
+# ---- quote (random local pick; a missing file yields no quote lines) ----
+QFILE="$HOME/.config/hypr/scripts/quotes.txt"
+BODY=""; AUTH=""
+if [[ -f "$QFILE" ]]; then
+    line=$(shuf -n 1 "$QFILE" 2>/dev/null)
+    if [[ -n "$line" ]]; then
+        BODY=${line% — *}; AUTH=${line##* — }
+        [[ "$BODY" == "$line" ]] && AUTH=""
+        BODY=${BODY//$'\t'/ }; AUTH=${AUTH//$'\t'/ }
+    fi
+fi
+
+QW_MAX=44
+QCOL=$(( ART_W + 6 ))   # quote column when parked beside the art
+
+# ---- layout: side-by-side -> stacked -> quote-only ----
+MODE=quote
+QW=$(( W < QW_MAX ? W : QW_MAX ))
+(( QW > 0 )) || QW=1
+if (( ART_OK )) && (( W >= QCOL + 20 )) && (( H >= TOTAL + 1 )); then
+    MODE=side
+    QW=$(( W - QCOL ))
+    (( QW > QW_MAX )) && QW=$QW_MAX
+elif (( ART_OK )) && (( W >= 20 )) && (( H >= TOTAL + 3 )); then
+    MODE=stack
+fi
+
+# ---- wrap quote to the layout width, then cap lines to fit the height ----
+QL=()
+if [[ -n "$BODY" ]]; then
+    mapfile -t QL < <(printf '%s' "$BODY" | fold -s -w "$QW")
+    for i in "${!QL[@]}"; do QL[$i]=${QL[$i]:0:$QW}; done
+fi
+case $MODE in
+    side)
+        QL=("${QL[@]:0:4}")
+        ;;
+    stack)
+        room=$(( H - TOTAL - 1 ))
+        (( room > 1 )) || room=2
+        cap=$room
+        [[ -n "$AUTH" ]] && cap=$(( room - 1 ))
+        (( cap > 0 )) || cap=1
+        QL=("${QL[@]:0:$cap}")
+        [[ -n "$AUTH" ]] && (( ${#QL[@]} + 1 > room )) && AUTH=""
+        ;;
+    quote)
+        cap=$H
+        [[ -n "$AUTH" ]] && cap=$(( H - 1 ))
+        (( cap > 0 )) || cap=1
+        QL=("${QL[@]:0:$cap}")
+        [[ -n "$AUTH" ]] && (( ${#QL[@]} + 1 > H )) && AUTH=""
+        ;;
+esac
+
+# ---- gradient art row on stdout, clamped to W visible cells ----
+print_art_row() {  # $1 = row index
+    local row="${ROWS[$1]}" nc out j t r g b rt ct
+    row=${row:0:$W}
+    nc=${#row}
+    (( nc > 0 )) || { printf '\n'; return 0; }
+    if (( TOTAL > 1 )); then rt=$(( $1 * 1000 / (TOTAL - 1) )); else rt=0; fi
+    out=""
+    for ((j=0; j<nc; j++)); do
+        if (( nc > 1 )); then ct=$(( j * 1000 / (nc - 1) )); else ct=0; fi
+        t=$(( (rt + ct) / 2 ))
+        r=$(( (TR * (1000 - t) + BR * t) / 1000 ))
+        g=$(( (TG * (1000 - t) + BG * t) / 1000 ))
+        b=$(( (TB * (1000 - t) + BB * t) / 1000 ))
+        out+=$'\e[38;2;'"${r};${g};${b}m${row:$j:1}"
+    done
+    printf '%s%s\n' "$out" "$RST"
+}
+
+if [[ $MODE == side ]]; then
+    for ((i=0; i<TOTAL; i++)); do print_art_row "$i"; done
+    n=${#QL[@]}
+    [[ -n "$AUTH" ]] && n=$(( n + 1 ))
+    if (( n > 0 )); then
+        start=$(( (TOTAL - n) / 2 ))
+        (( start < 0 )) && start=0
+        (( TOTAL > 0 )) && printf '\e[%dA' "$TOTAL"
+        first=1; r=$start
+        for q in "${QL[@]}"; do
+            if (( first )); then
+                first=0
+                (( r == 0 )) && printf '\r' || printf '\e[%dB\r' "$r"
+            else
+                printf '\e[1B\r'
+            fi
+            printf '\e[%dC%s%s%s' "$QCOL" "$IT" "$q" "$RST"
+        done
+        if [[ -n "$AUTH" ]]; then
+            atext="  — $AUTH"; atext=${atext:0:$QW}
+            if (( first )); then
+                first=0
+                (( r == 0 )) && printf '\r' || printf '\e[%dB\r' "$r"
+            else
+                printf '\e[1B\r'
+            fi
+            printf '\e[%dC%s%s%s%s' "$QCOL" "$DIM" "$IT" "$atext" "$RST"
+        fi
+        rest=$(( TOTAL - start - n ))
+        (( rest > 0 )) && printf '\e[%dB\r' "$rest" || printf '\r'
+    fi
+elif [[ $MODE == stack ]]; then
+    for ((i=0; i<TOTAL; i++)); do print_art_row "$i"; done
+    printf '\n'
+    for q in "${QL[@]}"; do printf '%s%s%s\n' "$IT" "$q" "$RST"; done
+    if [[ -n "$AUTH" ]]; then
+        atext="  — $AUTH"; printf '%s%s%s%s\n' "$DIM" "$IT" "${atext:0:$W}" "$RST"
+    fi
+else
+    for q in "${QL[@]}"; do printf '%s%s%s\n' "$IT" "$q" "$RST"; done
+    if [[ -n "$AUTH" ]]; then
+        atext="  — $AUTH"; printf '%s%s%s%s\n' "$DIM" "$IT" "${atext:0:$W}" "$RST"
+    fi
+fi
+exit 0

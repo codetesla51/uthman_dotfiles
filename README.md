@@ -6,17 +6,6 @@ Arch Linux, Hyprland, Quickshell, Matugen. Wallpaper sets the palette, everythin
 
 Bar island, Zathura and kitty over a wallpaper-pulled palette. Every surface you see here (bar, OSD, toasts, login, terminals, editors) is recolored from that one image.
 
-## Why not the usual stack
-
-The common Arch Hyprland setup is Waybar plus SwayNC plus a separate OSD daemon plus rofi or walker for launchers. That works, but it means four codebases, four config languages, and a theme pipeline that has to be rewritten for each one.
-
-This replaces all of that with a single QML codebase. Two consequences worth knowing:
-
-- The bar, the panels, the notification daemon, and the OSD are the same widgets in the same palette object, so a new panel reuses existing styles for free instead of restyling from scratch.
-- Hyprland only ever runs one command to talk to the shell (`quickshell -p ~/.config/quickshell ipc call <target> toggle`), so binds, scripts, and panels all drive the same surface.
-
-If you want GTK-native menus, a web-based bar, or per-app theming you can configure in a GUI, the usual stack is the better fit. If you would rather own the whole desktop in one language, this is the trade.
-
 ## Fresh machine
 
 ```bash

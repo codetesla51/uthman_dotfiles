@@ -2,11 +2,11 @@ import Quickshell
 import Quickshell.Io
 import QtQuick
 import QtQuick.Layouts
-import QtQuick.Controls
 
-// MonitorSettings — small live monitor controls for Hyprland.
-// Applies via ~/.config/hypr/monitors-override.conf (sourced after monitors.conf)
-// + hyprctl reload. No heavy UI, esc/click-outside to close.
+// MonitorSettings — display controls (scale / orientation / mode line) in the
+// segmented-pill design, themed off `colors`. Applies persistently via
+// ~/.config/hypr/monitors-override.conf (sourced after monitors.conf) —
+// a reload-repoll picks up the applied values, so no transient keywords.
 FloatingWindow {
     id: root
 
@@ -35,16 +35,19 @@ FloatingWindow {
 
     title: "Monitors"
     implicitWidth: 420
-    implicitHeight: 240
-    minimumSize: Qt.size(420, 240)
-    maximumSize: Qt.size(420, 240)
+    implicitHeight: col.implicitHeight + 48
+    // pinned like the old module: without a fixed size the fillWidth segs
+    // inside the fill-parent column form an implicit-size loop and the
+    // window blows up to a tile. Hyprland rules pin the same 460x620.
+    minimumSize: Qt.size(460, 620)
+    maximumSize: Qt.size(460, 620)
     color: "transparent"
     visible: root.open || closeAnim.running
 
     // NOTE: no IpcHandler here on purpose. shell.qml owns target "monitors"
     // and lazy-loads this module; a second handler for the same target wins
     // nothing and logs "registered but will not be used".
-    onOpenChanged: { if (open) { load(); openAnim.restart() } else closeAnim.restart() }
+    onOpenChanged: { if (open) { syncing = true; load(); openAnim.restart() } else closeAnim.restart() }
 
     Process {
         id: loadProc
@@ -60,46 +63,110 @@ FloatingWindow {
         if (!mon) return "preferred"
         return mon.width + "x" + mon.height + "@" + Math.round(mon.refreshRate)
     }
-    // Scale ladder — every value here divides the panel width into a whole
-    // number of pixels. Hyprland snaps any other scale to the nearest ratio
-    // that does (1.1 -> 1.2 on 1920, because 1920/1.1 = 1745.45), so offering
-    // it would just be a box that silently does nothing.
-    readonly property var scaleSteps: [1.0, 1.2, 1.25, 1.5, 1.6, 2.0]
-    function scaleIdx() {
-        if (!mon) return 1
+    readonly property var dims: mon ? [mon.width, mon.height] : [1600, 900]
+    readonly property bool portrait: orientVal === 1 || orientVal === 3
+    readonly property int pw: portrait ? dims[1] : dims[0]
+    readonly property int ph: portrait ? dims[0] : dims[1]
+
+    // scale ladder + whole-pixel math from the sketch: offer the common rungs,
+    // warn when the picked one doesn't divide the panel into whole pixels
+    readonly property var scaleLadder: [1, 1.2, 1.25, 1.5, 1.75, 2]
+    property real scaleVal: 1
+    property int orientVal: 0
+    // take values from the monitor until the user picks; the 1.5s re-poll
+    // must not clobber a pick that hasn't applied yet
+    property bool syncing: true
+    function syncFromMon() {
+        if (!mon || !syncing) return
+        orientVal = mon.transform
         var best = 0, bd = 999
-        for (var i = 0; i < scaleSteps.length; i++) {
-            var d = Math.abs(scaleSteps[i] - mon.scale)
+        for (var i = 0; i < scaleLadder.length; i++) {
+            var d = Math.abs(scaleLadder[i] - mon.scale)
             if (d < bd) { bd = d; best = i }
+        }
+        scaleVal = scaleLadder[best]
+    }
+    onMonitorsChanged: syncFromMon()
+
+    function whole(s) {
+        var n = Math.round(s * 100)
+        return (pw * 100) % n === 0 && (ph * 100) % n === 0
+    }
+    function nearest() {
+        var best = -1, bd = 9
+        for (var x = 100; x <= 200; x += 5) {
+            var s = x / 100
+            if (whole(s)) {
+                var d = Math.abs(s - scaleVal)
+                if (d < bd) { bd = d; best = s }
+            }
         }
         return best
     }
-    function apply(scale, transform) {
+
+    readonly property string value: (mon ? mon.name : "DP-1") + "," + currentMode() + ",0x0," + scaleVal + (orientVal ? ",transform," + orientVal : "")
+    function apply() {
         if (!mon) return
-        var name = mon.name
-        var mode = currentMode()
-        var cmd = "printf 'monitor = " + name + ", " + mode + ", auto, " + scale + ", transform, " + transform + "\\n' > $HOME/.config/hypr/monitors-override.conf && hyprctl reload >/dev/null 2>&1"
+        var cmd = "printf 'monitor = " + value + "\\n' > $HOME/.config/hypr/monitors-override.conf && hyprctl reload >/dev/null 2>&1"
         Quickshell.execDetached(["sh", "-c", cmd])
         reloadTimer.restart()
     }
-    function adjustScale(dir) {
-        var i = Math.min(Math.max(0, scaleIdx() + dir), scaleSteps.length - 1)
-        apply(scaleSteps[i], mon ? mon.transform : 0)
-    }
-    function rotate() { apply(mon ? mon.scale : 1.2, mon ? (mon.transform + 1) % 4 : 0) }
+
 
     Timer { id: reloadTimer; interval: 900; onTriggered: load() }
     Timer { id: refreshTimer; interval: 1500; running: root.open; repeat: true; onTriggered: load() }
 
+    component Seg: Rectangle {
+        id: seg
+        property var labels: []
+        property int current: 0
+        // orientation labels ("Portrait flip") outgrow a 13px segment, so
+        // that row opts into 11px while the short rows stay at 13
+        property int labelSize: 13
+        signal picked(int index)
+        implicitHeight: 44
+        radius: height / 2
+        color: colors.alpha(colors.background, 0.85)
+        border.width: 1
+        border.color: colors.alpha(colors.outline, 0.3)
+        Row {
+            anchors.fill: parent
+            anchors.margins: 4
+            spacing: 4
+            Repeater {
+                model: seg.labels
+                Rectangle {
+                    required property int index
+                    required property var modelData
+                    width: Math.max(1, (parent.width - (seg.labels.length - 1) * 4) / seg.labels.length)
+                    height: parent.height
+                    radius: height / 2
+                    color: seg.current === index ? colors.primary : "transparent"
+                    Text {
+                        anchors.centerIn: parent
+                        text: modelData
+                        font.family: colors.fontSans
+                        font.pixelSize: seg.labelSize
+                        font.weight: Font.Medium
+                        color: seg.current === index ? colors.background : colors.foreground
+                    }
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: seg.picked(index)
+                    }
+                }
+            }
+        }
+    }
+
     // glass card — anchors.fill so the hairline lands exactly on the window
-    // edge (same as every other card). A fixed/inset card leaves a margin the
-    // compositor then frames, which reads as a second border. Scale boxes use
-    // preferredWidth, not fillWidth — fillWidth children inside a fill-parent
-    // column form a circular implicit-size loop that pins the window to max.
+    // edge. A fixed/inset card leaves a margin the compositor then frames,
+    // which reads as a second border.
     Rectangle {
         id: card
         anchors.fill: parent
-        radius: 16
+        radius: 28
         color: colors.alpha(colors.surface, 0.52)
         border.width: 1
         border.color: colors.alpha(colors.outline, 0.15)
@@ -118,255 +185,102 @@ FloatingWindow {
         Keys.onEscapePressed: root.open = false
 
         ColumnLayout {
+            id: col
             anchors.fill: parent
-            anchors.margins: 12
-            spacing: 10
+            anchors.margins: 24
+            spacing: 18
 
-            // header — monitor identity + attached count
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: 6
-                Text {
-                    text: mon ? (mon.description || mon.name) : "No monitor"
-                    color: colors.alpha(colors.foreground, 0.9)
-                    font.family: colors.fontSans
-                    font.pixelSize: 11
-                    font.weight: Font.Medium
-                    Layout.fillWidth: true
-                    elide: Text.ElideRight
-                }
-                Text {
-                    text: root.monitors.length + " attached"
-                    color: colors.alpha(colors.outline, 0.45)
-                    font.family: colors.fontSans
-                    font.pixelSize: 7
-                    font.weight: Font.Bold
-                    font.letterSpacing: 1
-                }
-            }
-
-            // monitor picker — only worth the row with 2+ displays
-            RowLayout {
+            // monitor switcher — only when there's more than one
+            Seg {
                 Layout.fillWidth: true
                 visible: root.monitors.length > 1
-                spacing: 6
-                Repeater {
-                    model: root.monitors.length
-                    delegate: Rectangle {
-                        required property int index
-                        readonly property bool on: root.selected === index
-                        Layout.preferredHeight: 22
-                        Layout.preferredWidth: Math.max(60, mname.implicitWidth + 20)
-                        radius: 11
-                        color: on ? colors.alpha(colors.primary, 0.15) : colors.alpha(colors.surfaceVariant, 0.3)
-                        border.width: 1
-                        border.color: on ? colors.alpha(colors.primary, 0.3) : colors.alpha(colors.outline, 0.12)
-                        Behavior on color { ColorAnimation { duration: 180 } }
-                        Behavior on border.color { ColorAnimation { duration: 180 } }
-                        Text {
-                            id: mname
-                            anchors.centerIn: parent
-                            text: root.monitors[index] ? root.monitors[index].name : ""
-                            color: parent.on ? colors.primary : colors.alpha(colors.foreground, 0.7)
-                            font.family: colors.fontSans
-                            font.pixelSize: 9
-                            font.weight: Font.Bold
-                        }
-                        MouseArea { anchors.fill: parent; onClicked: root.selected = index }
-                    }
-                }
-                Item { Layout.fillWidth: true }
+                labels: { var a = []; for (var i = 0; i < root.monitors.length; i++) a.push(root.monitors[i].name); return a }
+                current: root.selected
+                onPicked: i => { root.selected = i; root.syncing = true; root.syncFromMon() }
             }
 
-            // scale — the one real control: a group of boxes, pick one.
-            // Plain Row with explicit sizes: a RowLayout here let the boxes
-            // grow past the card edge and cut the 2.00 box off.
-            // 6*52 + 5*5 = 337 < 396 usable. No layout engine, no drift.
-            Row {
-                spacing: 5
-                Repeater {
-                    model: root.scaleSteps
-                    delegate: Rectangle {
-                        required property var modelData
-                        required property int index
-                        readonly property bool on: index === root.scaleIdx()
-
-                        width: 52
-                        height: 44
-                        radius: 9
-                        color: on ? "transparent" : colors.alpha(colors.surfaceVariant, 0.3)
-                        border.width: 1
-                        border.color: on ? "transparent" : colors.alpha(colors.outline, 0.12)
-                        y: boxMa.containsMouse ? -2 : 0
-                        scale: boxMa.containsMouse ? 1.04 : 1.0
-                        Behavior on y { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
-                        Behavior on scale { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
-                        Behavior on color { ColorAnimation { duration: 200 } }
-                        Behavior on border.color { ColorAnimation { duration: 200 } }
-
-                        Rectangle {
-                            anchors.fill: parent
-                            radius: 9
-                            visible: parent.on
-                            gradient: Gradient {
-                                orientation: Gradient.Horizontal
-                                GradientStop { position: 0; color: colors.primary }
-                                GradientStop { position: 1; color: colors.alpha(colors.secondary, 0.9) }
-                            }
-                        }
-
-                        Text {
-                            anchors.centerIn: parent
-                            text: Number(modelData).toFixed(2)
-                            color: parent.on ? colors.background : colors.alpha(colors.foreground, 0.75)
-                            font.family: colors.fontSans
-                            font.pixelSize: 12
-                            font.weight: Font.ExtraBold
-                            Behavior on color { ColorAnimation { duration: 200 } }
-                        }
-
-                        MouseArea {
-                            id: boxMa
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            onClicked: root.apply(modelData, root.mon ? root.mon.transform : 0)
-                        }
-                    }
-                }
-            }
-
-            Rectangle { Layout.fillWidth: true; height: 1; color: colors.alpha(colors.outline, 0.12) }
-
-            // facts — three compact cells, dividers are siblings
             RowLayout {
+                spacing: 14
+                Row {
+                    spacing: 2
+                    Text { text: String(root.scaleVal).replace(/\.0+$/, ""); color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 76; font.weight: Font.Bold }
+                    Text { text: "×"; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 34; anchors.baseline: parent.children[0].baseline }
+                }
+                ColumnLayout {
+                    spacing: 0
+                    Text { text: Math.round(root.pw / root.scaleVal) + " × " + Math.round(root.ph / root.scaleVal); color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 19; font.weight: Font.Medium }
+                    Text { text: "usable desktop"; color: colors.alpha(colors.outline, 0.8); font.family: colors.fontSans; font.pixelSize: 14 }
+                }
+            }
+
+            Text { text: "Orientation"; color: colors.alpha(colors.outline, 0.8); font.family: colors.fontSans; font.pixelSize: 14 }
+            Seg {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 40
-                spacing: 0
+                labelSize: 11
+                labels: ["Landscape", "Portrait", "Upside down", "Portrait flip"]
+                current: root.orientVal
+                onPicked: i => { root.orientVal = i; root.syncing = false }
+            }
 
-                // Plain Item cell, so inner content may use anchors — the rule
-                // is only "no anchors.* on children OF a layout", and the
-                // anchors.verticalCenter ColumnLayout that was here (child
-                // of a RowLayout) blew the whole row's geometry out.
-                Item {
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    ColumnLayout {
-                        anchors.left: parent.left
-                        anchors.right: parent.right
-                        anchors.verticalCenter: parent.verticalCenter
-                        spacing: 3
-                        Text {
-                            text: "ROT"
-                            color: colors.alpha(colors.outline, 0.55)
-                            font.family: colors.fontSans
-                            font.pixelSize: 7
-                            font.weight: Font.Bold
-                            font.letterSpacing: 1.3
-                        }
-                        // Plain Row, explicit sizes — same reason as the
-                        // scale boxes above: no layout engine, no drift.
-                        Row {
-                            spacing: 6
-                            Text {
-                                text: mon ? (mon.transform * 90) + "°" : "—"
-                                color: colors.alpha(colors.foreground, 0.9)
-                                font.family: colors.fontSans
-                                font.pixelSize: 12
-                                font.weight: Font.Bold
-                                anchors.verticalCenter: parent.verticalCenter
-                            }
-                            Rectangle {
-                                width: 52
-                                height: 22
-                                radius: 11
-                                color: rotMa.containsMouse ? colors.alpha(colors.primary, 0.15) : colors.alpha(colors.surfaceVariant, 0.3)
-                                border.width: 1
-                                border.color: colors.alpha(colors.outline, 0.12)
-                                y: rotMa.containsMouse ? -2 : 0
-                                Behavior on y { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
-                                Behavior on color { ColorAnimation { duration: 140 } }
-                                Text {
-                                    anchors.centerIn: parent
-                                    text: "turn"
-                                    color: colors.alpha(colors.foreground, 0.8)
-                                    font.family: colors.fontSans
-                                    font.pixelSize: 9
-                                    font.weight: Font.Bold
-                                }
-                                MouseArea {
-                                    id: rotMa
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    onClicked: root.rotate()
-                                }
-                            }
-                        }
+            Text { text: "Scale"; color: colors.alpha(colors.outline, 0.8); font.family: colors.fontSans; font.pixelSize: 14 }
+            Seg {
+                Layout.fillWidth: true
+                labels: ["1", "1.2", "1.25", "1.5", "1.75", "2"]
+                current: root.scaleLadder.indexOf(root.scaleVal)
+                onPicked: i => { root.scaleVal = root.scaleLadder[i]; root.syncing = false }
+            }
+            Text {
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                font.family: colors.fontSans
+                font.pixelSize: 14
+                color: root.whole(root.scaleVal) ? colors.alpha(colors.outline, 0.8) : colors.secondary
+                text: root.whole(root.scaleVal)
+                      ? "Whole pixels. Text stays sharp in every app."
+                      : "Not a whole number of pixels, so some apps may look soft." + (root.nearest() > 0 ? " Try " + root.nearest() + " instead." : "")
+            }
+
+            Rectangle {
+                Layout.fillWidth: true
+                implicitHeight: 52
+                radius: 26
+                color: colors.alpha(colors.background, 0.85)
+                border.width: 1
+                border.color: colors.alpha(colors.outline, 0.3)
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: 18
+                    anchors.rightMargin: 6
+                    spacing: 6
+                    Text {
+                        Layout.fillWidth: true
+                        elide: Text.ElideRight
+                        text: "monitor=" + root.value
+                        color: colors.primary
+                        font.family: colors.fontSans
+                        font.pixelSize: 12
                     }
-                }
-
-                Rectangle { Layout.preferredWidth: 1; Layout.preferredHeight: 20; Layout.alignment: Qt.AlignVCenter; color: colors.alpha(colors.outline, 0.12) }
-
-                Item {
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    ColumnLayout {
-                        anchors.left: parent.left
-                        anchors.right: parent.right
-                        anchors.verticalCenter: parent.verticalCenter
-                        spacing: 3
+                    Rectangle {
+                        implicitWidth: 66
+                        implicitHeight: 40
+                        radius: 20
+                        color: colors.primary
                         Text {
-                            text: "MODE"
-                            color: colors.alpha(colors.outline, 0.55)
+                            anchors.centerIn: parent
+                            text: "Apply"
                             font.family: colors.fontSans
-                            font.pixelSize: 7
-                            font.weight: Font.Bold
-                            font.letterSpacing: 1.3
+                            font.pixelSize: 13
+                            font.weight: Font.Medium
+                            color: colors.background
                         }
-                        Text {
-                            Layout.fillWidth: true
-                            text: mon ? currentMode() : "—"
-                            color: colors.alpha(colors.foreground, 0.9)
-                            font.family: colors.fontSans
-                            font.pixelSize: 12
-                            font.weight: Font.Bold
-                            elide: Text.ElideRight
-                        }
-                    }
-                }
-
-                Rectangle { Layout.preferredWidth: 1; Layout.preferredHeight: 20; Layout.alignment: Qt.AlignVCenter; color: colors.alpha(colors.outline, 0.12) }
-
-                Item {
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    ColumnLayout {
-                        anchors.left: parent.left
-                        anchors.right: parent.right
-                        anchors.verticalCenter: parent.verticalCenter
-                        spacing: 3
-                        Text {
-                            text: "STATE"
-                            color: colors.alpha(colors.outline, 0.55)
-                            font.family: colors.fontSans
-                            font.pixelSize: 7
-                            font.weight: Font.Bold
-                            font.letterSpacing: 1.3
-                        }
-                        Text {
-                            Layout.fillWidth: true
-                            text: mon ? (mon.disabled ? "off" : "on") : "—"
-                            color: mon && mon.disabled ? colors.error : colors.alpha(colors.secondary, 0.95)
-                            font.family: colors.fontSans
-                            font.pixelSize: 12
-                            font.weight: Font.Bold
-                            horizontalAlignment: Text.AlignRight
-                            elide: Text.ElideRight
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: root.apply()
                         }
                     }
                 }
             }
-
-            Item { Layout.fillHeight: true }
         }
     }
 }

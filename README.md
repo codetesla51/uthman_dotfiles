@@ -19,6 +19,98 @@ set-wallpaper ~/Pictures/your-wallpaper.jpg
 ```
 
 Reboot once after the first install (SDDM theme lands in `/usr/share/sddm/themes/`, user services start on fresh login). Lost after that: `SUPER+K` is the keybind cheatsheet.
+
+## How the whole thing fits together
+
+Four pieces, and each one only knows about the one below it.
+
+```
+Hyprland         window manager, keybinds, layer rules, compositor
+  └── quickshell bar, panels, OSD, notification daemon  (all QML)
+        └── Matugen   one image -> every app's colors
+              └── wallpaper   the only input
+```
+
+Hyprland owns windows and keys. It never draws the bar itself. Quickshell owns everything you see drawn by this repo, in one QML process. Matugen owns color, and knows nothing about QML. The wallpaper is the single input that flows upward through the other three.
+
+A wallpaper change is the clearest way to see the whole chain move:
+
+```bash
+set-wallpaper ~/Pictures/new.jpg
+```
+
+That one command does five things in order:
+
+1. Symlinks the image to `~/.config/theme/current/background`, which is what everything else treats as "current wallpaper".
+2. Hands it to `awww` (or `swww`) for a 0.7s wave transition, so the change is visible before any color moves.
+3. Calls `getTheme`, which runs `matugen image` to build a Material You palette.
+4. Regenerates the cursor theme through `matugen-cursor`, round-tripping it so Hyprland drops its cache and no logout is needed.
+5. Writes the basename to `~/.local/state/omarchy/current/theme.name` as a nudge for the file manager to hot-reload.
+
+Matugen then writes 37 output files from 19 templates, one file per app per destination. Nothing is copied or converted afterward. The shell notices on its own within a second.
+
+### How one image becomes 37 files
+
+Each template is a file with `{{ colors... }}` placeholders. Matugen renders it and writes the result. The config is a flat list of template-to-output pairs, and several templates are rendered more than once because they need to land in two places:
+
+```toml
+[templates.hyprland-standalone]
+input_path  = "~/.config/matugen/templates/hyprland-colors.conf"
+output_path = "~/.config/theme/current/colors.conf"
+
+[templates.hyprland-current]
+input_path  = "~/.config/matugen/templates/hyprland-colors.conf"
+output_path = "~/.config/omarchy/current/theme/colors.conf"
+```
+
+Same input, different output. That is why `hyprland-theme`, `hyprland-current`, and `hyprland-standalone` all read the same `hyprland-colors.conf`. Templates are cheap; outputs are where the duplication lives.
+
+### Where the 37 files land
+
+| Destination | Count | Who reads it |
+|-------------|-------|--------------|
+| `~/.config/theme/current/` | 12 | live config, rewritten every wallpaper change |
+| `~/.config/theme/themes/snow_black/` | 10 | named snapshots, accumulates history |
+| `~/.config/omarchy/current/theme/` | 8 | legacy path kept for compatibility |
+| `/usr/share/sddm/themes/elarun-custom/` | 1 | login screen, needs root path |
+| `~/uthman_notes/.obsidian/snippets/` | 1 | your notes vault |
+| `~/.config/quickshell/colors.css` | 1 | the shell, polled every second |
+| `~/.config/{cava,cavasik,rofi,zathura}/` | 4 | audio visualizer, PDF reader, launcher |
+
+`theme/current/` is what everything actually reads at runtime. `snow_black/` is a saved snapshot that grows over time and is safe to delete. The `omarchy/current/` copies exist because this setup started from omarchy defaults and some vendor configs still read that path.
+
+Two outputs are worth calling out because they are the only ones outside `~/.config`:
+
+- **SDDM** writes to `/usr/share/sddm/themes/`, a system path. That is why `install.sh` needs to run once and why the first install asks for a reboot.
+- **Obsidian** writes into your notes vault, which lives outside this repo. The vault is not part of the dotfiles and is never committed.
+
+### Why the shell picks the trickiest path
+
+The shell's palette comes from `waybar-colors.css`, named for Waybar even though no Waybar runs here. It is a plain list of 29 Material color roles:
+
+```css
+@define-color primary   #adc6ff;
+@define-color surface   #1c110f;
+@define-color tertiary  #ffb780;
+```
+
+The template is still called `waybar` because it predates the rewrite and `config.toml` maps it, but the file it produces is quickshell's `colors.css`. Matugen also has a `reload_apps.waybar = true` setting, which sends a signal on write. Both are vestigial names. The shell does not use the signal; it polls the file instead, because Matugen replaces the file rather than editing it. A replaced file gets a new inode, which silently breaks `FileView` watchers, so `Colors.qml` re-reads on a 1s timer instead.
+
+> [!TIP]
+> `set-wallpaper` backgrounds `getTheme` and waits on it, so the transition starts immediately while colors are still being computed. Total time from press to fully restyled desktop is about 3 seconds, of which matugen is 2.1 and the cursor is 0.9. They run in parallel, so adding more templates costs nothing to perceived speed.
+
+### Where each concern lives
+
+| Concern | Owner | Notes |
+|---------|-------|-------|
+| Windows, keys, blur, gaps | `~/.config/hypr/*.conf` | `vendor/` holds upstream defaults, personal files override |
+| Everything drawn | `~/.config/quickshell/` | 55 modules, one palette object shared by all of them |
+| Colors for everything | `~/.config/matugen/` | `config.toml` maps templates to outputs |
+| Wallpaper | `~/Pictures/` | git-ignored, never committed |
+| Terminal, prompt, history | `.zshrc` + starship/atuin | unrelated to the shell process |
+
+The separation is deliberate: if a theme breaks, only Matugen's templates are involved. If a panel misbehaves, only QML is involved. There is no config file that mixes the two.
+
 ## How theming works
 
 Matugen reads the wallpaper, builds a Material You palette, and fills variables in each template. One command recolors everything with no restarts:
@@ -26,6 +118,8 @@ Matugen reads the wallpaper, builds a Material You palette, and fills variables 
 ```bash
 matugen image ~/Pictures/your-wallpaper.jpg
 ```
+
+Normally you call `set-wallpaper` instead, since that also swaps the image itself and regenerates the cursor.
 
 `~/.config/matugen/config.toml` maps each template to its outputs. The main ones:
 

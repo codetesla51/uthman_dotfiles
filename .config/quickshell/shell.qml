@@ -56,14 +56,28 @@ ShellRoot {
 
     // ControlCenter (974 lines) — toggle only
     property bool ccOpen: false
-    IpcHandler { target: "controlcenter"; function toggle(): void { ccOpen = !ccOpen } }
+    IpcHandler {
+        target: "controlcenter"
+        // the Loader compiles async (~4s cold). A second press mid-load used
+        // to flip ccOpen back off and CANCEL the load, so mashing the key
+        // restarted the 4s wait every time — that was the "3 presses" bug.
+        // Swallow the cancel while the first load is still in flight.
+        function toggle(): void {
+            if (ccOpen && ccLoader.status === Loader.Loading) return
+            ccOpen = !ccOpen
+        }
+    }
     Loader {
         id: ccLoader
-        active: ccOpen
+        active: true // prewarmed (~10MB): compile once at login so the first
+                     // SUPER ALT P only flips `open` instead of waiting ~4s
         asynchronous: true
         source: "modules/ControlCenter.qml"
-        onLoaded: { item.colors = barPalette; item.open = true }
+        onLoaded: { item.colors = barPalette; item.open = ccOpen }
     }
+    // shell -> item: open/close without unloading (stays warm)
+    onCcOpenChanged: { if (ccLoader.item) ccLoader.item.open = ccOpen }
+    // item -> shell: Esc / click-outside closes propagate back out
     Connections {
         target: ccLoader.item
         function onOpenChanged() { if (ccLoader.item && !ccLoader.item.open) ccOpen = false }

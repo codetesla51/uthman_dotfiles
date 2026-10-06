@@ -31,7 +31,16 @@ Rectangle {
                            : colors.alpha(colors.outline, 0.15)
 
     opacity: 0
+    // growT 0 = cinched dot, 1 = full card. Scaling (not animating width)
+    // keeps the wrapping text laid out once and stops the stacked toasts from
+    // reflowing mid-animation. Origin sits on the right edge because the toast
+    // is right-anchored — growing from there keeps it on screen.
+    property real growT: 1
     transform: Translate { id: slide }
+    // Item.scale, not a Scale transform — anchored on the right edge so the
+    // grow pushes leftward and stays on screen
+    scale: 0.12 + 0.88 * growT
+    transformOrigin: Item.Right
 
 
     // compact per-app Phosphor icon (mirrors NotificationCenter.appGlyph)
@@ -142,13 +151,25 @@ Rectangle {
         else
             expiryTimer.interval = 0
         if (expiryTimer.interval > 0) expiryTimer.restart()
+        content.opacity = 0
         enterAnim.start()
     }
 
     ParallelAnimation {
         id: enterAnim
-        NumberAnimation { target: root; property: "opacity"; from: 0; to: 1; duration: 200; easing.type: Easing.OutCubic }
-        NumberAnimation { target: slide; property: "x"; from: -24; to: 0; duration: 200; easing.type: Easing.OutCubic }
+        NumberAnimation { target: root; property: "opacity"; from: 0; to: 1; duration: 120; easing.type: Easing.OutCubic }
+        NumberAnimation { target: slide; property: "x"; from: -24; to: 0; duration: 120; easing.type: Easing.OutCubic }
+        // the grow: dot -> card on the overshoot bezier
+        NumberAnimation {
+            target: root; property: "growT"
+            from: 0; to: 1; duration: 250
+            easing.type: Easing.Bezier; easing.bezierCurve: [0.2, 0.9, 0.3, 1.2]
+        }
+        // text stays laid out but invisible, then fades in a beat later
+        SequentialAnimation {
+            PauseAnimation { duration: 110 }
+            NumberAnimation { target: content; property: "opacity"; to: 1; duration: 150 }
+        }
     }
 
     SequentialAnimation {
@@ -169,6 +190,7 @@ Rectangle {
         id: content
         anchors { left: parent.left; right: parent.right; top: parent.top; margins: 13 }
         spacing: 6
+        opacity: 0
 
         // ── row 1: tiny app icon · app name · close ──
         RowLayout {

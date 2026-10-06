@@ -121,10 +121,16 @@ PanelWindow {
         interval: 250
         onTriggered: bar.musicHover = false
     }
+    // SUPER ALT SPACE cinches the island down to a 44px dot and springs it
+    // back open, so swapping trapezoid <-> capsule reads as one continuous
+    // move instead of a hard swap. Notifications are the toast's job, not
+    // the bar's.
+    function pulseIsland() { growAnim.restart() }
+
     IpcHandler {
         target: "bar"
         function toggle(): void { bar.barsVisible = !bar.barsVisible }
-        function toggleIsland(): void { bar.dynamicIsland = !bar.dynamicIsland }
+        function toggleIsland(): void { bar.dynamicIsland = !bar.dynamicIsland; bar.pulseIsland() }
     }
 
     Item {
@@ -148,22 +154,66 @@ PanelWindow {
             id: island
             anchors { top: parent.top; horizontalCenter: parent.horizontalCenter }
             anchors.topMargin: 0
-            width: islandRow.implicitWidth + 40
+            property real naturalWidth: islandRow.implicitWidth + 40
+            // growT 0 = cinched to a dot, 1 = natural. The grow animation
+            // overshoots past 1 and settles, same as the reference easing.
+            property real growT: 1
+            width: 44 + (naturalWidth - 44) * growT
             height: 54
+            // content-driven resizes stay smooth; the pulse owns growT
+            Behavior on naturalWidth { NumberAnimation { duration: 380; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] } }
             // trapezoid geometry — rounded bottom corners
             readonly property real inset: 18         // horizontal inset of bottom edge
             readonly property real r: 14
             readonly property real len: Math.sqrt(inset*inset + height*height)
             readonly property real sx: inset / len
             readonly property real sy: height / len
-            Behavior on width { NumberAnimation { duration: 380; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] } }
+            NumberAnimation {
+                id: growAnim
+                target: island; property: "growT"
+                from: 0; to: 1; duration: 420
+                easing.type: Easing.Bezier; easing.bezierCurve: [0.2, 0.9, 0.3, 1.2]
+            }
+            // glow follows the music: album-art dominant hue while playing,
+            // theme primary when idle — the line reads as a play indicator.
+            // Near-black art is unreadable on the dark bar, so it blends
+            // halfway toward primary (keeps the hue, guarantees light).
+            function satFor(c, b) {
+                var avg = (c.r + c.g + c.b) / 3
+                return Qt.rgba(
+                    Math.min(1, Math.max(0, avg + (c.r - avg) * b)),
+                    Math.min(1, Math.max(0, avg + (c.g - avg) * b)),
+                    Math.min(1, Math.max(0, avg + (c.b - avg) * b)), 1)
+            }
+            function glowFor(t) {
+                var lum = 0.2126 * t.r + 0.7152 * t.g + 0.0722 * t.b
+                var c = satFor(t, 1.6)
+                if (lum < 0.10) {
+                    var p = colors.primary
+                    c = satFor(Qt.rgba((c.r + p.r) / 2, (c.g + p.g) / 2, (c.b + p.b) / 2, 1), 1.6)
+                }
+                // vivid enforcement: stretch dull browns/greys to a 0.35
+                // channel spread; true grey has no hue — use primary instead
+                var mx = Math.max(c.r, c.g, c.b), mn = Math.min(c.r, c.g, c.b)
+                var spread = mx - mn
+                if (spread <= 0.02) return satFor(colors.primary, 1.6)
+                if (spread < 0.35) {
+                    var avg = (c.r + c.g + c.b) / 3, k = 0.35 / spread
+                    return Qt.rgba(
+                        Math.min(1, Math.max(0, avg + (c.r - avg) * k)),
+                        Math.min(1, Math.max(0, avg + (c.g - avg) * k)),
+                        Math.min(1, Math.max(0, avg + (c.b - avg) * k)), 1)
+                }
+                return c
+            }
+            readonly property color glowBase: nowPlaying.isPlaying ? glowFor(nowPlaying.trackColor) : colors.primary
 
             // Dynamic-Island capsule overlay (SUPER ALT SPACE minimal mode)
             Rectangle {
                 opacity: bar.dynamicIsland ? 1 : 0
                 Behavior on opacity { NumberAnimation { duration: 220; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] } }
                 anchors.centerIn: parent
-                width: islandRow.implicitWidth + 36
+                width: island.width
                 height: 40
                 radius: height / 2
                 color: colors.alpha(colors.background, 0.85)
@@ -282,8 +332,8 @@ PanelWindow {
                     gradient: Gradient {
                         orientation: Gradient.Horizontal
                         GradientStop { position: 0.0; color: "transparent" }
-                        GradientStop { position: 0.18; color: colors.alpha(colors.primary, 0.30) }
-                        GradientStop { position: 0.82; color: colors.alpha(colors.primary, 0.30) }
+                        GradientStop { position: 0.18; color: colors.alpha(island.glowBase, 0.60) }
+                        GradientStop { position: 0.82; color: colors.alpha(island.glowBase, 0.60) }
                         GradientStop { position: 1.0; color: "transparent" }
                     }
                 }
@@ -295,7 +345,7 @@ PanelWindow {
                         y: 4
                         width: 1
                         height: 3
-                        color: colors.alpha(colors.primary, 0.16)
+                        color: colors.alpha(island.glowBase, 0.35)
                     }
                 }
 
@@ -313,21 +363,21 @@ PanelWindow {
                             width: 11
                             height: 11
                             radius: 5.5
-                            color: colors.alpha(colors.primary, 0.10 * glow)
+                            color: colors.alpha(island.glowBase, 0.28 * glow)
                         }
                         Rectangle {
                             anchors.centerIn: parent
                             width: 7
                             height: 7
                             radius: 3.5
-                            color: colors.alpha(colors.primary, 0.25 * glow)
+                            color: colors.alpha(island.glowBase, 0.55 * glow)
                         }
                         Rectangle {
                             anchors.centerIn: parent
                             width: 4
                             height: 4
                             radius: 2
-                            color: colors.alpha(colors.primary, 0.95 * glow)
+                            color: colors.alpha(island.glowBase, 0.95 * glow)
 
                             SequentialAnimation on opacity {
                                 loops: Animation.Infinite

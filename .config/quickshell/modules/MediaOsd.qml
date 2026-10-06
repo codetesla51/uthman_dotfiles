@@ -1,5 +1,6 @@
 import Quickshell
 import Quickshell.Io
+import Quickshell.Wayland
 import QtQuick
 
 // MediaOsd — quickshell replacement for omarchy's swayosd.
@@ -16,13 +17,25 @@ PanelWindow {
     readonly property bool show: _show
     property bool _show: false
 
-    anchors { top: true }
-    margins { top: 70 }
-    implicitWidth: 280
-    implicitHeight: 64
+    // screen height for vertical centring — a stretched window would make the
+    // compositor blur the whole column, not just the chip
+    readonly property int screenH: {
+        try {
+            var ss = Quickshell.screens
+            var list = (ss && ss.values) ? ss.values : ss
+            if (list && list.length) return list[0].height || 900
+        } catch (e) {}
+        return 900
+    }
+
+    anchors { left: true; top: true }
+    margins { left: 12; top: Math.max(0, Math.round((root.screenH - chip.bodyH) / 2)) }
+    implicitWidth: chip.bodyW
+    implicitHeight: chip.bodyH
     exclusionMode: ExclusionMode.Ignore
     color: "transparent"
     visible: root.show
+    WlrLayershell.namespace: "qs-osd"
 
     IpcHandler {
         target: "media"
@@ -81,70 +94,56 @@ PanelWindow {
 
     Timer { id: hideTimer; interval: 1400; onTriggered: root._show = false }
 
-    Rectangle {
-        id: card
+    OsdChip {
+        id: chip
         anchors.fill: parent
-        radius: 18
-        color: colors.alpha(colors.surface, 0.78)
-        border.width: 1
-        border.color: colors.alpha(colors.primary, 0.25)
-        opacity: root.show ? 1 : 0
-        scale: root.show ? 1 : 0.92
-        Behavior on opacity { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
-        Behavior on scale { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
+        colors: root.colors
+        vertical: true
+        tailLength: 130
+        // surface @ 0.78 + primary @ 0.25 hairline — the fill the OSD shipped
+        // with before it became a chip. OsdChip already defaults to exactly
+        // this, so don't override it.
+        stroke: colors.alpha(colors.primary, 0.25)
+        // no opacity anywhere: the fade-out never rendered anyway (the window
+        // hides on _show=false), and the fade-in left the chip looking dim.
+        // Scale alone does the entrance.
+        opacity: 1
+        scale: root.show ? 1 : 0.9
+        Behavior on scale { NumberAnimation { duration: 130; easing.type: Easing.Bezier; easing.bezierCurve: [0.2, 0.9, 0.3, 1.2] } }
 
-        Row {
-            anchors { left: parent.left; right: parent.right; verticalCenter: parent.verticalCenter }
-            anchors.margins: 16
-            spacing: 12
+        // glyph rides the circle lobe
+        iconSlot: Text {
+            anchors.centerIn: parent
+            text: root.mode === "volume"
+                    ? (root.off ? root.chr_mute : (root.value <= 33 ? root.chr_low : root.chr_high))
+                    : root.mode === "mic"
+                      ? (root.off ? root.chr_micoff : root.chr_mic)
+                    : (root.value <= 20 ? root.chr_night : root.chr_sun)
+            color: root.off ? colors.error : colors.primary
+            font.family: colors.fontSans
+            font.pixelSize: 20
+            Behavior on color { ColorAnimation { duration: 200 } }
+        }
 
-            Text {
-                anchors.verticalCenter: parent.verticalCenter
-                text: root.mode === "volume"
-                        ? (root.off ? chr_mute : (root.value <= 33 ? chr_low : chr_high))
-                        : root.mode === "mic"
-                          ? (root.off ? chr_micoff : chr_mic)
-                        : (root.value <= 20 ? chr_night : chr_sun)
-                color: root.off ? colors.error : colors.primary
-                font.family: colors.fontSans
-                font.pixelSize: 20
+        // level bar alone on the tail, vertically centred in the band
+        tailSlot: Rectangle {
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.top: parent.top
+            width: 10
+            height: parent.height
+            radius: 5
+            color: colors.alpha(colors.outline, 0.35)
+
+            Rectangle {
+                width: parent.width
+                height: parent.height * root.value / 100
+                radius: 5
+                anchors.bottom: parent.bottom
+                color: root.off ? colors.error
+                     : root.mode === "brightness" ? colors.tertiary
+                     : colors.primary
+                Behavior on height { NumberAnimation { duration: 120; easing.type: Easing.OutQuad } }
                 Behavior on color { ColorAnimation { duration: 200 } }
-            }
-
-            // label + bar column
-            Column {
-                anchors.verticalCenter: parent.verticalCenter
-                spacing: 6
-                width: parent.width - 32 - 20
-
-                Text {
-                    text: root.mode === "volume" ? (root.off ? "MUTED" : "VOLUME")
-                        : root.mode === "mic" ? (root.off ? "MIC MUTED" : "MICROPHONE")
-                        : "BRIGHTNESS"
-                    color: root.off ? colors.error : colors.foreground
-                    font.family: colors.fontSans
-                    font.pixelSize: 10
-                    font.weight: Font.Bold
-                    font.letterSpacing: 1.5
-                }
-
-                Rectangle {
-                    width: parent.width
-                    height: 8
-                    radius: 4
-                    color: colors.alpha(colors.outline, 0.18)
-
-                    Rectangle {
-                        width: parent.width * root.value / 100
-                        height: parent.height
-                        radius: 4
-                        color: root.off ? colors.error
-                             : root.mode === "brightness" ? colors.tertiary
-                             : colors.primary
-                        Behavior on width { NumberAnimation { duration: 120; easing.type: Easing.OutQuad } }
-                        Behavior on color { ColorAnimation { duration: 200 } }
-                    }
-                }
             }
         }
     }

@@ -85,6 +85,36 @@ FloatingWindow {
         if (!hasPlayer || player.length<=0) return "3:20"
         var s = Math.floor(player.length); var m=Math.floor(s/60); s=s%60; return m+":"+(s<10?"0":"")+s
     }
+    // segmented seekbar — 44 bars, played stretch lit, playhead bounces while
+    // playing. Heights are a fixed pseudo-random shape, same every load.
+    // Played bars run the theme gradient (primary -> secondary -> tertiary),
+    // same three stops the old pill fill used — never one flat color.
+    readonly property int segCount: 44
+    property real segPhase: 0
+    function segMix(a, b, t) {
+        return Qt.rgba(a.r + (b.r - a.r) * t, a.g + (b.g - a.g) * t,
+                       a.b + (b.b - a.b) * t, 1)
+    }
+    function segRamp(i, n) {
+        if (n <= 1) return colors.primary
+        var t = Math.max(0, Math.min(1, i / (n - 1)))
+        if (t < 0.5) return root.segMix(colors.primary, colors.secondary, t * 2)
+        return root.segMix(colors.secondary, colors.tertiary, (t - 0.5) * 2)
+    }
+    function segColor(i) {
+        return root.segRamp(i, Math.round(root.npPos * root.segCount))
+    }
+    function segScale(i) {
+        var n = Math.round(root.npPos * root.segCount)
+        if (root.isPlaying && i < n) {
+            if (i === n - 1) return 1.25
+            var near = Math.max(0, 1 - (n - 1 - i) / 10)
+            return 0.7 + 0.3 * Math.sin(root.segPhase * 1.6 + i * 0.55) * near + 0.3 * near
+        }
+        return 1
+    }
+    // drives the bounce; silent unless the panel is open and music is playing
+    Timer { id: segTick; interval: 50; running: root.open && root.isPlaying; repeat: true; onTriggered: root.segPhase += 0.3 }
     // visualizer — live cava feed, embedded here (moved from SUPER ALT V window)
     readonly property int vizBars: 24
     property var vizLevels: []
@@ -276,6 +306,7 @@ FloatingWindow {
         }
     }
     function setVolume(v){ Quickshell.execDetached(["sh","-c","wpctl set-volume @DEFAULT_AUDIO_SINK@ "+v.toFixed(2)+" >/dev/null 2>&1 || pactl set-sink-volume @DEFAULT_SINK@ "+Math.round(v*100)+"% >/dev/null 2>&1 &"]) }
+    function toggleMute(){ root.muted = !root.muted; Quickshell.execDetached(["sh","-c","wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle >/dev/null 2>&1 &"]) }
 
     title: "Control Center"
     implicitWidth: 760
@@ -460,31 +491,38 @@ FloatingWindow {
                                 font.family: colors.fontSans; font.pixelSize: 14; font.weight: Font.ExtraBold; elide: Text.ElideRight
                             }
                             Text { text: root.hasPlayer?root.npArtist:"No player"; color: colors.alpha(colors.foreground,0.7); font.family: colors.fontSans; font.pixelSize: 9; elide: Text.ElideRight; Layout.fillWidth: true }
-                            Rectangle {
-                                Layout.fillWidth: true; height: 18; radius: 9
-                                clip: true
-                                color: colors.alpha(colors.surfaceVariant, 0.55)
-                                Rectangle {
-                                    width: Math.max(18, parent.width * root.npPos); height: parent.height; radius: 9
-                                    gradient: Gradient {
-                                        GradientStop { position: 0; color: colors.primary }
-                                        GradientStop { position: 0.55; color: colors.secondary }
-                                        GradientStop { position: 1; color: colors.tertiary }
-                                    }
-                                    Rectangle {
-                                        anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
-                                        width: 10; height: 10; radius: 5
-                                        color: colors.background
-                                        border.width: 2; border.color: colors.primary
+                            Item {
+                                id: segStrip
+                                Layout.fillWidth: true; Layout.preferredHeight: 28
+                                function segSeek(x) {
+                                    if (!root.hasPlayer || !root.player.length || !root.player.canSeek) return
+                                    root.player.position = Math.max(0, Math.min(1, x / segStrip.width)) * root.player.length
+                                }
+                                Row {
+                                    id: segRow
+                                    anchors.fill: parent
+                                    spacing: 3
+                                    Repeater {
+                                        model: root.segCount
+                                        Rectangle {
+                                            width: Math.max(1, (segRow.width - (root.segCount - 1) * 3) / root.segCount)
+                                            height: segStrip.height * (0.30 + Math.abs(Math.sin(index * 0.7) * Math.cos(index * 0.23)) * 0.70)
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            radius: 2
+                                            color: index < Math.round(root.npPos * root.segCount) ? root.segColor(index) : colors.alpha(colors.surfaceVariant, 0.55)
+                                            transform: Scale {
+                                                xScale: 1
+                                                yScale: root.segScale(index)
+                                                origin.x: width / 2
+                                                origin.y: height / 2
+                                            }
+                                        }
                                     }
                                 }
                                 MouseArea {
                                     anchors.fill: parent
-                                    onClicked: function(mouse){
-                                        if(!root.hasPlayer || !root.player.length || !root.player.canSeek) return
-                                        var v = mouse.x / width
-                                        root.player.position = v * root.player.length
-                                    }
+                                    onPressed: function(mouse){ segStrip.segSeek(mouse.x) }
+                                    onPositionChanged: function(mouse){ if (pressed) segStrip.segSeek(mouse.x) }
                                 }
                             }
                                 Item { Layout.preferredHeight: 8 }
@@ -651,14 +689,48 @@ FloatingWindow {
                             Item { Layout.fillWidth: true }
                             Text { text: Math.round(root.brightness*100)+"%"; Layout.alignment: Qt.AlignVCenter; color: colors.secondary; font.family: colors.fontSans; font.pixelSize: 10; font.weight: Font.ExtraBold }
                         }
-                        Slider {
-                            id: briSlider
-                            Layout.fillWidth: true
-                            from: 0; to: 1; value: root.brightness
-                            onPressedChanged: if(!pressed) { root.brightness = value; root.setBrightness(value) }
-                            onValueChanged: if(pressed) { root.brightness = value; if(value%0.05 < 0.01) root.setBrightness(value) }
-                            background: Rectangle { implicitHeight: 7; radius: 4; color: colors.alpha(colors.surfaceVariant,0.55); Rectangle { width: parent.width * (briSlider.value - briSlider.from)/(briSlider.to - briSlider.from); height: parent.height; radius: 4; color: colors.secondary; opacity: 0.9 } }
-                            handle: Rectangle { x: briSlider.leftPadding + briSlider.visualPosition * (briSlider.availableWidth - width); y: briSlider.topPadding + briSlider.availableHeight/2 - height/2; width: 18; height: 18; radius: 9; color: briSlider.pressed ? colors.secondary : colors.background; border.width: 2; border.color: colors.secondary; Behavior on color { ColorAnimation { duration: 150 } } }
+                        Item {
+                            id: briStrip
+                            Layout.fillWidth: true; Layout.preferredHeight: 26
+                            transformOrigin: Item.Center
+                            readonly property int count: 16
+                            readonly property int lit: Math.round(root.brightness * count)
+                            property real _lastSent: -1
+                            function stripSet(x) {
+                                if (briStrip.width <= 0) return
+                                var f = Math.max(0, Math.min(1, x / briStrip.width))
+                                root.brightness = f
+                                if (Math.abs(f - briStrip._lastSent) > 0.05) { briStrip._lastSent = f; root.setBrightness(f) }
+                            }
+                            SequentialAnimation {
+                                id: briBump
+                                NumberAnimation { target: briStrip; property: "scale"; to: 1.04; duration: 90; easing.type: Easing.OutCubic }
+                                NumberAnimation { target: briStrip; property: "scale"; to: 1; duration: 90; easing.type: Easing.OutCubic }
+                            }
+                            Row {
+                                id: briRow
+                                anchors.fill: parent
+                                spacing: 3
+                                Repeater {
+                                    model: briStrip.count
+                                    Item {
+                                        width: Math.max(1, (briRow.width - (briStrip.count - 1) * 3) / briStrip.count)
+                                        height: 26
+                                        Rectangle {
+                                            anchors.bottom: parent.bottom
+                                            width: parent.width; height: parent.height * (0.35 + index * 0.04)
+                                            radius: 2
+                                            color: index < briStrip.lit ? root.segRamp(index, briStrip.lit) : colors.alpha(colors.surfaceVariant, 0.55)
+                                        }
+                                    }
+                                }
+                            }
+                            MouseArea {
+                                anchors.fill: parent
+                                onPressed: function(mouse){ briStrip.stripSet(mouse.x) }
+                                onPositionChanged: function(mouse){ if (pressed) briStrip.stripSet(mouse.x) }
+                                onReleased: { root.setBrightness(root.brightness); briStrip._lastSent = root.brightness; briBump.restart() }
+                            }
                         }
                     }
                     Rectangle { width: 1; height: parent.height - 14; color: colors.alpha(colors.outline,0.12) }
@@ -666,19 +738,54 @@ FloatingWindow {
                     ColumnLayout {
                         Layout.fillWidth: true; spacing: 6
                         RowLayout { spacing: 8; Layout.alignment: Qt.AlignVCenter; Layout.bottomMargin: 7
-                            Rectangle { width: 26; height: 26; radius: 13; color: colors.alpha(colors.primary,0.15); border.width:1; border.color: colors.alpha(colors.primary,0.3); Text { anchors.centerIn: parent; text: root.muted ? "󰝟" : ""; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 12 } MouseArea { anchors.fill: parent; onClicked: { root.muted=!root.muted; Quickshell.execDetached(["sh","-c","wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle >/dev/null 2>&1 &"]) } } }
+                            Rectangle { width: 26; height: 26; radius: 13; color: colors.alpha(colors.primary,0.15); border.width:1; border.color: colors.alpha(colors.primary,0.3); Text { anchors.centerIn: parent; text: root.muted ? "󰝟" : ""; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 12 } MouseArea { anchors.fill: parent; onClicked: root.toggleMute() } }
                             Text { text: "VOLUME"; Layout.alignment: Qt.AlignVCenter; color: colors.alpha(colors.outline,0.65); font.family: colors.fontSans; font.pixelSize: 7; font.weight: Font.Bold; font.letterSpacing: 1.3 }
                             Item { Layout.fillWidth: true }
-                            Text { text: Math.round(root.volume*100)+"%"; Layout.alignment: Qt.AlignVCenter; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 10; font.weight: Font.ExtraBold }
+                            Text { text: root.muted ? "MUTE" : Math.round(root.volume*100)+"%"; Layout.alignment: Qt.AlignVCenter; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 10; font.weight: Font.ExtraBold }
                         }
-                        Slider {
-                            id: volSlider
-                            Layout.fillWidth: true
-                            from: 0; to: 1; value: root.volume
-                            onPressedChanged: if(!pressed) { root.volume = value; root.setVolume(value) }
-                            onValueChanged: if(pressed) { root.volume = value; if(value%0.05 < 0.01) root.setVolume(value) }
-                            background: Rectangle { implicitHeight: 7; radius: 4; color: colors.alpha(colors.surfaceVariant,0.55); Rectangle { width: parent.width * (volSlider.value - volSlider.from)/(volSlider.to - volSlider.from); height: parent.height; radius: 4; color: colors.primary; opacity: 0.9 } }
-                            handle: Rectangle { x: volSlider.leftPadding + volSlider.visualPosition * (volSlider.availableWidth - width); y: volSlider.topPadding + volSlider.availableHeight/2 - height/2; width: 18; height: 18; radius: 9; color: volSlider.pressed ? colors.primary : colors.background; border.width: 2; border.color: colors.primary; Behavior on color { ColorAnimation { duration: 150 } } }
+                        Item {
+                            id: volStrip
+                            Layout.fillWidth: true; Layout.preferredHeight: 26
+                            transformOrigin: Item.Center
+                            readonly property int count: 16
+                            readonly property int lit: root.muted ? 0 : Math.round(root.volume * count)
+                            property real _lastSent: -1
+                            function stripSet(x) {
+                                if (volStrip.width <= 0) return
+                                var f = Math.max(0, Math.min(1, x / volStrip.width))
+                                if (root.muted) root.toggleMute()
+                                root.volume = f
+                                if (Math.abs(f - volStrip._lastSent) > 0.05) { volStrip._lastSent = f; root.setVolume(f) }
+                            }
+                            SequentialAnimation {
+                                id: volBump
+                                NumberAnimation { target: volStrip; property: "scale"; to: 1.04; duration: 90; easing.type: Easing.OutCubic }
+                                NumberAnimation { target: volStrip; property: "scale"; to: 1; duration: 90; easing.type: Easing.OutCubic }
+                            }
+                            Row {
+                                id: volRow
+                                anchors.fill: parent
+                                spacing: 3
+                                Repeater {
+                                    model: volStrip.count
+                                    Item {
+                                        width: Math.max(1, (volRow.width - (volStrip.count - 1) * 3) / volStrip.count)
+                                        height: 26
+                                        Rectangle {
+                                            anchors.bottom: parent.bottom
+                                            width: parent.width; height: parent.height * (0.35 + index * 0.04)
+                                            radius: 2
+                                            color: index < volStrip.lit ? root.segRamp(index, volStrip.lit) : colors.alpha(colors.surfaceVariant, 0.55)
+                                        }
+                                    }
+                                }
+                            }
+                            MouseArea {
+                                anchors.fill: parent
+                                onPressed: function(mouse){ volStrip.stripSet(mouse.x) }
+                                onPositionChanged: function(mouse){ if (pressed) volStrip.stripSet(mouse.x) }
+                                onReleased: { root.setVolume(root.volume); volStrip._lastSent = root.volume; volBump.restart() }
+                            }
                         }
                     }
                     Rectangle { width: 1; height: parent.height - 14; color: colors.alpha(colors.outline,0.12) }

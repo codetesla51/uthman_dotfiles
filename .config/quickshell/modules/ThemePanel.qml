@@ -200,7 +200,9 @@ PanelWindow {
 
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 10
+                spacing: 8
+                Text { text: "THEME"; color: colors.alpha(colors.outline, 0.6); font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold; font.letterSpacing: 1.5 }
+                Text { text: walls.length > 0 ? walls.length + " walls" : ""; color: colors.alpha(colors.outline, 0.5); font.family: colors.fontSans; font.pixelSize: 9 }
                 Item { Layout.fillWidth: true }
                 Text { visible: root.applying; text: "Applying…"; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold }
                 Rectangle {
@@ -217,6 +219,7 @@ PanelWindow {
                 id: previewItem
                 Layout.fillWidth: true
                 Layout.preferredHeight: 484
+                Text { visible: root.walls.length === 0; anchors.centerIn: parent; text: "scanning wallpapers…"; color: colors.alpha(colors.outline, 0.6); font.family: colors.fontSans; font.pixelSize: 10 }
                 WheelHandler { acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad; onWheel: (wheel) => { if (wheel.angleDelta.y < 0) root.next(); else root.prev() } }
                 // octagon mask via Shape + OpacityMask
                 Item {
@@ -281,7 +284,7 @@ PanelWindow {
                         x: parent.width / 2 - 31 + Math.cos(ang) * 204
                         y: parent.height / 2 - 31 + Math.sin(ang) * 204
                         opacity: 0.55 + 0.45 * front
-                        scale: (0.92 + 0.14 * front) * (maS.containsMouse ? 1.08 : 1)
+                        scale: (0.92 + 0.14 * front) * (maS.containsMouse ? 1.08 : 1) * (sat.isSelected ? 1.12 : 1)
                         z: isSelected ? 2 : 1
                         Behavior on scale { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
 
@@ -322,11 +325,11 @@ PanelWindow {
                         Shape {
                             anchors.fill: parent
                             ShapePath {
-                                strokeColor: sat.isApplied ? colors.primary
+                                strokeColor: (sat.isSelected || sat.isApplied) ? colors.primary
                                            : maS.containsMouse ? colors.alpha(colors.primary, 0.45)
                                            : colors.alpha(colors.outline, 0.18)
                                 fillColor: "transparent"
-                                strokeWidth: sat.isApplied ? 2 : maS.containsMouse ? 1.5 : 1
+                                strokeWidth: sat.isSelected ? 2.5 : sat.isApplied ? 2 : maS.containsMouse ? 1.5 : 1
                                 PathSvg { path: "M 19 0 L 45 0 L 64 19 L 64 45 L 45 64 L 19 64 L 0 45 L 0 19 Z" }
                             }
                         }
@@ -344,14 +347,16 @@ PanelWindow {
                 Rectangle {
                     anchors.centerIn: parent
                     anchors.verticalCenterOffset: 129
-                    width: capText.implicitWidth+16
+                    width: Math.min(capText.implicitWidth+16, 420)
                     height: 22
                     radius: 11
                     color: colors.alpha(colors.background,0.85)
                     Text {
                         id: capText
                         anchors.centerIn: parent
-                        text: walls.length>0 ? walls[currentIndex].name : ""
+                        width: Math.min(implicitWidth, 388)
+                        horizontalAlignment: Text.AlignHCenter
+                        text: walls.length>0 ? ((currentIndex+1) + " / " + walls.length + "  •  " + walls[currentIndex].name) : ""
                         color: colors.foreground
                         font.family: colors.fontSans; font.pixelSize: 9
                         elide: Text.ElideMiddle
@@ -380,7 +385,7 @@ PanelWindow {
                 Layout.fillWidth: true
                 spacing: 8
                 Text {
-                    text: "scroll or ←→ to rotate the ring  •  enter applies  •  esc closes"
+                    text: "scroll or ←→ to browse  •  enter applies  •  double-click jumps  •  esc closes"
                     color: colors.alpha(colors.outline,0.5)
                     font.family: colors.fontSans; font.pixelSize: 9
                     Layout.fillWidth: true

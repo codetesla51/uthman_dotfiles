@@ -98,6 +98,30 @@ ShellRoot {
         function onOpenChanged() { if (monLoader.item && !monLoader.item.open) monOpen = false }
     }
 
+    // Pomodoro — focus timer plugin (app menu qs-pomodoro). The module was
+    // never instantiated so its own toggle target never registered.
+    property bool pomOpen: false
+    IpcHandler {
+        target: "pomodoro"
+        function toggle(): void {
+            if (pomOpen && pomLoader.status === Loader.Loading) return
+            pomOpen = !pomOpen
+        }
+        function close(): void { pomOpen = false }
+    }
+    Loader {
+        id: pomLoader
+        active: pomOpen
+        asynchronous: true
+        source: "modules/Pomodoro.qml"
+        onLoaded: { item.colors = barPalette; item.open = true }
+    }
+    onPomOpenChanged: { if (pomLoader.item) pomLoader.item.open = pomOpen }
+    Connections {
+        target: pomLoader.item
+        function onOpenChanged() { if (pomLoader.item && !pomLoader.item.open) pomOpen = false }
+    }
+
     // Earbuds — bluetooth headset batteries (SUPER ALT E)
     property bool ebOpen: false
     IpcHandler {

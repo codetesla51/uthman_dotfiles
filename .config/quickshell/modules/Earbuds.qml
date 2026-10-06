@@ -37,8 +37,10 @@ FloatingWindow {
     property bool connected: false
     property bool busy: false
     // batteries, L then R: {pct: -1|0..100, charging: bool}.
-    // Single-source hardware (one level for the set) mirrors to both rings.
+    // Single-source hardware (one level for the set) shows one ring; labels
+    // only make sense with two real sources.
     property var bats: [{pct: -1, charging: false}, {pct: -1, charging: false}]
+    property int batSources: 0
     function level(i) { return (i >= 0 && i < bats.length) ? bats[i].pct : -1 }
     function charging(i) { return (i >= 0 && i < bats.length) ? bats[i].charging : false }
     function levelColor(p) {
@@ -74,6 +76,7 @@ FloatingWindow {
                 if (!first) {
                     root.mac = ""; root.devName = "No earbuds"; root.connected = false
                     root.bats = [{pct: -1, charging: false}, {pct: -1, charging: false}]
+                    root.batSources = 0
                     return
                 }
                 root.mac = first
@@ -92,7 +95,7 @@ FloatingWindow {
                 var on = text.toLowerCase().indexOf("yes") !== -1
                 root.connected = on
                 if (on) upProc.running = true
-                else root.bats = [{pct: -1, charging: false}, {pct: -1, charging: false}]
+                else { root.bats = [{pct: -1, charging: false}, {pct: -1, charging: false}]; root.batSources = 0 }
             }
         }
     }
@@ -116,6 +119,7 @@ FloatingWindow {
                         charging: !!sm && (sm[1] === "charging" || sm[1] === "fully-charged")
                     })
                 }
+                root.batSources = found.length
                 if (found.length === 1) found.push({pct: found[0].pct, charging: found[0].charging})
                 while (found.length < 2) found.push({pct: -1, charging: false})
                 root.bats = found.slice(0, 2)
@@ -174,7 +178,8 @@ FloatingWindow {
             width: 130; height: 196
             property real pct: root.level(slot)
             property bool chg: root.charging(slot)
-            property bool dim: !root.connected || root.busy
+            // active = linked and actually reporting; unknown rings sink back
+            property bool dim: bud.pct < 0 || !root.connected || root.busy
             // progress ring
             Canvas {
                 id: ring
@@ -259,6 +264,7 @@ FloatingWindow {
                 font.family: root.fontUi; font.pixelSize: 30
             }
             Text {
+                visible: root.batSources > 1
                 anchors.horizontalCenter: parent.horizontalCenter
                 y: 172
                 text: bud.slot === 0 ? "Left" : "Right"

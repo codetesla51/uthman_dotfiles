@@ -1,4 +1,5 @@
 import Quickshell
+import Quickshell.Io
 import Quickshell.Services.Mpris
 import QtQuick
 import QtQuick.Layouts
@@ -16,6 +17,29 @@ Item {
     readonly property bool isPlaying: hasPlayer && player.playbackState === MprisPlaybackState.Playing
     readonly property string artUrl: hasPlayer ? (player.trackArtUrl || "") : ""
     property color trackColor: colors.primary
+
+    // live levels from cava (same raw-ascii feed the control center uses,
+    // fewer bars and a slower tick — the island only shows 5). Runs only
+    // while playing; silence/paused reads as flat bars, never frozen ones.
+    readonly property int vizBars: 8
+    property var vizLevels: []
+    function vizApply(line){
+        var parts = line.trim().split(";")
+        if (parts.length < root.vizBars) return
+        var arr = new Array(root.vizBars)
+        for (var i = 0; i < root.vizBars; i++)
+            arr[i] = Math.max(0, Math.min(100, parseInt(parts[i]) || 0))
+        vizLevels = arr
+    }
+    Process {
+        id: vizProc
+        command: ["cava", "-p", Quickshell.env("HOME") + "/.config/quickshell/scripts/cava-island.conf"]
+        running: root.isPlaying
+        stdout: SplitParser {
+            splitMarker: "\n"
+            onRead: function(line){ root.vizApply(line) }
+        }
+    }
 
     // remote art flakes (slow CDN / 404) — imperative source so retries
     // actually reload; dead art falls back to the music icon, never a blank box
@@ -149,31 +173,28 @@ Item {
             }
         }
 
-        // -- visualizer: five dancing bars, staggered timers --
-        // one Matugen accent per bar, cycling primary / secondary / tertiary
+        // -- visualizer: five live bars off the cava feed --
+        // one Matugen accent per bar, cycling primary / secondary / tertiary.
+        // No feed (or silence) reads flat; the timers are gone with the fakery.
         Row {
             id: visRow
             opacity: root.hasPlayer ? 1 : 0.5
             spacing: 2
             readonly property var barColors: [colors.primary, colors.secondary, colors.tertiary]
+            function barH(i) {
+                if (!root.isPlaying || i * 2 >= root.vizLevels.length) return 3
+                return 3 + Math.max(0, Math.min(100, root.vizLevels[i * 2])) / 100 * 11
+            }
             Repeater {
                 model: 5
                 delegate: Rectangle {
-                    id: bar
                     required property int index
                     width: 2
                     radius: 1
                     color: visRow.barColors[index % visRow.barColors.length]
                     opacity: 0.72 + index * 0.06
-                    height: root.isPlaying ? 8 : 3
-                    Behavior on height { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
-                    Timer {
-                        interval: 120 + bar.index * 23
-                        running: root.isPlaying
-                        repeat: true
-                        triggeredOnStart: true
-                        onTriggered: bar.height = 4 + Math.random() * 10
-                    }
+                    height: visRow.barH(index)
+                    Behavior on height { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
                 }
             }
         }

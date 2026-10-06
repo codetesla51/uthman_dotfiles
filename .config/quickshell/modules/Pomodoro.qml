@@ -37,12 +37,6 @@ FloatingWindow {
     color: "transparent"
     visible: root.open || closeAnim.running
 
-    IpcHandler {
-        target: "pomodoro"
-        function toggle(): void { root.open = !root.open }
-        function close(): void { root.open = false }
-    }
-
     onOpenChanged: { if(open){ Qt.callLater(function(){ bg.forceActiveFocus() }); openAnim.restart() } else closeAnim.restart() }
 
     function todayStr(){ return Qt.formatDate(new Date(), "yyyy-MM-dd") }

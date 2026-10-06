@@ -172,6 +172,7 @@ poll.interval = 200; poll.repeat = true
 * Repo root is `~/dotfiles` (stow-style). `~/.config/hypr/*.conf` etc. are symlinks to `~/dotfiles/.config/hypr/*` — **except** `bindings.conf` was a real file diverged from dotfiles (two-brain problem caught via `diff`). Always keep `~/.config/hypr/bindings.conf -> ../../dotfiles/.config/hypr/bindings.conf`.
 * `~/dotfiles/.config/quickshell/memory.md` is the session log — **never commit it**. `.gitignore` has `.config/quickshell/memory.md`.
 * `colors.css`, `*Qt6QMLForBeginners*` etc. are generated / learning material — gitignored.
+* **Privileged actions ALWAYS go through PassPrompt.** `modules/PassPrompt.qml` is the `SUDO_ASKPASS` backend and it is always resident — never lazy-load it, never build a second password dialog. Flow: `ipc call passprompt ask "<What> — <why>"` → shows; poll `st()` until `done`/`cancelled`; read with `result()` (one-shot, clears on read). The prompt splits on `" — "` into header and reason, so always pass both halves. Design reference is the approved mock (420px dialog, lock chip, eye toggle, caps row, Cancel/Allow). Touching its geometry means re-reading the mock first.
 
 ---
 

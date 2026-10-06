@@ -2,6 +2,21 @@
 
 Arch Linux, Hyprland, Quickshell, Matugen. Wallpaper sets the palette, everything else follows.
 
+![Desktop](assets/screenshots/desktop.png)
+
+Bar island, Zathura and kitty over a wallpaper-pulled palette. Every surface you see here (bar, OSD, toasts, login, terminals, editors) is recolored from that one image.
+
+## Why not the usual stack
+
+The common Arch Hyprland setup is Waybar plus SwayNC plus a separate OSD daemon plus rofi or walker for launchers. That works, but it means four codebases, four config languages, and a theme pipeline that has to be rewritten for each one.
+
+This replaces all of that with a single QML codebase. Two consequences worth knowing:
+
+- The bar, the panels, the notification daemon, and the OSD are the same widgets in the same palette object, so a new panel reuses existing styles for free instead of restyling from scratch.
+- Hyprland only ever runs one command to talk to the shell (`quickshell -p ~/.config/quickshell ipc call <target> toggle`), so binds, scripts, and panels all drive the same surface.
+
+If you want GTK-native menus, a web-based bar, or per-app theming you can configure in a GUI, the usual stack is the better fit. If you would rather own the whole desktop in one language, this is the trade.
+
 ## Fresh machine
 
 ```bash
@@ -47,6 +62,8 @@ Active colors live in `~/.config/theme/current/` and are rewritten on every run.
 
 The shell replaces Waybar and SwayNC with one QML codebase. Entry is `shell.qml`, which instantiates the bar plus standalone windows sharing one `Colors` palette object. The bar window sits at `y=0 h=54`. The center tab is a trapezoid in classic mode, and `SUPER ALT SPACE` flips it into a floating black capsule. Clock, NowPlaying (album art, title/artist, live visualizer, hover transport), and the bell live flat inside it. System pills (CPU, memory, temp, network, battery, WatchCat) ride left and right as glass pills.
 
+Heavy panels load on first use, then stay compiled in memory. `shell.qml` holds the IPC target and drives `item.open` in both directions, so a reopened panel is a flag flip instead of a fresh QML compile. Presses that arrive mid-compile are ignored rather than cancelling the open.
+
 Hyprland binds and scripts talk to the shell over IPC, always with the identical path string:
 
 ```bash
@@ -78,7 +95,7 @@ Thin widgets. They display state and delegate detail to panels.
 | `Tray` | System tray container |
 | `StatusPill` | One pill consolidating idle, DND, recording, and tray transient states |
 | `BellButton` | Notification bell with unread badge |
-| `NowPlaying` | Track art, title/artist, dancing visualizer, hover transport |
+| `NowPlaying` | Track art, title/artist, live cava spectrum, hover transport |
 
 ### Panels and windows
 
@@ -90,7 +107,7 @@ Overlays are `PanelWindow` layer-shell popups. Larger tools are regular Hyprland
 | `SystemMonitor` | Per-core CPU, RAM, network, process list with kill | `SUPER+U`, cpu/memory pills |
 | `BatteryPanel` | Charge curve, power profile, time estimates | `SUPER ALT+B`, battery pill |
 | `NotificationCenter` | Notification drawer, history, DND toggle | `SUPER+,` |
-| `ControlCenter` | Bento grid: Now Playing, weather + pomodoro, quick toggles, network, activity, visualizer | `SUPER ALT+P` |
+| `ControlCenter` | Bento grid: Now Playing, weather, quick toggles, network, activity, live cava visualizer | `SUPER ALT+P` |
 | `AppLauncher` | Spotlight-style launcher, wheel scroll | `SUPER+Space` |
 | `PkgManager` | pacman + AUR search, queue, install progress, updates | `SUPER+I` |
 | `PdfViewer` | PDF/EPUB library: recents, favorites, full-text search, Zathura handoff | `SUPER ALT+N`, `utpdf <file>` |
@@ -101,9 +118,17 @@ Overlays are `PanelWindow` layer-shell popups. Larger tools are regular Hyprland
 | `ClipboardPanel` | Clipboard manager (Hyprland window): history with image previews (cliphist backend) plus a Sticky shelf of pinned snippets in LocalStorage, fired with `SUPER ALT 1-9` | `SUPER CTRL+V` (window), `SUPER CTRL+P` (pin current clipboard from anywhere) |
 | `KeybindsPanel` | Searchable, executable keybind cheatsheet | `SUPER+K` |
 | `FastFetchWindow` | System info card | `SUPER+N` |
-| `ScreenTime` | App-usage heatmap and top apps, Go daemon backend | `SUPER ALT+T` |
-| `DriveHealth` | SMART health, disk space, throughput, speed test | `SUPER ALT+D` |
+| `ScreenTime` | App-usage heatmap and top apps, Go daemon backend | `SUPER ALT+T`, launcher |
+| `DriveHealth` | SMART health, disk space, throughput, speed test | `SUPER ALT+D`, launcher |
 | `WorkspaceViewer` | Fullscreen overview of every workspace with live windows | `SUPER ALT+O` |
+| `MonitorSettings` | Scale/orientation picker, whole-pixel warnings, persistent apply | launcher |
+| `Earbuds` | Headset battery rings from bluetoothctl and UPower | `SUPER ALT+E` |
+| `Bluetooth` | Adapter power, scan, pair/connect/disconnect | launcher |
+| `Pomodoro` | Focus timer: phases, durations, session stats | `SUPER ALT+C`, launcher |
+| `GitHubDash` | Heatmap, inbox, PRs, running actions | launcher |
+| `Dictionary` | Definitions, IPA, audio, Datamuse related words | launcher |
+| `Grap` | Instant ripgrep search across the home dir | launcher |
+| `FailWatch` | Failed units, OOM/segfault alerts, `pacman -Qkk` | launcher |
 | `ClockWindow` | Detached clock card | bar clock click |
 | `MediaOsd` | Volume/brightness/mic overlay | Fn keys |
 | `PassPrompt` | System password prompt (`SUDO_ASKPASS` backend) | privileged panel actions |
@@ -157,6 +182,7 @@ The daemon samples in 12s chunks, flags "hot" processes (over 500 KB/s for 10s+)
 | `SUPER+E` / `SUPER+I` / `SUPER ALT+N` | Theme / packages / PDF library |
 | `SUPER CTRL+Space` | Wallpaper store |
 | `SUPER ALT+P` / `T` / `K` / `D` / `Y` | Control center / screen time / phone / drives / WatchCat |
+| `SUPER ALT+C` / `E` | Pomodoro / earbuds |
 | `SUPER ALT+O` / `SUPER+,` | Workspace overview / notification center |
 | `SUPER+,` / `SUPER SHIFT+,` | Notifications / do-not-disturb |
 | `SUPER CTRL+V` / `SUPER CTRL+P` / `SUPER+N` | Clipboard window / pin clipboard to sticky shelf / system info |
@@ -200,7 +226,7 @@ What runs the desktop day to day, and where each piece lives:
 │   ├── quickshell/           # desktop shell (see module tables above)
 │   │   ├── shell.qml         # root: bar + standalone windows + shared palette
 │   │   ├── components/       # Bar.qml, Colors.qml
-│   │   ├── modules/          # 50 feature files
+│   │   ├── modules/          # 55 feature files
 │   │   ├── scripts/          # temperature.sh, watchcat daemon + dashboard, idle helpers
 │   │   ├── colors.css        # generated by matugen, polled live, do not hand-edit
 │   │   ├── PLUGINS.md        # module registry: IPC target + bind per module

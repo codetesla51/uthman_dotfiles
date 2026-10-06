@@ -23,12 +23,6 @@ FloatingWindow {
     color: "transparent"
     visible: root.open || closeAnim.running
 
-    IpcHandler {
-        target: "notes"
-        function toggle(): void { root.open = !root.open }
-        function close(): void { root.open = false }
-    }
-
     // ---- storage ----
     property var notes: []
 

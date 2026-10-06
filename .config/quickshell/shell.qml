@@ -310,5 +310,31 @@ ShellRoot {
         function onOpenChanged() { if (grapLoader.item && !grapLoader.item.open) grapOpen = false }
     }
 
+    // QuickNotes — scratch idea capture (launcher qs-notes). Same orphan
+    // story as Pomodoro: module owned its own target but nothing
+    // instantiated it, so the launcher entry hit "Target not found".
+    property bool notesOpen: false
+    IpcHandler {
+        target: "notes"
+        function toggle(): void {
+            if (notesOpen && notesLoader.status === Loader.Loading) return
+            notesOpen = !notesOpen
+        }
+        function close(): void { if (notesOpen && notesLoader.status === Loader.Loading) return; notesOpen = false }
+    }
+    Loader {
+        id: notesLoader
+        active: notesOpen || notesWarm
+        asynchronous: true
+        source: "modules/QuickNotes.qml"
+        onLoaded: { notesWarm = true; item.colors = barPalette; item.open = true }
+    }
+    property bool notesWarm: false
+    onNotesOpenChanged: { if (notesLoader.item) notesLoader.item.open = notesOpen }
+    Connections {
+        target: notesLoader.item
+        function onOpenChanged() { if (notesLoader.item && !notesLoader.item.open) notesOpen = false }
+    }
+
     Colors { id: barPalette }
 }

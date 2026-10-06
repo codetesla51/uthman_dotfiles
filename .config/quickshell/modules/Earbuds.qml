@@ -21,9 +21,9 @@ FloatingWindow {
 
     title: "Earbuds"
     implicitWidth: 380
-    implicitHeight: 460
-    minimumSize: Qt.size(380, 460)
-    maximumSize: Qt.size(380, 460)
+    implicitHeight: 420
+    minimumSize: Qt.size(380, 420)
+    maximumSize: Qt.size(380, 420)
     color: "transparent"
     visible: root.open || closeAnim.running
 
@@ -36,8 +36,9 @@ FloatingWindow {
     property string devName: "No earbuds"
     property bool connected: false
     property bool busy: false
-    // batteries in L/R/C order: {pct: -1|0..100, charging: bool}
-    property var bats: [{pct: -1, charging: false}, {pct: -1, charging: false}, {pct: -1, charging: false}]
+    // batteries, L then R: {pct: -1|0..100, charging: bool}.
+    // Single-source hardware (one level for the set) mirrors to both rings.
+    property var bats: [{pct: -1, charging: false}, {pct: -1, charging: false}]
     function level(i) { return (i >= 0 && i < bats.length) ? bats[i].pct : -1 }
     function charging(i) { return (i >= 0 && i < bats.length) ? bats[i].charging : false }
     function levelColor(p) {
@@ -72,13 +73,12 @@ FloatingWindow {
                 }
                 if (!first) {
                     root.mac = ""; root.devName = "No earbuds"; root.connected = false
-                    root.bats = [{pct: -1, charging: false}, {pct: -1, charging: false}, {pct: -1, charging: false}]
+                    root.bats = [{pct: -1, charging: false}, {pct: -1, charging: false}]
                     return
                 }
                 root.mac = first
                 root.devName = fname || first
                 infoProc.running = true
-                upProc.running = true
             }
         }
     }
@@ -88,7 +88,12 @@ FloatingWindow {
         command: ["sh", "-c", "timeout 8 bluetoothctl info '" + root.mac.replace(/'/g, "'\\''") + "' 2>/dev/null | grep -i 'Connected:'"]
         stdout: StdioCollector {
             waitForEnd: true
-            onStreamFinished: { root.connected = text.toLowerCase().indexOf("yes") !== -1 }
+            onStreamFinished: {
+                var on = text.toLowerCase().indexOf("yes") !== -1
+                root.connected = on
+                if (on) upProc.running = true
+                else root.bats = [{pct: -1, charging: false}, {pct: -1, charging: false}]
+            }
         }
     }
     // 2b. batteries via one upower dump, blocks matched by MAC
@@ -111,8 +116,9 @@ FloatingWindow {
                         charging: !!sm && (sm[1] === "charging" || sm[1] === "fully-charged")
                     })
                 }
-                while (found.length < 3) found.push({pct: -1, charging: false})
-                root.bats = found.slice(0, 3)
+                if (found.length === 1) found.push({pct: found[0].pct, charging: found[0].charging})
+                while (found.length < 2) found.push({pct: -1, charging: false})
+                root.bats = found.slice(0, 2)
             }
         }
     }
@@ -169,32 +175,6 @@ FloatingWindow {
             property real pct: root.level(slot)
             property bool chg: root.charging(slot)
             property bool dim: !root.connected || root.busy
-            // sonar ring (behind, only while connected and idle)
-            Repeater {
-                model: 3
-                Rectangle {
-                    required property int index
-                    anchors.centerIn: parent
-                    anchors.verticalCenterOffset: -32
-                    width: 120; height: 120; radius: 60
-                    color: "transparent"
-                    border.width: 1.5
-                    border.color: colors.primary
-                    opacity: 0
-                    SequentialAnimation {
-                        running: root.connected && !root.busy && root.open
-                        loops: Animation.Infinite
-                        PauseAnimation { duration: index * 1400 }
-                        ParallelAnimation {
-                            NumberAnimation { target: parent; property: "scale"; from: 0.3; to: 1.6; duration: 2800; easing.type: Easing.Bezier; easing.bezierCurve: [0.2, 0.6, 0.3, 1] }
-                            SequentialAnimation {
-                                NumberAnimation { target: parent; property: "opacity"; to: 0.45; duration: 200 }
-                                NumberAnimation { target: parent; property: "opacity"; to: 0; duration: 2600 }
-                            }
-                        }
-                    }
-                }
-            }
             // progress ring
             Canvas {
                 id: ring
@@ -231,20 +211,6 @@ FloatingWindow {
                 rotation: bud.mirror ? 9 : -9
                 opacity: bud.dim ? 0.4 : 1
                 Behavior on opacity { NumberAnimation { duration: 400 } }
-                SequentialAnimation {
-                    running: root.busy
-                    loops: Animation.Infinite
-                    NumberAnimation { target: budBody; property: "opacity"; to: 0.45; duration: 450; easing.type: Easing.InOutQuad }
-                    NumberAnimation { target: budBody; property: "opacity"; to: 1; duration: 450; easing.type: Easing.InOutQuad }
-                }
-                // float bob
-                SequentialAnimation {
-                    running: root.connected && !root.busy
-                    loops: Animation.Infinite
-                    PauseAnimation { duration: bud.mirror ? 2500 : 0 }
-                    NumberAnimation { target: budBody; property: "y"; to: 29; duration: 2500; easing.type: Easing.InOutQuad }
-                    NumberAnimation { target: budBody; property: "y"; to: 34; duration: 2500; easing.type: Easing.InOutQuad }
-                }
                 Rectangle { // stem
                     anchors.horizontalCenter: parent.horizontalCenter
                     y: 6; width: 16; height: 60; radius: 8
@@ -273,12 +239,6 @@ FloatingWindow {
                 width: 16; height: 22
                 visible: root.connected && bud.chg
                 opacity: 1
-                SequentialAnimation {
-                    running: visible
-                    loops: Animation.Infinite
-                    NumberAnimation { target: parent; property: "opacity"; to: 0.35; duration: 800 }
-                    NumberAnimation { target: parent; property: "opacity"; to: 1; duration: 800 }
-                }
                 onVisibleChanged: if (visible) requestPaint()
                 onPaint: {
                     var ctx = getContext("2d")
@@ -322,14 +282,7 @@ FloatingWindow {
                     Layout.fillWidth: true
                     Text { text: root.devName; color: colors.foreground; font.family: root.fontUi; font.pixelSize: 15; font.weight: Font.DemiBold; elide: Text.ElideRight; Layout.fillWidth: true }
                     RowLayout { spacing: 6
-                        Rectangle { width: 7; height: 7; radius: 3.5; color: root.busy ? colors.secondary : (root.connected ? colors.primary : colors.alpha(colors.outline, 0.5)); Layout.alignment: Qt.AlignVCenter
-                            SequentialAnimation {
-                                running: root.connected && !root.busy
-                                loops: Animation.Infinite
-                                NumberAnimation { target: parent; property: "opacity"; to: 0.35; duration: 1000 }
-                                NumberAnimation { target: parent; property: "opacity"; to: 1; duration: 1000 }
-                            }
-                        }
+                        Rectangle { width: 7; height: 7; radius: 3.5; color: root.busy ? colors.secondary : (root.connected ? colors.primary : colors.alpha(colors.outline, 0.5)); Layout.alignment: Qt.AlignVCenter }
                         Text { text: root.busy ? root.statusText : (root.connected ? "Connected" : (root.mac === "" ? "No earbuds paired" : "Disconnected")); color: colors.alpha(colors.outline, 0.75); font.family: root.fontUi; font.pixelSize: 12 }
                     }
                 }
@@ -344,28 +297,7 @@ FloatingWindow {
                 Bud { slot: 1; mirror: true }
             }
 
-            // case row
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: 12
-                Rectangle { width: 30; height: 22; radius: 6; color: "transparent"; border.width: 2; border.color: colors.alpha(colors.outline, 0.6); Layout.alignment: Qt.AlignVCenter
-                    Rectangle { anchors.left: parent.left; anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; height: 2; color: colors.alpha(colors.outline, 0.6) } }
-                Text { text: "Case"; color: colors.foreground; font.family: root.fontUi; font.pixelSize: 14; Layout.alignment: Qt.AlignVCenter }
-                Rectangle {
-                    Layout.fillWidth: true; height: 8; radius: 4
-                    color: colors.alpha(colors.surfaceVariant, 0.55)
-                    Layout.alignment: Qt.AlignVCenter
-                    Rectangle {
-                        anchors.left: parent.left; anchors.top: parent.top; anchors.bottom: parent.bottom
-                        width: root.level(2) < 0 ? 0 : parent.width * root.level(2) / 100
-                        radius: 4
-                        color: root.levelColor(root.level(2))
-                    }
-                }
-                Text { text: root.level(2) < 0 ? "–" : Math.round(root.level(2)) + "%"; color: colors.foreground; font.family: root.fontUi; font.pixelSize: 20; Layout.preferredWidth: 52; horizontalAlignment: Text.AlignRight; Layout.alignment: Qt.AlignVCenter }
-            }
-
-            // foot: address + connect/disconnect
+// foot: address + connect/disconnect
             RowLayout {
                 Layout.fillWidth: true
                 spacing: 10

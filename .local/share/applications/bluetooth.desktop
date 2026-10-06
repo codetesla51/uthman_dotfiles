@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=Bluetooth
+Comment=Adapter power, scan, pair and connect Bluetooth devices (quickshell)
+Exec=quickshell -p ~/.config/quickshell ipc call bluetooth toggle
+Icon=bluetooth
+Terminal=false
+Type=Application
+Categories=System;Bluetooth;Settings;
+Keywords=bluetooth;pair;connect;headset;wireless;
+StartupWMClass=quickshell

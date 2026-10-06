@@ -14,10 +14,84 @@ FloatingWindow {
     property var colors
     property bool open: false
 
-    // tabs: 0 Search  1 Queue  2 Installed  3 Updates
-    property int tab: 0
+    // tabs: 0 Search  1 Queue  2 Installed  3 Updates  4 Explore
+    property int tab: 4
+    // explore — curated app-store picks (all real repo/AUR packages).
+    // Browse-first: rows queue through toggleSelect, install via quickInstall,
+    // exactly like search rows, so no new backend paths.
+    property string exploreCat: "All"
+    readonly property var exploreApps: [
+        // essentials
+        {n:"networkmanager", d:"Network connections", s:"repo", c:"Essentials"},
+        {n:"bluez", d:"Bluetooth stack", s:"repo", c:"Essentials"},
+        {n:"bluez-utils", d:"Bluetooth tools", s:"repo", c:"Essentials"},
+        {n:"pipewire", d:"Audio and video server", s:"repo", c:"Essentials"},
+        {n:"wireplumber", d:"PipeWire session manager", s:"repo", c:"Essentials"},
+        {n:"cups", d:"Printing system", s:"repo", c:"Essentials"},
+        {n:"power-profiles-daemon", d:"Power profiles", s:"repo", c:"Essentials"},
+        // gaming
+        {n:"steam", d:"Game store and runtime", s:"repo", c:"Gaming"},
+        {n:"lutris", d:"Game library manager", s:"repo", c:"Gaming"},
+        {n:"heroic-games-launcher-bin", d:"Epic and GOG client", s:"AUR", c:"Gaming"},
+        {n:"prismlauncher", d:"Minecraft launcher", s:"repo", c:"Gaming"},
+        {n:"retroarch", d:"Retro emulator frontend", s:"repo", c:"Gaming"},
+        {n:"mangohud", d:"In-game overlay stats", s:"repo", c:"Gaming"},
+        {n:"gamemode", d:"Automatic performance tuning", s:"repo", c:"Gaming"},
+        {n:"wine", d:"Windows compatibility layer", s:"repo", c:"Gaming"},
+        {n:"protonup-qt-bin", d:"Manage Proton versions", s:"AUR", c:"Gaming"},
+        // tools
+        {n:"yazi", d:"Terminal file manager", s:"repo", c:"Tools"},
+        {n:"btop", d:"System monitor", s:"repo", c:"Tools"},
+        {n:"fzf", d:"Fuzzy finder", s:"repo", c:"Tools"},
+        {n:"zoxide", d:"Smarter cd", s:"repo", c:"Tools"},
+        {n:"starship", d:"Shell prompt", s:"repo", c:"Tools"},
+        {n:"eza", d:"Modern ls replacement", s:"repo", c:"Tools"},
+        {n:"bat", d:"Cat with highlighting", s:"repo", c:"Tools"},
+        {n:"lazygit", d:"Git terminal UI", s:"repo", c:"Tools"},
+        {n:"github-cli", d:"GitHub from the terminal", s:"repo", c:"Tools"},
+        {n:"tmux", d:"Terminal multiplexer", s:"repo", c:"Tools"},
+        // media
+        {n:"mpv", d:"Minimal video player", s:"repo", c:"Media"},
+        {n:"obs-studio", d:"Recording and streaming", s:"repo", c:"Media"},
+        {n:"audacity", d:"Audio editor", s:"repo", c:"Media"},
+        {n:"imv", d:"Keyboard image viewer", s:"repo", c:"Media"},
+        {n:"celluloid", d:"GTK video frontend", s:"repo", c:"Media"},
+        // browsers
+        {n:"firefox", d:"Private web browser", s:"repo", c:"Browsers"},
+        {n:"chromium", d:"Open-source Chrome", s:"repo", c:"Browsers"},
+        {n:"zen-browser-bin", d:"Customizable Firefox fork", s:"AUR", c:"Browsers"},
+        {n:"brave-bin", d:"Privacy browser", s:"AUR", c:"Browsers"},
+        // creative
+        {n:"gimp", d:"Image editor", s:"repo", c:"Creative"},
+        {n:"inkscape", d:"Vector graphics", s:"repo", c:"Creative"},
+        {n:"blender", d:"3D creation suite", s:"repo", c:"Creative"},
+        {n:"krita", d:"Digital painting", s:"repo", c:"Creative"}
+    ]
+    readonly property var exploreCats: ["All", "Essentials", "Gaming", "Tools", "Media", "Browsers", "Creative"]
+    property var exploreList: []
+    function explorePkg(a) { return {name: a.n, version: "", desc: a.d, source: a.s === "AUR" ? "AUR" : "official", repo: a.s === "AUR" ? "aur" : "repo"} }
+    function shuffleExplore() {
+        var pool = exploreApps.filter(function(a){
+            return exploreCat === "All" || a.c === exploreCat
+        })
+        for (var i = pool.length - 1; i > 0; i--) {
+            var j = Math.floor(Math.random() * (i + 1))
+            var t = pool[i]; pool[i] = pool[j]; pool[j] = t
+        }
+        exploreList = pool
+    }
+    function isInstalledName(n) {
+        for (var i = 0; i < installedAll.length; i++) if (installedAll[i].name === n) return true
+        return false
+    }
     property string query: ""
     property var searchResults: []
+    property int srcFilter: 0 // 0 all 1 repo 2 aur (prototype source chips)
+    readonly property var searchFiltered: {
+        if (srcFilter === 1) return searchResults.filter(function(p){ return p.source !== "AUR" })
+        if (srcFilter === 2) return searchResults.filter(function(p){ return p.source === "AUR" })
+        return searchResults
+    }
     property int searchNav: 0
     property int instNav: 0
     property int updNav: 0
@@ -115,9 +189,10 @@ FloatingWindow {
     // alias for walker/rofi desktop entry
     IpcHandler { target: "packages"; function toggle(): void { root.open = !root.open } }
 
-    onOpenChanged: if (open) { refreshInstalled(); refreshUpdates(); searchNav=0; instNav=0; updNav=0; allowHover=false; if(root.tab===0) Qt.callLater(function(){ searchField.forceActiveFocus() }); openAnim.restart() } else closeAnim.restart()
+    onOpenChanged: if (open) { refreshInstalled(); refreshUpdates(); searchNav=0; instNav=0; updNav=0; allowHover=false; shuffleExplore(); if(root.tab===0) Qt.callLater(function(){ searchField.forceActiveFocus() }); openAnim.restart() } else closeAnim.restart()
     onTabChanged: { searchNav=0; instNav=0; updNav=0; allowHover=false; if(open) { if(tab===0) Qt.callLater(function(){ searchField.forceActiveFocus() }); else if(tab===2) Qt.callLater(function(){ instField.forceActiveFocus() }); else card.forceActiveFocus() } }
     onSearchResultsChanged: searchNav=0
+    onSrcFilterChanged: searchNav=0
     onInstalledFilteredChanged: instNav=0
     onUpdatesListChanged: updNav=0
 
@@ -713,12 +788,13 @@ FloatingWindow {
             if(root.installing) return
             if(e.key===Qt.Key_Slash && root.tab===0){ searchField.forceActiveFocus(); e.accepted=true; return }
             if(e.key===Qt.Key_Tab && root.tab===0){ searchField.forceActiveFocus(); e.accepted=true; return }
-            if(root.tab===0 && root.searchResults.length>0){
-                if(e.key===Qt.Key_Down){ root.searchNav=Math.min(root.searchNav+1, root.searchResults.length-1); searchList.positionViewAtIndex(root.searchNav, ListView.Contain); e.accepted=true }
+            if(e.key>=Qt.Key_1 && e.key<=Qt.Key_5){ root.tab=e.key-Qt.Key_1; e.accepted=true; return }
+            if(root.tab===0 && root.searchFiltered.length>0){
+                if(e.key===Qt.Key_Down){ root.searchNav=Math.min(root.searchNav+1, root.searchFiltered.length-1); searchList.positionViewAtIndex(root.searchNav, ListView.Contain); e.accepted=true }
                 else if(e.key===Qt.Key_Up){ root.searchNav=Math.max(root.searchNav-1,0); searchList.positionViewAtIndex(root.searchNav, ListView.Contain); e.accepted=true }
-                else if(e.key===Qt.Key_Return || e.key===Qt.Key_Enter){ var p=root.searchResults[root.searchNav]; if(p) root.toggleSelect(p); e.accepted=true }
-                else if(e.key===Qt.Key_Space){ var q=root.searchResults[root.searchNav]; if(q) root.toggleSelect(q); e.accepted=true }
-                else if(e.key===Qt.Key_D){ var d=root.searchResults[root.searchNav]; if(d) root.quickInstall(d); e.accepted=true }
+                else if(e.key===Qt.Key_Return || e.key===Qt.Key_Enter){ var p=root.searchFiltered[root.searchNav]; if(p) root.toggleSelect(p); e.accepted=true }
+                else if(e.key===Qt.Key_Space){ var q=root.searchFiltered[root.searchNav]; if(q) root.toggleSelect(q); e.accepted=true }
+                else if(e.key===Qt.Key_D){ var d=root.searchFiltered[root.searchNav]; if(d) root.quickInstall(d); e.accepted=true }
             } else if(root.tab===2 && root.installedFiltered.length>0){
                 if(e.key===Qt.Key_Down){ root.instNav=Math.min(root.instNav+1, root.installedFiltered.length-1); instList.positionViewAtIndex(root.instNav, ListView.Contain); e.accepted=true }
                 else if(e.key===Qt.Key_Up){ root.instNav=Math.max(root.instNav-1,0); instList.positionViewAtIndex(root.instNav, ListView.Contain); e.accepted=true }
@@ -743,44 +819,42 @@ FloatingWindow {
             NumberAnimation { target: card; property: "scale"; to: 0.94; duration: 180; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
         }
 
+        component Kbd: Rectangle {
+            id: kbd
+            property string t: ""
+            implicitWidth: kbdTxt.implicitWidth + 14
+            implicitHeight: 20
+            radius: 6
+            color: colors.alpha(colors.surfaceVariant, 0.4)
+            border.width: 1
+            border.color: colors.alpha(colors.outline, 0.2)
+            Text {
+                id: kbdTxt
+                anchors.centerIn: parent
+                text: kbd.t
+                color: colors.foreground
+                font.family: colors.fontSans
+                font.pixelSize: 11
+            }
+        }
+
         ColumnLayout {
             anchors.fill: parent
             anchors.margins: 16
             spacing: 12
 
-            // header — title + stats + close
+            // header — logo tile + title + status + close
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 10
-                Text {
-                    text: "󰏖  PACKAGE MANAGER"
-                    color: colors.primary
-                    font.family: colors.fontSans
-                    font.pixelSize: 13
-                    font.weight: Font.ExtraBold
-                    font.letterSpacing: 1.1
-                }
+                spacing: 12
                 Rectangle {
-                    Layout.preferredWidth: queueBadge.implicitWidth+14
-                    Layout.preferredHeight: 22
-                    radius: 11
-                    visible: root.selectedList.length>0
-                    color: colors.alpha(colors.primary, 0.18)
-                    border.width:1; border.color: colors.alpha(colors.primary, 0.35)
-                    Text {
-                        id: queueBadge
-                        anchors.centerIn: parent
-                        text: root.selectedList.length + " queued"
-                        color: colors.primary
-                        font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold
-                    }
+                    width: 34; height: 34; radius: 12
+                    color: colors.primary
+                    Text { anchors.centerIn: parent; text: "󰏖"; color: colors.background; font.family: colors.fontSans; font.pixelSize: 18 }
                 }
+                Text { text: "Packages"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 20; font.weight: Font.Bold }
                 Item { Layout.fillWidth: true }
-                Text {
-                    text: root.installedAll.length + " installed  •  " + root.updatesList.length + " updates"
-                    color: colors.alpha(colors.outline, 0.65)
-                    font.family: colors.fontSans; font.pixelSize: 9
-                }
+                Text { text: root.installedAll.length + " installed · " + root.updatesList.length + " updates"; color: colors.alpha(colors.outline,0.65); font.family: colors.fontSans; font.pixelSize: 11 }
                 Rectangle {
                     width: 28; height: 28; radius: 14
                     color: closeMa.containsMouse ? colors.alpha(colors.surfaceVariant, 0.6) : colors.alpha(colors.surface, 0.6)
@@ -790,27 +864,28 @@ FloatingWindow {
                 }
             }
 
-            // tab bar — glass pills, hover lifts
+            // tabs — 4 pills with counts, accent underline on the active one
             RowLayout {
                 Layout.fillWidth: true
                 spacing: 8
                 Repeater {
                     model: [
-                        {l:"Search", c: root.searchResults.length},
+                        {l:"Search", c: root.searchFiltered.length},
                         {l:"Queue", c: root.selectedList.length},
                         {l:"Installed", c: root.installedAll.length},
-                        {l:"Updates", c: root.updatesList.length}
+                        {l:"Updates", c: root.updatesList.length},
+                        {l:"Explore", c: root.exploreApps.length}
                     ]
                     delegate: Rectangle {
                         required property var modelData
                         required property int index
                         Layout.fillWidth: true
-                        height: 36
-                        radius: 12
-                        color: root.tab===index ? colors.alpha(colors.primary, 0.20) : ma.containsMouse ? colors.alpha(colors.surfaceVariant, 0.35) : colors.alpha(colors.surface, 0.55)
+                        height: 40
+                        radius: 13
+                        color: root.tab===index ? colors.alpha(colors.primary, 0.16) : tabMa.containsMouse ? colors.alpha(colors.surfaceVariant, 0.35) : colors.alpha(colors.surface, 0.55)
                         border.width:1
                         border.color: root.tab===index ? colors.alpha(colors.primary, 0.45) : colors.alpha(colors.outline, 0.14)
-                        scale: ma.containsMouse ? 1.02 : 1
+                        scale: tabMa.containsMouse && !root.installing ? 1.02 : 1
                         Behavior on scale { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
                         Behavior on color { ColorAnimation { duration: 140 } }
                         RowLayout {
@@ -826,449 +901,338 @@ FloatingWindow {
                             Rectangle {
                                 visible: modelData.c>0
                                 width: cnt.implicitWidth+10; height: 18; radius: 9
-                                color: root.tab===index ? colors.alpha(colors.primary, 0.25) : colors.alpha(colors.surfaceVariant, 0.5)
-                                Text { id: cnt; anchors.centerIn: parent; text: modelData.c; color: root.tab===index?colors.primary:colors.alpha(colors.outline,0.9); font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold }
+                                color: root.tab===index ? colors.primary : colors.alpha(colors.surfaceVariant, 0.5)
+                                Text { id: cnt; anchors.centerIn: parent; text: modelData.c; color: root.tab===index ? colors.background : colors.alpha(colors.outline,0.9); font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold }
                             }
                         }
-                        MouseArea { id: ma; anchors.fill: parent; hoverEnabled:true; onClicked: root.tab=index }
+                        MouseArea { id: tabMa; anchors.fill: parent; hoverEnabled:true; onClicked: if(!root.installing) root.tab=index }
                     }
                 }
             }
 
-            Rectangle { Layout.fillWidth: true; height:1; color: colors.alpha(colors.outline,0.12) }
+            // job view swaps over the tab body while a transaction runs
+            ColumnLayout {
+                id: jobBox
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                spacing: 12
+                visible: root.installing
+                Canvas {
+                    id: pacCanvas
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 26
+                    property real mouth: 0
+                    onVisibleChanged: if (visible) requestPaint()
+                    Connections { target: root; function onInstallPctChanged() { pacCanvas.requestPaint() } }
+                    Timer { interval: 120; running: root.installing && !root.installDone; repeat: true
+                        onTriggered: { pacCanvas.mouth += 0.55; pacCanvas.requestPaint() } }
+                    onPaint: {
+                        var ctx = getContext("2d")
+                        var w = width, h = height, cy = h / 2
+                        ctx.clearRect(0, 0, w, h)
+                        var n = Math.max(1, Math.floor(w / 20))
+                        var eaten = Math.floor(Math.min(1, Math.max(0, root.installPct)) * n)
+                        ctx.fillStyle = String(colors.outline)
+                        for (var i = eaten; i < n; i++) {
+                            ctx.beginPath()
+                            ctx.arc(10 + i * 20, cy, 2, 0, 2 * Math.PI)
+                            ctx.fill()
+                        }
+                        var px = Math.min(w - 12, Math.max(12, root.installPct * w))
+                        var half = root.installDone ? 0 : 0.15 + 0.35 * Math.abs(Math.sin(pacCanvas.mouth))
+                        ctx.fillStyle = String(root.installFailed ? colors.error : colors.primary)
+                        ctx.beginPath()
+                        ctx.moveTo(px, cy)
+                        ctx.arc(px, cy, 10, half, 2 * Math.PI - half)
+                        ctx.closePath()
+                        ctx.fill()
+                    }
+                }
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 10
+                    Text { text: root.installDone ? (root.installFailed ? "Failed" : "Done") : (root.installPhase!=="" ? root.installPhase : "Working…"); color: root.installFailed ? colors.error : colors.primary; font.family: colors.fontSans; font.pixelSize: 12; font.weight: Font.Bold; Layout.fillWidth: true; elide: Text.ElideRight }
+                    Text { visible: root.transTot>0; text: root.transCur + "/" + root.transTot; color: colors.alpha(colors.outline,0.7); font.family: colors.fontSans; font.pixelSize: 11 }
+                    Text { text: Math.round(root.installPct*100)+"%"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 12; font.weight: Font.Bold }
+                }
+                Text { visible: root.installDone && root.installSummary!==""; text: root.installSummary; color: root.installFailed ? colors.error : colors.alpha(colors.outline, 0.75); font.family: colors.fontSans; font.pixelSize: 11; Layout.fillWidth: true; elide: Text.ElideRight }
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    radius: 12
+                    color: colors.alpha(colors.surface, 0.65)
+                    border.width:1; border.color: colors.alpha(colors.outline,0.12)
+                    clip: true
+                    Flickable {
+                        id: logFlick
+                        anchors.fill: parent
+                        anchors.margins: 10
+                        contentHeight: logText.implicitHeight
+                        contentWidth: width
+                        clip: true
+                        flickableDirection: Flickable.VerticalFlick
+                        boundsBehavior: Flickable.StopAtBounds
+                        ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+                        onContentHeightChanged: if(contentHeight>height) contentY = Math.max(0, contentHeight - height)
+                        Text {
+                            id: logText
+                            width: logFlick.width
+                            text: root.installLog || "Waiting for output…"
+                            color: colors.alpha(colors.foreground, 0.85)
+                            font.family: colors.fontSans
+                            font.pixelSize: 10
+                            wrapMode: Text.Wrap
+                            textFormat: Text.PlainText
+                        }
+                    }
+                }
+                RowLayout {
+                    Layout.fillWidth: true
+                    Item { Layout.fillWidth: true }
+                    Rectangle {
+                        visible: root.installing && !root.installDone
+                        width: 90; height: 34; radius: 10
+                        color: cancelMa.containsMouse ? colors.alpha(colors.error,0.18) : colors.alpha(colors.surface,0.6); border.width:1; border.color: colors.alpha(colors.error,0.4)
+                        Text { anchors.centerIn: parent; text: "Cancel"; color: colors.error; font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.Bold }
+                        MouseArea { id: cancelMa; anchors.fill: parent; hoverEnabled:true; onClicked: installProc.running=false }
+                    }
+                    Rectangle {
+                        visible: root.installDone
+                        width: 130; height: 34; radius: 10
+                        color: colors.alpha(colors.surface,0.6); border.width:1; border.color: colors.alpha(colors.outline,0.15)
+                        Text { anchors.centerIn: parent; text: root.installFailed ? "Dismiss" : "Done — Close"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.Bold }
+                        MouseArea { anchors.fill: parent; onClicked: { if(!root.installFailed && root.installMode==="install") root.clearQueue(); root.installing=false; root.installDone=false; root.installFailed=false; root.installPct=0; root.installLog=""; root.installSummary=""; root.installPhase="" } }
+                    }
+                }
+            }
 
-            // ---- content stack ----
             StackLayout {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
+                visible: !root.installing
                 currentIndex: root.tab
 
                 // TAB 0: SEARCH
-                ColumnLayout {
-                    spacing: 10
-                    // search field
+                ColumnLayout { spacing: 10
                     Rectangle {
-                        Layout.fillWidth: true
-                        height: 42
-                        radius: 12
+                        Layout.fillWidth: true; height: 44; radius: 14
                         color: colors.alpha(colors.surface, 0.75)
                         border.width:1
                         border.color: searchField.activeFocus ? colors.alpha(colors.primary, 0.45) : colors.alpha(colors.outline, 0.15)
                         Behavior on border.color { ColorAnimation { duration: 150 } }
                         RowLayout {
                             anchors.fill: parent
-                            anchors.leftMargin: 14; anchors.rightMargin: 10
+                            anchors.leftMargin: 7; anchors.rightMargin: 10
                             spacing: 10
-                            Text { text: ""; color: colors.alpha(colors.outline,0.7); font.family: colors.fontSans; font.pixelSize: 14 }
+                            Rectangle { width: 30; height: 30; radius: 9; color: colors.primary
+                                Text { anchors.centerIn: parent; text: ""; color: colors.background; font.family: colors.fontSans; font.pixelSize: 14 } }
                             TextField {
                                 id: searchField
                                 Layout.fillWidth: true
-                                placeholderText: "Search pacman + AUR…  (Esc unfocus • D installs hovered)"
+                                placeholderText: "Search pacman + AUR…"
                                 placeholderTextColor: colors.alpha(colors.outline, 0.45)
                                 color: colors.foreground
-                                font.family: colors.fontSans; font.pixelSize: 12
+                                font.family: colors.fontSans; font.pixelSize: 13
                                 background: null
                                 selectByMouse: true
-                                onTextChanged: { root.query=text; searchDebounce.restart() }
+                                onTextChanged: { root.query=text; root.searchNav=0; searchDebounce.restart() }
                                 Keys.onPressed: function(e){
                                     if(e.key===Qt.Key_Escape){ card.forceActiveFocus(); e.accepted=true }
-                                    else if(e.key===Qt.Key_Tab){ card.forceActiveFocus(); e.accepted=true }
-                                    else if(e.key===Qt.Key_Down){ if(root.searchResults.length>0){ root.searchNav=Math.min(root.searchNav+1, root.searchResults.length-1); searchList.positionViewAtIndex(root.searchNav, ListView.Contain); e.accepted=true } }
-                                    else if(e.key===Qt.Key_Up){ if(root.searchResults.length>0){ root.searchNav=Math.max(root.searchNav-1,0); searchList.positionViewAtIndex(root.searchNav, ListView.Contain); e.accepted=true } }
-                                    else if(e.key===Qt.Key_Return || e.key===Qt.Key_Enter || e.key===Qt.Key_Space){ var p=root.searchResults[root.searchNav]; if(p){ root.toggleSelect(p)} else if(root.searchResults.length>0) root.toggleSelect(root.searchResults[0]); e.accepted=true }
-                                    else if(e.key===Qt.Key_D && e.modifiers===Qt.ControlModifier){ var dd=root.searchResults[root.searchNav]; if(dd) root.quickInstall(dd); else if(root.searchResults.length>0) root.quickInstall(root.searchResults[0]); e.accepted=true }
+                                    else if(e.key===Qt.Key_Down){ if(root.searchFiltered.length>0){ root.searchNav=Math.min(root.searchNav+1, root.searchFiltered.length-1); searchList.positionViewAtIndex(root.searchNav, ListView.Contain); e.accepted=true } }
+                                    else if(e.key===Qt.Key_Up){ if(root.searchFiltered.length>0){ root.searchNav=Math.max(root.searchNav-1,0); searchList.positionViewAtIndex(root.searchNav, ListView.Contain); e.accepted=true } }
+                                    else if(e.key===Qt.Key_Return || e.key===Qt.Key_Enter || e.key===Qt.Key_Space){ var p=root.searchFiltered[root.searchNav]; if(p){ root.toggleSelect(p)} else if(root.searchFiltered.length>0) root.toggleSelect(root.searchFiltered[0]); e.accepted=true }
+                                    else if(e.key===Qt.Key_D && e.modifiers===Qt.ControlModifier){ var dd=root.searchFiltered[root.searchNav]; if(dd) root.quickInstall(dd); else if(root.searchFiltered.length>0) root.quickInstall(root.searchFiltered[0]); e.accepted=true }
                                 }
                             }
-                            // spinner / clear
                             Text {
                                 visible: root.searching
                                 text: ""
                                 color: colors.primary
-                                font.family: colors.fontSans; font.pixelSize: 12
+                                font.family: colors.fontSans; font.pixelSize: 13
                                 RotationAnimation on rotation { running: root.searching; loops: Animation.Infinite; from:0; to:360; duration: 700 }
                             }
                             Text {
                                 visible: !root.searching && searchField.text!==""
                                 text: "󰅖"
-                                color: clearMa.containsMouse?colors.foreground:colors.alpha(colors.outline,0.6)
+                                color: clrMa.containsMouse?colors.foreground:colors.alpha(colors.outline,0.6)
                                 font.family: colors.fontSans; font.pixelSize: 14
-                                MouseArea { id: clearMa; anchors.fill: parent; hoverEnabled:true; onClicked: {searchField.text=""; root.query=""; root.searchResults=[]} }
+                                MouseArea { id: clrMa; anchors.fill: parent; hoverEnabled:true; onClicked: {searchField.text=""; root.query=""; root.searchResults=[]} }
                             }
+                            Kbd { t: "/" }
                         }
                     }
                     RowLayout {
                         Layout.fillWidth: true
-                        spacing: 8
-                        Text { text: root.searching ? "Searching…" : root.query.trim()==="" ? "Type to search official + AUR  •  Esc unfocuses for D  •  / refocuses" : root.searchResults.length+" results  •  Esc unfocus  •  D quick-installs hovered  •  sizes auto-load"; color: colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 9; Layout.fillWidth:true; elide: Text.ElideRight }
-                        Text { visible: root.selectedList.length>0; text: root.selectedList.length+" queued → Queue tab"; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold }
+                        spacing: 6
+                        Text { text: "Source"; color: colors.alpha(colors.outline,0.65); font.family: colors.fontSans; font.pixelSize: 11 }
+                        Repeater { model: ["All", "Repo", "AUR"]
+                            delegate: Rectangle {
+                                required property var modelData
+                                required property int index
+                                width: chLbl.implicitWidth+20; height: 24; radius: 8
+                                color: root.srcFilter===index ? colors.primary : "transparent"
+                                border.width:1; border.color: root.srcFilter===index ? colors.primary : colors.alpha(colors.outline,0.2)
+                                Text { id: chLbl; anchors.centerIn: parent; text: modelData; color: root.srcFilter===index ? colors.background : colors.foreground; font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.Medium }
+                                MouseArea { anchors.fill: parent; onClicked: { root.srcFilter=index; root.searchNav=0 } }
+                            }
+                        }
+                        Item { Layout.fillWidth: true }
+                        Text { text: root.searchFiltered.length + " results"; color: colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 11 }
                     }
-
-                    // results list — arrow keys + mouse
                     ListView {
                         id: searchList
                         Layout.fillWidth: true
                         Layout.fillHeight: true
                         clip: true
-                        model: root.searchResults
+                        model: root.searchFiltered
                         currentIndex: root.searchNav
-                        spacing: 6
+                        spacing: 4
                         boundsBehavior: Flickable.StopAtBounds
                         ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
                         delegate: Rectangle {
                             required property var modelData
                             required property int index
                             width: searchList.width
-                            height: 70
+                            height: 60
                             radius: 12
-                            color: modelData.name && root.isSelected(modelData.name) ? colors.alpha(colors.primary, 0.14) : index===root.searchNav ? colors.alpha(colors.primary, 0.08) : maS.containsMouse ? colors.alpha(colors.surfaceVariant, 0.28) : colors.alpha(colors.surface, 0.45)
-                            border.width:1
-                            border.color: modelData.name && root.isSelected(modelData.name) ? colors.alpha(colors.primary, 0.45) : index===root.searchNav ? colors.alpha(colors.primary, 0.35) : maS.containsMouse ? colors.alpha(colors.primary, 0.22) : colors.alpha(colors.outline, 0.12)
+                            color: index===root.searchNav ? colors.alpha(colors.primary, 0.14) : (modelData.name && root.isSelected(modelData.name)) ? colors.alpha(colors.primary, 0.08) : hovS.containsMouse ? colors.alpha(colors.surfaceVariant, 0.3) : "transparent"
+                            border.width: 1
+                            border.color: index===root.searchNav ? colors.alpha(colors.primary, 0.45) : (modelData.name && root.isSelected(modelData.name)) ? colors.alpha(colors.primary, 0.3) : "transparent"
+                            MouseArea { id: hovS; anchors.fill: parent; hoverEnabled: true; onClicked: { root.searchNav=index; root.toggleSelect(modelData) } }
                             RowLayout {
                                 anchors.fill: parent
-                                anchors.leftMargin: 12; anchors.rightMargin: 12
-                                anchors.topMargin: 8; anchors.bottomMargin: 8
+                                anchors.leftMargin: 12; anchors.rightMargin: 10
                                 spacing: 12
-                                // checkbox
                                 Rectangle {
-                                    Layout.preferredWidth: 22; Layout.preferredHeight: 22; radius: 6
-                                    color: modelData.name && root.isSelected(modelData.name) ? colors.primary : "transparent"
-                                    border.width:1; border.color: modelData.name && root.isSelected(modelData.name) ? colors.primary : colors.alpha(colors.outline, 0.35)
-                                    Text { anchors.centerIn: parent; visible: modelData.name && root.isSelected(modelData.name); text: ""; color: colors.background; font.family: colors.fontSans; font.pixelSize: 10; font.weight: Font.Bold }
-                                    MouseArea { anchors.fill: parent; onClicked: root.toggleSelect(modelData) }
+                                    width: 20; height: 20; radius: 6
+                                    Layout.alignment: Qt.AlignVCenter
+                                    color: (modelData.name && root.isSelected(modelData.name)) ? colors.primary : "transparent"
+                                    border.width: 1.5
+                                    border.color: (modelData.name && root.isSelected(modelData.name)) ? colors.primary : colors.alpha(colors.outline, 0.5)
+                                    Text { anchors.centerIn: parent; visible: modelData.name && root.isSelected(modelData.name); text: ""; color: colors.background; font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.Bold }
                                 }
                                 ColumnLayout {
                                     Layout.fillWidth: true
                                     spacing: 2
-                                    RowLayout {
-                                        Layout.fillWidth: true
-                                        spacing: 8
-                                        Text { text: modelData.name; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 12; font.weight: Font.Bold; elide: Text.ElideRight; Layout.fillWidth: false }
-                                        Text { text: modelData.version; color: colors.alpha(colors.outline, 0.7); font.family: colors.fontSans; font.pixelSize: 9 }
-                                        Rectangle {
-                                            visible: (sizeMap[modelData.name]||"")!=="" || sizeProcOff.running || sizeProcAur.running
-                                            Layout.preferredWidth: sTxt.implicitWidth+12; Layout.preferredHeight: 20; radius: 10
-                                            color: (sizeMap[modelData.name]||"")!=="" ? colors.alpha(colors.primary, 0.14) : colors.alpha(colors.outline, 0.08)
-                                            border.width:1; border.color: (sizeMap[modelData.name]||"")!=="" ? colors.alpha(colors.primary, 0.30) : colors.alpha(colors.outline, 0.15)
-                                            Text { id: sTxt; anchors.centerIn: parent; text: sizeMap[modelData.name]||"…"; color: (sizeMap[modelData.name]||"")!=="" ? colors.primary : colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold }
-                                        }
-                                        Rectangle {
-                                            Layout.preferredWidth: srcTxt.implicitWidth+10; Layout.preferredHeight: 18; radius: 9
-                                            color: modelData.source==="AUR" ? colors.alpha(colors.tertiary, 0.18) : colors.alpha(colors.secondary, 0.18)
-                                            border.width:1; border.color: modelData.source==="AUR" ? colors.alpha(colors.tertiary, 0.35) : colors.alpha(colors.secondary, 0.35)
-                                            Text { id: srcTxt; anchors.centerIn: parent; text: modelData.source==="AUR" ? "AUR" : modelData.repo; color: modelData.source==="AUR"?colors.tertiary:colors.secondary; font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold }
-                                        }
-                                        Rectangle {
-                                            visible: modelData.installed
-                                            width: instTxt.implicitWidth+10; height: 18; radius: 9
-                                            color: colors.alpha(colors.primary, 0.15)
-                                            Text { id: instTxt; anchors.centerIn: parent; text: "installed"; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold }
-                                        }
-                                        Item { Layout.fillWidth: true }
+                                    RowLayout { spacing: 6
+                                        Text { text: modelData.name; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 13; font.weight: Font.Bold }
+                                        Text { text: modelData.version; color: colors.alpha(colors.outline,0.7); font.family: colors.fontSans; font.pixelSize: 11 }
+                                        Rectangle { visible: modelData.source==="AUR"; height: 16; width: aurT.implicitWidth+10; radius: 6; color: "transparent"; border.width: 1; border.color: colors.alpha(colors.secondary,0.5)
+                                            Text { id: aurT; anchors.centerIn: parent; text: "AUR"; color: colors.secondary; font.family: colors.fontSans; font.pixelSize: 9 } }
+                                        Rectangle { visible: modelData.source!=="AUR"; height: 16; width: repoT.implicitWidth+10; radius: 6; color: "transparent"; border.width: 1; border.color: colors.alpha(colors.outline,0.25)
+                                            Text { id: repoT; anchors.centerIn: parent; text: modelData.repo; color: colors.alpha(colors.outline,0.8); font.family: colors.fontSans; font.pixelSize: 9 } }
+                                        Rectangle { visible: modelData.installed; height: 16; width: instT.implicitWidth+10; radius: 6; color: colors.alpha(colors.primary,0.15); border.width: 1; border.color: colors.alpha(colors.primary,0.4)
+                                            Text { id: instT; anchors.centerIn: parent; text: "installed"; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold } }
                                     }
-                                    Text { text: modelData.desc || "—"; color: colors.alpha(colors.foreground, 0.72); font.family: colors.fontSans; font.pixelSize: 9; elide: Text.ElideRight; Layout.fillWidth: true; maximumLineCount: 2; wrapMode: Text.Wrap }
+                                    Text { text: modelData.desc || ""; color: colors.alpha(colors.outline,0.75); font.family: colors.fontSans; font.pixelSize: 11; elide: Text.ElideRight; Layout.fillWidth: true }
                                 }
-                            }
-                            MouseArea { id: maS; anchors.fill: parent; hoverEnabled:true; onEntered: if(root.allowHover) root.searchNav=index; onPositionChanged: if(!root.allowHover) root.allowHover=true; onClicked: root.toggleSelect(modelData) }
-                            Rectangle {
-                                anchors.right: parent.right; anchors.rightMargin: 10; anchors.verticalCenter: parent.verticalCenter
-                                width: 34; height: 28; radius: 9
-                                visible: index===root.searchNav || maS.containsMouse
-                                color: dMa.containsMouse ? colors.alpha(colors.primary, 0.30) : colors.alpha(colors.primary, 0.16)
-                                border.width:1; border.color: colors.alpha(colors.primary, 0.45)
-                                Text { anchors.centerIn: parent; text: "D"; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 10; font.weight: Font.ExtraBold }
-                                MouseArea { id: dMa; anchors.fill: parent; hoverEnabled:true; onClicked: function(e){ root.quickInstall(modelData) } }
+                                Text { visible: root.sizeMap[modelData.name] !== undefined; text: "󰄠 " + (root.sizeMap[modelData.name] || ""); color: colors.primary; font.family: colors.fontSans; font.pixelSize: 11; Layout.alignment: Qt.AlignVCenter }
+                                Rectangle { visible: hovS.containsMouse; width: 26; height: 26; radius: 8; Layout.alignment: Qt.AlignVCenter
+                                    color: dMa.containsMouse ? colors.alpha(colors.primary,0.25) : "transparent"; border.width: 1; border.color: colors.alpha(colors.primary,0.4)
+                                    Text { anchors.centerIn: parent; text: "D"; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.ExtraBold }
+                                    MouseArea { id: dMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.quickInstall(modelData) } }
                             }
                         }
-                        Text {
-                            anchors.centerIn: parent
-                            visible: !root.searching && root.searchResults.length===0 && root.query.trim()!==""
-                            text: "No results"
-                            color: colors.alpha(colors.outline,0.5); font.family: colors.fontSans; font.pixelSize: 11
-                        }
-                        Text {
-                            anchors.centerIn: parent
-                            visible: !root.searching && root.searchResults.length===0 && root.query.trim()===""
-                            text: "Try  “kitty”  •  “zed”  •  “firefox”"
-                            color: colors.alpha(colors.outline,0.4); font.family: colors.fontSans; font.pixelSize: 10
-                        }
+                    }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Text { text: root.selectedList.length + " queued" + (root.totalQueuedSizeStr ? " · " + root.totalQueuedSizeStr : ""); color: colors.alpha(colors.outline,0.65); font.family: colors.fontSans; font.pixelSize: 11; Layout.fillWidth: true; elide: Text.ElideRight }
+                        Rectangle { visible: root.selectedList.length>0; width: 120; height: 42; radius: 12; color: "transparent"; border.width: 1; border.color: colors.alpha(colors.outline,0.25)
+                            Text { anchors.centerIn: parent; text: "Review queue"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.Medium }
+                            MouseArea { anchors.fill: parent; onClicked: root.tab=1 } }
                     }
                 }
 
-                // TAB 1: QUEUE / INSTALL
-                ColumnLayout {
-                    spacing: 10
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: 8
-                        Text { text: root.selectedList.length===0 ? "No packages queued" : root.selectedList.length+" package"+(root.selectedList.length>1?"s":"")+" queued" + (totalQueuedSizeStr? " · "+totalQueuedSizeStr : ""); color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.Bold; Layout.fillWidth:true }
-                        Rectangle {
-                            visible: root.selectedList.length>0 && !root.installing
-                            width: clearQTxt.implicitWidth+14; height: 28; radius: 9
-                            color: clearQMa.containsMouse?colors.alpha(colors.surfaceVariant,0.6):colors.alpha(colors.surface,0.6)
-                            border.width:1; border.color: colors.alpha(colors.outline,0.15)
-                            Text { id: clearQTxt; anchors.centerIn: parent; text: "Clear"; color: colors.alpha(colors.outline,0.9); font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold }
-                            MouseArea { id: clearQMa; anchors.fill: parent; hoverEnabled:true; onClicked: root.clearQueue() }
-                        }
-                    }
-
+                // TAB 1: QUEUE
+                ColumnLayout { spacing: 10
                     ListView {
                         id: queueList
                         Layout.fillWidth: true
                         Layout.fillHeight: true
-                        visible: !root.installing
                         clip: true
                         model: root.selectedList
-                        spacing: 6
+                        spacing: 4
                         boundsBehavior: Flickable.StopAtBounds
                         ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
                         delegate: Rectangle {
                             required property var modelData
+                            required property int index
                             width: queueList.width
-                            height: 44
-                            radius: 10
-                            color: colors.alpha(colors.surface, 0.55)
-                            border.width:1; border.color: colors.alpha(colors.outline,0.12)
-                            RowLayout {
-                                anchors.fill: parent
-                                anchors.leftMargin: 12; anchors.rightMargin: 10
-                                spacing: 10
-                                Rectangle { width: 8; height: 8; radius:4; color: modelData.source==="AUR"?colors.tertiary:colors.secondary }
-                                Text { text: modelData.name; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.Bold; Layout.fillWidth: true; elide: Text.ElideRight }
-                                Text { text: sizeMap[modelData.name]||modelData.version; color: colors.alpha(colors.outline,0.65); font.family: colors.fontSans; font.pixelSize: 9 }
-                                Text { visible: (sizeMap[modelData.name]||"")!==""; text: modelData.version; color: colors.alpha(colors.outline,0.45); font.family: colors.fontSans; font.pixelSize: 8 }
-                                Rectangle {
-                                    width: 44; height: 22; radius: 8
-                                    color: modelData.source==="AUR"?colors.alpha(colors.tertiary,0.18):colors.alpha(colors.secondary,0.18)
-                                    Text { anchors.centerIn: parent; text: modelData.source==="AUR"?"AUR":modelData.repo; color: modelData.source==="AUR"?colors.tertiary:colors.secondary; font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold }
-                                }
-                                Rectangle {
-                                    width: 26; height: 26; radius: 8
-                                    color: rmMa.containsMouse?colors.alpha(colors.error,0.15):"transparent"
-                                    Text { anchors.centerIn: parent; text: "󰅖"; color: rmMa.containsMouse?colors.error:colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 12 }
-                                    MouseArea { id: rmMa; anchors.fill: parent; hoverEnabled:true; onClicked: root.removeSelected(modelData.name) }
-                                }
-                            }
-                        }
-                    }
-                    Text {
-                        visible: !root.installing && root.selectedList.length===0
-                        Layout.alignment: Qt.AlignHCenter
-                        text: "Queue packages from Search → they appear here"
-                        color: colors.alpha(colors.outline,0.5); font.family: colors.fontSans; font.pixelSize: 10
-                    }
-
-                    // install progress area — nice bar + log (not raw scrollback only)
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: 8
-                        visible: root.installing
-                        // animated progress bar — glass + shimmer
-                        Rectangle {
-                            Layout.fillWidth: true
-                            height: 12
-                            radius: 6
-                            color: colors.alpha(colors.surfaceVariant, 0.35)
-                            clip: true
-                            Rectangle {
-                                id: progFill
-                                width: parent.width * root.installPct
-                                height: parent.height
-                                radius: 6
-                                color: root.installFailed ? colors.error : colors.primary
-                                Behavior on width { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
-                            }
-                        }
-                        RowLayout {
-                            Layout.fillWidth: true
-                            Text { text: root.installDone ? (root.installFailed ? "Failed" : "Done") : (root.installPhase!=="" ? root.installPhase : (root.installMode==="install" ? "Installing…" : root.installMode==="remove" ? "Removing…" : "Updating…")); color: root.installFailed ? colors.error : colors.primary; font.family: colors.fontSans; font.pixelSize: 10; font.weight: Font.Bold; Layout.fillWidth:true; elide: Text.ElideRight }
-                            Text { text: root.installDone && !root.installFailed ? "100%" : Math.round(root.installPct*100)+"%"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 10; font.weight: Font.Bold }
-                        }
-                        Text {
-                            visible: root.installDone && root.installSummary!==""
-                            text: root.installSummary
-                            color: root.installFailed ? colors.error : colors.alpha(colors.outline, 0.75)
-                            font.family: colors.fontSans; font.pixelSize: 9; Layout.fillWidth: true; wrapMode: Text.Wrap
-                        }
-                        // live log — scrollable, monospaced, not raw fullscreen dump
-                        Rectangle {
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: 220
+                            height: 54
                             radius: 12
-                            color: colors.alpha(colors.surface, 0.65)
-                            border.width:1; border.color: colors.alpha(colors.outline,0.12)
-                            clip: true
-                            Flickable {
-                                id: logFlick
-                                anchors.fill: parent
-                                anchors.margins: 10
-                                contentHeight: logText.implicitHeight
-                                contentWidth: width
-                                clip: true
-                                flickableDirection: Flickable.VerticalFlick
-                                boundsBehavior: Flickable.StopAtBounds
-                                ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
-                                onContentHeightChanged: if(contentHeight>height) contentY = Math.max(0, contentHeight - height)
-                                Text {
-                                    id: logText
-                                    width: logFlick.width
-                                    text: root.installLog || "Waiting for output…"
-                                    color: colors.alpha(colors.foreground, 0.85)
-                                    font.family: colors.fontSans
-                                    font.pixelSize: 9
-                                    wrapMode: Text.Wrap
-                                    textFormat: Text.PlainText
-                                }
+                            color: hovQ.containsMouse ? colors.alpha(colors.surfaceVariant, 0.3) : "transparent"
+                            border.width: 1; border.color: "transparent"
+                            RowLayout { anchors.fill: parent; anchors.leftMargin: 12; anchors.rightMargin: 10; spacing: 12
+                                Rectangle { width: 20; height: 20; radius: 6; Layout.alignment: Qt.AlignVCenter; color: colors.primary; border.width: 1; border.color: colors.primary
+                                    Text { anchors.centerIn: parent; text: ""; color: colors.background; font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.Bold } }
+                                ColumnLayout { Layout.fillWidth: true; spacing: 2
+                                    RowLayout { spacing: 6
+                                        Text { text: modelData.name; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 13; font.weight: Font.Bold }
+                                        Text { text: modelData.version; color: colors.alpha(colors.outline,0.7); font.family: colors.fontSans; font.pixelSize: 11 } }
+                                    Text { text: modelData.desc || ""; color: colors.alpha(colors.outline,0.75); font.family: colors.fontSans; font.pixelSize: 11; elide: Text.ElideRight; Layout.fillWidth: true } }
+                                Text { visible: root.sizeMap[modelData.name] !== undefined; text: "󰄠 " + (root.sizeMap[modelData.name] || ""); color: colors.primary; font.family: colors.fontSans; font.pixelSize: 11; Layout.alignment: Qt.AlignVCenter }
                             }
-                        }
-                        RowLayout {
-                            Layout.fillWidth: true
-                            Item { Layout.fillWidth: true }
-                            Rectangle {
-                                visible: installProc.running
-                                width: 90; height: 28; radius: 9
-                                color: cancelMa.containsMouse ? colors.alpha(colors.error,0.18) : colors.alpha(colors.surface,0.6); border.width:1; border.color: colors.alpha(colors.error,0.4)
-                                Text { anchors.centerIn: parent; text: "Cancel"; color: colors.error; font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold }
-                                MouseArea { id: cancelMa; anchors.fill: parent; hoverEnabled:true; onClicked: installProc.running=false }
-                            }
-                            Rectangle {
-                                visible: !installProc.running
-                                width: 110; height: 28; radius: 9
-                                color: colors.alpha(colors.surface,0.6); border.width:1; border.color: colors.alpha(colors.outline,0.15)
-                                Text { anchors.centerIn: parent; text: root.installFailed ? "Dismiss" : "Done — Close"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold }
-                                MouseArea { anchors.fill: parent; onClicked: { if(!root.installFailed && root.installMode==="install") root.clearQueue(); root.installing=false; root.installDone=false; root.installFailed=false; root.installPct=0; root.installLog=""; root.installSummary=""; root.installPhase="" } }
-                            }
+                            MouseArea { id: hovQ; anchors.fill: parent; hoverEnabled: true; onClicked: root.removeSelected(modelData.name) }
                         }
                     }
-
-                    // install button (hidden while installing)
-                    Rectangle {
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: 44
-                        radius: 12
-                        visible: !root.installing
-                        color: root.selectedList.length===0 ? colors.alpha(colors.surfaceVariant,0.35) : installMa.containsMouse ? colors.alpha(colors.primary, 0.28) : colors.alpha(colors.primary, 0.18)
-                        border.width:1
-                        border.color: root.selectedList.length===0 ? colors.alpha(colors.outline,0.12) : colors.alpha(colors.primary, 0.45)
-                        enabled: root.selectedList.length>0
-                        opacity: root.selectedList.length===0 ? 0.55 : 1
-                        RowLayout {
-                            anchors.centerIn: parent
-                            spacing: 8
-                            Text { text: "󰄠"; color: root.selectedList.length===0?colors.alpha(colors.outline,0.6):colors.primary; font.family: colors.fontSans; font.pixelSize: 14 }
-                            Text { text: "Install  ("+root.selectedList.length+")"+(totalQueuedSizeStr ? "  •  "+totalQueuedSizeStr : ""); color: root.selectedList.length===0?colors.alpha(colors.outline,0.6):colors.primary; font.family: colors.fontSans; font.pixelSize: 12; font.weight: Font.ExtraBold }
-                            Text { visible: root.selectedList.length>0; text: "— pacman for repo, yay for AUR"; color: colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 8 }
-                        }
-                        MouseArea { id: installMa; anchors.fill: parent; hoverEnabled:true; enabled: root.selectedList.length>0; onClicked: root.startInstall() }
-                    }
-                    Text {
-                        visible: !root.installing && root.selectedList.length>0
-                        text: "Will run: pacman for official, yay for AUR  •  sudo prompt pops via PassPrompt (cached 5 min)"
-                        color: colors.alpha(colors.outline,0.5); font.family: colors.fontSans; font.pixelSize: 8; Layout.alignment: Qt.AlignHCenter
+                    Text { visible: root.selectedList.length===0; text: "Nothing queued. Select packages in Search."; color: colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 12; Layout.alignment: Qt.AlignHCenter }
+                    RowLayout { Layout.fillWidth: true; spacing: 8
+                        Text { text: root.selectedList.length + " packages" + (root.totalQueuedSizeStr ? " · " + root.totalQueuedSizeStr + " download" : ""); color: colors.alpha(colors.outline,0.65); font.family: colors.fontSans; font.pixelSize: 11; Layout.fillWidth: true; elide: Text.ElideRight }
+                        Rectangle { visible: root.selectedList.length>0; width: 90; height: 42; radius: 12; color: "transparent"; border.width: 1; border.color: colors.alpha(colors.outline,0.25)
+                            Text { anchors.centerIn: parent; text: "Clear"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.Medium }
+                            MouseArea { anchors.fill: parent; onClicked: root.clearQueue() } }
+                        Rectangle { width: 150; height: 42; radius: 12; enabled: root.selectedList.length>0; opacity: root.selectedList.length>0?1:0.45
+                            color: root.selectedList.length>0 ? colors.primary : colors.alpha(colors.surfaceVariant,0.35)
+                            Text { anchors.centerIn: parent; text: "󰄠 Install (" + root.selectedList.length + ")"; color: root.selectedList.length>0 ? colors.background : colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.Bold }
+                            MouseArea { anchors.fill: parent; enabled: root.selectedList.length>0; onClicked: root.startInstall() } }
                     }
                 }
 
-                // TAB 2: INSTALLED / UNINSTALL
-                ColumnLayout {
-                    spacing: 10
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: 8
-                        Rectangle {
-                            Layout.fillWidth: true
-                            height: 38
-                            radius: 10
-                            color: colors.alpha(colors.surface, 0.75)
-                            border.width:1; border.color: instField.activeFocus ? colors.alpha(colors.primary,0.4) : colors.alpha(colors.outline,0.14)
-                            RowLayout {
-                                anchors.fill: parent
-                                anchors.leftMargin: 10; anchors.rightMargin: 10
-                                spacing: 8
-                                Text { text: ""; color: colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 12 }
-                                TextField {
-                                    id: instField
-                                    Layout.fillWidth: true
-                                    placeholderText: "Filter installed…"
-                                    placeholderTextColor: colors.alpha(colors.outline,0.45)
-                                    color: colors.foreground
-                                    font.family: colors.fontSans; font.pixelSize: 11
-                                    background: null
-                                    onTextChanged: root.instQuery=text
-                                    Keys.onPressed: function(e){
-                                        if(e.key===Qt.Key_Down){ if(root.installedFiltered.length>0){ root.instNav=Math.min(root.instNav+1, root.installedFiltered.length-1); instList.positionViewAtIndex(root.instNav, ListView.Contain); e.accepted=true } }
-                                        else if(e.key===Qt.Key_Up){ if(root.installedFiltered.length>0){ root.instNav=Math.max(root.instNav-1,0); instList.positionViewAtIndex(root.instNav, ListView.Contain); e.accepted=true } }
-                                        else if(e.key===Qt.Key_Return || e.key===Qt.Key_Enter || e.key===Qt.Key_Space){ var r=root.installedFiltered[root.instNav]; if(r) root.toggleUninstall(r); e.accepted=true }
-                                        else if(e.key===Qt.Key_Escape || e.key===Qt.Key_Tab){ card.forceActiveFocus(); e.accepted=true }
-                                    }
-                                }
-                                Text { visible: instField.text!==""; text: "󰅖"; color: colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 12; MouseArea { anchors.fill: parent; onClicked: instField.text="" } }
+                // TAB 2: INSTALLED
+                ColumnLayout { spacing: 10
+                    Rectangle {
+                        Layout.fillWidth: true; height: 44; radius: 14
+                        color: colors.alpha(colors.surface, 0.75)
+                        border.width:1
+                        border.color: instField.activeFocus ? colors.alpha(colors.primary, 0.45) : colors.alpha(colors.outline, 0.15)
+                        Behavior on border.color { ColorAnimation { duration: 150 } }
+                        RowLayout { anchors.fill: parent; anchors.leftMargin: 7; anchors.rightMargin: 10; spacing: 10
+                            Rectangle { width: 30; height: 30; radius: 9; color: colors.primary
+                                Text { anchors.centerIn: parent; text: ""; color: colors.background; font.family: colors.fontSans; font.pixelSize: 14 } }
+                            TextField {
+                                id: instField
+                                Layout.fillWidth: true
+                                placeholderText: "Filter installed…"
+                                placeholderTextColor: colors.alpha(colors.outline, 0.45)
+                                color: colors.foreground
+                                font.family: colors.fontSans; font.pixelSize: 13
+                                background: null
+                                selectByMouse: true
+                                onTextChanged: root.instQuery=text
+                                Keys.onPressed: function(e){ if(e.key===Qt.Key_Escape){ card.forceActiveFocus(); e.accepted=true } }
                             }
-                        }
-                        Rectangle {
-                            width: 28; height: 28; radius: 9
-                            color: refreshInstMa.containsMouse?colors.alpha(colors.primary,0.12):colors.alpha(colors.surface,0.6)
-                            border.width:1; border.color: colors.alpha(colors.outline,0.12)
-                            Text { anchors.centerIn: parent; text: ""; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 12 }
-                            MouseArea { id: refreshInstMa; anchors.fill: parent; hoverEnabled:true; onClicked: root.refreshInstalled() }
+                            Text { visible: instField.text!==""; text: "󰅖"; color: instClrMa.containsMouse?colors.foreground:colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 14
+                                MouseArea { id: instClrMa; anchors.fill: parent; hoverEnabled:true; onClicked: instField.text="" } }
                         }
                     }
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: 6
-                        Repeater {
-                            model: [{k:0,l:"All"},{k:1,l:"Official"},{k:2,l:"AUR"}]
+                    RowLayout { Layout.fillWidth: true; spacing: 6
+                        Text { text: "Show"; color: colors.alpha(colors.outline,0.65); font.family: colors.fontSans; font.pixelSize: 11 }
+                        Repeater { model: ["All", "Native", "Foreign"]
                             delegate: Rectangle {
                                 required property var modelData
-                                width: 78; height: 26; radius: 9
-                                color: root.instFilter===modelData.k ? colors.alpha(colors.primary,0.20) : maF.containsMouse?colors.alpha(colors.surfaceVariant,0.4):colors.alpha(colors.surface,0.55)
-                                border.width:1; border.color: root.instFilter===modelData.k ? colors.alpha(colors.primary,0.45) : colors.alpha(colors.outline,0.12)
-                                Text { anchors.centerIn: parent; text: modelData.l; color: root.instFilter===modelData.k?colors.primary:colors.alpha(colors.foreground,0.8); font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold }
-                                MouseArea { id: maF; anchors.fill: parent; hoverEnabled:true; onClicked: root.instFilter=modelData.k }
+                                required property int index
+                                width: chLbl2.implicitWidth+20; height: 24; radius: 8
+                                color: root.instFilter===index ? colors.primary : "transparent"
+                                border.width:1; border.color: root.instFilter===index ? colors.primary : colors.alpha(colors.outline,0.2)
+                                Text { id: chLbl2; anchors.centerIn: parent; text: modelData; color: root.instFilter===index ? colors.background : colors.foreground; font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.Medium }
+                                MouseArea { anchors.fill: parent; onClicked: root.instFilter=index }
                             }
                         }
                         Item { Layout.fillWidth: true }
-                        Text { text: root.installedFiltered.length+" / "+root.installedAll.length; color: colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 9 }
-                        Text { visible: root.uninstallCount>0; text: "•  "+root.uninstallCount+" selected"; color: colors.error; font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold }
+                        Text { text: root.installedFiltered.length + " shown"; color: colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 11 }
                     }
-
-                    // uninstall progress reuse same area when installing remove
-                    ColumnLayout {
-                        visible: root.installing && root.installMode==="remove"
-                        Layout.fillWidth: true
-                        spacing: 8
-                        Rectangle {
-                            Layout.fillWidth: true; height: 8; radius: 4
-                            color: colors.alpha(colors.surfaceVariant,0.35)
-                            Rectangle { width: parent.width*root.installPct; height: parent.height; radius:4; color: root.installFailed ? colors.error : colors.primary; Behavior on width { NumberAnimation { duration: 250 } } }
-                        }
-                        Text { text: root.installDone ? (root.installFailed ? "Failed — "+root.installSummary : "Done — "+root.installSummary) : (root.installPhase!=="" ? root.installPhase+"  •  "+Math.round(root.installPct*100)+"%" : "Removing…"); color: root.installFailed ? colors.error : colors.primary; font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold; Layout.fillWidth: true; elide: Text.ElideRight }
-                        Rectangle {
-                            Layout.fillWidth: true; Layout.preferredHeight: 140; radius: 10
-                            color: colors.alpha(colors.surface,0.6); border.width:1; border.color: colors.alpha(colors.outline,0.12)
-                            clip: true
-                            Flickable {
-                                anchors.fill: parent; anchors.margins: 8
-                                contentHeight: rmLog.implicitHeight; clip:true; boundsBehavior: Flickable.StopAtBounds
-                                ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
-                                onContentHeightChanged: if(contentHeight>height) contentY = Math.max(0, contentHeight-height)
-                                Text { id: rmLog; width: parent.width; text: root.installLog; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 9; wrapMode: Text.Wrap }
-                            }
-                        }
-                        RowLayout {
-                            Layout.fillWidth: true
-                            Item { Layout.fillWidth: true }
-                            Rectangle {
-                                visible: !installProc.running
-                                width: 110; height: 28; radius: 9
-                                color: colors.alpha(colors.surface,0.6); border.width:1; border.color: colors.alpha(colors.outline,0.15)
-                                Text { anchors.centerIn: parent; text: root.installFailed ? "Dismiss" : "Done — Close"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold }
-                                MouseArea { anchors.fill: parent; onClicked: { root.uninstallMap=({}); root.installing=false; root.installDone=false; root.installFailed=false; root.installPct=0; root.installLog=""; root.installSummary=""; root.installPhase="" } }
-                            }
-                        }
-                    }
-
                     ListView {
                         id: instList
-                        visible: !(root.installing && root.installMode==="remove")
                         Layout.fillWidth: true
                         Layout.fillHeight: true
                         clip: true
@@ -1281,200 +1245,179 @@ FloatingWindow {
                             required property var modelData
                             required property int index
                             width: instList.width
-                            height: 42
-                            radius: 10
-                            color: modelData.name && root.isUninstallSelected(modelData.name) ? colors.alpha(colors.error, 0.12) : index===root.instNav ? colors.alpha(colors.error, 0.08) : maI.containsMouse ? colors.alpha(colors.surfaceVariant,0.28) : colors.alpha(colors.surface,0.45)
-                            border.width:1; border.color: modelData.name && root.isUninstallSelected(modelData.name) ? colors.alpha(colors.error,0.4) : index===root.instNav ? colors.alpha(colors.error, 0.30) : colors.alpha(colors.outline,0.12)
-                            RowLayout {
-                                anchors.fill: parent
-                                anchors.leftMargin: 10; anchors.rightMargin: 10
-                                spacing: 10
-                                Rectangle {
-                                    width: 22; height: 22; radius: 6
-                                    color: modelData.name && root.isUninstallSelected(modelData.name) ? colors.error : "transparent"
-                                    border.width:1; border.color: modelData.name && root.isUninstallSelected(modelData.name) ? colors.error : colors.alpha(colors.outline,0.35)
-                                    Text { anchors.centerIn: parent; visible: modelData.name && root.isUninstallSelected(modelData.name); text: ""; color: "white"; font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold }
-                                    MouseArea { anchors.fill: parent; onClicked: root.toggleUninstall(modelData) }
-                                }
-                                Text { text: modelData.name; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.Medium; Layout.fillWidth: true; elide: Text.ElideRight }
-                                Text { text: modelData.version; color: colors.alpha(colors.outline,0.65); font.family: colors.fontSans; font.pixelSize: 9; elide: Text.ElideRight }
-                                Rectangle {
-                                    width: 52; height: 18; radius: 9
-                                    color: modelData.source==="AUR"?colors.alpha(colors.tertiary,0.15):colors.alpha(colors.secondary,0.15)
-                                    Text { anchors.centerIn: parent; text: modelData.source==="AUR"?"AUR":"official"; color: modelData.source==="AUR"?colors.tertiary:colors.secondary; font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold }
-                                }
-                            }
-                            MouseArea { id: maI; anchors.fill: parent; hoverEnabled:true; onEntered: if(root.allowHover) root.instNav=index; onPositionChanged: if(!root.allowHover) root.allowHover=true; onClicked: root.toggleUninstall(modelData) }
+                            height: 50
+                            radius: 12
+                            color: index===root.instNav ? colors.alpha(colors.primary, 0.14) : (modelData.name && root.isUninstallSelected(modelData.name)) ? colors.alpha(colors.error, 0.10) : hovI.containsMouse ? colors.alpha(colors.surfaceVariant, 0.3) : "transparent"
+                            border.width: 1
+                            border.color: index===root.instNav ? colors.alpha(colors.primary, 0.45) : (modelData.name && root.isUninstallSelected(modelData.name)) ? colors.alpha(colors.error, 0.4) : "transparent"
+                            Rectangle { id: iCb; anchors.left: parent.left; anchors.leftMargin: 12; anchors.verticalCenter: parent.verticalCenter
+                                width: 20; height: 20; radius: 6
+                                color: (modelData.name && root.isUninstallSelected(modelData.name)) ? colors.error : "transparent"
+                                border.width: 1.5
+                                border.color: (modelData.name && root.isUninstallSelected(modelData.name)) ? colors.error : colors.alpha(colors.outline, 0.5)
+                                Text { anchors.centerIn: parent; visible: modelData.name && root.isUninstallSelected(modelData.name); text: ""; color: colors.background; font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.Bold } }
+                            Text { anchors.left: iCb.right; anchors.leftMargin: 12; anchors.verticalCenter: parent.verticalCenter; width: 230
+                                text: modelData.name; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 13; font.weight: Font.Bold; elide: Text.ElideRight }
+                            Text { anchors.verticalCenter: parent.verticalCenter; x: 282; width: 150
+                                text: modelData.version; color: colors.alpha(colors.outline,0.7); font.family: colors.fontSans; font.pixelSize: 11; elide: Text.ElideRight }
+                            Text { anchors.verticalCenter: parent.verticalCenter; x: 440
+                                text: modelData.source==="official" ? "Native package" : "Foreign package"; color: colors.alpha(colors.outline,0.7); font.family: colors.fontSans; font.pixelSize: 11 }
+                            Rectangle { anchors.right: parent.right; anchors.rightMargin: 12; anchors.verticalCenter: parent.verticalCenter
+                                height: 16; width: repoT2.implicitWidth+10; radius: 6; color: "transparent"; border.width: 1; border.color: colors.alpha(colors.outline,0.25)
+                                Text { id: repoT2; anchors.centerIn: parent; text: modelData.repo; color: colors.alpha(colors.outline,0.8); font.family: colors.fontSans; font.pixelSize: 9 } }
+                            MouseArea { id: hovI; anchors.fill: parent; hoverEnabled: true; onClicked: { root.instNav=index; root.toggleUninstall(modelData) } }
                         }
                     }
-
-                    Rectangle {
-                        Layout.fillWidth: true
-                        height: 42
-                        radius: 11
-                        visible: !(root.installing && root.installMode==="remove")
-                        color: root.uninstallCount===0 ? colors.alpha(colors.surfaceVariant,0.35) : rmAllMa.containsMouse?colors.alpha(colors.error,0.22):colors.alpha(colors.error,0.14)
-                        border.width:1; border.color: root.uninstallCount===0?colors.alpha(colors.outline,0.12):colors.alpha(colors.error,0.4)
-                        enabled: root.uninstallCount>0
-                        opacity: root.uninstallCount===0 ? 0.55 : 1
-                        RowLayout {
-                            anchors.centerIn: parent
-                            spacing: 8
-                            Text { text: "󰆴"; color: root.uninstallCount===0?colors.alpha(colors.outline,0.6):colors.error; font.family: colors.fontSans; font.pixelSize: 13 }
-                            Text { text: "Remove selected  ("+root.uninstallCount+")"; color: root.uninstallCount===0?colors.alpha(colors.outline,0.6):colors.error; font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.ExtraBold }
-                        }
-                        MouseArea { id: rmAllMa; anchors.fill: parent; hoverEnabled:true; enabled: root.uninstallCount>0; onClicked: root.startRemove() }
+                    RowLayout { Layout.fillWidth: true; spacing: 8
+                        Text { text: root.uninstallCount + " selected · pacman -Rns"; color: colors.alpha(colors.outline,0.65); font.family: colors.fontSans; font.pixelSize: 11; Layout.fillWidth: true; elide: Text.ElideRight }
+                        Rectangle { width: 150; height: 42; radius: 12; enabled: root.uninstallCount>0; opacity: root.uninstallCount>0?1:0.45
+                            color: root.uninstallCount>0 ? colors.error : colors.alpha(colors.surfaceVariant,0.35)
+                            Text { anchors.centerIn: parent; text: "󰅖 Remove (" + root.uninstallCount + ")"; color: root.uninstallCount>0 ? colors.background : colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.Bold }
+                            MouseArea { anchors.fill: parent; enabled: root.uninstallCount>0; onClicked: root.startRemove() } }
                     }
-                    Text { visible: !(root.installing && root.installMode==="remove"); text: "Batch remove — runs:  pkexec pacman -Rns"; color: colors.alpha(colors.outline,0.45); font.family: colors.fontSans; font.pixelSize: 8; Layout.alignment: Qt.AlignHCenter }
                 }
 
                 // TAB 3: UPDATES
-                ColumnLayout {
-                    spacing: 10
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: 8
-                        Text { text: root.updatesList.length===0 ? "Up to date" : root.updatesList.length+" update"+(root.updatesList.length>1?"s":"")+" available"; color: root.updatesList.length===0?colors.alpha(colors.outline,0.7):colors.primary; font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.Bold; Layout.fillWidth:true }
-                        Text { text: root.lastChecked ? "checked "+root.lastChecked : ""; color: colors.alpha(colors.outline,0.5); font.family: colors.fontSans; font.pixelSize: 8 }
-                        Rectangle {
-                            width: 68; height: 26; radius: 9
-                            color: updRefreshMa.containsMouse?colors.alpha(colors.primary,0.15):colors.alpha(colors.surface,0.6)
-                            border.width:1; border.color: colors.alpha(colors.outline,0.12)
-                            Text { anchors.centerIn: parent; text: "Refresh"; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold }
-                            MouseArea { id: updRefreshMa; anchors.fill: parent; hoverEnabled:true; onClicked: root.refreshUpdates() }
-                        }
+                ColumnLayout { spacing: 10
+                    RowLayout { Layout.fillWidth: true; spacing: 8
+                        Text { visible: root.lastChecked!==""; text: "Checked " + root.lastChecked; color: colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 11; Layout.fillWidth: true; elide: Text.ElideRight }
+                        Item { visible: root.lastChecked===""; Layout.fillWidth: true }
+                        Rectangle { width: 110; height: 34; radius: 10; color: "transparent"; border.width: 1; border.color: colors.alpha(colors.outline,0.25)
+                            Text { anchors.centerIn: parent; text: "Refresh"; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.Medium }
+                            MouseArea { anchors.fill: parent; onClicked: root.refreshUpdates() } }
                     }
-
-                    // update progress
-                    ColumnLayout {
-                        visible: root.installing && root.installMode==="update"
-                        Layout.fillWidth: true
-                        spacing: 8
-                        Rectangle {
-                            Layout.fillWidth: true; height: 8; radius: 4
-                            color: colors.alpha(colors.surfaceVariant,0.35)
-                            Rectangle { width: parent.width*root.installPct; height: parent.height; radius:4; color: root.installFailed ? colors.error : colors.primary; Behavior on width { NumberAnimation { duration:250 } } }
-                        }
-                        Text { text: root.installDone ? (root.installFailed ? "Failed — "+root.installSummary : "Done — "+root.installSummary) : (root.installPhase!=="" ? root.installPhase+"  •  "+Math.round(root.installPct*100)+"%" : "Updating…"); color: root.installFailed ? colors.error : colors.primary; font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold; Layout.fillWidth: true; elide: Text.ElideRight }
-                        Rectangle {
-                            Layout.fillWidth: true; Layout.preferredHeight: 160; radius:10
-                            color: colors.alpha(colors.surface,0.6); border.width:1; border.color: colors.alpha(colors.outline,0.12)
-                            clip: true
-                            Flickable {
-                                anchors.fill: parent; anchors.margins: 8
-                                contentHeight: updLog.implicitHeight; clip:true
-                                boundsBehavior: Flickable.StopAtBounds
-                                ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
-                                onContentHeightChanged: if(contentHeight>height) contentY=Math.max(0,contentHeight-height)
-                                Text { id: updLog; width: parent.width; text: root.installLog; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 9; wrapMode: Text.Wrap }
-                            }
-                        }
-                        RowLayout {
-                            Layout.fillWidth: true
-                            Item { Layout.fillWidth: true }
-                            Rectangle {
-                                visible: !installProc.running
-                                width: 110; height: 28; radius: 9
-                                color: colors.alpha(colors.surface,0.6); border.width:1; border.color: colors.alpha(colors.outline,0.15)
-                                Text { anchors.centerIn: parent; text: root.installFailed ? "Dismiss" : "Done — Close"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold }
-                                MouseArea { anchors.fill: parent; onClicked: { root.updateSelected=({}); root.installing=false; root.installDone=false; root.installFailed=false; root.installPct=0; root.installLog=""; root.installSummary=""; root.installPhase="" } }
-                            }
-                        }
-                    }
-
                     ListView {
                         id: updList
-                        visible: !(root.installing && root.installMode==="update")
                         Layout.fillWidth: true
                         Layout.fillHeight: true
                         clip: true
                         model: root.updatesList
                         currentIndex: root.updNav
-                        spacing: 5
+                        spacing: 4
                         boundsBehavior: Flickable.StopAtBounds
                         ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
                         delegate: Rectangle {
                             required property var modelData
                             required property int index
                             width: updList.width
-                            height: 48
-                            radius: 10
-                            color: modelData.name && root.isUpdateSelected(modelData.name) ? colors.alpha(colors.primary,0.14) : index===root.updNav ? colors.alpha(colors.primary, 0.08) : maU.containsMouse ? colors.alpha(colors.surfaceVariant,0.28) : colors.alpha(colors.surface,0.45)
-                            border.width:1; border.color: modelData.name && root.isUpdateSelected(modelData.name) ? colors.alpha(colors.primary,0.4) : index===root.updNav ? colors.alpha(colors.primary, 0.30) : colors.alpha(colors.outline,0.12)
-                            RowLayout {
-                                anchors.fill: parent
-                                anchors.leftMargin: 10; anchors.rightMargin: 10
-                                spacing: 10
-                                Rectangle {
-                                    width: 22; height: 22; radius: 6
-                                    color: modelData.name && root.isUpdateSelected(modelData.name) ? colors.primary : "transparent"
-                                    border.width:1; border.color: modelData.name && root.isUpdateSelected(modelData.name) ? colors.primary : colors.alpha(colors.outline,0.35)
-                                    Text { anchors.centerIn: parent; visible: modelData.name && root.isUpdateSelected(modelData.name); text: ""; color: colors.background; font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold }
-                                    MouseArea { anchors.fill: parent; onClicked: root.toggleUpdate(modelData) }
-                                }
-                                ColumnLayout {
-                                    Layout.fillWidth: true
-                                    spacing: 1
-                                    Text { text: modelData.name; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.Bold }
-                                    Text { text: modelData.oldVer + "  →  " + modelData.newVer; color: colors.alpha(colors.outline,0.7); font.family: colors.fontSans; font.pixelSize: 9 }
-                                }
-                                Rectangle {
-                                    width: 52; height: 18; radius: 9
-                                    color: modelData.source==="AUR"?colors.alpha(colors.tertiary,0.15):colors.alpha(colors.secondary,0.15)
-                                    Text { anchors.centerIn: parent; text: modelData.source==="AUR"?"AUR":"official"; color: modelData.source==="AUR"?colors.tertiary:colors.secondary; font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold }
-                                }
-                            }
-                            MouseArea { id: maU; anchors.fill: parent; hoverEnabled:true; onEntered: if(root.allowHover) root.updNav=index; onPositionChanged: if(!root.allowHover) root.allowHover=true; onClicked: root.toggleUpdate(modelData) }
-                        }
-                        Text {
-                            anchors.centerIn: parent
-                            visible: root.updatesList.length===0 && !(root.installing && root.installMode==="update")
-                            text: "No updates — you're current"
-                            color: colors.alpha(colors.outline,0.5); font.family: colors.fontSans; font.pixelSize: 11
+                            height: 54
+                            radius: 12
+                            color: index===root.updNav ? colors.alpha(colors.primary, 0.14) : (modelData.name && root.isUpdateSelected(modelData.name)) ? colors.alpha(colors.primary, 0.08) : hovU.containsMouse ? colors.alpha(colors.surfaceVariant, 0.3) : "transparent"
+                            border.width: 1
+                            border.color: index===root.updNav ? colors.alpha(colors.primary, 0.45) : (modelData.name && root.isUpdateSelected(modelData.name)) ? colors.alpha(colors.primary, 0.3) : "transparent"
+                            Rectangle { id: uCb; anchors.left: parent.left; anchors.leftMargin: 12; anchors.verticalCenter: parent.verticalCenter
+                                width: 20; height: 20; radius: 6
+                                color: (modelData.name && root.isUpdateSelected(modelData.name)) ? colors.primary : "transparent"
+                                border.width: 1.5
+                                border.color: (modelData.name && root.isUpdateSelected(modelData.name)) ? colors.primary : colors.alpha(colors.outline, 0.5)
+                                Text { anchors.centerIn: parent; visible: modelData.name && root.isUpdateSelected(modelData.name); text: ""; color: colors.background; font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.Bold } }
+                            Text { anchors.left: uCb.right; anchors.leftMargin: 12; anchors.verticalCenter: parent.verticalCenter; width: 220
+                                text: modelData.name; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 13; font.weight: Font.Bold; elide: Text.ElideRight }
+                            Text { anchors.verticalCenter: parent.verticalCenter; x: 272; width: 260
+                                text: modelData.oldVer + "  →  " + modelData.newVer; color: colors.alpha(colors.outline,0.75); font.family: colors.fontSans; font.pixelSize: 11; elide: Text.ElideRight }
+                            Rectangle { anchors.right: parent.right; anchors.rightMargin: 12; anchors.verticalCenter: parent.verticalCenter
+                                height: 16; width: repoT3.implicitWidth+10; radius: 6; color: "transparent"; border.width: 1; border.color: colors.alpha(colors.outline,0.25)
+                                Text { id: repoT3; anchors.centerIn: parent; text: modelData.repo; color: colors.alpha(colors.outline,0.8); font.family: colors.fontSans; font.pixelSize: 9 } }
+                            MouseArea { id: hovU; anchors.fill: parent; hoverEnabled: true; onClicked: { root.updNav=index; root.toggleUpdate(modelData) } }
                         }
                     }
+                    Text { visible: root.updatesList.length===0; text: "Everything is up to date."; color: colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 12; Layout.alignment: Qt.AlignHCenter }
+                    RowLayout { Layout.fillWidth: true; spacing: 8
+                        Text { text: root.updatesList.length + " updates"; color: colors.alpha(colors.outline,0.65); font.family: colors.fontSans; font.pixelSize: 11; Layout.fillWidth: true; elide: Text.ElideRight }
+                        Rectangle { width: 170; height: 42; radius: 12; enabled: root.updateSelectedCount>0; opacity: root.updateSelectedCount>0?1:0.45
+                            color: "transparent"; border.width: 1; border.color: root.updateSelectedCount>0 ? colors.alpha(colors.primary,0.4) : colors.alpha(colors.outline,0.12)
+                            Text { anchors.centerIn: parent; text: "Update selected (" + root.updateSelectedCount + ")"; color: root.updateSelectedCount>0 ? colors.primary : colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.Medium }
+                            MouseArea { anchors.fill: parent; enabled: root.updateSelectedCount>0; onClicked: root.startUpdate(false) } }
+                        Rectangle { width: 130; height: 42; radius: 12; enabled: root.updatesList.length>0; opacity: root.updatesList.length>0?1:0.45
+                            color: root.updatesList.length>0 ? colors.primary : colors.alpha(colors.surfaceVariant,0.35)
+                            Text { anchors.centerIn: parent; text: "Update all"; color: root.updatesList.length>0 ? colors.background : colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.Bold }
+                            MouseArea { anchors.fill: parent; enabled: root.updatesList.length>0; onClicked: root.startUpdate(true) } }
+                    }
+                }
 
+                // TAB 4: EXPLORE — curated app-store picks, shuffled per open
+                ColumnLayout { spacing: 10
                     RowLayout {
-                        visible: !(root.installing && root.installMode==="update")
                         Layout.fillWidth: true
-                        spacing: 8
-                        Rectangle {
-                            Layout.fillWidth: true
-                            height: 40
-                            radius: 11
-                            color: root.updateSelectedCount===0 ? colors.alpha(colors.surfaceVariant,0.35) : selMa.containsMouse?colors.alpha(colors.primary,0.22):colors.alpha(colors.primary,0.15)
-                            border.width:1; border.color: root.updateSelectedCount===0?colors.alpha(colors.outline,0.12):colors.alpha(colors.primary,0.4)
-                            enabled: root.updateSelectedCount>0
-                            opacity: root.updateSelectedCount===0?0.55:1
-                            Text { anchors.centerIn: parent; text: "Update selected ("+root.updateSelectedCount+")"; color: root.updateSelectedCount===0?colors.alpha(colors.outline,0.6):colors.primary; font.family: colors.fontSans; font.pixelSize: 10; font.weight: Font.Bold }
-                            MouseArea { id: selMa; anchors.fill: parent; hoverEnabled:true; enabled: root.updateSelectedCount>0; onClicked: root.startUpdate(false) }
+                        spacing: 6
+                        Repeater { model: root.exploreCats
+                            delegate: Rectangle {
+                                required property var modelData
+                                required property int index
+                                width: chLbl3.implicitWidth+20; height: 24; radius: 8
+                                color: root.exploreCat===modelData ? colors.primary : "transparent"
+                                border.width:1; border.color: root.exploreCat===modelData ? colors.primary : colors.alpha(colors.outline,0.2)
+                                Text { id: chLbl3; anchors.centerIn: parent; text: modelData; color: root.exploreCat===modelData ? colors.background : colors.foreground; font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.Medium }
+                                MouseArea { anchors.fill: parent; onClicked: { root.exploreCat=modelData; root.shuffleExplore() } }
+                            }
                         }
-                        Rectangle {
-                            Layout.fillWidth: true
-                            height: 40
-                            radius: 11
-                            color: root.updatesList.length===0 ? colors.alpha(colors.surfaceVariant,0.35) : allMa.containsMouse?colors.alpha(colors.primary,0.28):colors.alpha(colors.primary,0.20)
-                            border.width:1; border.color: root.updatesList.length===0?colors.alpha(colors.outline,0.12):colors.alpha(colors.primary,0.5)
-                            enabled: root.updatesList.length>0
-                            opacity: root.updatesList.length===0?0.55:1
-                            Text { anchors.centerIn: parent; text: "Update all"; color: root.updatesList.length===0?colors.alpha(colors.outline,0.6):colors.primary; font.family: colors.fontSans; font.pixelSize: 10; font.weight: Font.ExtraBold }
-                            MouseArea { id: allMa; anchors.fill: parent; hoverEnabled:true; enabled: root.updatesList.length>0; onClicked: root.startUpdate(true) }
+                        Item { Layout.fillWidth: true }
+                        Text { text: root.exploreList.length + " picks"; color: colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 11 }
+                    }
+                    ListView {
+                        id: expListView
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        clip: true
+                        model: root.exploreList
+                        spacing: 4
+                        boundsBehavior: Flickable.StopAtBounds
+                        ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+                        delegate: Rectangle {
+                            required property var modelData
+                            required property int index
+                            width: expListView.width
+                            height: 56
+                            radius: 12
+                            color: (modelData.n && root.isSelected(modelData.n)) ? colors.alpha(colors.primary, 0.08) : hovE.containsMouse ? colors.alpha(colors.surfaceVariant, 0.3) : "transparent"
+                            border.width: 1
+                            border.color: (modelData.n && root.isSelected(modelData.n)) ? colors.alpha(colors.primary, 0.3) : "transparent"
+                            MouseArea { id: hovE; anchors.fill: parent; hoverEnabled: true; onClicked: root.toggleSelect(root.explorePkg(modelData)) }
+                            Rectangle { id: eCb; anchors.left: parent.left; anchors.leftMargin: 12; anchors.verticalCenter: parent.verticalCenter
+                                width: 20; height: 20; radius: 6
+                                color: (modelData.n && root.isSelected(modelData.n)) ? colors.primary : "transparent"
+                                border.width: 1.5
+                                border.color: (modelData.n && root.isSelected(modelData.n)) ? colors.primary : colors.alpha(colors.outline, 0.5)
+                                Text { anchors.centerIn: parent; visible: modelData.n && root.isSelected(modelData.n); text: ""; color: colors.background; font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.Bold } }
+                            ColumnLayout { anchors.left: eCb.right; anchors.leftMargin: 12; anchors.right: parent.right; anchors.rightMargin: 12; anchors.verticalCenter: parent.verticalCenter
+                                spacing: 2
+                                RowLayout { spacing: 6
+                                    Text { text: modelData.n; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 13; font.weight: Font.Bold }
+                                    Rectangle { height: 16; width: eTag.implicitWidth+10; radius: 6; color: "transparent"; border.width: 1
+                                        border.color: modelData.s==="AUR" ? colors.alpha(colors.secondary,0.5) : colors.alpha(colors.outline,0.25)
+                                        Text { id: eTag; anchors.centerIn: parent; text: modelData.s; color: modelData.s==="AUR" ? colors.secondary : colors.alpha(colors.outline,0.8); font.family: colors.fontSans; font.pixelSize: 9 } }
+                                    Rectangle { visible: root.isInstalledName(modelData.n); height: 16; width: eInst.implicitWidth+10; radius: 6; color: colors.alpha(colors.primary,0.15); border.width: 1; border.color: colors.alpha(colors.primary,0.4)
+                                        Text { id: eInst; anchors.centerIn: parent; text: "installed"; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold } }
+                                }
+                                Text { text: modelData.d; color: colors.alpha(colors.outline,0.75); font.family: colors.fontSans; font.pixelSize: 11; elide: Text.ElideRight; Layout.fillWidth: true }
+                            }
+                            Rectangle { visible: hovE.containsMouse && !root.isInstalledName(modelData.n); anchors.right: parent.right; anchors.rightMargin: 10; anchors.verticalCenter: parent.verticalCenter
+                                width: 26; height: 26; radius: 8; color: "transparent"; border.width: 1; border.color: colors.alpha(colors.primary,0.4)
+                                Text { anchors.centerIn: parent; text: "D"; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.ExtraBold }
+                                MouseArea { anchors.fill: parent; hoverEnabled: true; onClicked: root.quickInstall(root.explorePkg(modelData)) } }
                         }
                     }
-                    Text { visible: !(root.installing && root.installMode==="update"); text: "Select packages or update all  •  pacman for repo, yay for AUR"; color: colors.alpha(colors.outline,0.45); font.family: colors.fontSans; font.pixelSize: 8; Layout.alignment: Qt.AlignHCenter }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Text { text: "Pick to queue · D installs now · reshuffles every open"; color: colors.alpha(colors.outline,0.65); font.family: colors.fontSans; font.pixelSize: 11; Layout.fillWidth: true; elide: Text.ElideRight }
+                    }
                 }
             }
 
-            // footer hint
-            Text {
-                text: "Esc unfocus • D quick-install hovered • / search • Space toggle • Esc again closes"
-                color: colors.alpha(colors.outline, 0.42)
-                font.family: colors.fontSans; font.pixelSize: 8
-                Layout.alignment: Qt.AlignHCenter
+            // footer key hints
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 14
+                Item { Layout.fillWidth: true }
+                Kbd { t: "/" } Text { text: "search"; color: colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 11 }
+                Kbd { t: "↑↓" } Text { text: "move"; color: colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 11 }
+                Kbd { t: "Space" } Text { text: "select"; color: colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 11 }
+                Kbd { t: "D" } Text { text: "install"; color: colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 11 }
+                Kbd { t: "1–5" } Text { text: "tabs"; color: colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 11 }
+                Kbd { t: "Esc" } Text { text: "close"; color: colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 11 }
+                Item { Layout.fillWidth: true }
             }
-
-
-            }
+        }
 
     }
 }

@@ -306,6 +306,22 @@ FloatingWindow {
         }
     }
     function setVolume(v){ Quickshell.execDetached(["sh","-c","wpctl set-volume @DEFAULT_AUDIO_SINK@ "+v.toFixed(2)+" >/dev/null 2>&1 || pactl set-sink-volume @DEFAULT_SINK@ "+Math.round(v*100)+"% >/dev/null 2>&1 &"]) }
+    Process {
+        id: volProbe
+        command: ["sh", "-c", "echo \"v=$(wpctl get-volume @DEFAULT_AUDIO_SINK@ 2>/dev/null);b=$(brightnessctl g 2>/dev/null):$(brightnessctl m 2>/dev/null)\""]
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: {
+                var t = text.trim()
+                var vm = t.match(/Volume:\s*([0-9.]+)/)
+                if (vm) root.volume = Math.max(0, Math.min(1, parseFloat(vm[1])))
+                root.muted = t.indexOf("MUTED") !== -1
+                var bm = t.match(/b=(\d+):(\d+)/)
+                if (bm && parseInt(bm[2]) > 0)
+                    root.brightness = Math.max(0, Math.min(1, parseInt(bm[1]) / parseInt(bm[2])))
+            }
+        }
+    }
     function toggleMute(){ root.muted = !root.muted; Quickshell.execDetached(["sh","-c","wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle >/dev/null 2>&1 &"]) }
 
     title: "Control Center"
@@ -318,7 +334,7 @@ FloatingWindow {
 
     IpcHandler { target: "controlcenter"; function toggle(): void { root.open = !root.open } }
 
-    onOpenChanged: if(open) { ghUserProc.running=true; weatherProc.running=true; root.calOffset=0; root.rebuildCal(); root.loadTopActivities(); root.loadActivityLast7(); Qt.callLater(function(){ card.forceActiveFocus() }); openAnim.restart() } else closeAnim.restart()
+    onOpenChanged: if(open) { ghUserProc.running=true; weatherProc.running=true; volProbe.running=true; root.calOffset=0; root.rebuildCal(); root.loadTopActivities(); root.loadActivityLast7(); Qt.callLater(function(){ card.forceActiveFocus() }); openAnim.restart() } else closeAnim.restart()
 
     // pet action set — only the in-place ones, see petCalm/petLively
     FileView {

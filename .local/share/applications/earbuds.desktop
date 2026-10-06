@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=Earbuds
+Comment=Bluetooth headset batteries and connection (quickshell)
+Exec=quickshell -p ~/.config/quickshell ipc call earbuds toggle
+Icon=audio-headphones
+Terminal=false
+Type=Application
+Categories=System;Audio;Bluetooth;
+Keywords=earbuds;bluetooth;headset;battery;
+StartupWMClass=quickshell

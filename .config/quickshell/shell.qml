@@ -98,6 +98,52 @@ ShellRoot {
         function onOpenChanged() { if (monLoader.item && !monLoader.item.open) monOpen = false }
     }
 
+    // Earbuds — bluetooth headset batteries (SUPER ALT E)
+    property bool ebOpen: false
+    IpcHandler {
+        target: "earbuds"
+        // same async-load race as ControlCenter: swallow the cancel while the
+        // first compile is still in flight so mashing never eats the open
+        function toggle(): void {
+            if (ebOpen && ebLoader.status === Loader.Loading) return
+            ebOpen = !ebOpen
+        }
+    }
+    Loader {
+        id: ebLoader
+        active: ebOpen
+        asynchronous: true
+        source: "modules/Earbuds.qml"
+        onLoaded: { item.colors = barPalette; item.open = true }
+    }
+    onEbOpenChanged: { if (ebLoader.item) ebLoader.item.open = ebOpen }
+    Connections {
+        target: ebLoader.item
+        function onOpenChanged() { if (ebLoader.item && !ebLoader.item.open) ebOpen = false }
+    }
+
+    // Bluetooth manager — adapter power, scan, pair/connect/disconnect
+    property bool btOpen: false
+    IpcHandler {
+        target: "bluetooth"
+        function toggle(): void {
+            if (btOpen && btLoader.status === Loader.Loading) return
+            btOpen = !btOpen
+        }
+    }
+    Loader {
+        id: btLoader
+        active: btOpen
+        asynchronous: true
+        source: "modules/Bluetooth.qml"
+        onLoaded: { item.colors = barPalette; item.open = true }
+    }
+    onBtOpenChanged: { if (btLoader.item) btLoader.item.open = btOpen }
+    Connections {
+        target: btLoader.item
+        function onOpenChanged() { if (btLoader.item && !btLoader.item.open) btOpen = false }
+    }
+
     // GitHubDash — toggle + close. Background notify + cache warming live in
     // resident GitHubPoller, so this Loader is display-only.
     property bool ghOpen: false

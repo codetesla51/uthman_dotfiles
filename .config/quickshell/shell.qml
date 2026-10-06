@@ -21,22 +21,24 @@ ShellRoot {
     // locking again; revisit only with a timed auto-rescue test harness.
     // LockScreen {}
 
-    // ---- lazy heavies: Loader + IPC proxy, zero RAM while closed ----
-    // Esc/click-outside inside each panel sets its own open=false; the
-    // Connections block below propagates that back out so the Loader unloads.
+    // ---- lazy heavies: Loader + IPC proxy, zero RAM until first used ----
+    // Each loader stays compiled after its first open (warm flag) so the
+    // second press is instant. A press mid-load never cancels: open wins,
+    // close is swallowed until onLoaded fires. Esc/click-outside inside
+    // each panel sets its own open=false; Connections propagates back out.
 
     // PkgManager (1467 lines, 11 Process) — pkgman + packages targets, tab shortcuts
     property bool pkgOpen: false
     property int pkgTab: 0
     IpcHandler {
         target: "pkgman"
-        function toggle(): void { pkgOpen = !pkgOpen }
+        function toggle(): void { if (pkgOpen && pkgLoader.status === Loader.Loading) return; pkgOpen = !pkgOpen }
         function showSearch(): void { pkgShow(0) }
         function showQueue(): void { pkgShow(1) }
         function showInstalled(): void { pkgShow(2) }
         function showUpdates(): void { pkgShow(3) }
     }
-    IpcHandler { target: "packages"; function toggle(): void { pkgOpen = !pkgOpen } }
+    IpcHandler { target: "packages"; function toggle(): void { if (pkgOpen && pkgLoader.status === Loader.Loading) return; pkgOpen = !pkgOpen } }
     function pkgShow(t: int): void {
         pkgTab = t
         if (pkgLoader.item) { pkgLoader.item.tab = t; pkgLoader.item.open = true }
@@ -44,11 +46,13 @@ ShellRoot {
     }
     Loader {
         id: pkgLoader
-        active: pkgOpen
+        active: pkgOpen || pkgWarm
         asynchronous: true
         source: "modules/PkgManager.qml"
-        onLoaded: { item.colors = barPalette; item.tab = pkgTab; item.open = true }
+        onLoaded: { pkgWarm = true; item.colors = barPalette; item.tab = pkgTab; item.open = true }
     }
+    property bool pkgWarm: false
+    onPkgOpenChanged: { if (pkgLoader.item) pkgLoader.item.open = pkgOpen }
     Connections {
         target: pkgLoader.item
         function onOpenChanged() { if (pkgLoader.item && !pkgLoader.item.open) pkgOpen = false }
@@ -85,14 +89,16 @@ ShellRoot {
 
     // Monitors — small live monitor panel (scale/DPI, rotate, status)
     property bool monOpen: false
-    IpcHandler { target: "monitors"; function toggle(): void { monOpen = !monOpen } }
+    IpcHandler { target: "monitors"; function toggle(): void { if (monOpen && monLoader.status === Loader.Loading) return; monOpen = !monOpen } }
     Loader {
         id: monLoader
-        active: monOpen
+        active: monOpen || monWarm
         asynchronous: true
         source: "modules/MonitorSettings.qml"
-        onLoaded: { item.colors = barPalette; item.open = true }
+        onLoaded: { monWarm = true; item.colors = barPalette; item.open = true }
     }
+    property bool monWarm: false
+    onMonOpenChanged: { if (monLoader.item) monLoader.item.open = monOpen }
     Connections {
         target: monLoader.item
         function onOpenChanged() { if (monLoader.item && !monLoader.item.open) monOpen = false }
@@ -107,15 +113,16 @@ ShellRoot {
             if (pomOpen && pomLoader.status === Loader.Loading) return
             pomOpen = !pomOpen
         }
-        function close(): void { pomOpen = false }
+        function close(): void { if (pomOpen && pomLoader.status === Loader.Loading) return; pomOpen = false }
     }
     Loader {
         id: pomLoader
-        active: pomOpen
+        active: pomOpen || pomWarm
         asynchronous: true
         source: "modules/Pomodoro.qml"
-        onLoaded: { item.colors = barPalette; item.open = true }
+        onLoaded: { pomWarm = true; item.colors = barPalette; item.open = true }
     }
+    property bool pomWarm: false
     onPomOpenChanged: { if (pomLoader.item) pomLoader.item.open = pomOpen }
     Connections {
         target: pomLoader.item
@@ -135,11 +142,12 @@ ShellRoot {
     }
     Loader {
         id: ebLoader
-        active: ebOpen
+        active: ebOpen || ebWarm
         asynchronous: true
         source: "modules/Earbuds.qml"
-        onLoaded: { item.colors = barPalette; item.open = true }
+        onLoaded: { ebWarm = true; item.colors = barPalette; item.open = true }
     }
+    property bool ebWarm: false
     onEbOpenChanged: { if (ebLoader.item) ebLoader.item.open = ebOpen }
     Connections {
         target: ebLoader.item
@@ -157,11 +165,12 @@ ShellRoot {
     }
     Loader {
         id: btLoader
-        active: btOpen
+        active: btOpen || btWarm
         asynchronous: true
         source: "modules/Bluetooth.qml"
-        onLoaded: { item.colors = barPalette; item.open = true }
+        onLoaded: { btWarm = true; item.colors = barPalette; item.open = true }
     }
+    property bool btWarm: false
     onBtOpenChanged: { if (btLoader.item) btLoader.item.open = btOpen }
     Connections {
         target: btLoader.item
@@ -173,16 +182,18 @@ ShellRoot {
     property bool ghOpen: false
     IpcHandler {
         target: "github"
-        function toggle(): void { ghOpen = !ghOpen }
-        function close(): void { ghOpen = false }
+        function toggle(): void { if (ghOpen && ghLoader.status === Loader.Loading) return; ghOpen = !ghOpen }
+        function close(): void { if (ghOpen && ghLoader.status === Loader.Loading) return; ghOpen = false }
     }
     Loader {
         id: ghLoader
-        active: ghOpen
+        active: ghOpen || ghWarm
         asynchronous: true
         source: "modules/GitHubDash.qml"
-        onLoaded: { item.colors = barPalette; item.open = true }
+        onLoaded: { ghWarm = true; item.colors = barPalette; item.open = true }
     }
+    property bool ghWarm: false
+    onGhOpenChanged: { if (ghLoader.item) ghLoader.item.open = ghOpen }
     Connections {
         target: ghLoader.item
         function onOpenChanged() { if (ghLoader.item && !ghLoader.item.open) ghOpen = false }
@@ -193,7 +204,7 @@ ShellRoot {
     property string dictWord: ""
     IpcHandler {
         target: "dict"
-        function toggle(): void { dictOpen = !dictOpen }
+        function toggle(): void { if (dictOpen && dictLoader.status === Loader.Loading) return; dictOpen = !dictOpen }
         function lookup(word: string): void {
             if (dictLoader.item) dictLoader.item.lookup(word)
             else { dictWord = word; dictOpen = true }
@@ -201,11 +212,13 @@ ShellRoot {
     }
     Loader {
         id: dictLoader
-        active: dictOpen
+        active: dictOpen || dictWarm
         asynchronous: true
         source: "modules/Dictionary.qml"
-        onLoaded: { item.colors = barPalette; if (dictWord !== "") { var w = dictWord; dictWord = ""; item.lookup(w) } else item.open = true }
+        onLoaded: { dictWarm = true; item.colors = barPalette; if (dictWord !== "") { var w = dictWord; dictWord = ""; item.lookup(w) } else item.open = true }
     }
+    property bool dictWarm: false
+    onDictOpenChanged: { if (dictLoader.item) dictLoader.item.open = dictOpen }
     Connections {
         target: dictLoader.item
         function onOpenChanged() { if (dictLoader.item && !dictLoader.item.open) dictOpen = false }
@@ -216,20 +229,22 @@ ShellRoot {
     property string pdfPath: ""
     IpcHandler {
         target: "pdfviewer"
-        function toggle(): void { pdfOpen = !pdfOpen }
+        function toggle(): void { if (pdfOpen && pdfLoader.status === Loader.Loading) return; pdfOpen = !pdfOpen }
         function open(path: string): void {
             if (pdfLoader.item) { if (path) pdfLoader.item.openWith(path); else pdfLoader.item.open = true }
             else { if (path) pdfPath = path; pdfOpen = true }
         }
-        function close(): void { pdfOpen = false }
+        function close(): void { if (pdfOpen && pdfLoader.status === Loader.Loading) return; pdfOpen = false }
     }
     Loader {
         id: pdfLoader
-        active: pdfOpen
+        active: pdfOpen || pdfWarm
         asynchronous: true
         source: "modules/PdfViewer.qml"
-        onLoaded: { item.colors = barPalette; if (pdfPath !== "") { var p = pdfPath; pdfPath = ""; item.openWith(p) } else item.open = true }
+        onLoaded: { pdfWarm = true; item.colors = barPalette; if (pdfPath !== "") { var p = pdfPath; pdfPath = ""; item.openWith(p) } else item.open = true }
     }
+    property bool pdfWarm: false
+    onPdfOpenChanged: { if (pdfLoader.item) pdfLoader.item.open = pdfOpen }
     Connections {
         target: pdfLoader.item
         function onOpenChanged() { if (pdfLoader.item && !pdfLoader.item.open) pdfOpen = false }
@@ -237,14 +252,16 @@ ShellRoot {
 
     // Wallshelf (300-thumb scan) — toggle only
     property bool shelfOpen: false
-    IpcHandler { target: "wallshelf"; function toggle(): void { shelfOpen = !shelfOpen } }
+    IpcHandler { target: "wallshelf"; function toggle(): void { if (shelfOpen && shelfLoader.status === Loader.Loading) return; shelfOpen = !shelfOpen } }
     Loader {
         id: shelfLoader
-        active: shelfOpen
+        active: shelfOpen || shelfWarm
         asynchronous: true
         source: "modules/Wallshelf.qml"
-        onLoaded: { item.colors = barPalette; item.open = true }
+        onLoaded: { shelfWarm = true; item.colors = barPalette; item.open = true }
     }
+    property bool shelfWarm: false
+    onShelfOpenChanged: { if (shelfLoader.item) shelfLoader.item.open = shelfOpen }
     Connections {
         target: shelfLoader.item
         function onOpenChanged() { if (shelfLoader.item && !shelfLoader.item.open) shelfOpen = false }
@@ -252,14 +269,16 @@ ShellRoot {
 
     // WorkspaceViewer — toggle only
     property bool wsvOpen: false
-    IpcHandler { target: "wsview"; function toggle(): void { wsvOpen = !wsvOpen } }
+    IpcHandler { target: "wsview"; function toggle(): void { if (wsvOpen && wsvLoader.status === Loader.Loading) return; wsvOpen = !wsvOpen } }
     Loader {
         id: wsvLoader
-        active: wsvOpen
+        active: wsvOpen || wsvWarm
         asynchronous: true
         source: "modules/WorkspaceViewer.qml"
-        onLoaded: { item.colors = barPalette; item.open = true }
+        onLoaded: { wsvWarm = true; item.colors = barPalette; item.open = true }
     }
+    property bool wsvWarm: false
+    onWsvOpenChanged: { if (wsvLoader.item) wsvLoader.item.open = wsvOpen }
     Connections {
         target: wsvLoader.item
         function onOpenChanged() { if (wsvLoader.item && !wsvLoader.item.open) wsvOpen = false }
@@ -270,8 +289,8 @@ ShellRoot {
     property string grapQ: ""
     IpcHandler {
         target: "grap"
-        function toggle(): void { grapOpen = !grapOpen }
-        function close(): void { grapOpen = false }
+        function toggle(): void { if (grapOpen && grapLoader.status === Loader.Loading) return; grapOpen = !grapOpen }
+        function close(): void { if (grapOpen && grapLoader.status === Loader.Loading) return; grapOpen = false }
         function search(q: string): void {
             if (grapLoader.item) grapLoader.item.search(q)
             else { grapQ = q; grapOpen = true }
@@ -279,11 +298,13 @@ ShellRoot {
     }
     Loader {
         id: grapLoader
-        active: grapOpen
+        active: grapOpen || grapWarm
         asynchronous: true
         source: "modules/Grap.qml"
-        onLoaded: { item.colors = barPalette; if (grapQ !== "") { var q = grapQ; grapQ = ""; item.search(q) } else item.open = true }
+        onLoaded: { grapWarm = true; item.colors = barPalette; if (grapQ !== "") { var q = grapQ; grapQ = ""; item.search(q) } else item.open = true }
     }
+    property bool grapWarm: false
+    onGrapOpenChanged: { if (grapLoader.item) grapLoader.item.open = grapOpen }
     Connections {
         target: grapLoader.item
         function onOpenChanged() { if (grapLoader.item && !grapLoader.item.open) grapOpen = false }

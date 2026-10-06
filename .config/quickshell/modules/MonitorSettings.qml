@@ -47,7 +47,10 @@ FloatingWindow {
     // NOTE: no IpcHandler here on purpose. shell.qml owns target "monitors"
     // and lazy-loads this module; a second handler for the same target wins
     // nothing and logs "registered but will not be used".
-    onOpenChanged: { if (open) { syncing = true; load(); openAnim.restart() } else closeAnim.restart() }
+    onOpenChanged: {
+        if (open) { syncing = true; load(); openAnim.restart() }
+        else closeAnim.restart()
+    }
 
     Process {
         id: loadProc

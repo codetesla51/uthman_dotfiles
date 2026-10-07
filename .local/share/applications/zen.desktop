@@ -1,0 +1,12 @@
+[Desktop Entry]
+Name=Zen Browser
+Comment=Minimal, privacy-focused web browser
+Exec=/home/uthman/.local/opt/zen/zen %U
+Icon=app.zen_browser.zen
+Type=Application
+Terminal=false
+Categories=Network;WebBrowser;
+Keywords=Internet;WWW;Browser;Web;Zen;Firefox;
+MimeType=text/html;x-scheme-handler/http;x-scheme-handler/https;
+StartupWMClass=zen
+StartupNotify=true

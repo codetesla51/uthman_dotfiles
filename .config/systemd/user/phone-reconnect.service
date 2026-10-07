@@ -1,0 +1,15 @@
+[Unit]
+Description=PhoneBridge wireless link watchdog (phone-reconnect watch)
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/home/uthman/.local/bin/phone-reconnect watch
+Restart=on-failure
+RestartSec=15
+Environment=HOME=/home/uthman
+Environment=PATH=/home/uthman/.local/bin:/usr/local/bin:/usr/bin:/bin
+
+[Install]
+WantedBy=graphical-session.target

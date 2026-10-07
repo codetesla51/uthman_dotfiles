@@ -1,0 +1,115 @@
+#!/bin/bash
+# phone-reconnect — bring the PhoneBridge link back without thinking.
+#
+#   phone-reconnect         one shot: wireless -> cord bootstrap -> clear error
+#   phone-reconnect watch   retry every 30s, only speaks when the answer changes
+#
+# wireless alive  -> adb connect to the saved target (clears stale offline entries)
+# USB plugged     -> tcpip bootstrap, read the phone's WiFi IP, save it, cut over
+# neither         -> says exactly what's missing
+# Idempotent: safe to run any time. A cord bootstrap saves the new IP to
+# ~/.config/phone-sender/target and the phonebridge config.
+set -u
+command -v adb >/dev/null || { echo "phone-reconnect: adb not found (pacman -S android-tools)" >&2; exit 1; }
+adb start-server >/dev/null 2>&1
+
+SENDER_CONF=~/.config/phone-sender/target
+PB_CONF=~/.config/phonebridge/config.ini
+
+read_target() {
+    local t
+    t=$(tr -d '[:space:]' < "$SENDER_CONF" 2>/dev/null)
+    echo "${t:-192.168.166.70:5555}"
+}
+
+TARGET=$(read_target)
+
+save_target() { # $1 = host:port — keep sender + bridge configs in sync
+    mkdir -p ~/.config/phone-sender
+    printf '%s\n' "$1" > "$SENDER_CONF"
+    if [[ -f "$PB_CONF" ]]; then
+        python3 - "$PB_CONF" "$1" <<'EOF' 2>/dev/null
+import configparser, sys
+p, tgt = sys.argv[1], sys.argv[2]
+c = configparser.ConfigParser(); c.read(p)
+if not c.has_section("phone"): c.add_section("phone")
+c.set("phone", "device", tgt); c.set("phone", "target", tgt)
+with open(p, "w") as f: c.write(f)
+EOF
+    fi
+}
+
+state_of() { adb devices 2>/dev/null | awk -v id="$1" '$1==id{print $2; exit}'; }
+alive() { [[ "$(state_of "$1")" == "device" ]]; }
+
+try_wireless() { # $1 = id — true when it ends in state device
+    alive "$1" && return 0
+    # a dead phone leaves an "offline" entry that makes `adb connect` lie;
+    # drop it first so the reconnect is real
+    [[ -n "$(state_of "$1")" ]] && adb disconnect "$1" >/dev/null 2>&1
+    timeout 8 adb connect "$1" >/dev/null 2>&1
+    alive "$1"
+}
+
+phone_ip() { # $1 = usb serial — wlan0 IPv4, retried (route can lag after tcpip)
+    local ip i
+    for i in 1 2 3 4 5; do
+        ip=$(adb -s "$1" shell ip route 2>/dev/null | awk '/wlan0 .*src/{print $NF; exit}')
+        [[ -z "$ip" ]] && ip=$(adb -s "$1" shell ip -4 addr show wlan0 2>/dev/null | awk '/inet /{split($2,a,"/"); print a[1]; exit}')
+        if [[ -n "$ip" ]]; then echo "$ip"; return 0; fi
+        sleep 1
+    done
+    return 1
+}
+
+run() { # returns 0 when the link is up; echoes one status line either way
+    if try_wireless "$TARGET"; then
+        echo "phone-reconnect: link up on $TARGET (wireless)"
+        return 0
+    fi
+
+    USBID=$(adb devices 2>/dev/null | awk '$2=="device" && $1 !~ /:/{print $1; exit}')
+    if [[ -n "$USBID" ]]; then
+        echo "phone-reconnect: USB link ($USBID) — switching to WiFi…"
+        adb -s "$USBID" tcpip 5555 >/dev/null 2>&1
+        sleep 2
+        if ! IP=$(phone_ip "$USBID"); then
+            echo "phone-reconnect: no WiFi IP on the phone — is WiFi on?" >&2
+            return 1
+        fi
+        if try_wireless "$IP:5555"; then
+            save_target "$IP:5555"
+            TARGET=$(read_target)
+            echo "phone-reconnect: wireless at $IP:5555 — unplug the cord"
+            return 0
+        fi
+        echo "phone-reconnect: WiFi connect failed — same network on both ends?" >&2
+        return 1
+    fi
+
+    echo "phone-reconnect: phone unreachable." >&2
+    echo "  tried wireless: $TARGET" >&2
+    echo "  fix: same WiFi + wireless debugging on, or plug the cord and re-run" >&2
+    return 1
+}
+
+watch_mode() {
+    echo "phone-reconnect: watching every 30s (ctrl-c to stop)"
+    local prev="" out
+    while true; do
+        TARGET=$(read_target)
+        out=$(run 2>&1) || true
+        if [[ "$out" != "$prev" ]]; then
+            echo "$out"
+            prev="$out"
+        fi
+        sleep 30
+    done
+}
+
+case "${1:-}" in
+    "")       run; exit $? ;;
+    watch)    watch_mode ;;
+    -h|--help) sed -n '2,10p' "$0"; exit 0 ;;
+    *)        echo "phone-reconnect: unknown argument '$1' (try: watch)" >&2; exit 2 ;;
+esac

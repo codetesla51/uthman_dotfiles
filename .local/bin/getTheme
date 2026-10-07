@@ -4,20 +4,24 @@ THEME_TYPE="scheme-fidelity"
 CONTRAST="0.2"
 MODE="dark"
 WALLPAPER=""
+SOURCE=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         -t|--type)
-            val="$2"
-            [[ "$val" == scheme-* ]] && THEME_TYPE="scheme-fidelity" || THEME_TYPE="scheme-fidelity"
+            [[ "$2" == scheme-* ]] && THEME_TYPE="$2" || { echo "getTheme: unknown type $2" >&2; exit 1; }
             shift 2
             ;;
         -c|--contrast)
-            CONTRAST="0.2"
+            CONTRAST="$2"
             shift 2
             ;;
         -m|--mode)
-            MODE="dark"
+            [[ "$2" == dark || "$2" == light ]] && MODE="$2" || { echo "getTheme: mode must be dark|light" >&2; exit 1; }
+            shift 2
+            ;;
+        -s|--source)
+            SOURCE="$2"
             shift 2
             ;;
         /*)
@@ -51,7 +55,11 @@ echo "  Type: $THEME_TYPE"
 echo "  Contrast: $CONTRAST"
 echo "  Mode: $MODE"
 
-matugen image "$WALLPAPER" --mode "$MODE" --type "$THEME_TYPE" --contrast "$CONTRAST" --source-color-index 0
+if [[ -n "$SOURCE" ]]; then
+    matugen color hex "$SOURCE" --mode "$MODE" --type "$THEME_TYPE" --contrast "$CONTRAST"
+else
+    matugen image "$WALLPAPER" --mode "$MODE" --type "$THEME_TYPE" --contrast "$CONTRAST" --source-color-index 0
+fi
 
 if [[ $? -ne 0 ]]; then
     echo "Error: matugen failed"

@@ -1,8 +1,10 @@
 /* ── matugen Zen layer — appended after firefox.css inside userChrome.css ──
- * Hooks Zen's native theme vars, then mirrors the frosted-glass tab language
- * onto the vertical tab strip. The --m-* vars come from firefox.css above.
+ * ULTRA GLASS: floating content island, pill tabs with accent glow, deep
+ * translucent chrome. The --m-* vars come from firefox.css above.
  * Selectors verified against Zen 1.23 omni.ja (tab[selected], #zen-*
- * containers, --zen-primary-color et al). */
+ * containers, --zen-primary-color et al). Opacity degrades gracefully:
+ * translucent layers composite over --m-bg where the compositor gives an
+ * opaque window, and bleed real wallpaper blur where it gives ARGB. */
 
 :root {
   /* Zen's own theming API — accent + surfaces follow the wallpaper */
@@ -13,45 +15,74 @@
   --zen-colors-border: {{ colors.outline.default.hex }} !important;
   --zen-main-browser-background: {{ colors.background.default.hex }} !important;
   --zen-toolbar-element-bg: color-mix(in srgb, {{ colors.surface_variant.default.hex }} 55%, transparent) !important;
+
+  /* glass ramp — sidebar reads over blur, navbar melts into it */
+  --z-glass-deep: color-mix(in srgb, var(--m-surface) 62%, transparent);
+  --z-glass-thin: color-mix(in srgb, var(--m-surface) 42%, transparent);
+  --z-blur: 26px;
+  --z-radius: 14px;
+  --z-glow: 0 0 18px color-mix(in srgb, var(--m-accent) 35%, transparent);
 }
 
-/* ══ app + content wrappers inherit the theme bg ══ */
+/* ══ let the compositor in — chrome goes translucent ══ */
+#main-window {
+  background: transparent !important;
+}
 #zen-main-app-wrapper,
-#zen-tabbox-wrapper,
-#zen-appcontent-wrapper,
 #zen-browser-background {
+  background: transparent !important;
+}
+
+/* ══ floating content island — the signature ══ */
+#zen-tabbox-wrapper {
+  margin: 6px 8px 8px 2px !important;
+  border-radius: var(--z-radius) !important;
+  border: 1px solid var(--m-glass-line) !important;
+  box-shadow: 0 10px 36px rgba(0, 0, 0, 0.38) !important;
+  overflow: hidden !important;
   background: var(--m-bg) !important;
 }
+#zen-appcontent-wrapper {
+  background: transparent !important;
+}
 
-/* ══ top navbar container — same frosted glass as navigator-toolbox ══ */
+/* ══ top navbar — thin glass melting into the blur ══ */
 #zen-appcontent-navbar-container,
 #zen-appcontent-navbar-wrapper {
-  background: var(--m-glass) !important;
-  backdrop-filter: blur(var(--m-blur)) saturate(150%) !important;
-  border-bottom: 1px solid color-mix(in srgb, var(--m-line) 50%, transparent) !important;
+  background: var(--z-glass-thin) !important;
+  backdrop-filter: blur(var(--z-blur)) saturate(160%) !important;
+  border-bottom: 1px solid color-mix(in srgb, var(--m-line) 40%, transparent) !important;
 }
 .zen-toolbar-background {
   background: transparent !important;
 }
 
-/* ══ vertical tabs — same language as top tabs, full-radius pills ══ */
+/* ══ sidebar — deep glass so glyphs stay readable ══ */
+#sidebar-box,
+#sidebar {
+  background: var(--z-glass-deep) !important;
+  backdrop-filter: blur(var(--z-blur)) saturate(160%) !important;
+}
+
+/* ══ vertical tabs — floating pills, lit active ══ */
 #zen-tabs-wrapper tab::before,
 #zen-tabs-wrapper tab::after {
   border: none !important;
 }
 #zen-tabs-wrapper tab .tab-background {
-  border-radius: 10px !important;
+  border-radius: 12px !important;
   background: transparent !important;
+  border: 1px solid transparent !important;
 }
 #zen-tabs-wrapper tab[selected] .tab-background,
 #zen-tabs-wrapper tab[visuallyselected] .tab-background {
-  background: var(--m-glass-strong) !important;
-  backdrop-filter: blur(var(--m-blur)) !important;
-  box-shadow: inset 2px 0 0 var(--m-accent),
-              0 0 0 1px color-mix(in srgb, var(--m-accent) 30%, transparent) !important;
+  background: color-mix(in srgb, var(--m-raised) 58%, transparent) !important;
+  backdrop-filter: blur(var(--z-blur)) !important;
+  border-color: color-mix(in srgb, var(--m-accent) 45%, transparent) !important;
+  box-shadow: inset 2px 0 0 var(--m-accent), var(--z-glow) !important;
 }
 #zen-tabs-wrapper tab:hover:not([selected]):not([visuallyselected]) .tab-background {
-  background: color-mix(in srgb, var(--m-raised) 45%, transparent) !important;
+  background: color-mix(in srgb, var(--m-raised) 38%, transparent) !important;
 }
 #zen-tabs-wrapper tab .tab-content {
   color: var(--m-dim) !important;
@@ -68,7 +99,12 @@
   fill: var(--m-fg) !important;
 }
 
-/* workspace sections + pinned groups */
+/* essentials row floats free */
+.zen-essentials-container {
+  background: transparent !important;
+}
+
+/* workspace sections */
 .zen-workspace-tabs-section,
 .zen-workspace-pinned-tabs-section {
   color: var(--m-sub) !important;
@@ -77,7 +113,7 @@
 /* ══ workspaces button + current-workspace pill ══ */
 #zen-workspaces-button {
   color: var(--m-sub) !important;
-  border-radius: 8px !important;
+  border-radius: 10px !important;
 }
 #zen-workspaces-button:hover {
   background: color-mix(in srgb, var(--m-raised) 50%, transparent) !important;
@@ -88,17 +124,21 @@
 }
 .zen-current-workspace-indicator {
   color: var(--m-fg) !important;
+  background: color-mix(in srgb, var(--m-raised) 40%, transparent) !important;
+  border-radius: 10px !important;
+  border: 1px solid var(--m-glass-line) !important;
 }
 .zen-current-workspace-indicator-icon {
   fill: var(--m-accent) !important;
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--m-accent) 70%, transparent));
 }
 
-/* ══ sidebar top/foot buttons — same hover as toolbar buttons ══ */
+/* ══ sidebar top/foot buttons ══ */
 #zen-sidebar-top-buttons toolbarbutton,
 #zen-sidebar-foot-buttons toolbarbutton {
   fill: var(--m-dim) !important;
   color: var(--m-sub) !important;
-  border-radius: 8px !important;
+  border-radius: 10px !important;
 }
 #zen-sidebar-top-buttons toolbarbutton:hover,
 #zen-sidebar-foot-buttons toolbarbutton:hover {
@@ -106,12 +146,17 @@
   fill: var(--m-fg) !important;
 }
 
-/* ══ essentials strip ══ */
-.zen-essentials-container {
-  background: transparent !important;
+/* ══ urlbar — pill with lit focus ring ══ */
+#urlbar-background {
+  border-radius: 14px !important;
+}
+#urlbar[focused] > #urlbar-background,
+#urlbar[open] > #urlbar-background {
+  box-shadow: 0 0 0 1px var(--m-accent), var(--z-glow) !important;
 }
 
 /* ══ loading progress follows the accent ══ */
 #zen-loading-progress-bar {
   background: var(--m-accent) !important;
+  box-shadow: var(--z-glow) !important;
 }

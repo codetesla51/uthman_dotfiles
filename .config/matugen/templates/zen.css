@@ -103,6 +103,16 @@
 #zen-tabs-wrapper tab[visuallyselected] .tab-content {
   color: var(--m-fg) !important;
 }
+/* ══ zen toasts (top pills) — quiet glass, no loud edge ══ */
+.zen-toast {
+  background: color-mix(in srgb, var(--m-surface) 82%, transparent) !important;
+  backdrop-filter: blur(var(--z-blur)) saturate(150%) !important;
+  border: 1px solid var(--m-glass-line) !important;
+  border-radius: 12px !important;
+  color: var(--m-fg) !important;
+  box-shadow: none !important;
+}
+
 /* ══ window controls — box hidden entirely (Ctrl+Shift+W closes) ══ */
 #titlebar-buttonbox-container,
 .titlebar-buttonbox-container {

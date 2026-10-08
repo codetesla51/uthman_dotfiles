@@ -120,9 +120,11 @@
   box-shadow: none !important;
 }
 
-/* essentials row floats free */
+/* essentials row floats free with air around it */
 .zen-essentials-container {
   background: transparent !important;
+  margin-top: 4px !important;
+  padding-bottom: 4px !important;
 }
 
 /* workspace sections */

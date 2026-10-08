@@ -51,11 +51,14 @@
 #navigator-toolbox {
   background: var(--z-glass-thin) !important;
   backdrop-filter: blur(var(--z-blur)) saturate(160%) !important;
+  border-bottom: none !important;
+  box-shadow: none !important;
 }
 #zen-appcontent-navbar-container,
 #zen-appcontent-navbar-wrapper {
   background: transparent !important;
-  border-bottom: 1px solid color-mix(in srgb, var(--m-line) 40%, transparent) !important;
+  border: none !important;
+  box-shadow: none !important;
 }
 #PersonalToolbar {
   background: color-mix(in srgb, var(--m-surface) 35%, transparent) !important;

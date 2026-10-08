@@ -28,6 +28,7 @@ PanelWindow {
         {key:"SUPER + Space", desc:"Launch apps", cat:"Apps", disp:"exec", arg:"quickshell -p ~/.config/quickshell ipc call launcher toggle"},
         {key:"SUPER Shift + F", desc:"File manager", cat:"Apps", disp:"exec", arg:"uwsm-app -- thunar"},
         {key:"SUPER Shift + B", desc:"Browser", cat:"Apps", disp:"exec", arg:"xdg-open https://google.com"},
+        {key:"SUPER Shift + Z", desc:"Zen Browser", cat:"Apps", disp:"exec", arg:"uwsm-app -- zen"},
         {key:"SUPER Shift + N", desc:"Editor (Zed)", cat:"Apps", disp:"exec", arg:"uwsm-app -- zed"},
         {key:"SUPER Shift + M", desc:"Music (Spotify)", cat:"Apps", disp:"exec", arg:"uwsm-app -- spotify"},
         {key:"SUPER Shift + O", desc:"Obsidian", cat:"Apps", disp:"exec", arg:"uwsm-app -- obsidian"},
@@ -105,6 +106,16 @@ PanelWindow {
         {key:"SUPER Shift + 10", desc:"Move to workspace 10", cat:"Workspaces", disp:"movetoworkspace", arg:"10"},
         {key:"SUPER + Tab", desc:"Next workspace", cat:"Workspaces", disp:"workspace", arg:"e+1"},
         {key:"SUPER Shift + Tab", desc:"Prev workspace", cat:"Workspaces", disp:"workspace", arg:"e-1"},
+        {key:"Ctrl + T / W / R", desc:"New / close / reload tab", cat:"Zen"},
+        {key:"Ctrl + L", desc:"Address bar", cat:"Zen"},
+        {key:"Ctrl + H / B", desc:"History / bookmarks sidebar", cat:"Zen"},
+        {key:"Ctrl + Alt + Left / Right", desc:"Prev / next workspace", cat:"Zen"},
+        {key:"Ctrl + Alt + G / V / H", desc:"Split grid / vertical / horizontal", cat:"Zen"},
+        {key:"Ctrl + Alt + U", desc:"Unsplit", cat:"Zen"},
+        {key:"Ctrl + S", desc:"Compact mode (auto-hide sidebar)", cat:"Zen"},
+        {key:"Ctrl + Alt + S", desc:"Peek sidebar in compact mode", cat:"Zen"},
+        {key:"Ctrl + O", desc:"Glance (peek link)", cat:"Zen"},
+        {key:"Ctrl + Shift + D", desc:"Pin tab (essential)", cat:"Zen"},
     ]
 
     property var filtered: {

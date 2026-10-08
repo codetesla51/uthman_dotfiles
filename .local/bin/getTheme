@@ -117,6 +117,12 @@ for _zprof in "$HOME/.config/zen"/*.Default* "$HOME/.config/zen"/*.default*; do
         echo 'user_pref("browser.tabs.allow_transparent_browser", true);' >> "$_zprof/user.js"
     grep -q 'zen.widget.linux.transparency' "$_zprof/user.js" 2>/dev/null || \
         echo 'user_pref("zen.widget.linux.transparency", true);' >> "$_zprof/user.js"
+    # SuperPins defaults — bool prefs mirror the mod's checkbox options
+    # (mod reads them via -moz-pref). NOTE: user.js wins every startup, so
+    # flipping these in Settings → Zen Mods only sticks if removed here.
+    for _sp in uc.pins.bg uc.pins.active-bg uc.pins.legacy-layout uc.essentials.transition-bg uc.remove-sidebar-scrollbar; do
+        grep -q "\"$_sp\"" "$_zprof/user.js" 2>/dev/null || echo "user_pref(\"$_sp\", true);" >> "$_zprof/user.js"
+    done
 done &
 
 # Live-update Cavasik colors (matugen already regenerated ~/.config/cavasik/colors.rgb)

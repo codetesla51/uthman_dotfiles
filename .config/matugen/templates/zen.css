@@ -85,10 +85,10 @@
 }
 #zen-tabs-wrapper tab[selected] .tab-background,
 #zen-tabs-wrapper tab[visuallyselected] .tab-background {
-  background: color-mix(in srgb, var(--m-raised) 58%, transparent) !important;
+  background: color-mix(in srgb, var(--m-accent) 20%, var(--m-raised)) !important;
   backdrop-filter: blur(var(--z-blur)) !important;
-  border-color: color-mix(in srgb, var(--m-accent) 45%, transparent) !important;
-  box-shadow: inset 2px 0 0 var(--m-accent), var(--z-glow) !important;
+  border-color: color-mix(in srgb, var(--m-accent) 35%, transparent) !important;
+  box-shadow: none !important;
 }
 #zen-tabs-wrapper tab:hover:not([selected]):not([visuallyselected]) .tab-background {
   background: color-mix(in srgb, var(--m-raised) 38%, transparent) !important;
@@ -117,6 +117,35 @@
 .zen-workspace-tabs-section,
 .zen-workspace-pinned-tabs-section {
   color: var(--m-sub) !important;
+}
+
+/* ══ sidebar rhythm — air between search, workspace pill, tabs ══ */
+#zen-sidebar-top-buttons {
+  padding-top: 6px !important;
+  margin-bottom: 4px !important;
+}
+.zen-current-workspace-indicator {
+  margin: 8px 16px 6px !important;
+  padding-top: 2px !important;
+  padding-bottom: 2px !important;
+}
+/* search + url pills stop edge-to-edge (one of these owns the sidebar pill
+ * depending on toolbar layout; dead rule is harmless) */
+#sidebar-search-container,
+#urlbar-container {
+  margin-inline: 16px !important;
+}
+#zen-tabs-wrapper {
+  padding: 2px 12px 0 !important;
+}
+#zen-tabs-wrapper tab {
+  margin-block: 3px !important;
+}
+#zen-workspaces-button {
+  margin: 8px !important;
+}
+#zen-sidebar-foot-buttons {
+  padding-bottom: 8px !important;
 }
 
 /* ══ workspaces button + current-workspace pill ══ */

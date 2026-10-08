@@ -24,13 +24,18 @@
   --z-glow: 0 0 18px color-mix(in srgb, var(--m-accent) 35%, transparent);
 }
 
-/* ══ let the compositor in — chrome goes translucent ══ */
-#main-window {
-  background: transparent !important;
+/* ══ full frame — one rounded hairline around the whole UI ══ */
+#zen-main-app-wrapper {
+  margin: 6px !important;
+  border: 1px solid var(--m-glass-line) !important;
+  border-radius: 14px !important;
+  overflow: hidden !important;
+  background: var(--m-bg) !important;
 }
-#zen-main-app-wrapper,
-#zen-browser-background {
-  background: transparent !important;
+/* sidebar splits from content with its own hairline */
+#sidebar-box,
+#sidebar {
+  border-right: 1px solid var(--m-glass-line) !important;
 }
 
 /* ══ content fills the window — no island, no rounding, no border ══ */

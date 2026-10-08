@@ -103,12 +103,9 @@
 #zen-tabs-wrapper tab[visuallyselected] .tab-content {
   color: var(--m-fg) !important;
 }
-#zen-tabs-wrapper tab .tab-close-button {
-  fill: var(--m-dim) !important;
-}
-#zen-tabs-wrapper tab .tab-close-button:hover {
-  background: color-mix(in srgb, var(--m-accent) 30%, transparent) !important;
-  fill: var(--m-fg) !important;
+/* tab close X — removed entirely (Ctrl+W / middle-click still close) */
+#zen-tabs-wrapper .tab-close-button {
+  display: none !important;
 }
 
 /* ══ pinned tabs — quiet pill, accent edge only while active ══ */

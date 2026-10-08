@@ -24,6 +24,15 @@
   --z-glow: 0 0 18px color-mix(in srgb, var(--m-accent) 35%, transparent);
 }
 
+/* ══ transparent-zen extension support — remove the light backdrop behind
+ * the page so supported sites (github, reddit, youtube…) go truly clear.
+ * Snippet straight from the extension author's README. */
+:root:not([inDOMFullscreen="true"]):not([chromehidden~="location"]):not([chromehidden~="toolbar"])
+  #tabbrowser-tabbox #tabbrowser-tabpanels .browserSidebarContainer
+  browser[transparent="true"] {
+  background: none !important;
+}
+
 /* ══ full frame — one rounded hairline around the whole UI ══
  * brighter than glass-line so it reads; accent-kissed while focused. */
 #zen-main-app-wrapper {

@@ -120,9 +120,11 @@ for _zprof in "$HOME/.config/zen"/*.Default* "$HOME/.config/zen"/*.default*; do
     # SuperPins defaults — bool prefs mirror the mod's checkbox options
     # (mod reads them via -moz-pref). NOTE: user.js wins every startup, so
     # flipping these in Settings → Zen Mods only sticks if removed here.
-    for _sp in uc.pins.bg uc.pins.active-bg uc.pins.legacy-layout uc.essentials.transition-bg uc.remove-sidebar-scrollbar; do
+    for _sp in uc.pins.bg uc.pins.active-bg uc.pins.legacy-layout uc.essentials.transition-bg uc.remove-sidebar-scrollbar uc.pins.grid-count; do
         grep -q "\"$_sp\"" "$_zprof/user.js" 2>/dev/null || echo "user_pref(\"$_sp\", true);" >> "$_zprof/user.js"
     done
+    grep -q '"mod.superpins.pins.grid-count"' "$_zprof/user.js" 2>/dev/null || \
+        echo 'user_pref("mod.superpins.pins.grid-count", "4");' >> "$_zprof/user.js"
 done &
 
 # Live-update Cavasik colors (matugen already regenerated ~/.config/cavasik/colors.rgb)

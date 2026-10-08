@@ -125,6 +125,12 @@ for _zprof in "$HOME/.config/zen"/*.Default* "$HOME/.config/zen"/*.default*; do
     done
     grep -q '"mod.superpins.pins.grid-count"' "$_zprof/user.js" 2>/dev/null || \
         echo 'user_pref("mod.superpins.pins.grid-count", "4");' >> "$_zprof/user.js"
+    # Data-saver prefs — kill speculative connections + autoplay + bg updates.
+    # Saves mobile data; re-enable updates when back on wifi (delete these lines).
+    for _ds in 'network.dns.disablePrefetch", true' 'network.predictor.enabled", false' 'browser.urlbar.speculativeConnect.enabled", false' 'network.prefetch-next", false' 'media.autoplay.default", 5' 'app.update.auto", false' 'extensions.update.autoUpdateDefault", false'; do
+        _dsk="${_ds%%\"*}"
+        grep -q "\"$_dsk\"" "$_zprof/user.js" 2>/dev/null || echo "user_pref(\"$_ds);" >> "$_zprof/user.js"
+    done
 done &
 
 # Live-update Cavasik colors (matugen already regenerated ~/.config/cavasik/colors.rgb)

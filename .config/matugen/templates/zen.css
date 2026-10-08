@@ -103,7 +103,11 @@
 #zen-tabs-wrapper tab[visuallyselected] .tab-content {
   color: var(--m-fg) !important;
 }
-/* ══ window controls — dark pills, no default orange ══ */
+/* ══ window controls — box hidden entirely (Ctrl+Shift+W closes) ══ */
+#titlebar-buttonbox-container,
+.titlebar-buttonbox-container {
+  display: none !important;
+}
 .titlebar-button {
   background: transparent !important;
   fill: var(--m-dim) !important;

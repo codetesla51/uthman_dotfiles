@@ -46,12 +46,21 @@
   background: transparent !important;
 }
 
-/* ══ top navbar — thin glass melting into the blur ══ */
-#zen-appcontent-navbar-container,
-#zen-appcontent-navbar-wrapper {
+/* ══ top navbar — thin glass melting into the blur ══
+ * (firefox.css keeps #navigator-toolbox near-opaque; Zen goes thinner so
+ * the wallpaper bleeds through once the transparent-browser pref lands.) */
+#navigator-toolbox {
   background: var(--z-glass-thin) !important;
   backdrop-filter: blur(var(--z-blur)) saturate(160%) !important;
+}
+#zen-appcontent-navbar-container,
+#zen-appcontent-navbar-wrapper {
+  background: transparent !important;
   border-bottom: 1px solid color-mix(in srgb, var(--m-line) 40%, transparent) !important;
+}
+#PersonalToolbar {
+  background: color-mix(in srgb, var(--m-surface) 35%, transparent) !important;
+  backdrop-filter: blur(var(--z-blur)) saturate(160%) !important;
 }
 .zen-toolbar-background {
   background: transparent !important;

@@ -103,6 +103,20 @@
 #zen-tabs-wrapper tab[visuallyselected] .tab-content {
   color: var(--m-fg) !important;
 }
+/* ══ window controls — dark pills, no default orange ══ */
+.titlebar-button {
+  background: transparent !important;
+  fill: var(--m-dim) !important;
+  border-radius: 8px !important;
+}
+.titlebar-button:hover {
+  background: color-mix(in srgb, var(--m-raised) 55%, transparent) !important;
+  fill: var(--m-fg) !important;
+}
+#titlebar-close:hover {
+  background: color-mix(in srgb, var(--m-err) 30%, transparent) !important;
+}
+
 /* tab close X — removed entirely (Ctrl+W / middle-click still close) */
 #zen-tabs-wrapper .tab-close-button {
   display: none !important;

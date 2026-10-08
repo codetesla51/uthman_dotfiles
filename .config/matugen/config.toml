@@ -150,6 +150,14 @@ output_path = "~/.config/theme/themes/snow_black/zen.css"
 input_path = "~/.config/matugen/templates/zen.css"
 output_path = "~/.config/theme/current/zen.css"
 
+[templates.zen-content-theme]
+input_path = "~/.config/matugen/templates/zen-content.css"
+output_path = "~/.config/theme/themes/snow_black/zen-usercontent.css"
+
+[templates.zen-content-current]
+input_path = "~/.config/matugen/templates/zen-content.css"
+output_path = "~/.config/theme/current/zen-usercontent.css"
+
 [templates.zathura]
 input_path = "~/.config/matugen/templates/zathurarc"
 output_path = "~/.config/zathura/zathurarc"

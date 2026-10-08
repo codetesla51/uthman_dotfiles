@@ -1,4 +1,6 @@
-/* ── matugen Firefox content — new-tab/home pages + global niceties ── */
+/* ── matugen Zen content — new-tab/home pages + global niceties (ZEN ONLY) ──
+ * Small centered logo, NOT a wallpaper. Search capped so it stops
+ * stretching wall-to-wall. */
 
 /* Everything (all sites): themed selection + thin scrollbars */
 ::selection {
@@ -10,15 +12,20 @@ html {
   scrollbar-color: {{ colors.surface_variant.default.hex }} {{ colors.background.default.hex }};
 }
 
-/* New-tab / home / blank pages — plain themed, no image */
+/* New-tab / home / blank pages */
 @-moz-document url("about:newtab"), url("about:home"), url("about:blank") {
   body {
-    background: {{ colors.background.default.hex }} !important;
+    background-color: {{ colors.background.default.hex }} !important;
+    background-image: url("file:///home/uthman/.config/zen/newtab-logo.png") !important;
+    background-position: center 32% !important;
+    background-size: 300px !important;
+    background-repeat: no-repeat !important;
+    background-attachment: fixed !important;
     color: {{ colors.on_background.default.hex }} !important;
     color-scheme: dark;
   }
 
-  /* search box (handoff + real input variants) — glass over wallpaper */
+  /* search box — capped width, centered, glass */
   .search-handoff-button,
   .search-wrapper input,
   .search-inner-wrapper,
@@ -29,6 +36,10 @@ html {
     border: 1px solid {{ colors.outline.default.hex }} !important;
     border-radius: 10px !important;
     box-shadow: none !important;
+  }
+  .search-wrapper {
+    max-width: 640px !important;
+    margin-inline: auto !important;
   }
   .search-handoff-button:focus,
   .search-handoff-button:focus-within,
@@ -45,7 +56,7 @@ html {
     background: {{ colors.primary.default.hex }} !important;
   }
 
-  /* top-site cards — glass over wallpaper */
+  /* top-site cards — glass */
   .top-site-outer .tile {
     background: color-mix(in srgb, {{ colors.surface_variant.default.hex }} 68%, transparent) !important;
     backdrop-filter: blur(18px) saturate(150%) !important;
@@ -63,7 +74,7 @@ html {
     color: {{ colors.on_surface.default.hex }} !important;
   }
 
-  /* pocket / highlights cards — glass over wallpaper */
+  /* pocket / highlights cards — glass */
   .card-outer,
   .ds-card {
     background: color-mix(in srgb, {{ colors.surface.default.hex }} 72%, transparent) !important;
@@ -90,7 +101,7 @@ html {
     color: {{ colors.primary.default.hex }} !important;
   }
 
-  /* weather / preferences pill — glass over wallpaper */
+  /* weather / preferences pill — glass */
   .weatherCard,
   .prefs-pane-wrapper {
     background: color-mix(in srgb, {{ colors.surface.default.hex }} 72%, transparent) !important;

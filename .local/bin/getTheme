@@ -117,6 +117,10 @@ for _zprof in "$HOME/.config/zen"/*.Default* "$HOME/.config/zen"/*.default*; do
         echo 'user_pref("browser.tabs.allow_transparent_browser", true);' >> "$_zprof/user.js"
     grep -q 'zen.widget.linux.transparency' "$_zprof/user.js" 2>/dev/null || \
         echo 'user_pref("zen.widget.linux.transparency", true);' >> "$_zprof/user.js"
+    # compact mode OFF at startup (its hover bar is the "edge that comes down").
+    # Ctrl+S still toggles it per-session — say the word and I'll unbind that too.
+    grep -q 'zen.view.compact.enable-at-startup' "$_zprof/user.js" 2>/dev/null || \
+        echo 'user_pref("zen.view.compact.enable-at-startup", false);' >> "$_zprof/user.js"
     # SuperPins defaults — bool prefs mirror the mod's checkbox options
     # (mod reads them via -moz-pref). NOTE: user.js wins every startup, so
     # flipping these in Settings → Zen Mods only sticks if removed here.

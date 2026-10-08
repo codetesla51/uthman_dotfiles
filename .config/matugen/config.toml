@@ -142,6 +142,14 @@ output_path = "~/.config/theme/themes/snow_black/firefox-usercontent.css"
 input_path = "~/.config/matugen/templates/firefox-content.css"
 output_path = "~/.config/theme/current/firefox-usercontent.css"
 
+[templates.zen-theme]
+input_path = "~/.config/matugen/templates/zen.css"
+output_path = "~/.config/theme/themes/snow_black/zen.css"
+
+[templates.zen-current]
+input_path = "~/.config/matugen/templates/zen.css"
+output_path = "~/.config/theme/current/zen.css"
+
 [templates.zathura]
 input_path = "~/.config/matugen/templates/zathurarc"
 output_path = "~/.config/zathura/zathurarc"

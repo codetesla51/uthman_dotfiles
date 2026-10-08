@@ -102,6 +102,18 @@ for _ffbase in "$HOME/.mozilla/firefox" "$HOME/.config/mozilla/firefox"; do
     }
 done &
 
+# Zen gets the same theme: Firefox chrome + Zen layer stacked into one
+# userChrome.css (Zen tabs are `tab[selected]`, not `.tabbrowser-tab`).
+# user.js carries the stylesheets pref so no prefs.js surgery is needed.
+for _zprof in "$HOME/.config/zen"/*.Default* "$HOME/.config/zen"/*.default*; do
+    [[ -f "$_zprof/prefs.js" ]] || continue
+    mkdir -p "$_zprof/chrome"
+    { cat "$HOME/.config/theme/current/firefox.css"; printf '\n'; cat "$HOME/.config/theme/current/zen.css"; } > "$_zprof/chrome/userChrome.css"
+    cp -f "$HOME/.config/theme/current/firefox-usercontent.css" "$_zprof/chrome/userContent.css"
+    grep -q 'toolkit.legacyUserProfileCustomizations.stylesheets' "$_zprof/user.js" 2>/dev/null || \
+        echo 'user_pref("toolkit.legacyUserProfileCustomizations.stylesheets", true);' >> "$_zprof/user.js"
+done &
+
 # Live-update Cavasik colors (matugen already regenerated ~/.config/cavasik/colors.rgb)
 dbus-send --session --type=method_call --dest="io.github.TheWisker.Cavasik" \
     "/io/github/TheWisker/Cavasik" "io.github.TheWisker.Cavasik.set_fg_colors" \

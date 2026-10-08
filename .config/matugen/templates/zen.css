@@ -1,0 +1,117 @@
+/* ── matugen Zen layer — appended after firefox.css inside userChrome.css ──
+ * Hooks Zen's native theme vars, then mirrors the frosted-glass tab language
+ * onto the vertical tab strip. The --m-* vars come from firefox.css above.
+ * Selectors verified against Zen 1.23 omni.ja (tab[selected], #zen-*
+ * containers, --zen-primary-color et al). */
+
+:root {
+  /* Zen's own theming API — accent + surfaces follow the wallpaper */
+  --zen-primary-color: {{ colors.primary.default.hex }} !important;
+  --zen-colors-primary: {{ colors.surface.default.hex }} !important;
+  --zen-colors-secondary: {{ colors.surface_variant.default.hex }} !important;
+  --zen-colors-tertiary: {{ colors.background.default.hex }} !important;
+  --zen-colors-border: {{ colors.outline.default.hex }} !important;
+  --zen-main-browser-background: {{ colors.background.default.hex }} !important;
+  --zen-toolbar-element-bg: color-mix(in srgb, {{ colors.surface_variant.default.hex }} 55%, transparent) !important;
+}
+
+/* ══ app + content wrappers inherit the theme bg ══ */
+#zen-main-app-wrapper,
+#zen-tabbox-wrapper,
+#zen-appcontent-wrapper,
+#zen-browser-background {
+  background: var(--m-bg) !important;
+}
+
+/* ══ top navbar container — same frosted glass as navigator-toolbox ══ */
+#zen-appcontent-navbar-container,
+#zen-appcontent-navbar-wrapper {
+  background: var(--m-glass) !important;
+  backdrop-filter: blur(var(--m-blur)) saturate(150%) !important;
+  border-bottom: 1px solid color-mix(in srgb, var(--m-line) 50%, transparent) !important;
+}
+.zen-toolbar-background {
+  background: transparent !important;
+}
+
+/* ══ vertical tabs — same language as top tabs, full-radius pills ══ */
+#zen-tabs-wrapper tab::before,
+#zen-tabs-wrapper tab::after {
+  border: none !important;
+}
+#zen-tabs-wrapper tab .tab-background {
+  border-radius: 10px !important;
+  background: transparent !important;
+}
+#zen-tabs-wrapper tab[selected] .tab-background,
+#zen-tabs-wrapper tab[visuallyselected] .tab-background {
+  background: var(--m-glass-strong) !important;
+  backdrop-filter: blur(var(--m-blur)) !important;
+  box-shadow: inset 2px 0 0 var(--m-accent),
+              0 0 0 1px color-mix(in srgb, var(--m-accent) 30%, transparent) !important;
+}
+#zen-tabs-wrapper tab:hover:not([selected]):not([visuallyselected]) .tab-background {
+  background: color-mix(in srgb, var(--m-raised) 45%, transparent) !important;
+}
+#zen-tabs-wrapper tab .tab-content {
+  color: var(--m-dim) !important;
+}
+#zen-tabs-wrapper tab[selected] .tab-content,
+#zen-tabs-wrapper tab[visuallyselected] .tab-content {
+  color: var(--m-fg) !important;
+}
+#zen-tabs-wrapper tab .tab-close-button {
+  fill: var(--m-dim) !important;
+}
+#zen-tabs-wrapper tab .tab-close-button:hover {
+  background: color-mix(in srgb, var(--m-accent) 30%, transparent) !important;
+  fill: var(--m-fg) !important;
+}
+
+/* workspace sections + pinned groups */
+.zen-workspace-tabs-section,
+.zen-workspace-pinned-tabs-section {
+  color: var(--m-sub) !important;
+}
+
+/* ══ workspaces button + current-workspace pill ══ */
+#zen-workspaces-button {
+  color: var(--m-sub) !important;
+  border-radius: 8px !important;
+}
+#zen-workspaces-button:hover {
+  background: color-mix(in srgb, var(--m-raised) 50%, transparent) !important;
+  color: var(--m-fg) !important;
+}
+.zen-workspace-icon {
+  color: var(--m-dim) !important;
+}
+.zen-current-workspace-indicator {
+  color: var(--m-fg) !important;
+}
+.zen-current-workspace-indicator-icon {
+  fill: var(--m-accent) !important;
+}
+
+/* ══ sidebar top/foot buttons — same hover as toolbar buttons ══ */
+#zen-sidebar-top-buttons toolbarbutton,
+#zen-sidebar-foot-buttons toolbarbutton {
+  fill: var(--m-dim) !important;
+  color: var(--m-sub) !important;
+  border-radius: 8px !important;
+}
+#zen-sidebar-top-buttons toolbarbutton:hover,
+#zen-sidebar-foot-buttons toolbarbutton:hover {
+  background: color-mix(in srgb, var(--m-raised) 50%, transparent) !important;
+  fill: var(--m-fg) !important;
+}
+
+/* ══ essentials strip ══ */
+.zen-essentials-container {
+  background: transparent !important;
+}
+
+/* ══ loading progress follows the accent ══ */
+#zen-loading-progress-bar {
+  background: var(--m-accent) !important;
+}

@@ -24,18 +24,23 @@
   --z-glow: 0 0 18px color-mix(in srgb, var(--m-accent) 35%, transparent);
 }
 
-/* ══ full frame — one rounded hairline around the whole UI ══ */
+/* ══ full frame — one rounded hairline around the whole UI ══
+ * brighter than glass-line so it reads; accent-kissed while focused. */
 #zen-main-app-wrapper {
   margin: 6px !important;
-  border: 1px solid var(--m-glass-line) !important;
+  border: 1px solid color-mix(in srgb, var(--m-line) 60%, transparent) !important;
   border-radius: 14px !important;
   overflow: hidden !important;
   background: var(--m-bg) !important;
 }
-/* sidebar splits from content with its own hairline */
+#main-window:not(:-moz-window-inactive) #zen-main-app-wrapper {
+  border-color: color-mix(in srgb, var(--m-accent) 38%, var(--m-line)) !important;
+}
+/* sidebar splits from content — divider fades at both ends */
 #sidebar-box,
 #sidebar {
-  border-right: 1px solid var(--m-glass-line) !important;
+  border-right: 1px solid transparent !important;
+  border-image: linear-gradient(to bottom, transparent 4%, var(--m-glass-line) 22%, var(--m-glass-line) 78%, transparent 96%) 1 !important;
 }
 
 /* ══ content fills the window — no island, no rounding, no border ══ */

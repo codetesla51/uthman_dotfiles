@@ -10,13 +10,13 @@ html {
   scrollbar-color: {{ colors.surface_variant.default.hex }} {{ colors.background.default.hex }};
 }
 
-/* New-tab / home / blank pages — wallpaper with a legibility scrim */
+/* New-tab / home / blank pages — fixed Hollow Knight art, centered, scrimmed */
 @-moz-document url("about:newtab"), url("about:home"), url("about:blank") {
   body {
     background:
-      linear-gradient(color-mix(in srgb, {{ colors.background.default.hex }} 62%, transparent),
-                      color-mix(in srgb, {{ colors.background.default.hex }} 78%, transparent)),
-      url("file:///home/uthman/.config/theme/current/background") center / cover no-repeat fixed !important;
+      linear-gradient(color-mix(in srgb, {{ colors.background.default.hex }} 45%, transparent),
+                      color-mix(in srgb, {{ colors.background.default.hex }} 62%, transparent)),
+      url("file:///home/uthman/Pictures/masters/3840x2160_catppuccin_hollow-knight.jpg") center / cover no-repeat fixed !important;
     background-color: {{ colors.background.default.hex }} !important;
     color: {{ colors.on_background.default.hex }} !important;
     color-scheme: dark;

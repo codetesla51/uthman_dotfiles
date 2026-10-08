@@ -142,12 +142,8 @@
   margin-bottom: 4px !important;
 }
 .zen-current-workspace-indicator {
-  /* Zen sets width:100% here — any side margin then overflows the sidebar.
-   * width:auto lets it sit inside the 12px rail instead. */
-  width: auto !important;
-  margin: 8px 0 6px !important;
-  padding-top: 2px !important;
-  padding-bottom: 2px !important;
+  /* hidden — workspace dots at the sidebar foot cover switching */
+  display: none !important;
 }
 /* search + url pills live inside the rail (one of these owns the sidebar pill
  * depending on toolbar layout; dead rule is harmless) */

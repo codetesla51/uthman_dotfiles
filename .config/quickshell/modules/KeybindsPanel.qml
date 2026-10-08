@@ -116,12 +116,49 @@ PanelWindow {
         {key:"Ctrl + Alt + S", desc:"Peek sidebar in compact mode", cat:"Zen"},
         {key:"Ctrl + O", desc:"Glance (peek link)", cat:"Zen"},
         {key:"Ctrl + Shift + D", desc:"Pin tab (essential)", cat:"Zen"},
+        {key:"Ctrl + T / W / R", desc:"New / close / reload tab", cat:"Firefox"},
+        {key:"Ctrl + L", desc:"Address bar", cat:"Firefox"},
+        {key:"Ctrl + K", desc:"Search", cat:"Firefox"},
+        {key:"Ctrl + F", desc:"Find in page", cat:"Firefox"},
+        {key:"Ctrl + H / J", desc:"History / downloads", cat:"Firefox"},
+        {key:"Ctrl + B", desc:"Bookmarks sidebar", cat:"Firefox"},
+        {key:"Ctrl + D", desc:"Bookmark this page", cat:"Firefox"},
+        {key:"Ctrl + Shift + T", desc:"Reopen closed tab", cat:"Firefox"},
+        {key:"Space Space", desc:"Find files", cat:"Neovim"},
+        {key:"Space /", desc:"Grep project", cat:"Neovim"},
+        {key:"Space E", desc:"File explorer", cat:"Neovim"},
+        {key:"Space B D", desc:"Delete buffer", cat:"Neovim"},
+        {key:"Shift + H / L", desc:"Prev / next buffer", cat:"Neovim"},
+        {key:"Ctrl + H / J / K / L", desc:"Move between splits", cat:"Neovim"},
+        {key:"Space - / |", desc:"Split below / right", cat:"Neovim"},
+        {key:"Space W M", desc:"Zoom split", cat:"Neovim"},
+        {key:"Space G G", desc:"Lazygit", cat:"Neovim"},
+        {key:"Space Q Q", desc:"Quit all", cat:"Neovim"},
+        {key:"Ctrl + P", desc:"Command palette", cat:"Obsidian"},
+        {key:"Ctrl + O", desc:"Quick switcher (open note)", cat:"Obsidian"},
+        {key:"Ctrl + N", desc:"New note", cat:"Obsidian"},
+        {key:"Ctrl + Shift + F", desc:"Search vault", cat:"Obsidian"},
+        {key:"Ctrl + E", desc:"Toggle edit / preview", cat:"Obsidian"},
+        {key:"Ctrl + F", desc:"Find in note", cat:"Obsidian"},
+        {key:"Ctrl + P", desc:"File finder", cat:"Zed"},
+        {key:"Ctrl + Shift + P", desc:"Command palette", cat:"Zed"},
+        {key:"Ctrl + `", desc:"Terminal", cat:"Zed"},
+        {key:"Ctrl + Shift + F", desc:"Project search", cat:"Zed"},
+        {key:"Ctrl + ,", desc:"Settings", cat:"Zed"},
+        {key:"Ctrl + W", desc:"Close tab", cat:"Zed"},
+        {key:"Ctrl + Tab", desc:"Next tab", cat:"Zed"},
     ]
 
     property var filtered: {
         if(filter.trim()==="") return binds
-        var q=filter.trim().toLowerCase()
-        return binds.filter(function(b){ return b.key.toLowerCase().includes(q) || b.desc.toLowerCase().includes(q) || b.cat.toLowerCase().includes(q) })
+        // token-AND: every word must match somewhere (key, desc, cat, arg).
+        // "zen split" finds split rows; "super shift" narrows to chords.
+        var toks = filter.trim().toLowerCase().split(/\s+/)
+        return binds.filter(function(b){
+            var hay = (b.key + " " + b.desc + " " + b.cat + " " + (b.arg || "")).toLowerCase()
+            for (var i = 0; i < toks.length; i++) if (!hay.includes(toks[i])) return false
+            return true
+        })
     }
     // grouped model — category header rows interleaved with binds so the
     // list reads as sections, not a dumb flat dump. Headers carry only

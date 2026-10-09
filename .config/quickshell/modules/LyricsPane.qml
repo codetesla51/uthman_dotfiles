@@ -144,7 +144,7 @@ PanelWindow {
         var fs = 26
         while (fs > 13) {
             var rows = Math.ceil(raw.length * fs * 0.72 / 540)
-            if (rows * fs * 1.15 <= 60) return fs
+            if (rows * fs * 1.35 <= 60) return fs
             fs--
         }
         return 13
@@ -279,7 +279,7 @@ PanelWindow {
         font.family: "Inter"
         font.pixelSize: 15
         font.weight: Font.Bold
-        lineHeight: 1.7
+        lineHeight: 1.9
         wrapMode: Text.WordWrap
         style: Text.Outline
         styleColor: Qt.rgba(0, 0, 0, 0.85)
@@ -367,7 +367,7 @@ PanelWindow {
                 readonly property bool isPast: d < 0
                 readonly property string raw: String(modelData.x)
                 width: stage.width
-                height: Math.min(84, Math.max(52, lyricText.implicitHeight + 10))
+                height: Math.min(84, Math.max(56, lyricText.implicitHeight + 12))
                 clip: true
                 visible: Math.abs(d) <= 3
                 y: stage.midY + stage.drumR * Math.sin(d * Math.PI / 6) - height / 2
@@ -422,7 +422,7 @@ PanelWindow {
                     font.pixelSize: root.fitSize(raw)
                     font.weight: Font.Bold
                     font.letterSpacing: -0.4
-                    lineHeight: 1.15
+                    lineHeight: 1.35
                     style: Text.Outline
                     styleColor: Qt.rgba(0, 0, 0, 0.85)
                 }

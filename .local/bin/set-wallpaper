@@ -20,6 +20,16 @@ mkdir -p ~/.config/theme/current ~/.config/omarchy/current
 ln -sfn "$IMAGE" ~/.config/theme/current/background
 ln -sfn "$IMAGE" ~/.config/omarchy/current/background  # legacy compat
 
+# hyprlock can't animate: keep a flattened still beside the live background.
+# GIFs donate their first frame; stills just get symlinked. Runs under wait.
+STATIC="$HOME/.config/theme/current/background-static.jpg"
+case "$IMAGE" in
+    *.gif|*.GIF)
+        { vipsthumbnail "$IMAGE" --size 1920 -o "$STATIC[Q=90,strip]" >/dev/null 2>&1 ||           WALL="$IMAGE" OUT="$STATIC" python3 -c "import os; from PIL import Image; Image.open(os.environ['WALL']).convert('RGB').save(os.environ['OUT'])"; } &
+        ;;
+    *) ln -sfn "$IMAGE" "$STATIC" ;;
+esac
+
 if command -v awww >/dev/null 2>&1; then
     WALL="awww"
     DAEMON="awww-daemon"

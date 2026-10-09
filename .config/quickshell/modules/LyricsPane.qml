@@ -383,13 +383,13 @@ PanelWindow {
                     height: 3
                     radius: 2
                     x: 27
-                    y: height / 2 - 1.5
+                    y: parent.height / 2 - 1.5
                     color: isActive ? colors.tertiary : colors.alpha(colors.foreground, 0.55)
                 }
                 // line number
                 Text {
                     x: 27
-                    y: height / 2 + 8
+                    y: parent.height / 2 + 8
                     text: li + 1 < 10 ? "0" + (li + 1) : "" + (li + 1)
                     color: isActive ? colors.tertiary : colors.alpha(colors.foreground, 0.4)
                     font.family: "JetBrainsMono Nerd Font Mono"

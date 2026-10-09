@@ -209,7 +209,7 @@ PanelWindow {
             width: lineList.width
             wrapMode: Text.WordWrap
             text: modelData.x
-            color: d === 0 ? colors.foreground : colors.alpha(colors.foreground, Math.max(0.1, 1 - d * 0.3))
+            color: d === 0 ? colors.primary : colors.alpha(colors.foreground, Math.max(0.1, 1 - d * 0.3))
             opacity: d === 0 ? 1 : Math.max(0.1, 1 - d * 0.3)
             font.family: "Inter"
             font.pixelSize: Math.round(34 * fall)

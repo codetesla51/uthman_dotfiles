@@ -191,14 +191,20 @@ PanelWindow {
         running: root.open
         repeat: true
         triggeredOnStart: true
+        // hard resync from the player: catches seeks, pauses, drift
         onTriggered: root.pos = root.player ? root.player.position : 0
     }
     Timer {
-        id: karaTimer
-        interval: 150
-        running: root.open && root.state === "ready"
+        id: localTimer
+        interval: 100
+        running: root.open && root.playing && root.state === "ready"
         repeat: true
-        onTriggered: root.rekara()
+        // free-run between resyncs — many players only push position
+        // on change, so polling alone visibly lags line changes
+        onTriggered: {
+            root.pos += 0.1
+            root.retrack()
+        }
     }
 
     Process {

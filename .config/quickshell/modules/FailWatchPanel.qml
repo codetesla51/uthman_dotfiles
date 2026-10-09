@@ -96,6 +96,13 @@ FloatingWindow {
         onTriggered: root.pollLive()
     }
     Process {
+        id: clearProc
+        onExited: function (code) {
+            if (code === 0) { root.pkgMsg = ""; root.pollLive() }
+            else root.pkgMsg = "Clear failed"
+        }
+    }
+    Process {
         id: tailProc
         stdout: StdioCollector {
             waitForEnd: true
@@ -132,6 +139,11 @@ FloatingWindow {
     function unitLogCmd(name) { return "journalctl -u " + name + " -b --no-pager | tail -n 100" }
     function cursorCmd(cursor) { return "journalctl --after-cursor=" + root.shQuote(cursor) + " --no-pager" }
 
+    function clearOld() {
+        var db = Quickshell.env("HOME") + "/.local/share/failwatch/events.db"
+        clearProc.command = ["python3", "-c", "import sqlite3,datetime,sys;db=sqlite3.connect(sys.argv[1]);cut=(datetime.datetime.now(datetime.timezone.utc)-datetime.timedelta(hours=24)).isoformat();db.execute('DELETE FROM events WHERE ts<?',(cut,));db.commit()", db]
+        clearProc.running = true
+    }
     function kindColor(kind) {
         if (kind === "oom" || kind === "oops" || kind === "failed-unit" || kind === "unit-fail") return colors.error
         if (kind === "segfault") return colors.primary
@@ -295,7 +307,19 @@ FloatingWindow {
                 color: colors.alpha(colors.primary, 0.85); font.family: colors.fontSans; font.pixelSize: 10; font.weight: Font.Bold
             }
             // journal errors
-            Text { text: "JOURNAL ERRORS — OOM · SEGFAULT · OOPS (" + root.errors.length + " kept)"; color: colors.alpha(colors.outline, 0.6); font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold; font.letterSpacing: 1.5 }
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 10
+                Text { text: "JOURNAL ERRORS — OOM · SEGFAULT · OOPS (" + root.errors.length + " kept)"; color: colors.alpha(colors.outline, 0.6); font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold; font.letterSpacing: 1.5; Layout.fillWidth: true }
+                Rectangle {
+                    visible: root.errors.length > 0
+                    width: 76; height: 24; radius: 9
+                    color: clrMa.containsMouse ? colors.alpha(colors.secondary, 0.25) : colors.alpha(colors.surface, 0.4)
+                    border.width: 1; border.color: colors.alpha(colors.secondary, 0.35)
+                    Text { anchors.centerIn: parent; text: "clear old"; color: colors.secondary; font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold }
+                    MouseArea { id: clrMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.clearOld() }
+                }
+            }
             ListView {
                 id: errList
                 Layout.fillWidth: true
@@ -337,8 +361,8 @@ FloatingWindow {
                             spacing: 8
                             Text { text: modelData.summary; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 11; elide: Text.ElideRight; Layout.fillWidth: true }
                             Rectangle {
-                                width: 84; height: 28; radius: 9
-                                color: ecMa.containsMouse ? colors.alpha(colors.secondary, 0.25) : "transparent"
+                                width: 88; height: 28; radius: 9
+                                color: ecMa.containsMouse ? colors.alpha(colors.secondary, 0.25) : colors.alpha(colors.surface, 0.4)
                                 border.width: 1; border.color: colors.alpha(colors.secondary, 0.35)
                                 Text { anchors.centerIn: parent; text: root.openingKey === "c:" + modelData.id ? "opening…" : "full log"; color: colors.secondary; font.family: colors.fontSans; font.pixelSize: 10; font.weight: Font.Bold }
                                 MouseArea {

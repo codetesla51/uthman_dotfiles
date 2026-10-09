@@ -60,6 +60,18 @@ FloatingWindow {
     property int battery: -1
     property bool charging: false
     property string shotName: ""
+    property string plugged: ""         // USB | AC | Wireless (dumpsys battery)
+    property string signalNet: ""       // LTE / 5G / "" unknown
+    property int signalLevel: -1        // 0..4, -1 unknown
+    property double mobileMb: -1        // phone cell counters, since reboot
+    property double dataCapMb: 2048
+    property bool hotspotOn: false
+    property string hotspotNote: "Toggling can drop the link"
+    property bool hotspotBusy: false
+    property bool hotspotWant: false
+    property bool dndOn: false
+    property int phoneVol: -1            // music stream 0..15, -1 unknown
+    property int screenTimeout: 60000   // ms
 
     // --- type-ahead find ---
     property bool searching: false
@@ -73,10 +85,10 @@ FloatingWindow {
     property int pollStart: 0        // ms epoch when the current dump started (stale-poll watchdog)
 
     title: "PhoneBridge"
-    implicitWidth: 400
-    implicitHeight: 460
-    minimumSize: Qt.size(360, 400)
-    maximumSize: Qt.size(460, 520)
+    implicitWidth: 700
+    implicitHeight: 660
+    minimumSize: Qt.size(700, 660)
+    maximumSize: Qt.size(700, 660)
     color: "transparent"
     visible: root.open || closeAnim.running
 
@@ -169,6 +181,61 @@ FloatingWindow {
         shotProc.running = true
     }
 
+    // --- phone settings + radio (direct adb, same pattern as progressProc) ---
+    function adbArgs(extra) { return ["adb", "-s", root.deviceId, "shell"].concat(extra) }
+    function refreshPhoneState() {
+        if (!root.connected || root.deviceId === "") return
+        if (!pluggedProc.running) { pluggedProc.command = root.adbArgs(["dumpsys", "battery"]); pluggedProc.running = true }
+        if (!signalProc.running) { signalProc.command = root.adbArgs(["dumpsys", "telephony.registry"]); signalProc.running = true }
+        if (!dataProc.running) { dataProc.command = root.adbArgs(["cat", "/proc/net/dev"]); dataProc.running = true }
+        if (!dndGetProc.running) { dndGetProc.command = root.adbArgs(["settings", "get", "global", "zen_mode"]); dndGetProc.running = true }
+        if (!volGetProc.running) { volGetProc.command = root.adbArgs(["settings", "get", "system", "volume_music_speaker"]); volGetProc.running = true }
+        if (!timeoutGetProc.running) { timeoutGetProc.command = root.adbArgs(["settings", "get", "system", "screen_off_timeout"]); timeoutGetProc.running = true }
+        if (!hotspotStatProc.running) { hotspotStatProc.command = root.adbArgs(["dumpsys", "wifi"]); hotspotStatProc.running = true }
+    }
+    function dataText() {
+        if (root.mobileMb < 0) return "…"
+        var g = root.mobileMb / 1024
+        return (g >= 1 ? g.toFixed(1) + " GB" : Math.round(root.mobileMb) + " MB") + " of " + Math.round(root.dataCapMb / 1024) + " GB"
+    }
+    function toggleDnd() {
+        if (!root.connected) return
+        root.dndOn = !root.dndOn
+        root.say(root.dndOn ? "DND on" : "DND off")
+        dndSetProc.command = root.adbArgs(["settings", "put", "global", "zen_mode", root.dndOn ? "1" : "0"])
+        dndSetProc.running = true
+    }
+    function timeoutLabel() {
+        var m = root.screenTimeout
+        if (m <= 15000) return "15s"
+        if (m <= 30000) return "30s"
+        if (m <= 60000) return "1m"
+        if (m <= 300000) return "5m"
+        return "10m"
+    }
+    function cycleTimeout() {
+        if (!root.connected) return
+        var steps = [15000, 30000, 60000, 300000, 600000]
+        var next = steps[0]
+        for (var i = 0; i < steps.length; i++) if (root.screenTimeout < steps[i]) { next = steps[i]; break }
+        if (root.screenTimeout >= steps[steps.length - 1]) next = steps[0]
+        timeoutSetProc.command = root.adbArgs(["settings", "put", "system", "screen_off_timeout", String(next)])
+        timeoutSetProc.running = true
+    }
+    function setVolume(v) {
+        if (!root.connected) return
+        volSetProc.command = root.adbArgs(["cmd", "media_session", "volume", "--stream", "3", "--set", String(v)])
+        volSetProc.running = true
+    }
+    function toggleHotspot() {
+        if (!root.connected || root.hotspotBusy) return
+        root.hotspotWant = !root.hotspotOn
+        root.hotspotBusy = true
+        root.hotspotNote = "Switching — link may drop"
+        root.say(root.hotspotWant ? "Starting hotspot…" : "Stopping hotspot…")
+        hotspotProc.command = root.adbArgs(["cmd", "wifi", root.hotspotWant ? "start-softap" : "stop-softap"])
+        hotspotProc.running = true
+    }
     // ================= discovery =================
     // The daemon owns pairing state (~/.config/phonebridge/config.ini, written
     // by ~/phonebridge/init.sh). If nothing is attached we ask it to connect
@@ -248,6 +315,7 @@ FloatingWindow {
                     reconnectTimer.interval = 10000
                     root.refreshBattery()
                     if (root.remoteRows.length === 0) root.listRemote()
+                    root.refreshPhoneState()
                     return
                 }
                 // nothing attached: fall through to remembered-target connect
@@ -358,8 +426,8 @@ FloatingWindow {
     Process { id: ringProc }
 
 
-    Timer { interval: 15000; running: root.open; repeat: true; triggeredOnStart: false; onTriggered: { root.refreshDevices(); root.refreshBattery() } }
-    onOpenChanged: { if (open) { root.refreshDevices(); root.refreshBattery(); remoteList.focus = true; openAnim.restart() } else closeAnim.restart() }
+    Timer { interval: 15000; running: root.open; repeat: true; triggeredOnStart: false; onTriggered: { root.refreshDevices(); root.refreshBattery(); root.refreshPhoneState() } }
+    onOpenChanged: { if (open) { root.refreshDevices(); root.refreshBattery(); root.refreshPhoneState(); remoteList.focus = true; openAnim.restart() } else closeAnim.restart() }
 
     // ================= send =================
     function queueFiles(paths) {
@@ -731,7 +799,129 @@ FloatingWindow {
             }
         }
     }
-    function enterRemote(name) {
+    // plugged type from dumpsys battery (daemon owns level/charging)
+    Process {
+        id: pluggedProc
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: {
+                if (text.match(/Wireless powered: true/)) root.plugged = "WIRELESS"
+                else if (text.match(/USB powered: true/)) root.plugged = "USB"
+                else if (text.match(/AC powered: true/)) root.plugged = "AC"
+                else root.plugged = ""
+            }
+        }
+    }
+    // cell net + bars from the registry dump (unknowns stay hidden)
+    Process {
+        id: signalProc
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: {
+                var lv = text.match(/level=(\d)/)
+                root.signalLevel = lv ? Math.min(4, parseInt(lv[1])) : -1
+                var net = text.match(/(5G|LTE|NR|WCDMA|HSPA|UMTS|EDGE|GSM|CDMA)/)
+                root.signalNet = net ? (net[1] === "NR" ? "5G" : net[1]) : ""
+            }
+        }
+    }
+    // mobile bytes: rmnet/ccmni/qmap only (wlan/tun/clat would double-count)
+    Process {
+        id: dataProc
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: {
+                var total = 0, any = false
+                var devLines = text.split("\n")
+                for (var i = 0; i < devLines.length; i++) {
+                    var ci = devLines[i].indexOf(":")
+                    if (ci < 0) continue
+                    var iface = devLines[i].slice(0, ci).trim()
+                    if (!iface.match(/^(rmnet|ccmni|qmap)/)) continue
+                    var f = devLines[i].slice(ci + 1).trim().split(/\s+/)
+                    if (f.length < 9) continue
+                    total += (parseInt(f[0]) || 0) + (parseInt(f[8]) || 0)
+                    any = true
+                }
+                root.mobileMb = any ? total / 1048576 : -1
+            }
+        }
+    }
+    Process {
+        id: dndGetProc
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: { root.dndOn = text.trim() !== "0" && text.trim() !== "null" }
+        }
+    }
+    Process {
+        id: dndSetProc
+        onExited: function (code) {
+            dndGetProc.command = root.adbArgs(["settings", "get", "global", "zen_mode"]); dndGetProc.running = true
+            if (code !== 0) root.say("DND failed — screen on and unlocked?")
+        }
+    }    Process {
+        id: volGetProc
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: { var v = parseInt(text.trim()); if (!isNaN(v)) root.phoneVol = Math.max(0, Math.min(15, v)) }
+        }
+    }
+    Process {
+        id: volSetProc
+        onExited: function (code) {
+            if (code === 0) { volGetProc.command = root.adbArgs(["settings", "get", "system", "volume_music_speaker"]); volGetProc.running = true }
+            else root.say("Volume failed — screen on and unlocked?")
+        }
+    }
+    Process {
+        id: timeoutGetProc
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: { var v = parseInt(text.trim()); if (!isNaN(v) && v > 0) root.screenTimeout = v }
+        }
+    }
+    Process {
+        id: timeoutSetProc
+        onExited: function (code) {
+            if (code === 0) { timeoutGetProc.command = root.adbArgs(["settings", "get", "system", "screen_off_timeout"]); timeoutGetProc.running = true; root.say("Timeout " + root.timeoutLabel()) }
+            else root.say("Timeout failed — screen on and unlocked?")
+        }
+    }
+    // softap status: best-effort grep, keeps the assumed state on no match
+    Process {
+        id: hotspotStatProc
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: {
+                var low = text.toLowerCase()
+                var si = low.indexOf("softap")
+                if (si >= 0) {
+                    var win = low.slice(si, si + 160)
+                    if (win.match(/disabl|stop|idle|inactive|failed/)) root.hotspotOn = false
+                    else if (win.match(/enabl|start|active|running/)) root.hotspotOn = true
+                }
+            }
+        }
+    }
+    Process {
+        id: hotspotProc
+        stdout: StdioCollector { waitForEnd: true }
+        stderr: StdioCollector { id: hotspotErr; waitForEnd: true }
+        onExited: function (code) {
+            root.hotspotBusy = false
+            if (code === 0) {
+                root.hotspotOn = root.hotspotWant
+                root.hotspotNote = root.hotspotOn ? "On — join the phone wifi if the link dropped" : "Toggling can drop the link"
+                root.say(root.hotspotOn ? "Hotspot on" : "Hotspot off")
+            } else {
+                var err = (hotspotErr.text.trim().split("\n").pop() || "hotspot failed").slice(0, 90)
+                root.say(err)
+                root.hotspotNote = "Toggle failed — " + err
+            }
+            root.refreshDevices()
+        }
+    }    function enterRemote(name) {
         if (root.remoteDir === "/sdcard" && name === "..") return
         if (name === "..") {
             var cut = root.remoteDir.lastIndexOf("/")
@@ -750,6 +940,7 @@ FloatingWindow {
     // bento glyph chip: circle, accent-tinted fill/border, nerd glyph (house style)
     component GlyphChip: Rectangle {
         required property string glyph
+        property string fontFam: ""
         property var tapped: function() {}
         property color accent: colors.primary
         property int px: 26
@@ -763,10 +954,38 @@ FloatingWindow {
             anchors.centerIn: parent
             text: parent.glyph
             color: chipHover.containsMouse ? colors.primary : parent.accent
-            font.family: colors.fontSans
+            font.family: parent.fontFam !== "" ? parent.fontFam : colors.fontSans
             font.pixelSize: 12
         }
         MouseArea { id: chipHover; anchors.fill: parent; hoverEnabled: true; onClicked: parent.tapped() }
+    }
+
+    // action tile: phosphor glyph + label, lifts on hover (house motion)
+    component ActionTile: Rectangle {
+        id: tile
+        required property string glyph
+        required property string label
+        property var tapped: function() {}
+        property bool lit: false
+        implicitWidth: tileRow.implicitWidth + 22
+        implicitHeight: 30
+        radius: 10
+        color: tileMa.containsMouse ? colors.alpha(colors.primary, 0.14) : colors.alpha(colors.surfaceVariant, 0.25)
+        border.width: 1
+        border.color: lit ? colors.alpha(colors.primary, 0.55) : tileMa.containsMouse ? colors.alpha(colors.primary, 0.45) : colors.alpha(colors.outline, 0.12)
+        scale: tileMa.containsMouse ? 1.05 : 1
+        y: tileMa.containsMouse ? -2 : 0
+        Behavior on color { ColorAnimation { duration: 180; easing.type: Easing.OutCubic } }
+        Behavior on scale { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
+        Behavior on y { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
+        RowLayout {
+            id: tileRow
+            anchors.centerIn: parent
+            spacing: 6
+            Text { text: tile.glyph; color: tile.lit ? colors.primary : colors.alpha(colors.primary, 0.85); font.family: "Phosphor"; font.pixelSize: 14 }
+            Text { text: tile.label; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 10; font.weight: Font.Bold }
+        }
+        MouseArea { id: tileMa; anchors.fill: parent; hoverEnabled: true; onClicked: parent.tapped() }
     }
 
     Rectangle {
@@ -774,7 +993,7 @@ FloatingWindow {
         anchors.fill: parent
         radius: 16
         clip: true
-        color: colors.alpha(colors.surface, 0.52)
+        color: colors.alpha(colors.surface, 0.88)
         border.width: 1
         border.color: colors.alpha(colors.outline, 0.15)
         // bezier pair — open pops with overshoot bounce (fast), close hurries
@@ -795,37 +1014,177 @@ FloatingWindow {
             anchors.margins: 14
             spacing: 8
 
-            // device row — compact: name, battery, ring (no leading glyph, no shot chip)
+            // device row — dot, name/link, battery/charge, signal, relink
             RowLayout {
                 Layout.fillWidth: true
                 spacing: 8
-                Text {
-                    text: root.connected ? root.deviceName : "No phone paired"
-                    color: root.connected ? colors.foreground : colors.alpha(colors.outline, 0.8)
-                    font.family: colors.fontSans
-                    font.pixelSize: 10
-                    font.weight: Font.Bold
-                    elide: Text.ElideRight
+                Rectangle {
+                    width: 8
+                    height: 8
+                    radius: 4
+                    Layout.alignment: Qt.AlignVCenter
+                    color: root.hotspotBusy ? colors.tertiary : root.connected ? colors.primary : colors.alpha(colors.outline, 0.4)
+                }
+                ColumnLayout {
+                    spacing: 0
                     Layout.fillWidth: true
+                    Text {
+                        text: root.connected ? root.deviceName : "No phone paired"
+                        color: root.connected ? colors.foreground : colors.alpha(colors.outline, 0.8)
+                        font.family: colors.fontSans
+                        font.pixelSize: 10
+                        font.weight: Font.Bold
+                        elide: Text.ElideRight
+                        Layout.fillWidth: true
+                    }
+                    Text {
+                        text: root.hotspotBusy ? "switching hotspot" : root.connected ? (root.deviceId + " · wifi") : "adb tcpip 5555 once"
+                        color: root.hotspotBusy ? colors.tertiary : root.connected ? colors.alpha(colors.primary, 0.8) : colors.alpha(colors.outline, 0.45)
+                        font.family: colors.fontSans
+                        font.pixelSize: 8
+                        elide: Text.ElideRight
+                        Layout.fillWidth: true
+                    }
                 }
-                Text {
+                ColumnLayout {
                     visible: root.connected
-                    text: root.battery >= 0 ? (root.battery + "%") : "…"
-                    color: root.battery < 15 ? colors.error : colors.tertiary
-                    font.family: colors.fontSans
-                    font.pixelSize: 9
-                    font.weight: Font.ExtraBold
+                    spacing: 0
+                    Layout.alignment: Qt.AlignVCenter
+                    Text {
+                        text: "" + (root.battery >= 0 ? root.battery + "%" : "…")
+                        color: root.charging ? colors.primary : root.battery < 15 && root.battery >= 0 ? colors.error : colors.foreground
+                        font.family: "Phosphor"
+                        font.pixelSize: 11
+                        font.weight: Font.Bold
+                        Layout.alignment: Qt.AlignRight
+                    }
+                    Text {
+                        text: root.charging ? ("CHARGING" + (root.plugged !== "" ? " · " + root.plugged : "")) : "ON BATTERY"
+                        color: root.charging ? colors.primary : colors.alpha(colors.outline, 0.6)
+                        font.family: colors.fontSans
+                        font.pixelSize: 7
+                        font.weight: Font.Bold
+                        font.letterSpacing: 1.1
+                        Layout.alignment: Qt.AlignRight
+                    }
                 }
-                Text {
-                    visible: !root.connected
-                    text: "adb tcpip 5555 once"
-                    color: colors.alpha(colors.outline, 0.45)
-                    font.family: colors.fontSans
-                    font.pixelSize: 8
+                ColumnLayout {
+                    visible: root.connected && root.signalLevel >= 0
+                    spacing: 0
+                    Layout.alignment: Qt.AlignVCenter
+                    Text {
+                        text: ""
+                        color: colors.primary
+                        font.family: "Phosphor"
+                        font.pixelSize: 11
+                        Layout.alignment: Qt.AlignRight
+                    }
+                    Text {
+                        text: (root.signalNet !== "" ? root.signalNet + " · " : "") + root.signalLevel + "/4"
+                        color: colors.alpha(colors.outline, 0.6)
+                        font.family: colors.fontSans
+                        font.pixelSize: 7
+                        font.weight: Font.Bold
+                        Layout.alignment: Qt.AlignRight
+                    }
                 }
-                GlyphChip { visible: root.connected; glyph: "󰂚"; px: 20; accent: colors.tertiary; Layout.alignment: Qt.AlignVCenter; tapped: () => root.ringPhone() }
+                GlyphChip { visible: root.connected; glyph: ""; fontFam: "Phosphor"; px: 22; accent: colors.primary; Layout.alignment: Qt.AlignVCenter; tapped: () => root.refreshDevices() }
+            }
+            // ---- DATA + HOTSPOT ----
+            RowLayout {
+                visible: root.connected
+                Layout.fillWidth: true
+                spacing: 8
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 54
+                    radius: 12
+                    color: colors.alpha(colors.surfaceVariant, 0.25)
+                    border.width: 1
+                    border.color: colors.alpha(colors.outline, 0.12)
+                    ColumnLayout {
+                        anchors.fill: parent
+                        anchors.margins: 10
+                        anchors.topMargin: 7
+                        anchors.bottomMargin: 8
+                        spacing: 3
+                        Text { text: "MOBILE DATA · SINCE REBOOT"; color: colors.alpha(colors.outline, 0.65); font.family: colors.fontSans; font.pixelSize: 7; font.weight: Font.Bold; font.letterSpacing: 1.3 }
+                        Text { text: root.dataText(); color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.Bold }
+                        Rectangle {
+                            Layout.fillWidth: true
+                            height: 4
+                            radius: 2
+                            color: colors.alpha(colors.surfaceVariant, 0.5)
+                            Rectangle {
+                                width: root.mobileMb < 0 ? 0 : parent.width * Math.min(1, root.mobileMb / root.dataCapMb)
+                                height: parent.height
+                                radius: 2
+                                color: colors.tertiary
+                                Behavior on width { NumberAnimation { duration: 250; easing.type: Easing.OutCubic } }
+                            }
+                        }
+                    }
+                }
+                Rectangle {
+                    Layout.preferredWidth: 148
+                    Layout.preferredHeight: 54
+                    radius: 12
+                    color: root.hotspotOn ? colors.alpha(colors.primary, 0.10) : colors.alpha(colors.surfaceVariant, 0.25)
+                    border.width: 1
+                    border.color: root.hotspotOn ? colors.alpha(colors.primary, 0.45) : colors.alpha(colors.outline, 0.12)
+                    Behavior on color { ColorAnimation { duration: 180; easing.type: Easing.OutCubic } }
+                    ColumnLayout {
+                        anchors.fill: parent
+                        anchors.margins: 10
+                        anchors.topMargin: 7
+                        anchors.bottomMargin: 8
+                        spacing: 3
+                        Text { text: "HOTSPOT"; color: colors.alpha(colors.outline, 0.65); font.family: colors.fontSans; font.pixelSize: 7; font.weight: Font.Bold; font.letterSpacing: 1.3 }
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 6
+                            Text { text: root.hotspotBusy ? "…" : root.hotspotOn ? "On" : "Off"; color: root.hotspotOn ? colors.primary : colors.foreground; font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.Bold; Layout.fillWidth: true }
+                            GlyphChip { glyph: ""; fontFam: "Phosphor"; px: 22; accent: root.hotspotOn ? colors.primary : colors.outline; tapped: () => root.toggleHotspot() }
+                        }
+                    }
+                }
+            }
+            Text {
+                visible: root.connected
+                text: root.hotspotNote
+                color: colors.alpha(colors.outline, 0.5)
+                font.family: colors.fontSans
+                font.pixelSize: 7
+                Layout.alignment: Qt.AlignHCenter
             }
 
+            // ---- ACTIONS ----
+            Flow {
+                visible: root.connected
+                Layout.fillWidth: true
+                spacing: 6
+                ActionTile { glyph: ""; label: "Ring"; tapped: () => root.ringPhone() }
+                ActionTile { glyph: ""; label: "Shot"; tapped: () => root.shotPhone() }
+                ActionTile { glyph: ""; label: "Clip"; tapped: () => root.sendClipboard() }
+                ActionTile { glyph: ""; label: root.dndOn ? "DND on" : "DND"; lit: root.dndOn; tapped: () => root.toggleDnd() }
+                ActionTile { glyph: ""; label: root.timeoutLabel(); tapped: () => root.cycleTimeout() }
+            }
+            RowLayout {
+                visible: root.connected
+                Layout.fillWidth: true
+                spacing: 8
+                Text { text: ""; color: colors.alpha(colors.primary, 0.85); font.family: "Phosphor"; font.pixelSize: 14; Layout.alignment: Qt.AlignVCenter }
+                Slider {
+                    Layout.fillWidth: true
+                    from: 0
+                    to: 15
+                    stepSize: 1
+                    enabled: root.phoneVol >= 0
+                    value: root.phoneVol
+                    onMoved: root.setVolume(Math.round(value))
+                }
+                Text { text: root.phoneVol < 0 ? "…" : root.phoneVol + "/15"; color: colors.alpha(colors.outline, 0.6); font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold }
+            }
             // ---- SEND: drop zone tile ----
             RowLayout {
                 Layout.fillWidth: true
@@ -1023,8 +1382,8 @@ FloatingWindow {
             }
             Rectangle {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 280
-                Layout.minimumHeight: 120
+                Layout.preferredHeight: 340
+                Layout.minimumHeight: 200
                 radius: 14
                 color: colors.alpha(colors.surface, 0.35)
                 border.width: 1
@@ -1136,7 +1495,7 @@ FloatingWindow {
                 visible: root.connected
                 Layout.fillWidth: true
                 Text {
-                    text: "j/k move · l open · p pull · s sel · y yank · c clip · g/G ends · h up · / find · esc close"
+                    text: "j/k move · l open · p pull · s sel · S shot · y yank · c clip · r ring · d dnd · t timeout · g/G ends · h up · / find · esc close"
                     color: colors.alpha(colors.outline, 0.4)
                     font.family: colors.fontSans
                     font.pixelSize: 7
@@ -1200,6 +1559,10 @@ FloatingWindow {
             }
             if (e.key === Qt.Key_Escape) { root.open = false; e.accepted = true; return }
             if (e.text === "p" || e.text === "P") { root.pullSelection(); e.accepted = true; return }
+            if (e.text === "S") { root.shotPhone(); e.accepted = true; return }
+            if (e.text === "r" || e.text === "R") { root.ringPhone(); e.accepted = true; return }
+            if (e.text === "d" || e.text === "D") { root.toggleDnd(); e.accepted = true; return }
+            if (e.text === "t" || e.text === "T") { root.cycleTimeout(); e.accepted = true; return }
             if (e.key === Qt.Key_S) {
                 var si = remoteList.currentIndex
                 if (si < 0 && root.remoteRows.length > 0) si = 0

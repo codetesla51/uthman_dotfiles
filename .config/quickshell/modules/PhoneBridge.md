@@ -42,6 +42,16 @@ one-shot subcommands and polls on timers. Pairing/config: `~/phonebridge/init.sh
 - **Phone browser** — browse and pull files off the phone (see keys below).
 - **Battery + status** — device row shows the paired phone and battery %,
   refreshed on a 15 s timer while the panel is open.
+- **Charge / signal / data / hotspot** — header adds charging state + plug
+  type (`dumpsys battery`), cell net + bars (`dumpsys telephony.registry`),
+  mobile-data used since reboot (`/proc/net/dev` rmnet/ccmni/qmap only, no
+  double-count), and a hotspot toggle (`cmd wifi start/stop-softap`) with a
+  link-lost → watchdog re-link state. 2 GB cap is `dataCapMb`.
+- **Quick actions** — Ring, Shot (`S`), Clip, DND toggle (`d`), screen-timeout
+  cycler (`t`: 15s→10m), media-volume slider (`cmd media_session`, proven by
+  ring). Keys: `r` ring, `S` shot (`s` stays select), `d` DND, `t` timeout.
+  Torch is deliberately absent: no stable adb API on this ROM (needs relay-app
+  support).
 - **Notify forwarder** — every 4 s while a phone is paired it polls the
   notification shade and when a *new* notification appears from an
   allowlisted app it pings the desktop with `notify-send` (sender name only —

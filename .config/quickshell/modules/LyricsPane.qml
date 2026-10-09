@@ -131,12 +131,13 @@ PanelWindow {
     function escHtml(s) {
         return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
     }
-    // mock fit(): wrap estimate, shrink until block height fits 73px (17% of stage)
+    // mock fit(): wrap estimate, shrink until block height fits 60px —
+    // two capped neighbors (42px halves) must stay inside 86px drum spacing
     function fitSize(raw) {
         var fs = 26
         while (fs > 13) {
             var rows = Math.ceil(raw.length * fs * 0.72 / 540)
-            if (rows * fs * 1.15 <= 73) return fs
+            if (rows * fs * 1.15 <= 60) return fs
             fs--
         }
         return 13
@@ -355,7 +356,7 @@ PanelWindow {
                 readonly property bool isPast: d < 0
                 readonly property string raw: String(modelData.x)
                 width: stage.width
-                height: Math.min(110, Math.max(52, lyricText.implicitHeight + 10))
+                height: Math.min(84, Math.max(52, lyricText.implicitHeight + 10))
                 clip: true
                 visible: Math.abs(d) <= 3
                 y: stage.midY + stage.drumR * Math.sin(d * Math.PI / 6) - height / 2
@@ -382,13 +383,13 @@ PanelWindow {
                     height: 3
                     radius: 2
                     x: 27
-                    y: 26 - 1.5
+                    y: height / 2 - 1.5
                     color: isActive ? colors.tertiary : colors.alpha(colors.foreground, 0.55)
                 }
                 // line number
                 Text {
                     x: 27
-                    y: 26 + 8
+                    y: height / 2 + 8
                     text: li + 1 < 10 ? "0" + (li + 1) : "" + (li + 1)
                     color: isActive ? colors.tertiary : colors.alpha(colors.foreground, 0.4)
                     font.family: "JetBrainsMono Nerd Font Mono"

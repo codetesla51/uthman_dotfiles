@@ -3,15 +3,20 @@ import Quickshell.Io
 import Quickshell.Services.Mpris
 import Quickshell.Wayland
 import QtQuick
+import QtQuick.Shapes
 import Qt5Compat.GraphicalEffects
 
-// LyricsPane — "Focus" design: one sharp active line, context lines fall off
-// by distance (blur d*2.6, opacity 1-d*.3 floor .1, scale 1-d*.07 floor .8),
-// track auto-centers, left origin. Transparent, draggable anywhere.
-// Lyrics from lrclib, fetched only while open, one request per track.
+// LyricsPane — "Safe Dial" design on the theme palette: lyric lines ride a
+// rotating drum (30deg per line, R = 40% of stage), active line centered in a
+// hairline window with accent pointers, karaoke word-flip driven by the same
+// timing math as the mock (word i lights at p*n-i), line numbers in mono.
+// Cyan -> primary, pink -> secondary, whites -> foreground/outline.
+// Lyrics engine (lrclib fetch, LRC parse, MPRIS follow, drag) unchanged.
 // Toggle: `ipc call lyrics toggle` (SUPER ALT L).
 //
-// FOCAL: the active line. Nothing else competes.
+// One honest approximation: the mock sweeps a gradient across each word;
+// QML flips whole words (lit at half progress) — same pacing, no sweep.
+// FOCAL: the active line in the window. Nothing else competes.
 PanelWindow {
     id: root
 
@@ -27,33 +32,29 @@ PanelWindow {
     property var lines: []
     property int currentIdx: -1
     property real pos: 0
+    property real karaP: 0      // 0..1 progress through the active line
     property string fetchedKey: ""
     property string state: "idle"   // idle | fetching | ready | plain | none | quiet
 
-    readonly property int screenW: {
-        try {
-            var ss = Quickshell.screens
-            var list = (ss && ss.values) ? ss.values : ss
-            if (list && list.length) return list[0].width || 1920
-        } catch (e) {}
-        return 1920
-    }
-    readonly property int screenH: {
-        try {
-            var ss = Quickshell.screens
-            var list = (ss && ss.values) ? ss.values : ss
-            if (list && list.length) return list[0].height || 1080
-        } catch (e) {}
-        return 1080
+    // drum window: ±3 lines instantiated, the rest stay out of the tree
+    property var winLines: []
+    property int winBase: 0
+    onCurrentIdxChanged: root.rewindow()
+    onLinesChanged: root.rewindow()
+    function rewindow() {
+        if (root.state !== "ready") { root.winLines = []; return }
+        var b = Math.max(0, root.currentIdx - 3)
+        root.winBase = b
+        root.winLines = root.lines.slice(b, b + 7)
     }
 
     property bool freeMove: false
     property int offX: 620
-    property int offY: 676
+    property int offY: 590
     anchors { left: root.freeMove; top: root.freeMove; bottom: !root.freeMove }
     margins { left: root.offX; top: root.offY; bottom: 64 }
     implicitWidth: 680
-    implicitHeight: 340
+    implicitHeight: 430
     exclusionMode: ExclusionMode.Ignore
     color: "transparent"
     visible: root.open
@@ -71,6 +72,7 @@ PanelWindow {
         root.fetchedKey = root.trackKey
         root.lines = []
         root.currentIdx = -1
+        root.karaP = 0
         root.state = "fetching"
         var dur = (root.player && root.player.length > 0) ? Math.round(root.player.length) : 0
         var url = "https://lrclib.net/api/get?artist_name=" + encodeURIComponent(root.artist)
@@ -97,6 +99,19 @@ PanelWindow {
         return out
     }
 
+    function plainText() {
+        var out = []
+        for (var i = 0; i < root.lines.length && i < 10; i++) out.push(root.lines[i].x)
+        if (root.lines.length > 10) out.push("…")
+        return out.join("\n")
+    }
+    function lineDur(a) {
+        if (a < 0 || a >= root.lines.length) return 0
+        if (a + 1 < root.lines.length) return root.lines[a + 1].t - root.lines[a].t
+        if (root.player && root.player.length > 0) return root.player.length - root.lines[a].t
+        return 0
+    }
+
     function retrack() {
         if (root.lines.length === 0 || root.state !== "ready") return
         var idx = -1
@@ -105,6 +120,16 @@ PanelWindow {
             else break
         }
         root.currentIdx = idx
+        root.rekara()
+    }
+
+    function rekara() {
+        var a = root.currentIdx
+        if (a < 0 || root.state !== "ready") { root.karaP = 0; return }
+        var dur = root.lineDur(a)
+        if (dur <= 0) { root.karaP = 0; return }
+        var p = (root.pos - root.lines[a].t) / (dur * 0.85)
+        root.karaP = Math.max(0, Math.min(1, p))
     }
 
     onPosChanged: root.retrack()
@@ -116,6 +141,13 @@ PanelWindow {
         repeat: true
         triggeredOnStart: true
         onTriggered: root.pos = root.player ? root.player.position : 0
+    }
+    Timer {
+        id: karaTimer
+        interval: 150
+        running: root.open && root.state === "ready"
+        repeat: true
+        onTriggered: root.rekara()
     }
 
     Process {
@@ -166,13 +198,33 @@ PanelWindow {
     }
 
     Text {
-        id: stateLine
-        visible: root.lines.length === 0
+        id: plainBlock
+        visible: root.state === "plain"
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.leftMargin: 58
         anchors.rightMargin: 58
         anchors.verticalCenter: parent.verticalCenter
+        horizontalAlignment: Text.AlignHCenter
+        text: root.plainText()
+        color: colors.alpha(colors.foreground, 0.75)
+        font.family: "Inter"
+        font.pixelSize: 16
+        font.weight: Font.Bold
+        wrapMode: Text.WordWrap
+        style: Text.Outline
+        styleColor: Qt.rgba(0, 0, 0, 0.85)
+    }
+
+    Text {
+        id: stateLine
+        visible: root.state !== "ready" && root.state !== "plain"
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.leftMargin: 58
+        anchors.rightMargin: 58
+        anchors.verticalCenter: parent.verticalCenter
+        horizontalAlignment: Text.AlignHCenter
         text: root.state === "quiet" ? "nothing playing"
             : root.state === "fetching" ? "finding lyrics…"
             : root.state === "none" ? "no lyrics found"
@@ -185,45 +237,130 @@ PanelWindow {
         styleColor: Qt.rgba(0, 0, 0, 0.85)
     }
 
-    ListView {
-        id: lineList
+    // ---- drum stage ----
+    Item {
+        id: stage
         visible: root.lines.length > 0
         anchors.fill: parent
-        anchors.leftMargin: 58
-        anchors.rightMargin: 58
-        clip: true
-        model: root.lines
-        interactive: false
-        spacing: 26
-        currentIndex: root.currentIdx
-        highlightRangeMode: ListView.StrictlyEnforceRange
-        preferredHighlightBegin: 130
-        preferredHighlightEnd: 170
-        highlightMoveDuration: 900
-        highlightMoveVelocity: -1
-        delegate: Text {
-            required property var modelData
-            required property int index
-            readonly property int d: Math.abs(index - root.currentIdx)
-            readonly property real fall: Math.max(0.8, 1 - d * 0.07)
-            width: lineList.width
-            wrapMode: Text.WordWrap
-            text: modelData.x
-            color: d === 0 ? colors.primary : colors.alpha(colors.foreground, Math.max(0.1, 1 - d * 0.3))
-            opacity: d === 0 ? 1 : Math.max(0.1, 1 - d * 0.3)
-            font.family: "Inter"
-            font.pixelSize: Math.round(34 * fall)
-            font.weight: Font.ExtraBold
-            font.letterSpacing: -0.7
-            lineHeight: 1.12
-            style: Text.Outline
-            styleColor: Qt.rgba(0, 0, 0, 0.85)
-            layer.enabled: d > 0
-            layer.effect: FastBlur {
-                radius: Math.min(16, d * 2.6)
-                transparentBorder: true
+        readonly property real midY: height / 2
+        readonly property real drumR: height * 0.4
+
+        // window band hairlines
+        Rectangle {
+            width: parent.width
+            height: 1
+            y: parent.midY - 27
+            color: colors.alpha(colors.outline, 0.2)
+        }
+        Rectangle {
+            width: parent.width
+            height: 1
+            y: parent.midY + 27
+            color: colors.alpha(colors.outline, 0.2)
+        }
+        // pointers
+        Shape {
+            width: 14
+            height: 18
+            y: parent.midY - 9
+            ShapePath {
+                fillColor: colors.primary
+                strokeColor: "transparent"
+                PathMove { x: 0; y: 0 }
+                PathLine { x: 14; y: 9 }
+                PathLine { x: 0; y: 18 }
+                PathLine { x: 0; y: 0 }
             }
-            Behavior on opacity { NumberAnimation { duration: 900; easing.type: Easing.OutCubic } }
+        }
+        Shape {
+            width: 14
+            height: 18
+            x: parent.width - 14
+            y: parent.midY - 9
+            ShapePath {
+                fillColor: colors.primary
+                strokeColor: "transparent"
+                PathMove { x: 14; y: 0 }
+                PathLine { x: 0; y: 9 }
+                PathLine { x: 14; y: 18 }
+                PathLine { x: 14; y: 0 }
+            }
+        }
+
+        Repeater {
+            model: root.winLines
+            delegate: Item {
+                required property var modelData
+                required property int index
+                readonly property int li: root.winBase + index
+                readonly property int d: li - root.currentIdx
+                readonly property bool isActive: d === 0
+                readonly property bool isPast: d < 0
+                readonly property var words: String(modelData.x).split(" ")
+                width: stage.width
+                height: 52
+                visible: Math.abs(d) <= 3
+                y: stage.midY + stage.drumR * Math.sin(d * Math.PI / 6) - 26
+                Behavior on y { NumberAnimation { duration: 1000; easing.type: Easing.OutCubic } }
+                opacity: Math.max(0, 1 - Math.abs(d) * 0.3)
+                Behavior on opacity { NumberAnimation { duration: 900; easing.type: Easing.OutCubic } }
+                rotation: 0
+                transform: Rotation {
+                    axis { x: 1; y: 0; z: 0 }
+                    origin.x: width / 2
+                    origin.y: 26
+                    angle: -d * 30
+                    Behavior on angle { NumberAnimation { duration: 1000; easing.type: Easing.OutCubic } }
+                }
+                layer.enabled: Math.abs(d) > 0
+                layer.effect: FastBlur {
+                    radius: Math.min(10, Math.abs(d) * 1.6)
+                    transparentBorder: true
+                }
+
+                // tick
+                Rectangle {
+                    width: 34
+                    height: 3
+                    radius: 2
+                    x: 27
+                    y: 26 - 1.5
+                    color: isActive ? colors.primary : colors.alpha(colors.foreground, 0.55)
+                }
+                // line number
+                Text {
+                    x: 27
+                    y: 26 + 8
+                    text: li + 1 < 10 ? "0" + (li + 1) : "" + (li + 1)
+                    color: isActive ? colors.primary : colors.alpha(colors.foreground, 0.4)
+                    font.family: "JetBrainsMono Nerd Font Mono"
+                    font.pixelSize: 12
+                    font.letterSpacing: 2
+                }
+                // words
+                Row {
+                    anchors.centerIn: parent
+                    spacing: 9
+                    Repeater {
+                        model: words
+                        delegate: Text {
+                            required property string modelData
+                            required property int index
+                            readonly property real lit: isActive ? Math.max(0, Math.min(1, root.karaP * words.length - index)) : 0
+                            text: modelData
+                            color: isPast ? colors.alpha(colors.primary, 0.75)
+                                : isActive ? (lit >= 0.5 ? colors.primary : colors.alpha(colors.foreground, 0.35))
+                                : colors.alpha(colors.foreground, 0.35)
+                            font.family: "Inter"
+                            font.pixelSize: 26
+                            font.weight: Font.Bold
+                            font.letterSpacing: -0.4
+                            style: Text.Outline
+                            styleColor: Qt.rgba(0, 0, 0, 0.85)
+                        }
+                    }
+                }
+            }
         }
     }
 }

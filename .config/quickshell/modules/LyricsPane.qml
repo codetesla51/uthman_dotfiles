@@ -32,6 +32,8 @@ PanelWindow {
     property var lines: []
     property int currentIdx: -1
     property real pos: 0
+    property real posBase: 0
+    property double stampBase: 0
     property real karaP: 0      // 0..1 progress through the active line
     property string fetchedKey: ""
     property int attempt: 0        // 0 = artist+title+duration, 1 = no duration, 2+ = timed retries
@@ -168,7 +170,7 @@ PanelWindow {
         if (root.lines.length === 0 || root.state !== "ready") return
         var idx = -1
         for (var i = 0; i < root.lines.length; i++) {
-            if (root.lines[i].t <= root.pos + 0.15) idx = i
+            if (root.lines[i].t <= root.pos + 0.05) idx = i
             else break
         }
         root.currentIdx = idx
@@ -193,17 +195,20 @@ PanelWindow {
         repeat: true
         triggeredOnStart: true
         // hard resync from the player: catches seeks, pauses, drift
-        onTriggered: root.pos = root.player ? root.player.position : 0
+        onTriggered: {
+            root.posBase = root.player ? root.player.position : 0
+            root.stampBase = Date.now()
+            root.pos = root.posBase
+        }
     }
     Timer {
         id: localTimer
         interval: 100
         running: root.open && root.playing && root.state === "ready"
         repeat: true
-        // free-run between resyncs — many players only push position
-        // on change, so polling alone visibly lags line changes
+        // elapsed-time clock: immune to timer jitter, rebased on resync
         onTriggered: {
-            root.pos += 0.1
+            root.pos = root.posBase + (Date.now() - root.stampBase) / 1000
             root.retrack()
         }
     }

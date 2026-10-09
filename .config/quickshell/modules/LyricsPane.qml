@@ -160,6 +160,8 @@ PanelWindow {
             if (!pressed) return
             root.offX += Math.round(e.x - px)
             root.offY += Math.round(e.y - py)
+            px = e.x
+            py = e.y
         }
     }
 

@@ -6,7 +6,9 @@ import QtQuick.Layouts
 import QtQuick.Controls
 import QtQuick.LocalStorage 2.0
 
-// Battery Panel — nice battery UI, change performance, calculate life & usage.
+// Battery Panel — nice battery UI, change performance, calculate life & usage,
+// plus nbfc fan speeds (no sudo: the service runs as root),
+// plus gif-wallpaper freeze off-performance (awww animates otherwise).
 PanelWindow {
     id: root
     property var colors
@@ -49,8 +51,9 @@ PanelWindow {
         interval: 5000; running: root.open; repeat: true; triggeredOnStart: true
         onTriggered: {
             var h=pctHistory.slice(); h.push(pct); if(h.length>30) h.shift(); pctHistory=h
-            // also poll power profile
+            // also poll power profile + fan
             profileProc.running=true
+            fanProc.running=true
         }
     }
 
@@ -101,8 +104,106 @@ PanelWindow {
     // watch battery state
     Connections { target: root.dev; function onStateChanged(){ maybeAutoSwitch() } }
     onPctChanged: maybeAutoSwitch()
-    onCurProfileChanged: { if (Date.now()-lastAutoSwitchMs > 90000) maybeAutoSwitch() }
-    Timer { id: autoPoll; interval: 12000; running: true; repeat: true; onTriggered: { profileProc.running=true; if(!root.open) maybeAutoSwitch() } }
+    onCurProfileChanged: { if (Date.now()-lastAutoSwitchMs > 90000) maybeAutoSwitch(); if (!wallCurProc.running) wallCurProc.running = true }
+    Timer { id: autoPoll; interval: 12000; running: true; repeat: true; onTriggered: { profileProc.running=true; wallCurProc.running=true; if(!root.open) maybeAutoSwitch() } }
+
+    // ---- fan (nbfc) — polled only while open, set needs no sudo ----
+    property bool fanOk: false
+    property bool fanAuto: true
+    property string fanTemp: "…"
+    property string fanCur: "…"
+    property string fanTarget: ""
+    Process {
+        id: fanProc
+        command: ["sh", "-c", "nbfc status 2>/dev/null"]
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: {
+                var tmp = "", cur = "", auto = "true", tgt = ""
+                var lines = String(text).split("\n")
+                for (var i = 0; i < lines.length; i++) {
+                    var kv = lines[i].split(":")
+                    if (kv.length < 2) continue
+                    var k = kv[0].trim(), v = kv.slice(1).join(":").trim()
+                    if (k === "Temperature") tmp = v
+                    else if (k === "Current Fan Speed") cur = v
+                    else if (k === "Auto Control Enabled") auto = v
+                    else if (k === "Target Fan Speed") tgt = v
+                }
+                if (tmp === "") { root.fanOk = false; return }
+                root.fanOk = true
+                root.fanTemp = Math.round(parseFloat(tmp)) + "°"
+                root.fanCur = Math.round(parseFloat(cur)) + "%"
+                root.fanAuto = (auto === "true")
+                root.fanTarget = tgt
+            }
+        }
+        onExited: function (code) { if (code !== 0) root.fanOk = false }
+    }
+    function setFan(mode) {
+        if (mode === "auto") Quickshell.execDetached(["nbfc", "set", "-f", "0", "-a"])
+        else Quickshell.execDetached(["nbfc", "set", "-f", "0", "-s", mode])
+        fanRefresh.restart()
+    }
+    Timer { id: fanRefresh; interval: 2500; onTriggered: fanProc.running = true }
+
+    // ---- gif freeze: only performance animates; balanced/saver show the
+    // static first frame (same palette, no theme regen). Tracks wallpaper
+    // changes so a fresh gif always starts live.
+    property string wallGif: ""
+    property bool wallFrozen: false
+    property string wallPending: ""
+    Process {
+        id: wallCurProc
+        command: ["sh", "-c", "readlink \"$HOME/.config/theme/current/background\" 2>/dev/null"]
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: {
+                var cur = text.trim()
+                if (!/\.gif$/i.test(cur)) { root.wallGif = ""; return }
+                if (cur !== root.wallGif) { root.wallGif = cur; root.wallFrozen = false }
+                root.wallSync()
+            }
+        }
+    }
+    function wallSync() {
+        if (root.wallGif === "" || root.wallPending !== "") return
+        var wantFrozen = root.curProfile !== "performance" && root.curProfile !== "unknown"
+        if (wantFrozen === root.wallFrozen) return
+        root.wallPending = wantFrozen ? "freeze" : "live"
+        var L = [
+            "CUR=\"" + root.wallGif + "\"",
+            "MODE=\"" + root.wallPending + "\"",
+            "STATIC=\"$HOME/.config/theme/current/background-static.jpg\"",
+            "SRC=\"$HOME/.config/theme/current/background-static.src\"",
+            "command -v awww >/dev/null 2>&1 && BIN=awww || BIN=swww",
+            "if [ \"$MODE\" = freeze ]; then",
+            "  if [ ! -f \"$STATIC\" ] || [ \"$(cat \"$SRC\" 2>/dev/null)\" != \"$CUR\" ]; then",
+            "    rm -f \"$STATIC\"",
+            "    vipsthumbnail \"$CUR\" --size 1920 -o \"$STATIC[Q=90,strip]\" >/dev/null 2>&1 || \\",
+            "    WALL=\"$CUR\" OUT=\"$STATIC\" python3 -c \"import os; from PIL import Image; Image.open(os.environ['WALL']).convert('RGB').save(os.environ['OUT'])\" || exit 1",
+            "    echo \"$CUR\" > \"$SRC\"",
+            "  fi",
+            "  \"$BIN\" img \"$STATIC\" --transition-type none >/dev/null 2>&1 || exit 1",
+            "else",
+            "  \"$BIN\" img \"$CUR\" --transition-type none >/dev/null 2>&1 || exit 1",
+            "fi"
+        ]
+        wallActProc.command = ["sh", "-c", L.join("\n")]
+        wallActProc.running = true
+    }
+    Process {
+        id: wallActProc
+        stdout: StdioCollector { waitForEnd: true; onStreamFinished: {} }
+        onExited: function (code) {
+            if (code === 0) {
+                root.wallFrozen = (root.wallPending === "freeze")
+                console.log("[Battery] wallpaper " + (root.wallFrozen ? "frozen (static)" : "live (animated)") + " on " + root.curProfile)
+            }
+            root.wallPending = ""
+            root.wallSync()
+        }
+    }
 
     anchors { top:true; bottom:true; left:true; right:true }
     exclusionMode: ExclusionMode.Ignore
@@ -313,6 +414,51 @@ PanelWindow {
                 Text {
                     visible: root.curProfile==="unknown"
                     text: "power-profiles-daemon not running"
+                    color: colors.alpha(colors.outline,0.5)
+                    font.family: colors.fontSans; font.pixelSize: 8
+                    Layout.alignment: Qt.AlignHCenter
+                }
+            }
+
+            // fan speeds (nbfc) — auto rides the profile curve, tiles pin
+            // a fixed % until auto is re-selected. Status in tertiary (data).
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: 6
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 8
+                    Text { text: "FAN"; color: colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold; font.letterSpacing: 1.2; Layout.fillWidth: true }
+                    Text { text: root.fanOk ? ((root.fanAuto ? "auto" : "manual") + " · " + root.fanTemp + " · " + root.fanCur) : "nbfc off"; color: root.fanOk ? colors.tertiary : colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold }
+                }
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 8
+                    Repeater {
+                        model: [{id:"auto", label:"Auto", sub:"curve"}, {id:"50", label:"50%", sub:"fixed"}, {id:"100", label:"Blast", sub:"fixed"}]
+                        delegate: Rectangle {
+                            required property var modelData
+                            readonly property bool sel: root.fanOk && (modelData.id === "auto" ? root.fanAuto : (!root.fanAuto && Math.round(parseFloat(root.fanTarget)) === parseInt(modelData.id, 10)))
+                            Layout.fillWidth: true
+                            height: 48
+                            radius: 12
+                            opacity: root.fanOk ? 1 : 0.45
+                            color: sel ? colors.alpha(colors.primary,0.18) : colors.alpha(colors.surface,0.6)
+                            border.width:1; border.color: sel ? colors.alpha(colors.primary,0.4) : colors.alpha(colors.outline,0.12)
+                            ColumnLayout {
+                                anchors.centerIn: parent
+                                spacing: 2
+                                Text { text: modelData.label; color: sel ? colors.primary : colors.foreground; font.family: colors.fontSans; font.pixelSize: 13; font.weight: Font.ExtraBold; Layout.alignment: Qt.AlignHCenter }
+                                Text { text: modelData.sub; color: sel ? colors.primary : colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.DemiBold; Layout.alignment: Qt.AlignHCenter }
+                            }
+                            transform: Translate { y: fanMa.containsMouse ? -2 : 0; Behavior on y { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } } }
+                            MouseArea { id: fanMa; anchors.fill: parent; hoverEnabled: true; enabled: root.fanOk; onClicked: root.setFan(modelData.id) }
+                        }
+                    }
+                }
+                Text {
+                    visible: !root.fanOk
+                    text: "nbfc service not running"
                     color: colors.alpha(colors.outline,0.5)
                     font.family: colors.fontSans; font.pixelSize: 8
                     Layout.alignment: Qt.AlignHCenter

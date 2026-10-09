@@ -25,7 +25,9 @@ ln -sfn "$IMAGE" ~/.config/omarchy/current/background  # legacy compat
 STATIC="$HOME/.config/theme/current/background-static.jpg"
 case "$IMAGE" in
     *.gif|*.GIF)
-        { vipsthumbnail "$IMAGE" --size 1920 -o "$STATIC[Q=90,strip]" >/dev/null 2>&1 ||           WALL="$IMAGE" OUT="$STATIC" python3 -c "import os; from PIL import Image; Image.open(os.environ['WALL']).convert('RGB').save(os.environ['OUT'])"; } &
+        # rm first: STATIC may be a symlink to a still — extracting through it
+        # would overwrite that wallpaper file instead of replacing the link.
+        { rm -f "$STATIC" && vipsthumbnail "$IMAGE" --size 1920 -o "$STATIC[Q=90,strip]" >/dev/null 2>&1 ||           WALL="$IMAGE" OUT="$STATIC" python3 -c "import os; from PIL import Image; Image.open(os.environ['WALL']).convert('RGB').save(os.environ['OUT'])"; } &
         ;;
     *) ln -sfn "$IMAGE" "$STATIC" ;;
 esac

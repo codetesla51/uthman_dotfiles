@@ -349,7 +349,8 @@ PanelWindow {
                 readonly property bool isPast: d < 0
                 readonly property string raw: String(modelData.x)
                 width: stage.width
-                height: Math.max(52, lyricText.implicitHeight + 10)
+                height: Math.min(110, Math.max(52, lyricText.implicitHeight + 10))
+                clip: true
                 visible: Math.abs(d) <= 3
                 y: stage.midY + stage.drumR * Math.sin(d * Math.PI / 6) - height / 2
                 Behavior on y { NumberAnimation { duration: 450; easing.type: Easing.OutCubic } }

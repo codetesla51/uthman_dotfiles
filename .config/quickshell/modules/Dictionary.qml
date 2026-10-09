@@ -48,6 +48,8 @@ FloatingWindow {
     property string dictQueued: ""
     property bool mirror: false
     property int _seq: 0
+    property int _dictSeq: 0
+    property int _wikiSeq: 0
     property bool dmBusy: false
     property var dmQueued: null
     property string _dmRel: ""
@@ -68,8 +70,8 @@ FloatingWindow {
                     root.runDict(q)
                     return
                 }
-                if (root.state !== "loading") return
-                var trimmed = text.trimEnd()
+                if (root.state !== "loading" || root._dictSeq !== root._seq) return
+                var trimmed = String(text).trim()
                 var idx = trimmed.lastIndexOf("\n")
                 var code = idx !== -1 ? trimmed.slice(idx + 1).trim() : ""
                 var body = idx !== -1 ? trimmed.slice(0, idx) : trimmed
@@ -115,7 +117,8 @@ FloatingWindow {
         root.dictBusy = true
         root.dictQueued = ""
         root.mirror = false
-        dictProc.command = ["curl", "-s", "--max-time", "30", "-o", "/tmp/dict-result.json", "-w", "\n%{http_code}",
+        root._dictSeq = root._seq
+        dictProc.command = ["curl", "-s", "--max-time", "10", "-w", "\n%{http_code}",
             "https://api.dictionaryapi.dev/api/v2/entries/en/" + w]
         dictProc.running = true
     }
@@ -133,11 +136,26 @@ FloatingWindow {
     }
     // Wiktionary mirror — dictionaryapi.dev stalls from some routes;
     // this answers in <1s with plain definitions (no audio/synonyms).
+    Process {
+        id: wikiProc
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: {
+                if (root.state !== "loading" || root._wikiSeq !== root._seq) return
+                var trimmed = String(text).trim()
+                var idx = trimmed.lastIndexOf("\n")
+                var code = idx !== -1 ? trimmed.slice(idx + 1).trim() : ""
+                var body = idx !== -1 ? trimmed.slice(0, idx) : trimmed
+                root.onWikiResult(code, body)
+            }
+        }
+    }
     function runWiki(w) {
-        root.mirror = true
-        dictProc.command = ["curl", "-s", "--max-time", "15", "-w", "\n%{http_code}",
+        if (wikiProc.running) return
+        root._wikiSeq = root._seq
+        wikiProc.command = ["curl", "-s", "--max-time", "15", "-w", "\n%{http_code}",
             "https://en.wiktionary.org/api/rest_v1/page/definition/" + w]
-        dictProc.running = true
+        wikiProc.running = true
     }
     function onWikiResult(code, body) {
         var w = searchField.text.trim().toLowerCase()
@@ -147,6 +165,7 @@ FloatingWindow {
                 return
             } catch (e) {}
         }
+        if (root.dictBusy) return
         root.state = "error"
         if (code === "404")
             root.errMsg = "No definition found for \"" + w + "\". Check the spelling."
@@ -213,6 +232,7 @@ FloatingWindow {
         relatedSyn = []
         relatedSound = []
         root.runDict(w)
+        root.runWiki(w)
     }
 
     function applyEntry(arr) {

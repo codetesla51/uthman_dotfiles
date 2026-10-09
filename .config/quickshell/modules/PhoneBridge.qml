@@ -178,7 +178,7 @@ FloatingWindow {
         if (!root.connected) return
         root.dndOn = !root.dndOn
         root.say(root.dndOn ? "DND on" : "DND off")
-        dndSetProc.command = root.adbArgs(["settings", "put", "global", "zen_mode", root.dndOn ? "1" : "0"])
+        dndSetProc.command = root.adbArgs(["cmd", "notification", "set_dnd", root.dndOn ? "priority" : "off"])
         dndSetProc.running = true
     }
     function timeoutLabel() {
@@ -763,10 +763,11 @@ FloatingWindow {
         stdout: StdioCollector {
             waitForEnd: true
             onStreamFinished: {
-                var lv = text.match(/level=(\d)/)
-                root.signalLevel = lv ? Math.min(4, parseInt(lv[1])) : -1
-                var net = text.match(/(5G|LTE|NR|WCDMA|HSPA|UMTS|EDGE|GSM|CDMA)/)
-                root.signalNet = net ? (net[1] === "NR" ? "5G" : net[1]) : ""
+                var lv = -1, lm, lre = /mLte=CellSignalStrengthLte:[^}]*?level=(\d)/g
+                while ((lm = lre.exec(text)) !== null) lv = Math.max(lv, parseInt(lm[1]))
+                root.signalLevel = Math.min(4, lv)
+                var rt = text.match(/getRilDataRadioTechnology=\d+\((\w+)\)/)
+                root.signalNet = rt ? (rt[1] === "NR" ? "5G" : rt[1]) : ""
             }
         }
     }
@@ -781,7 +782,7 @@ FloatingWindow {
                     var ci = devLines[i].indexOf(":")
                     if (ci < 0) continue
                     var iface = devLines[i].slice(0, ci).trim()
-                    if (!iface.match(/^(rmnet|ccmni|qmap)/)) continue
+                    if (!iface.match(/^(rmnet|ccmni|qmap|seth_)/)) continue
                     var f = devLines[i].slice(ci + 1).trim().split(/\s+/)
                     if (f.length < 9) continue
                     total += (parseInt(f[0]) || 0) + (parseInt(f[8]) || 0)

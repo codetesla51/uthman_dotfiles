@@ -341,6 +341,12 @@ FloatingWindow {
         }
         focus: root.open
         Keys.onEscapePressed: root.open = false
+        Keys.onPressed: (e) => {
+            if (searchField.activeFocus) return
+            if (e.text === "p" || e.text === "P") { root.playAudio(); e.accepted = true }
+            else if (e.text === "y" || e.text === "Y") { root.copyEntry(); e.accepted = true }
+            else if ((e.text === "r" || e.text === "R") && root.state === "error") { root.lookup(searchField.text); e.accepted = true }
+        }
 
         ColumnLayout {
             anchors.fill: parent
@@ -396,7 +402,8 @@ FloatingWindow {
                             spacing: 4
                             Text {
                                 text: modelData
-                                color: histMa.containsMouse ? colors.primary : colors.alpha(colors.outline, 0.75)
+                                color: histMa.containsMouse ? colors.primary : colors.alpha(colors.foreground, 0.85)
+                                font.underline: true
                                 font.family: colors.fontSans
                                 font.pixelSize: 11
                                 MouseArea { id: histMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.lookup(modelData) }
@@ -488,7 +495,8 @@ FloatingWindow {
                         }
                         Text {
                             text: "copy definition"
-                            color: copyMa.containsMouse ? colors.secondary : colors.alpha(colors.secondary, 0.7)
+                            color: colors.secondary
+                            font.underline: true
                             font.family: colors.fontSans
                             font.pixelSize: 11
                             MouseArea { id: copyMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.copyEntry() }
@@ -532,7 +540,8 @@ FloatingWindow {
                                     delegate: Text {
                                         required property var modelData
                                         text: modelData
-                                        color: synMa.containsMouse ? colors.secondary : colors.alpha(colors.secondary, 0.75)
+                                        color: colors.secondary
+                                        font.underline: true
                                         font.family: colors.fontSans
                                         font.pixelSize: 12
                                         font.underline: synMa.containsMouse
@@ -544,7 +553,8 @@ FloatingWindow {
                                     delegate: Text {
                                         required property var modelData
                                         text: modelData
-                                        color: antMa.containsMouse ? colors.error : colors.alpha(colors.error, 0.75)
+                                        color: colors.error
+                                        font.underline: true
                                         font.family: colors.fontSans
                                         font.pixelSize: 12
                                         font.underline: antMa.containsMouse
@@ -564,7 +574,8 @@ FloatingWindow {
                             delegate: Text {
                                 required property var modelData
                                 text: modelData
-                                color: rsMa.containsMouse ? colors.primary : colors.alpha(colors.primary, 0.75)
+                                color: colors.primary
+                                font.underline: true
                                 font.family: colors.fontSans
                                 font.pixelSize: 12
                                 font.underline: rsMa.containsMouse
@@ -584,7 +595,7 @@ FloatingWindow {
             }
 
             Text {
-                text: "enter define · esc close"
+                text: "enter define · p play · y copy · r retry · esc close"
                 color: colors.alpha(colors.outline, 0.4)
                 font.family: colors.fontSans
                 font.pixelSize: 9

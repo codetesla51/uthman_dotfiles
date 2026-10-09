@@ -1134,7 +1134,7 @@ FloatingWindow {
                         id: dropTile
                         visible: root.connected
                         Layout.fillWidth: true
-                        Layout.preferredHeight: 56
+                        Layout.preferredHeight: 120
                         color: dropArea.containsDrag ? colors.alpha(colors.primary, 0.12) : colors.alpha(colors.surfaceVariant, 0.25)
                         border.color: dropArea.containsDrag ? colors.alpha(colors.primary, 0.55) : colors.alpha(colors.outline, 0.12)
                         transform: Translate {
@@ -1143,23 +1143,42 @@ FloatingWindow {
                         }
                         Behavior on color { ColorAnimation { duration: 150 } }
                         Behavior on border.color { ColorAnimation { duration: 150 } }
-                        ColumnLayout {
-                            anchors.verticalCenter: parent.verticalCenter
-                            anchors.left: parent.left
-                            anchors.leftMargin: 14
-                            spacing: 2
-                            Text {
-                                text: "Drop files to send"
-                                color: dropArea.containsDrag ? colors.primary : colors.foreground
-                                font.family: colors.fontSans
-                                font.pixelSize: 11
-                                font.weight: Font.Bold
+                        RowLayout {
+                            anchors.centerIn: parent
+                            spacing: 14
+                            Rectangle {
+                                width: 52
+                                height: 52
+                                radius: 26
+                                color: colors.alpha(colors.primary, dropArea.containsDrag ? 0.22 : 0.12)
+                                border.width: 1
+                                border.color: colors.alpha(colors.primary, dropArea.containsDrag ? 0.55 : 0.3)
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: ""
+                                    color: dropArea.containsDrag ? colors.primary : colors.alpha(colors.primary, 0.8)
+                                    font.family: "Phosphor"
+                                    font.pixelSize: 24
+                                    scale: dropArea.containsDrag ? 1.12 : 1
+                                    Behavior on scale { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
+                                    Behavior on color { ColorAnimation { duration: 150 } }
+                                }
                             }
-                            Text {
-                                text: "Lands in Download on the phone"
-                                color: colors.alpha(colors.outline, 0.7)
-                                font.family: colors.fontSans
-                                font.pixelSize: 9
+                            ColumnLayout {
+                                spacing: 2
+                                Text {
+                                    text: "Drop files to send"
+                                    color: dropArea.containsDrag ? colors.primary : colors.foreground
+                                    font.family: colors.fontSans
+                                    font.pixelSize: 12
+                                    font.weight: Font.Bold
+                                }
+                                Text {
+                                    text: "Lands in Download on the phone"
+                                    color: colors.alpha(colors.outline, 0.7)
+                                    font.family: colors.fontSans
+                                    font.pixelSize: 9
+                                }
                             }
                         }
                         DropArea {

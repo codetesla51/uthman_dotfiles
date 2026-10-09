@@ -1125,14 +1125,11 @@ FloatingWindow {
                     font.family: colors.fontSans
                     font.pixelSize: 9
                 }
-                Text {
+                Btn {
                     visible: root.queue.length > 0
-                    text: "clear done"
-                    color: clearMa.containsMouse ? colors.primary : colors.alpha(colors.outline, 0.7)
-                    font.family: colors.fontSans
-                    font.pixelSize: 9
-                    font.weight: Font.Bold
-                    MouseArea { id: clearMa; anchors.fill: parent; anchors.margins: -4; hoverEnabled: true; onClicked: root.clearFinished() }
+                    label: "Clear"
+                    Layout.preferredHeight: 24
+                    tapped: () => root.clearFinished()
                 }
             }
             Surface {
@@ -1201,9 +1198,9 @@ FloatingWindow {
                         anchors.rightMargin: 4
                         spacing: 8
                         Text {
-                            text: modelData.error !== "" ? "×" : modelData.done ? "✓" : "↑"
+                            text: modelData.error !== "" ? "×" : modelData.done ? "" : "↑"
                             color: modelData.error !== "" ? colors.error : modelData.done ? colors.secondary : colors.primary
-                            font.family: colors.fontSans
+                            font.family: modelData.done && modelData.error === "" ? "Phosphor" : colors.fontSans
                             font.pixelSize: 11
                             font.weight: Font.Bold
                             Layout.preferredWidth: 10

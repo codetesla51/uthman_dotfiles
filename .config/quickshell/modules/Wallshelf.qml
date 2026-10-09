@@ -203,7 +203,7 @@ FloatingWindow {
     }
     function refreshLocal(){
         root.scanningLocal = true
-        localProc.command = ["sh","-c","find '"+root.linkDir+"' '"+root.cacheDir+"' -path '*/thumbs' -prune -o -type f \\( -iname '*.jpg' -o -iname '*.png' -o -iname '*.jpeg' -o -iname '*.webp' \\) -printf '%T@|%p\\n' 2>/dev/null | sort -rn | head -n 200 | $HOME/.local/bin/mkthumbs"]
+        localProc.command = ["sh","-c","find '"+root.linkDir+"' '"+root.cacheDir+"' -path '*/thumbs' -prune -o -type f \\( -iname '*.jpg' -o -iname '*.png' -o -iname '*.jpeg' -o -iname '*.webp' -o -iname '*.gif' \\) -printf '%T@|%p\\n' 2>/dev/null | sort -rn | head -n 200 | $HOME/.local/bin/mkthumbs"]
         localProc.running = true
     }
     function refreshLocalMaybe(){

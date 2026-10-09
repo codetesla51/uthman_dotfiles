@@ -21,9 +21,9 @@ FloatingWindow {
 
     title: "Earbuds"
     implicitWidth: 380
-    implicitHeight: 420
-    minimumSize: Qt.size(380, 420)
-    maximumSize: Qt.size(380, 420)
+    implicitHeight: 360
+    minimumSize: Qt.size(380, 360)
+    maximumSize: Qt.size(380, 360)
     color: "transparent"
     visible: root.open || closeAnim.running
 
@@ -153,7 +153,7 @@ FloatingWindow {
     Rectangle {
         id: card
         anchors.fill: parent
-        radius: 22
+        radius: 16
         color: colors.alpha(colors.surface, 0.52)
         border.width: 1
         border.color: colors.alpha(colors.outline, 0.15)
@@ -273,6 +273,8 @@ FloatingWindow {
             }
         }
 
+        // HEIGHT BUDGET 360: margins 44 + header 26 + buds 196 + foot 36 + 2x16 gaps = 334 + 26 air.
+        // FOCAL: the two buds. Rank2: name/status. Rank3: foot.
         ColumnLayout {
             anchors.fill: parent
             anchors.margins: 22
@@ -292,7 +294,7 @@ FloatingWindow {
                         Text { text: root.busy ? root.statusText : (root.connected ? "Connected" : (root.mac === "" ? "No earbuds paired" : "Disconnected")); color: colors.alpha(colors.outline, 0.75); font.family: root.fontUi; font.pixelSize: 12 }
                     }
                 }
-                            }
+            }
 
             // buds side by side
             RowLayout {
@@ -310,9 +312,15 @@ FloatingWindow {
                 Text { text: root.mac === "" ? "bluetooth off or nothing paired" : root.mac; color: colors.alpha(colors.outline, 0.6); font.family: root.fontUi; font.pixelSize: 11; Layout.fillWidth: true; elide: Text.ElideRight }
                 Rectangle {
                     width: 124; height: 36; radius: 10
-                    color: actMa.containsMouse ? colors.alpha(colors.surfaceVariant, 0.7) : colors.alpha(colors.surfaceVariant, 0.4)
-                    border.width: 1; border.color: colors.alpha(colors.outline, 0.2)
+                    color: actMa.containsMouse ? colors.alpha(colors.primary, 0.16) : colors.alpha(colors.surfaceVariant, 0.4)
+                    border.width: 1; border.color: actMa.containsMouse ? colors.alpha(colors.primary, 0.5) : colors.alpha(colors.outline, 0.2)
                     opacity: root.mac === "" ? 0.45 : 1
+                    transform: Translate {
+                        y: actMa.containsMouse ? -2 : 0
+                        Behavior on y { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
+                    }
+                    Behavior on color { ColorAnimation { duration: 150 } }
+                    Behavior on border.color { ColorAnimation { duration: 150 } }
                     Text { anchors.centerIn: parent; text: root.connected ? "Disconnect" : "Connect"; color: colors.foreground; font.family: root.fontUi; font.pixelSize: 13; font.weight: Font.DemiBold }
                     MouseArea { id: actMa; anchors.fill: parent; hoverEnabled: true; enabled: root.mac !== ""; onClicked: root.actClicked() }
                 }

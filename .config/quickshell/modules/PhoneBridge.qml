@@ -1384,9 +1384,9 @@ FloatingWindow {
                         Rectangle {
                             visible: root.pullState === modelData.name
                             anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
-                            anchors.leftMargin: 10
-                            anchors.rightMargin: 10
-                            anchors.bottomMargin: 2
+                            anchors.leftMargin: 12
+                            anchors.rightMargin: 12
+                            anchors.bottomMargin: 5
                             height: 3
                             radius: 1.5
                             color: colors.alpha(colors.surfaceVariant, 0.6)

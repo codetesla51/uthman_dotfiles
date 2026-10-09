@@ -302,31 +302,31 @@ FloatingWindow {
                 Layout.fillHeight: true
                 clip: true
                 model: root.errors
-                spacing: 4
+                spacing: 6
                 boundsBehavior: Flickable.StopAtBounds
                 ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
                 delegate: Rectangle {
                     required property var modelData
                     required property int index
                     width: errList.width
-                    height: 48
-                    radius: 10
+                    height: 66
+                    radius: 12
                     color: ema.containsMouse ? colors.alpha(colors.primary, 0.07) : index % 2 === 0 ? colors.alpha(colors.surface, 0.35) : "transparent"
                     border.width: 1
                     border.color: ema.containsMouse ? colors.alpha(root.kindColor(modelData.kind), 0.4) : colors.alpha(root.kindColor(modelData.kind), 0.14)
                     ColumnLayout {
                         anchors.fill: parent
-                        anchors.leftMargin: 12; anchors.rightMargin: 8
-                        anchors.topMargin: 6; anchors.bottomMargin: 6
-                        spacing: 2
+                        anchors.leftMargin: 14; anchors.rightMargin: 10
+                        anchors.topMargin: 9; anchors.bottomMargin: 9
+                        spacing: 5
                         RowLayout {
                             Layout.fillWidth: true
                             spacing: 8
                             Rectangle {
-                                Layout.preferredWidth: kindLbl.implicitWidth + 14; Layout.preferredHeight: 18; radius: 9
+                                Layout.preferredWidth: kindLbl.implicitWidth + 18; Layout.preferredHeight: 22; radius: 11
                                 color: colors.alpha(root.kindColor(modelData.kind), 0.12)
                                 border.width: 1; border.color: colors.alpha(root.kindColor(modelData.kind), 0.4)
-                                Text { id: kindLbl; anchors.centerIn: parent; text: "#" + modelData.id + " " + modelData.kind; color: root.kindColor(modelData.kind); font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold }
+                                Text { id: kindLbl; anchors.centerIn: parent; text: "#" + modelData.id + " " + modelData.kind; color: root.kindColor(modelData.kind); font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold }
                             }
                             Text { text: (modelData.unit || "kernel").slice(0, 40); color: colors.alpha(colors.outline, 0.65); font.family: colors.fontSans; font.pixelSize: 8; elide: Text.ElideRight; Layout.maximumWidth: 200 }
                             Item { Layout.fillWidth: true }
@@ -335,12 +335,12 @@ FloatingWindow {
                         RowLayout {
                             Layout.fillWidth: true
                             spacing: 8
-                            Text { text: modelData.summary; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 10; elide: Text.ElideRight; Layout.fillWidth: true }
+                            Text { text: modelData.summary; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 11; elide: Text.ElideRight; Layout.fillWidth: true }
                             Rectangle {
-                                width: 64; height: 22; radius: 8
+                                width: 84; height: 28; radius: 9
                                 color: ecMa.containsMouse ? colors.alpha(colors.secondary, 0.25) : "transparent"
                                 border.width: 1; border.color: colors.alpha(colors.secondary, 0.35)
-                                Text { anchors.centerIn: parent; text: root.openingKey === "c:" + modelData.id ? "opening…" : "full log"; color: colors.secondary; font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold }
+                                Text { anchors.centerIn: parent; text: root.openingKey === "c:" + modelData.id ? "opening…" : "full log"; color: colors.secondary; font.family: colors.fontSans; font.pixelSize: 10; font.weight: Font.Bold }
                                 MouseArea {
                                     id: ecMa; anchors.fill: parent; hoverEnabled: true
                                     onClicked: {

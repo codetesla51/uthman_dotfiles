@@ -369,7 +369,7 @@ FloatingWindow {
                     selectByMouse: true
                     background: null
                     onAccepted: root.lookup(text)
-                    Keys.onEscapePressed: searchField.focus = false
+                    Keys.onEscapePressed: card.forceActiveFocus()
                 }
                 Rectangle {
                     width: 64; height: 28; radius: 9

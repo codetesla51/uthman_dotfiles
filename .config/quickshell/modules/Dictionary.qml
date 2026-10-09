@@ -30,11 +30,8 @@ FloatingWindow {
     color: "transparent"
     visible: root.open || closeAnim.running
 
-    IpcHandler {
-        target: "dict"
-        function toggle(): void { root.open = !root.open }
-        function lookup(word: string): void { root.open = true; root.lookup(word) }
-    }
+    // IPC lives in shell.qml (lazy Loader owns open state) — no local handler:
+    // a second target:"dict" handler fights the shell one and toggles blind.
 
     onOpenChanged: {
         if (open) { Qt.callLater(function() { searchField.forceActiveFocus() }); openAnim.restart() }
@@ -544,7 +541,6 @@ FloatingWindow {
                                         font.underline: true
                                         font.family: colors.fontSans
                                         font.pixelSize: 12
-                                        font.underline: synMa.containsMouse
                                         MouseArea { id: synMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.lookup(modelData) }
                                     }
                                 }
@@ -557,7 +553,6 @@ FloatingWindow {
                                         font.underline: true
                                         font.family: colors.fontSans
                                         font.pixelSize: 12
-                                        font.underline: antMa.containsMouse
                                         MouseArea { id: antMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.lookup(modelData) }
                                     }
                                 }
@@ -578,7 +573,6 @@ FloatingWindow {
                                 font.underline: true
                                 font.family: colors.fontSans
                                 font.pixelSize: 12
-                                font.underline: rsMa.containsMouse
                                 MouseArea { id: rsMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.lookup(modelData) }
                             }
                         }

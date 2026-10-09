@@ -16,6 +16,7 @@ Item {
 
     property bool locking: false   // pre-lock animation playing
     property string quote: ""
+    property bool bgAnimated: false  // current wallpaper is a gif
 
     IpcHandler {
         target: "lockscreen"
@@ -24,9 +25,11 @@ Item {
 
     function startLock() {
         if (lock.locked || locking) return
+        bgProc.running = true
         locking = true
         lockTimer.restart()
     }
+    Component.onCompleted: bgProc.running = true
 
     // fires at peak black — the cut hides inside full darkness
     Timer {
@@ -39,6 +42,15 @@ Item {
         }
     }
 
+    // resolve the background symlink: gifs animate, stills stay put
+    Process {
+        id: bgProc
+        command: ["sh", "-c", "case \"$(readlink -f ~/.config/theme/current/background 2>/dev/null)\" in *.gif|*.GIF) echo gif;; *) echo still;; esac"]
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: root.bgAnimated = (text.trim() === "gif")
+        }
+    }
     Process {
         id: quoteProc
         command: ["sh", "-c", "shuf -n 1 ~/.config/hypr/scripts/quotes.txt"]
@@ -58,10 +70,21 @@ Item {
         visible: root.locking
 
         Image {
+            visible: !root.bgAnimated
             anchors.fill: parent
             source: "file://" + Quickshell.env("HOME") + "/.config/theme/current/background"
             fillMode: Image.PreserveAspectCrop
             asynchronous: true
+            scale: root.locking ? 1.0 : 1.06
+            Behavior on scale { NumberAnimation { duration: 650; easing.type: Easing.InOutCubic } }
+        }
+        AnimatedImage {
+            visible: root.bgAnimated
+            anchors.fill: parent
+            source: "file://" + Quickshell.env("HOME") + "/.config/theme/current/background"
+            fillMode: AnimatedImage.PreserveAspectCrop
+            playing: visible
+            cache: false
             scale: root.locking ? 1.0 : 1.06
             Behavior on scale { NumberAnimation { duration: 650; easing.type: Easing.InOutCubic } }
         }
@@ -109,10 +132,19 @@ Item {
             Rectangle {
                 anchors.fill: parent
                 Image {
+                    visible: !root.bgAnimated
                     anchors.fill: parent
                     source: "file://" + Quickshell.env("HOME") + "/.config/theme/current/background"
                     fillMode: Image.PreserveAspectCrop
                     asynchronous: true
+                }
+                AnimatedImage {
+                    visible: root.bgAnimated
+                    anchors.fill: parent
+                    source: "file://" + Quickshell.env("HOME") + "/.config/theme/current/background"
+                    fillMode: AnimatedImage.PreserveAspectCrop
+                    playing: visible
+                    cache: false
                 }
                 Rectangle {
                     anchors.fill: parent

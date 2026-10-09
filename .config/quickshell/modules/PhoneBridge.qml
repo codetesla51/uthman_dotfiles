@@ -1117,11 +1117,18 @@ FloatingWindow {
                             Btn { label: root.hotspotOn ? "Turn off" : "Turn on"; lit: root.hotspotOn; Layout.fillWidth: true; tapped: () => root.toggleHotspot() }
                         }
                     }
-                    Btn { visible: root.connected; label: "Ring"; key: "r"; Layout.fillWidth: true; tapped: () => root.ringPhone() }
-                    Btn { visible: root.connected; label: "Screenshot"; key: "S"; Layout.fillWidth: true; tapped: () => root.shotPhone() }
-                    Btn { visible: root.connected; label: "Clipboard"; key: "c"; Layout.fillWidth: true; tapped: () => root.sendClipboard() }
-                    Btn { visible: root.connected; label: root.dndOn ? "DND on" : "DND off"; key: "d"; lit: root.dndOn; Layout.fillWidth: true; tapped: () => root.toggleDnd() }
-                    Btn { visible: root.connected; label: "Screen " + root.timeoutLabel(); key: "t"; Layout.fillWidth: true; tapped: () => root.cycleTimeout() }
+                    GridLayout {
+                        visible: root.connected
+                        Layout.fillWidth: true
+                        columns: 2
+                        columnSpacing: 6
+                        rowSpacing: 6
+                        Btn { label: "Ring"; key: "r"; Layout.fillWidth: true; tapped: () => root.ringPhone() }
+                        Btn { label: "Shot"; key: "S"; Layout.fillWidth: true; tapped: () => root.shotPhone() }
+                        Btn { label: "Clip"; key: "c"; Layout.fillWidth: true; tapped: () => root.sendClipboard() }
+                        Btn { label: root.dndOn ? "DND on" : "DND off"; key: "d"; lit: root.dndOn; Layout.fillWidth: true; tapped: () => root.toggleDnd() }
+                        Btn { label: "Screen " + root.timeoutLabel(); key: "t"; Layout.fillWidth: true; Layout.columnSpan: 2; tapped: () => root.cycleTimeout() }
+                    }
                     Item { Layout.fillHeight: true }
                     Btn { label: root.connected ? "Re-link" : "Retry"; Layout.fillWidth: true; tapped: () => root.refreshDevices() }
                 }

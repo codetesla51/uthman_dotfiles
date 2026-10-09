@@ -141,13 +141,19 @@ FloatingWindow {
     }
     Process {
         id: linkProc
+        stdout: StdioCollector { id: linkOut; waitForEnd: true }
+        stderr: StdioCollector { id: linkErr; waitForEnd: true }
         onExited: {
             root.setBusy(false)
-            root.statusText = ""
+            var out = (linkOut.text + "\n" + linkErr.text).trim().split("\n")
+            var last = out.length > 0 ? out[out.length - 1].trim().slice(0, 80) : ""
+            if (last.match(/successful|connected:\s*yes/i)) root.statusText = ""
+            else if (last !== "") { root.statusText = last; statusClear.restart() }
             probeTimer.restart()
         }
     }
     Timer { id: probeTimer; interval: 1200; onTriggered: root.probe() }
+    Timer { id: statusClear; interval: 5000; onTriggered: root.statusText = "" }
 
     // glass card
     Rectangle {
@@ -291,7 +297,7 @@ FloatingWindow {
                     Text { text: root.devName; color: colors.foreground; font.family: root.fontUi; font.pixelSize: 15; font.weight: Font.DemiBold; elide: Text.ElideRight; Layout.fillWidth: true }
                     RowLayout { spacing: 6
                         Rectangle { width: 7; height: 7; radius: 3.5; color: root.busy ? colors.secondary : (root.connected ? colors.primary : colors.alpha(colors.outline, 0.5)); Layout.alignment: Qt.AlignVCenter }
-                        Text { text: root.busy ? root.statusText : (root.connected ? "Connected" : (root.mac === "" ? "No earbuds paired" : "Disconnected")); color: colors.alpha(colors.outline, 0.75); font.family: root.fontUi; font.pixelSize: 12 }
+                        Text { text: root.statusText !== "" ? root.statusText : (root.connected ? "Connected" : (root.mac === "" ? "No earbuds paired" : "Disconnected")); color: root.statusText !== "" && !root.connected ? colors.error : colors.alpha(colors.outline, 0.75); font.family: root.fontUi; font.pixelSize: 12 }
                     }
                 }
             }

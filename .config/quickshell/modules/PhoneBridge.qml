@@ -333,7 +333,8 @@ FloatingWindow {
     }
     Timer {
         id: notifTimer
-        interval: 4000
+        // slow when the panel is shut — toasts can wait 30s, the CPU can't
+        interval: root.open ? 4000 : 30000
         running: root.connected
         repeat: true
         onTriggered: {
@@ -370,7 +371,7 @@ FloatingWindow {
 
     Timer {
         id: inboxTimer
-        interval: 5000
+        interval: root.open ? 5000 : 60000
         running: root.connected
         repeat: true
         onTriggered: {

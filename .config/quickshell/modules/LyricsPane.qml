@@ -129,8 +129,8 @@ PanelWindow {
 
     function plainText() {
         var out = []
-        for (var i = 0; i < root.lines.length && i < 10; i++) out.push(root.lines[i].x)
-        if (root.lines.length > 10) out.push("…")
+        for (var i = 0; i < root.lines.length && i < 7; i++) out.push(root.lines[i].x)
+        if (root.lines.length > 7) out.push("… · unsynced")
         return out.join("\n")
     }
     readonly property string terHex: "#" + colors.tertiary.toString().slice(-6)
@@ -277,8 +277,9 @@ PanelWindow {
         text: root.plainText()
         color: colors.alpha(colors.foreground, 0.75)
         font.family: "Inter"
-        font.pixelSize: 16
+        font.pixelSize: 15
         font.weight: Font.Bold
+        lineHeight: 1.7
         wrapMode: Text.WordWrap
         style: Text.Outline
         styleColor: Qt.rgba(0, 0, 0, 0.85)

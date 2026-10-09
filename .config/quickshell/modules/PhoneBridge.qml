@@ -6,15 +6,11 @@ import QtQuick.Controls
 
 // PhoneBridge — wireless file sender over ADB. Thin client over the standalone
 // ~/phonebridge backend (daemon CLI: devices, battery, clip, push, pull, ls,
-// shot, ring, inbox-sync, notifs). No app on the phone, no cable after the
-// one-time `tcpip` bootstrap: drop files and they land in Download, browse
-// the phone and pull anything back. Toggle: ipc call phonebridge (SUPER ALT K).
+// shot, ring, inbox-sync, notifs). Toggle: ipc call phonebridge (SUPER ALT K).
 FloatingWindow {
     id: root
 
-    // Fallback palette so colors.* reads never throw during startup:
-    // the external `colors` assignment can land after our bindings first
-    // evaluate, and one throw aborts setup of the whole shell (no bar, no IPC).
+    // Fallback palette so colors.* reads never throw during startup.
     QtObject {
         id: fallback
         property color background: "#17130f"
@@ -27,20 +23,21 @@ FloatingWindow {
         property color on_surface: "#efe5df"
         property color surfaceVariant: "#50453b"
         property color outline: "#a39487"
+        property string fontSans: "sans-serif"
         function alpha(c, a) { return Qt.rgba(c.r, c.g, c.b, a) }
     }
     property var colors: fallback
     property bool open: false
-    // standalone backend (~/phonebridge repo): all adb orchestration lives there
     property string daemon: Quickshell.env("HOME") + "/phonebridge/phonebridge"
     property string pcDest: Quickshell.env("HOME") + "/PhoneBridge"
 
     // --- device state ---
-    property string deviceId: ""        // "192.168.58.159:5555"
+    property string deviceId: ""
     property string deviceName: "Phone"
     property bool connected: false
+    property bool linkLost: false       // was connected, now gone, watchdog knocking
     property string statusMsg: ""
-    property bool busy: false           // a scan or connect attempt is running
+    property bool busy: false
 
     // --- send queue: [{path, name, total, sent, active, done, error}] ---
     property var queue: []
@@ -48,8 +45,8 @@ FloatingWindow {
 
     // --- pull browser ---
     property string remoteDir: "/sdcard"
-    property var remoteRows: []         // [{name, isDir}]
-    property string pullState: ""       // name pulling, "" when idle
+    property var remoteRows: []
+    property string pullState: ""
     property int pullTotal: 0
     property int pullGot: 0
     property var selected: []
@@ -60,28 +57,25 @@ FloatingWindow {
     property int battery: -1
     property bool charging: false
     property string shotName: ""
-    property string plugged: ""         // USB | AC | Wireless (dumpsys battery)
-    property string signalNet: ""       // LTE / 5G / "" unknown
-    property int signalLevel: -1        // 0..4, -1 unknown
-    property double mobileMb: -1        // phone cell counters, since reboot
+    property string plugged: ""
+    property string signalNet: ""
+    property int signalLevel: -1
+    property double mobileMb: -1
     property double dataCapMb: 2048
     property bool hotspotOn: false
     property string hotspotNote: "Toggling can drop the link"
     property bool hotspotBusy: false
     property bool hotspotWant: false
     property bool dndOn: false
-    property int screenTimeout: 60000   // ms
+    property int screenTimeout: 60000
 
     // --- type-ahead find ---
     property bool searching: false
     property string searchBuf: ""
 
-    // --- notify forward allowlist lives in the daemon config ---
-    // (~/.config/phonebridge/config.ini [notify]); the daemon filters + extracts
-    // senders, this client only pings.
-    property var seenKeys: []        // notification keys already pinged
-    property bool primed: false      // first scan after connect absorbs, no pings
-    property int pollStart: 0        // ms epoch when the current dump started (stale-poll watchdog)
+    property var seenKeys: []
+    property bool primed: false
+    property int pollStart: 0
 
     title: "PhoneBridge"
     implicitWidth: 700
@@ -93,7 +87,6 @@ FloatingWindow {
 
     IpcHandler { target: "phonebridge"; function toggle(): void { root.open = !root.open } }
 
-    // connect at bar startup so inbox/notif watchers run with the panel closed
     Component.onCompleted: root.refreshDevices()
 
     function say(text) {
@@ -107,7 +100,6 @@ FloatingWindow {
         Quickshell.execDetached(["sh", "-c", "notify-send -u normal -a 'Phone' '" + String(title).replace(/'/g, "'\\''") + "' '" + String(body).replace(/'/g, "'\\''") + "'"])
     }
 
-    // shell-quote one argument so names with spaces/quotes survive `adb shell`
     function sq(s) { return "'" + String(s).replace(/'/g, "'\\''") + "'" }
 
     function clearSearch() {
@@ -115,7 +107,6 @@ FloatingWindow {
         root.searchBuf = ""
     }
 
-    // type-ahead: jump to the first entry whose name starts with the buffer
     function findJump() {
         var q = root.searchBuf.toLowerCase()
         if (q === "") return
@@ -127,22 +118,14 @@ FloatingWindow {
         }
     }
 
-    // battery via the daemon (JSON: {level, charging})
     function refreshBattery() {
         if (!root.connected) return
         batteryProc.command = [root.daemon, "battery"]
         batteryProc.running = true
     }
 
-    // ── notify forward: the daemon polls the shade and returns parsed records
-    // [{key, label, title, sender}]. Works in DND too — DND silences the
-    // phone, it does not remove entries from the shade. The desktop ping goes
-    // through notify-send to quickshell's own NotificationCenter (owns
-    // org.freedesktop.Notifications). First scan after connect absorbs.
     function scanNotifs(fresh) {
         if (!root.primed) {
-            // first scan after connect: absorb what is already in the shade,
-            // do not re-ping old notifications
             for (var p = 0; p < fresh.length; p++) root.seenKeys.push(fresh[p].key)
             root.primed = true
             return
@@ -154,14 +137,10 @@ FloatingWindow {
             if (root.seenKeys.length > 200) root.seenKeys.shift()
             var who = f.sender || ("New " + f.label + " notification")
             var body = f.body ? String(f.body) : (f.sender ? "via " + f.label : "")
-            Quickshell.execDetached(["notify-send", "-a", f.label,
-                who, body])
+            Quickshell.execDetached(["notify-send", "-a", f.label, who, body])
         }
     }
 
-    // find-my-phone via the daemon: wake, max media volume, ringtone VIEW
-    // intent (best-effort), vibration burst (the audible carrier on builds
-    // with no media session/ringtones).
     function ringPhone() {
         if (!root.connected) { root.say("No phone connected — same WiFi as the laptop?"); return }
         root.say("Ringing phone…")
@@ -169,7 +148,6 @@ FloatingWindow {
         ringProc.running = true
     }
 
-    // phone screenshot -> ~/Pictures/PhoneBridge (daemon names the file)
     function shotPhone() {
         if (!root.connected) {
             root.say("No phone connected — same WiFi as the laptop?")
@@ -180,7 +158,7 @@ FloatingWindow {
         shotProc.running = true
     }
 
-    // --- phone settings + radio (direct adb, same pattern as progressProc) ---
+    // --- phone settings + radio (direct adb) ---
     function adbArgs(extra) { return ["adb", "-s", root.deviceId, "shell"].concat(extra) }
     function refreshPhoneState() {
         if (!root.connected || root.deviceId === "") return
@@ -229,13 +207,8 @@ FloatingWindow {
         hotspotProc.command = root.adbArgs(["cmd", "wifi", root.hotspotWant ? "start-softap" : "stop-softap"])
         hotspotProc.running = true
     }
+
     // ================= discovery =================
-    // The daemon owns pairing state (~/.config/phonebridge/config.ini, written
-    // by ~/phonebridge/init.sh). If nothing is attached we ask it to connect
-    // to the remembered target; first-time Wi-Fi needs `adb tcpip 5555` once.
-    // The daemon bounds every adb call (connect 8s), and the watchdog below
-    // is the backstop for a wedged daemon: without it a hung discovery leaves
-    // busy=true forever and the panel looks frozen instead of unreachable.
     property int discoveryStart: 0
     function connectTo(addr) {
         connectProc.command = addr ? [root.daemon, "connect", addr] : [root.daemon, "connect"]
@@ -266,9 +239,6 @@ FloatingWindow {
         }
     }
 
-    // auto-reconnect: phone rebooted, walked out of WiFi range, adbd dozed —
-    // keep knocking with a backoff (10s → 60s cap) instead of waiting for a
-    // manual retry. Resets the moment a device answers. Only while open.
     property int reconnectDelay: 10
     Timer {
         id: reconnectTimer
@@ -293,7 +263,6 @@ FloatingWindow {
                 var found = []
                 try { found = JSON.parse(text) } catch (e) {}
                 if (found.length > 0) {
-                    // several devices can be visible (cable + wifi): prefer the paired one
                     var pick = found[0]
                     for (var j = 0; j < found.length; j++) {
                         if (found[j].id === root.deviceId) pick = found[j]
@@ -304,6 +273,7 @@ FloatingWindow {
                         root.connected = true
                         root.say("Connected to " + root.deviceName)
                     }
+                    root.linkLost = false
                     root.reconnectDelay = 10
                     reconnectTimer.interval = 10000
                     root.refreshBattery()
@@ -311,11 +281,11 @@ FloatingWindow {
                     root.refreshPhoneState()
                     return
                 }
-                // nothing attached: fall through to remembered-target connect
                 if (!root.connected) {
                     root.connectTo("")
                 } else {
                     root.connected = false
+                    root.linkLost = true
                     root.deviceId = ""
                 }
             }
@@ -348,7 +318,7 @@ FloatingWindow {
         }
     }
 
-    // ── notify forward watcher: poll the shade every 4s while a phone is paired
+    // notify forward watcher
     Process {
         id: notifProc
         stdout: StdioCollector {
@@ -368,21 +338,16 @@ FloatingWindow {
         onTriggered: {
             var now = Date.now()
             if (notifProc.running) {
-                // stale poll (hung adb on flaky wifi): stop it so the next tick restarts
                 if (now - root.pollStart > 10000) notifProc.running = false
                 return
             }
             root.pollStart = now
-            // the daemon truncates + greps the ~1 MB --noredact dump phone-side
-            // and returns parsed records (~5 KB/s)
             notifProc.command = [root.daemon, "notifs"]
             notifProc.running = true
         }
     }
 
-    // ── inbox auto-delivery: the daemon pulls new share-sheet files into
-    // ~/Downloads itself (dedupe by name+size, >250 MB stays in the browser).
-    // This client just announces arrivals.
+    // inbox auto-delivery
     Process {
         id: inboxSyncProc
         stdout: StdioCollector {
@@ -408,16 +373,13 @@ FloatingWindow {
         running: root.connected
         repeat: true
         onTriggered: {
-            // don't fight a manual browser pull
             if (inboxSyncProc.running || root.pullState !== "" || root.pullQueue.length > 0) return
             inboxSyncProc.command = [root.daemon, "inbox-sync"]
             inboxSyncProc.running = true
         }
     }
 
-    // one-shot runner for the ring sequence
     Process { id: ringProc }
-
 
     Timer { interval: 15000; running: root.open; repeat: true; triggeredOnStart: false; onTriggered: { root.refreshDevices(); root.refreshBattery(); root.refreshPhoneState() } }
     onOpenChanged: { if (open) { root.refreshDevices(); root.refreshBattery(); root.refreshPhoneState(); remoteList.focus = true; openAnim.restart() } else closeAnim.restart() }
@@ -477,7 +439,6 @@ FloatingWindow {
                 var total = parseInt(text.trim()) || 0
                 root.setRow(root.pushIndex, { total: total })
                 var row = root.queue[root.pushIndex]
-                // daemon pushes + fires the media scanner; stdout is JSON (ignored here)
                 pushProc.command = [root.daemon, "push", row.path]
                 pushProc.running = true
                 progressPoll.restart()
@@ -584,12 +545,6 @@ FloatingWindow {
         }
         onExited: function (code) { if (code !== 0) root.say("Couldn't set it — screen on and unlocked?") }
     }
-    // C: PC clipboard straight into the phone's clipboard (paste-ready).
-    // Clipboard *reading* stays here (wl-paste is compositor-specific); the
-    // daemon takes the bytes via --file. Text goes through the PhoneRelay
-    // flash app; images push straight into Download. Caveat (verified): this
-    // ROM's clipboard watcher reaps clips set by the relay app within
-    // ~seconds of idle — paste right away.
     function sendClipboard() {
         if (!root.connected) {
             root.say("No phone connected — same WiFi as the laptop?")
@@ -680,7 +635,6 @@ FloatingWindow {
         root.pullTotal = 0
         root.pullGot = 0
         root.say("Pulling " + name + "…")
-        // dirs have no meaningful single size — leave pullTotal 0 for the indeterminate bar
         var isDir = false
         for (var d = 0; d < root.remoteRows.length; d++)
             if (root.remoteRows[d].name === name) { isDir = root.remoteRows[d].isDir; break }
@@ -792,7 +746,6 @@ FloatingWindow {
             }
         }
     }
-    // plugged type from dumpsys battery (daemon owns level/charging)
     Process {
         id: pluggedProc
         stdout: StdioCollector {
@@ -805,7 +758,6 @@ FloatingWindow {
             }
         }
     }
-    // cell net + bars from the registry dump (unknowns stay hidden)
     Process {
         id: signalProc
         stdout: StdioCollector {
@@ -818,7 +770,6 @@ FloatingWindow {
             }
         }
     }
-    // mobile bytes: rmnet/ccmni/qmap only (wlan/tun/clat would double-count)
     Process {
         id: dataProc
         stdout: StdioCollector {
@@ -853,7 +804,8 @@ FloatingWindow {
             dndGetProc.command = root.adbArgs(["settings", "get", "global", "zen_mode"]); dndGetProc.running = true
             if (code !== 0) root.say("DND failed — screen on and unlocked?")
         }
-    }    Process {
+    }
+    Process {
         id: timeoutGetProc
         stdout: StdioCollector {
             waitForEnd: true
@@ -867,7 +819,6 @@ FloatingWindow {
             else root.say("Timeout failed — screen on and unlocked?")
         }
     }
-    // softap status: best-effort grep, keeps the assumed state on no match
     Process {
         id: hotspotStatProc
         stdout: StdioCollector {
@@ -900,7 +851,8 @@ FloatingWindow {
             }
             root.refreshDevices()
         }
-    }    function enterRemote(name) {
+    }
+    function enterRemote(name) {
         if (root.remoteDir === "/sdcard" && name === "..") return
         if (name === "..") {
             var cut = root.remoteDir.lastIndexOf("/")
@@ -914,57 +866,59 @@ FloatingWindow {
         root.clearSearch()
         root.listRemote()
     }
-
     // ================= UI =================
-    // bento glyph chip: circle, accent-tinted fill/border, nerd glyph (house style)
-    component GlyphChip: Rectangle {
-        required property string glyph
-        property string fontFam: ""
-        property var tapped: function() {}
-        property color accent: colors.primary
-        property int px: 26
-        implicitWidth: px
-        implicitHeight: px
-        radius: px / 2
-        color: colors.alpha(accent, 0.15)
-        border.width: 1
-        border.color: colors.alpha(accent, 0.3)
-        Text {
-            anchors.centerIn: parent
-            text: parent.glyph
-            color: chipHover.containsMouse ? colors.primary : parent.accent
-            font.family: parent.fontFam !== "" ? parent.fontFam : colors.fontSans
-            font.pixelSize: 12
-        }
-        MouseArea { id: chipHover; anchors.fill: parent; hoverEnabled: true; onClicked: parent.tapped() }
+    // Type scale: 9 caps label · 11 body · 13 title.  Spacing: 10 between
+    // blocks, 12 inside cards.  Every block is full width and left aligned.
+
+    // section caption
+    component Cap: Text {
+        color: colors.alpha(colors.outline, 0.75)
+        font.family: colors.fontSans
+        font.pixelSize: 9
+        font.weight: Font.Bold
+        font.letterSpacing: 1.2
     }
 
-    // action tile: phosphor glyph + label, lifts on hover (house motion)
-    component ActionTile: Rectangle {
-        id: tile
-        required property string glyph
-        required property string label
-        property var tapped: function() {}
-        property bool lit: false
-        implicitWidth: tileRow.implicitWidth + 22
-        implicitHeight: 30
-        radius: 10
-        color: tileMa.containsMouse ? colors.alpha(colors.primary, 0.14) : colors.alpha(colors.surfaceVariant, 0.25)
+    // flat surface
+    component Surface: Rectangle {
+        radius: 12
+        color: colors.alpha(colors.surfaceVariant, 0.25)
         border.width: 1
-        border.color: lit ? colors.alpha(colors.primary, 0.55) : tileMa.containsMouse ? colors.alpha(colors.primary, 0.45) : colors.alpha(colors.outline, 0.12)
-        scale: tileMa.containsMouse ? 1.05 : 1
-        y: tileMa.containsMouse ? -2 : 0
-        Behavior on color { ColorAnimation { duration: 180; easing.type: Easing.OutCubic } }
-        Behavior on scale { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
-        Behavior on y { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
-        RowLayout {
-            id: tileRow
-            anchors.centerIn: parent
-            spacing: 6
-            Text { text: tile.glyph; color: tile.lit ? colors.primary : colors.alpha(colors.primary, 0.85); font.family: "Phosphor"; font.pixelSize: 14 }
-            Text { text: tile.label; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 10; font.weight: Font.Bold }
+        border.color: colors.alpha(colors.outline, 0.12)
+    }
+
+    // text button — lifts 2px on hover. Uses a transform so it still moves
+    // inside layouts (a layout owns x/y).
+    component Btn: Rectangle {
+        id: btn
+        required property string label
+        property bool lit: false
+        property bool solid: false
+        property var tapped: function() {}
+        implicitHeight: 32
+        implicitWidth: btnText.implicitWidth + 28
+        radius: 9
+        color: solid ? (btnMa.containsMouse ? colors.alpha(colors.primary, 0.85) : colors.primary)
+                     : btnMa.containsMouse ? colors.alpha(colors.primary, 0.16)
+                     : lit ? colors.alpha(colors.primary, 0.10) : colors.alpha(colors.surfaceVariant, 0.35)
+        border.width: 1
+        border.color: solid ? colors.primary : (lit || btnMa.containsMouse) ? colors.alpha(colors.primary, 0.55) : colors.alpha(colors.outline, 0.14)
+        transform: Translate {
+            y: btnMa.containsMouse ? -2 : 0
+            Behavior on y { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
         }
-        MouseArea { id: tileMa; anchors.fill: parent; hoverEnabled: true; onClicked: parent.tapped() }
+        Behavior on color { ColorAnimation { duration: 150 } }
+        Behavior on border.color { ColorAnimation { duration: 150 } }
+        Text {
+            id: btnText
+            anchors.centerIn: parent
+            text: btn.label
+            color: btn.solid ? colors.background : btn.lit ? colors.primary : colors.foreground
+            font.family: colors.fontSans
+            font.pixelSize: 11
+            font.weight: Font.DemiBold
+        }
+        MouseArea { id: btnMa; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: btn.tapped() }
     }
 
     Rectangle {
@@ -975,8 +929,6 @@ FloatingWindow {
         color: colors.alpha(colors.surface, 0.88)
         border.width: 1
         border.color: colors.alpha(colors.outline, 0.15)
-        // bezier pair — open pops with overshoot bounce (fast), close hurries
-        // out with none. Same curves as the notification drawer.
         ParallelAnimation {
             id: openAnim
             NumberAnimation { target: card; property: "opacity"; from: 0; to: 1; duration: 220; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
@@ -990,219 +942,234 @@ FloatingWindow {
 
         ColumnLayout {
             anchors.fill: parent
-            anchors.margins: 14
-            spacing: 8
+            anchors.margins: 16
+            spacing: 10
 
-            // device row — dot, name/link, battery/charge, signal, relink
-            RowLayout {
+            // ── status header ───────────────────────────────
+            Surface {
                 Layout.fillWidth: true
-                spacing: 8
-                ColumnLayout {
-                    spacing: 0
-                    Layout.fillWidth: true
-                    Text {
-                        text: root.connected ? root.deviceName : "No phone paired"
-                        color: root.connected ? colors.foreground : colors.alpha(colors.outline, 0.8)
-                        font.family: colors.fontSans
-                        font.pixelSize: 10
-                        font.weight: Font.Bold
-                        elide: Text.ElideRight
+                Layout.preferredHeight: 58
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: 14
+                    anchors.rightMargin: 12
+                    spacing: 18
+                    ColumnLayout {
                         Layout.fillWidth: true
+                        spacing: 2
+                        Text {
+                            text: root.connected ? root.deviceName : root.linkLost ? "Link lost" : "No phone paired"
+                            color: root.linkLost ? colors.error : colors.foreground
+                            font.family: colors.fontSans
+                            font.pixelSize: 13
+                            font.weight: Font.Bold
+                            elide: Text.ElideRight
+                            Layout.fillWidth: true
+                        }
+                        Text {
+                            text: root.hotspotBusy ? "Switching hotspot, link may drop"
+                                : root.connected ? root.deviceId + " · wifi"
+                                : root.linkLost ? "Watching, retrying in " + root.reconnectDelay + "s"
+                                : "Run adb tcpip 5555 once"
+                            color: root.hotspotBusy ? colors.tertiary : root.connected ? colors.alpha(colors.primary, 0.85) : colors.alpha(colors.outline, 0.7)
+                            font.family: colors.fontSans
+                            font.pixelSize: 9
+                            elide: Text.ElideRight
+                            Layout.fillWidth: true
+                        }
                     }
-                    Text {
-                        text: root.hotspotBusy ? "switching hotspot" : root.connected ? (root.deviceId + " · wifi") : "adb tcpip 5555 once"
-                        color: root.hotspotBusy ? colors.tertiary : root.connected ? colors.alpha(colors.primary, 0.8) : colors.alpha(colors.outline, 0.45)
-                        font.family: colors.fontSans
-                        font.pixelSize: 8
-                        elide: Text.ElideRight
-                        Layout.fillWidth: true
+                    ColumnLayout {
+                        visible: root.connected
+                        spacing: 2
+                        Text {
+                            text: root.battery >= 0 ? root.battery + "%" : "…"
+                            color: root.battery >= 0 && root.battery < 15 && !root.charging ? colors.error : colors.foreground
+                            font.family: colors.fontSans
+                            font.pixelSize: 13
+                            font.weight: Font.Bold
+                            Layout.alignment: Qt.AlignRight
+                        }
+                        Text {
+                            text: root.charging ? "CHARGING" + (root.plugged !== "" ? " · " + root.plugged : "") : "ON BATTERY"
+                            color: root.charging ? colors.primary : colors.alpha(colors.outline, 0.75)
+                            font.family: colors.fontSans
+                            font.pixelSize: 9
+                            font.weight: Font.Bold
+                            font.letterSpacing: 0.8
+                            Layout.alignment: Qt.AlignRight
+                        }
                     }
+                    ColumnLayout {
+                        visible: root.connected && root.signalLevel >= 0
+                        spacing: 4
+                        Item {
+                            Layout.alignment: Qt.AlignRight
+                            width: 19
+                            height: 13
+                            Repeater {
+                                model: 4
+                                Rectangle {
+                                    required property int index
+                                    x: index * 5
+                                    width: 4
+                                    height: 4 + index * 3
+                                    y: 13 - height
+                                    radius: 1
+                                    color: index < root.signalLevel ? colors.primary : colors.alpha(colors.outline, 0.3)
+                                }
+                            }
+                        }
+                        Text {
+                            text: (root.signalNet !== "" ? root.signalNet + " · " : "") + root.signalLevel + "/4"
+                            color: colors.alpha(colors.outline, 0.75)
+                            font.family: colors.fontSans
+                            font.pixelSize: 9
+                            font.weight: Font.Bold
+                            Layout.alignment: Qt.AlignRight
+                        }
+                    }
+                    Btn { label: root.connected ? "Re-link" : "Retry"; Layout.preferredHeight: 28; tapped: () => root.refreshDevices() }
                 }
-                ColumnLayout {
-                    visible: root.connected
-                    spacing: 0
-                    Layout.alignment: Qt.AlignVCenter
-                    Text {
-                        text: "" + (root.battery >= 0 ? root.battery + "%" : "…")
-                        color: root.charging ? colors.primary : root.battery < 15 && root.battery >= 0 ? colors.error : colors.foreground
-                        font.family: "Phosphor"
-                        font.pixelSize: 11
-                        font.weight: Font.Bold
-                        Layout.alignment: Qt.AlignRight
-                    }
-                    Text {
-                        text: root.charging ? ("CHARGING" + (root.plugged !== "" ? " · " + root.plugged : "")) : "ON BATTERY"
-                        color: root.charging ? colors.primary : colors.alpha(colors.outline, 0.6)
-                        font.family: colors.fontSans
-                        font.pixelSize: 7
-                        font.weight: Font.Bold
-                        font.letterSpacing: 1.1
-                        Layout.alignment: Qt.AlignRight
-                    }
-                }
-                ColumnLayout {
-                    visible: root.connected && root.signalLevel >= 0
-                    spacing: 0
-                    Layout.alignment: Qt.AlignVCenter
-                    Text {
-                        text: ""
-                        color: colors.primary
-                        font.family: "Phosphor"
-                        font.pixelSize: 11
-                        Layout.alignment: Qt.AlignRight
-                    }
-                    Text {
-                        text: (root.signalNet !== "" ? root.signalNet + " · " : "") + root.signalLevel + "/4"
-                        color: colors.alpha(colors.outline, 0.6)
-                        font.family: colors.fontSans
-                        font.pixelSize: 7
-                        font.weight: Font.Bold
-                        Layout.alignment: Qt.AlignRight
-                    }
-                }
-                GlyphChip { visible: root.connected; glyph: ""; fontFam: "Phosphor"; px: 22; accent: colors.primary; Layout.alignment: Qt.AlignVCenter; tapped: () => root.refreshDevices() }
             }
-            // ---- DATA + HOTSPOT ----
+
+            // ── data + hotspot ──────────────────────────────
             RowLayout {
                 visible: root.connected
                 Layout.fillWidth: true
-                spacing: 8
-                Rectangle {
+                spacing: 10
+                Surface {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 54
-                    radius: 12
-                    color: colors.alpha(colors.surfaceVariant, 0.25)
-                    border.width: 1
-                    border.color: colors.alpha(colors.outline, 0.12)
+                    Layout.preferredHeight: 70
                     ColumnLayout {
                         anchors.fill: parent
-                        anchors.margins: 10
-                        anchors.topMargin: 7
-                        anchors.bottomMargin: 8
-                        spacing: 3
-                        Text { text: "MOBILE DATA · SINCE REBOOT"; color: colors.alpha(colors.outline, 0.65); font.family: colors.fontSans; font.pixelSize: 7; font.weight: Font.Bold; font.letterSpacing: 1.3 }
-                        Text { text: root.dataText(); color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.Bold }
+                        anchors.leftMargin: 14
+                        anchors.rightMargin: 14
+                        anchors.topMargin: 10
+                        anchors.bottomMargin: 12
+                        spacing: 4
+                        Cap { text: "MOBILE DATA · SINCE REBOOT" }
+                        Text { text: root.dataText(); color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 13; font.weight: Font.Bold }
+                        Item { Layout.fillHeight: true }
                         Rectangle {
                             Layout.fillWidth: true
                             height: 4
                             radius: 2
-                            color: colors.alpha(colors.surfaceVariant, 0.5)
+                            color: colors.alpha(colors.surfaceVariant, 0.6)
                             Rectangle {
                                 width: root.mobileMb < 0 ? 0 : parent.width * Math.min(1, root.mobileMb / root.dataCapMb)
                                 height: parent.height
                                 radius: 2
-                                color: colors.tertiary
+                                color: root.mobileMb / root.dataCapMb > 0.9 ? colors.error : colors.tertiary
                                 Behavior on width { NumberAnimation { duration: 250; easing.type: Easing.OutCubic } }
                             }
                         }
                     }
                 }
-                Rectangle {
-                    Layout.preferredWidth: 148
-                    Layout.preferredHeight: 54
-                    radius: 12
+                Surface {
+                    Layout.preferredWidth: 270
+                    Layout.preferredHeight: 70
                     color: root.hotspotOn ? colors.alpha(colors.primary, 0.10) : colors.alpha(colors.surfaceVariant, 0.25)
-                    border.width: 1
                     border.color: root.hotspotOn ? colors.alpha(colors.primary, 0.45) : colors.alpha(colors.outline, 0.12)
-                    Behavior on color { ColorAnimation { duration: 180; easing.type: Easing.OutCubic } }
-                    ColumnLayout {
+                    RowLayout {
                         anchors.fill: parent
-                        anchors.margins: 10
-                        anchors.topMargin: 7
-                        anchors.bottomMargin: 8
-                        spacing: 3
-                        Text { text: "HOTSPOT"; color: colors.alpha(colors.outline, 0.65); font.family: colors.fontSans; font.pixelSize: 7; font.weight: Font.Bold; font.letterSpacing: 1.3 }
-                        RowLayout {
+                        anchors.leftMargin: 14
+                        anchors.rightMargin: 12
+                        spacing: 10
+                        ColumnLayout {
                             Layout.fillWidth: true
-                            spacing: 6
-                            Text { text: root.hotspotBusy ? "…" : root.hotspotOn ? "On" : "Off"; color: root.hotspotOn ? colors.primary : colors.foreground; font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.Bold; Layout.fillWidth: true }
-                            GlyphChip { glyph: ""; fontFam: "Phosphor"; px: 22; accent: root.hotspotOn ? colors.primary : colors.outline; tapped: () => root.toggleHotspot() }
+                            spacing: 4
+                            Cap { text: "HOTSPOT" }
+                            Text {
+                                text: root.hotspotBusy ? "Switching…" : root.hotspotOn ? "On" : "Off"
+                                color: root.hotspotOn ? colors.primary : colors.foreground
+                                font.family: colors.fontSans
+                                font.pixelSize: 13
+                                font.weight: Font.Bold
+                            }
+                            Text {
+                                text: root.hotspotNote
+                                color: colors.alpha(colors.outline, 0.7)
+                                font.family: colors.fontSans
+                                font.pixelSize: 9
+                                elide: Text.ElideRight
+                                Layout.fillWidth: true
+                            }
                         }
+                        Btn { label: root.hotspotOn ? "Turn off" : "Turn on"; lit: root.hotspotOn; tapped: () => root.toggleHotspot() }
                     }
                 }
             }
-            Text {
-                visible: root.connected
-                text: root.hotspotNote
-                color: colors.alpha(colors.outline, 0.5)
-                font.family: colors.fontSans
-                font.pixelSize: 7
-                Layout.alignment: Qt.AlignHCenter
-            }
 
-            // ---- ACTIONS ----
-            Flow {
-                visible: root.connected
-                Layout.fillWidth: true
-                spacing: 6
-                ActionTile { glyph: ""; label: "Ring"; tapped: () => root.ringPhone() }
-                ActionTile { glyph: ""; label: "Shot"; tapped: () => root.shotPhone() }
-                ActionTile { glyph: ""; label: "Clip"; tapped: () => root.sendClipboard() }
-                ActionTile { glyph: ""; label: root.dndOn ? "DND on" : "DND"; lit: root.dndOn; tapped: () => root.toggleDnd() }
-                ActionTile { glyph: ""; label: root.timeoutLabel(); tapped: () => root.cycleTimeout() }
-            }
-            // ---- SEND: drop zone tile ----
+            // ── quick actions: five equal columns ───────────
             RowLayout {
+                visible: root.connected
                 Layout.fillWidth: true
-                Text { text: "SEND TO PHONE"; color: colors.alpha(colors.outline, 0.65); font.family: colors.fontSans; font.pixelSize: 7; font.weight: Font.Bold; font.letterSpacing: 1.3; Layout.fillWidth: true; Layout.alignment: Qt.AlignVCenter }
+                spacing: 8
+                Btn { label: "Ring"; Layout.fillWidth: true; Layout.preferredWidth: 1; tapped: () => root.ringPhone() }
+                Btn { label: "Screenshot"; Layout.fillWidth: true; Layout.preferredWidth: 1; tapped: () => root.shotPhone() }
+                Btn { label: "Clipboard"; Layout.fillWidth: true; Layout.preferredWidth: 1; tapped: () => root.sendClipboard() }
+                Btn { label: root.dndOn ? "DND on" : "DND off"; lit: root.dndOn; Layout.fillWidth: true; Layout.preferredWidth: 1; tapped: () => root.toggleDnd() }
+                Btn { label: "Screen " + root.timeoutLabel(); Layout.fillWidth: true; Layout.preferredWidth: 1; tapped: () => root.cycleTimeout() }
             }
 
-            Rectangle {
-                id: dropTile
+            // ── send ────────────────────────────────────────
+            RowLayout {
+                visible: root.connected
                 Layout.fillWidth: true
-                Layout.preferredHeight: 100
-                radius: 14
-                color: dropArea.containsMouse ? colors.alpha(colors.primary, 0.12) : colors.alpha(colors.surfaceVariant, 0.25)
-                border.width: 1
-                border.color: dropArea.containsMouse ? colors.alpha(colors.primary, 0.5) : colors.alpha(colors.outline, 0.1)
-                scale: dropArea.containsMouse ? 1.02 : 1
-                Behavior on color { ColorAnimation { duration: 180; easing.type: Easing.OutCubic } }
-                Behavior on scale { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
-                Behavior on border.color { ColorAnimation { duration: 180; easing.type: Easing.OutCubic } }
-
-                RowLayout {
-                    anchors.centerIn: parent
-                    spacing: 12
-                    Rectangle {
-                        width: 44
-                        height: 44
-                        radius: 22
-                        color: colors.alpha(colors.primary, dropArea.containsMouse ? 0.22 : 0.12)
-                        border.width: 1
-                        border.color: colors.alpha(colors.primary, dropArea.containsMouse ? 0.5 : 0.22)
-                        Text {
-                            anchors.centerIn: parent
-                            text: "󰈔"
-                            color: dropArea.containsMouse ? colors.primary : colors.alpha(colors.primary, 0.8)
-                            font.family: colors.fontSans
-                            font.pixelSize: 22
-                            scale: dropArea.containsMouse ? 1.1 : 1
-                            Behavior on scale { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
-                            Behavior on color { ColorAnimation { duration: 180 } }
-                        }
+                Cap { text: "SEND TO PHONE"; Layout.fillWidth: true }
+                Text {
+                    visible: root.queue.length > 0
+                    text: root.queue.length + " in queue"
+                    color: colors.alpha(colors.outline, 0.7)
+                    font.family: colors.fontSans
+                    font.pixelSize: 9
+                }
+                Text {
+                    visible: root.queue.length > 0
+                    text: "clear done"
+                    color: clearMa.containsMouse ? colors.primary : colors.alpha(colors.outline, 0.7)
+                    font.family: colors.fontSans
+                    font.pixelSize: 9
+                    font.weight: Font.Bold
+                    MouseArea { id: clearMa; anchors.fill: parent; anchors.margins: -4; hoverEnabled: true; onClicked: root.clearFinished() }
+                }
+            }
+            Surface {
+                id: dropTile
+                visible: root.connected
+                Layout.fillWidth: true
+                Layout.preferredHeight: 56
+                color: dropArea.containsMouse || dropArea.containsDrag ? colors.alpha(colors.primary, 0.12) : colors.alpha(colors.surfaceVariant, 0.25)
+                border.color: dropArea.containsMouse || dropArea.containsDrag ? colors.alpha(colors.primary, 0.55) : colors.alpha(colors.outline, 0.12)
+                transform: Translate {
+                    y: dropArea.containsMouse || dropArea.containsDrag ? -2 : 0
+                    Behavior on y { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
+                }
+                Behavior on color { ColorAnimation { duration: 150 } }
+                Behavior on border.color { ColorAnimation { duration: 150 } }
+                ColumnLayout {
+                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.left: parent.left
+                    anchors.leftMargin: 14
+                    spacing: 2
+                    Text {
+                        text: "Drop files to send"
+                        color: dropArea.containsMouse || dropArea.containsDrag ? colors.primary : colors.foreground
+                        font.family: colors.fontSans
+                        font.pixelSize: 11
+                        font.weight: Font.Bold
                     }
-                    ColumnLayout {
-                        spacing: 2
-                        Text {
-                            text: "Drop files here"
-                            color: dropArea.containsMouse ? colors.primary : colors.foreground
-                            font.family: colors.fontSans
-                            font.pixelSize: 12
-                            font.weight: Font.ExtraBold
-                            Layout.alignment: Qt.AlignHCenter
-                        }
-                        Text {
-                            text: root.connected ? "lands in Download" : "no phone connected"
-                            color: colors.alpha(colors.outline, 0.6)
-                            font.family: colors.fontSans
-                            font.pixelSize: 8
-                            Layout.alignment: Qt.AlignHCenter
-                        }
+                    Text {
+                        text: "Lands in Download on the phone"
+                        color: colors.alpha(colors.outline, 0.7)
+                        font.family: colors.fontSans
+                        font.pixelSize: 9
                     }
                 }
                 DropArea {
                     id: dropArea
                     anchors.fill: parent
+                    property bool containsMouse: containsDrag
                     keys: ["text/uri-list"]
                     onDropped: function (drop) {
                         var paths = []
@@ -1211,148 +1178,131 @@ FloatingWindow {
                     }
                 }
             }
-
-            // ---- queue ----
-            ColumnLayout {
-                visible: root.queue.length > 0
+            ListView {
+                id: queueList
+                visible: root.connected && root.queue.length > 0
                 Layout.fillWidth: true
+                Layout.preferredHeight: Math.min(2, count) * 30 + Math.max(0, Math.min(2, count) - 1) * 4
+                clip: true
                 spacing: 4
-                RowLayout {
-                    Layout.fillWidth: true
-                    Text { text: "QUEUE (" + root.queue.length + ")"; color: colors.alpha(colors.outline, 0.65); font.family: colors.fontSans; font.pixelSize: 7; font.weight: Font.Bold; font.letterSpacing: 1.3; Layout.fillWidth: true; Layout.alignment: Qt.AlignVCenter }
-                    Text {
-                        text: "clear done"
-                        color: clearMa.containsMouse ? colors.primary : colors.alpha(colors.outline, 0.6)
-                        font.family: colors.fontSans
-                        font.pixelSize: 8
-                        font.weight: Font.Bold
-                        MouseArea { id: clearMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.clearFinished() }
-                    }
-                }
-                ListView {
-                    id: queueList
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: Math.min(2 * 36, count * 36)
-                    clip: true
-                    spacing: 4
-                    model: root.queue
-                    boundsBehavior: Flickable.StopAtBounds
-                    ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
-                    onCountChanged: if (count > 0) positionViewAtEnd()
-                    delegate: ColumnLayout {
-                        required property var modelData
-                        required property int index
-                        width: queueList.width
-                        spacing: 3
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: 6
-                            Text {
-                                text: modelData.error !== "" ? "󰅖" : modelData.done ? "" : "󰇚"
-                                color: modelData.error !== "" ? colors.error : modelData.done ? colors.secondary : colors.primary
-                                font.family: colors.fontSans
-                                font.pixelSize: 10
-                            }
-                            Text {
-                                text: modelData.error !== "" ? modelData.error : modelData.name
-                                color: modelData.error !== "" ? colors.error : colors.foreground
-                                font.family: colors.fontSans
-                                font.pixelSize: 10
-                                elide: Text.ElideRight
-                                Layout.fillWidth: true
-                            }
-                            Text {
-                                visible: modelData.active && modelData.total > 0
-                                text: Math.round(100 * modelData.sent / Math.max(1, modelData.total)) + "%"
-                                color: colors.primary
-                                font.family: colors.fontSans
-                                font.pixelSize: 9
-                                font.weight: Font.Bold
-                            }
-                            Text {
-                                visible: modelData.error !== ""
-                                text: "retry"
-                                color: retryMa.containsMouse ? colors.primary : colors.alpha(colors.primary, 0.75)
-                                font.family: colors.fontSans
-                                font.pixelSize: 9
-                                font.weight: Font.Bold
-                                MouseArea { id: retryMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.retryRow(index) }
-                            }
-                            Text {
-                                visible: modelData.done || modelData.error !== ""
-                                text: "×"
-                                color: xMa.containsMouse ? colors.error : colors.alpha(colors.outline, 0.55)
-                                font.family: colors.fontSans
-                                font.pixelSize: 10
-                                font.weight: Font.Bold
-                                MouseArea { id: xMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.removeRow(index) }
-                            }
+                model: root.queue
+                boundsBehavior: Flickable.StopAtBounds
+                ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+                onCountChanged: if (count > 0) positionViewAtEnd()
+                delegate: Item {
+                    required property var modelData
+                    required property int index
+                    width: queueList.width
+                    height: 30
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: 4
+                        anchors.rightMargin: 4
+                        spacing: 8
+                        Text {
+                            text: modelData.error !== "" ? "×" : modelData.done ? "✓" : "↑"
+                            color: modelData.error !== "" ? colors.error : modelData.done ? colors.secondary : colors.primary
+                            font.family: colors.fontSans
+                            font.pixelSize: 11
+                            font.weight: Font.Bold
+                            Layout.preferredWidth: 10
                         }
-                        Rectangle {
-                            visible: modelData.active && !modelData.done
+                        Text {
+                            text: modelData.error !== "" ? modelData.error : modelData.name
+                            color: modelData.error !== "" ? colors.error : colors.foreground
+                            font.family: colors.fontSans
+                            font.pixelSize: 11
+                            elide: Text.ElideRight
                             Layout.fillWidth: true
-                            height: 4
-                            radius: 2
-                            color: colors.alpha(colors.surfaceVariant, 0.5)
-                            Rectangle {
-                                width: parent.width * modelData.sent / Math.max(1, modelData.total)
-                                height: parent.height
-                                radius: 2
-                                color: colors.primary
-                                Behavior on width { NumberAnimation { duration: 250; easing.type: Easing.OutCubic } }
-                            }
+                        }
+                        Text {
+                            visible: modelData.active && modelData.total > 0
+                            text: Math.round(100 * modelData.sent / Math.max(1, modelData.total)) + "%"
+                            color: colors.primary
+                            font.family: colors.fontSans
+                            font.pixelSize: 11
+                            font.weight: Font.Bold
+                        }
+                        Text {
+                            visible: modelData.error !== ""
+                            text: "retry"
+                            color: retryMa.containsMouse ? colors.primary : colors.alpha(colors.primary, 0.75)
+                            font.family: colors.fontSans
+                            font.pixelSize: 11
+                            font.weight: Font.Bold
+                            MouseArea { id: retryMa; anchors.fill: parent; anchors.margins: -4; hoverEnabled: true; onClicked: root.retryRow(index) }
+                        }
+                        Text {
+                            visible: modelData.done || modelData.error !== ""
+                            text: "×"
+                            color: xMa.containsMouse ? colors.error : colors.alpha(colors.outline, 0.7)
+                            font.family: colors.fontSans
+                            font.pixelSize: 13
+                            MouseArea { id: xMa; anchors.fill: parent; anchors.margins: -4; hoverEnabled: true; onClicked: root.removeRow(index) }
+                        }
+                    }
+                    Rectangle {
+                        visible: modelData.active && !modelData.done
+                        anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
+                        anchors.leftMargin: 4
+                        anchors.rightMargin: 4
+                        height: 3
+                        radius: 1.5
+                        color: colors.alpha(colors.surfaceVariant, 0.6)
+                        Rectangle {
+                            width: parent.width * modelData.sent / Math.max(1, modelData.total)
+                            height: parent.height
+                            radius: 1.5
+                            color: colors.primary
+                            Behavior on width { NumberAnimation { duration: 250; easing.type: Easing.OutCubic } }
                         }
                     }
                 }
             }
 
-            // ---- PULL: phone browser ----
+            // ── phone browser ───────────────────────────────
             RowLayout {
                 Layout.fillWidth: true
-                Text { text: "ON THE PHONE (" + root.remoteRows.length + ")"; color: colors.alpha(colors.outline, 0.65); font.family: colors.fontSans; font.pixelSize: 7; font.weight: Font.Bold; font.letterSpacing: 1.3; Layout.fillWidth: true; Layout.alignment: Qt.AlignVCenter }
-                Text {
-                    text: root.remoteDir.replace("/sdcard", "phone")
-                    color: colors.alpha(colors.outline, 0.55)
-                    font.family: colors.fontSans
-                    font.pixelSize: 8
-                    elide: Text.ElideLeft
-                    Layout.maximumWidth: 120
-                }
+                spacing: 10
+                Cap { text: "ON THE PHONE · " + root.remoteRows.length; Layout.fillWidth: true }
                 Text {
                     visible: root.searching
                     text: "find: " + root.searchBuf + "▍"
                     color: colors.primary
                     font.family: colors.fontSans
-                    font.pixelSize: 8
+                    font.pixelSize: 9
                     font.weight: Font.Bold
                 }
                 Text {
-                    visible: root.selected.length > 0 && !root.searching
-                    text: root.selected.length + " sel"
-                    color: selMa.containsMouse ? colors.primary : colors.tertiary
+                    text: root.remoteDir.replace("/sdcard", "phone")
+                    color: colors.alpha(colors.outline, 0.7)
                     font.family: colors.fontSans
-                    font.pixelSize: 8
-                    font.weight: Font.Bold
-                    MouseArea { id: selMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.pullSelection() }
+                    font.pixelSize: 9
+                    elide: Text.ElideLeft
+                    Layout.maximumWidth: 200
+                }
+                Btn {
+                    visible: root.selected.length > 0
+                    solid: true
+                    label: "Pull " + root.selected.length
+                    Layout.preferredHeight: 24
+                    tapped: () => root.pullSelection()
                 }
             }
-            Rectangle {
+            Surface {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 340
-                Layout.minimumHeight: 200
-                radius: 14
+                Layout.fillHeight: true
+                Layout.minimumHeight: 140
                 color: colors.alpha(colors.surface, 0.35)
-                border.width: 1
-                border.color: colors.alpha(colors.outline, 0.12)
                 clip: true
 
                 Text {
                     visible: !root.connected
                     anchors.centerIn: parent
-                    text: "connect a phone to browse it"
-                    color: colors.alpha(colors.outline, 0.45)
+                    text: root.linkLost ? "Link lost, watching… will re-link on its own" : "Connect a phone to browse it"
+                    color: colors.alpha(colors.outline, 0.7)
                     font.family: colors.fontSans
-                    font.pixelSize: 9
+                    font.pixelSize: 11
                 }
                 ListView {
                     id: remoteList
@@ -1363,46 +1313,85 @@ FloatingWindow {
                     spacing: 2
                     model: root.remoteRows
                     keyNavigationWraps: true
-                    highlightMoveDuration: 150
+                    highlightMoveDuration: 120
                     highlight: Rectangle { color: colors.alpha(colors.primary, 0.10); radius: 8 }
                     boundsBehavior: Flickable.StopAtBounds
                     ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
                     onCurrentIndexChanged: if (currentIndex >= 0) positionViewAtIndex(currentIndex, ListView.Contain)
+                    header: Item {
+                        width: remoteList.width
+                        height: root.remoteDir !== "/sdcard" ? 28 : 0
+                        visible: root.remoteDir !== "/sdcard"
+                        Rectangle {
+                            anchors.fill: parent
+                            radius: 8
+                            color: upMa.containsMouse ? colors.alpha(colors.primary, 0.12) : "transparent"
+                        }
+                        Text {
+                            anchors.left: parent.left
+                            anchors.leftMargin: 28
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: "‹  up"
+                            color: colors.primary
+                            font.family: colors.fontSans
+                            font.pixelSize: 11
+                            font.weight: Font.Bold
+                        }
+                        MouseArea { id: upMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.enterRemote("..") }
+                    }
                     delegate: Rectangle {
                         required property var modelData
                         required property int index
+                        readonly property bool isSel: root.selected.indexOf(modelData.name) >= 0
                         width: remoteList.width
-                        height: 26
+                        height: 28
                         radius: 8
-                        color: root.selected.indexOf(modelData.name) >= 0 ? colors.alpha(colors.primary, 0.20) : rowMa.containsMouse ? colors.alpha(colors.primary, 0.12) : "transparent"
-                        Behavior on color { ColorAnimation { duration: 150 } }
+                        color: isSel ? colors.alpha(colors.primary, 0.18) : rowMa.containsMouse ? colors.alpha(colors.primary, 0.10) : "transparent"
+                        Behavior on color { ColorAnimation { duration: 120 } }
+                        transform: Translate {
+                            x: rowMa.containsMouse ? 3 : 0
+                            Behavior on x { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
+                        }
                         RowLayout {
                             anchors.fill: parent
-                            anchors.leftMargin: 8
-                            anchors.rightMargin: 6
-                            spacing: 6
+                            anchors.leftMargin: 10
+                            anchors.rightMargin: 10
+                            spacing: 8
                             Text {
-                                text: modelData.isDir ? "󰉋" : ""
-                                color: modelData.isDir ? colors.primary : colors.alpha(colors.foreground, 0.7)
+                                text: isSel ? "✓" : ""
+                                color: colors.primary
                                 font.family: colors.fontSans
                                 font.pixelSize: 11
+                                font.weight: Font.Bold
+                                Layout.preferredWidth: 10
                             }
                             Text {
-                                text: modelData.name
-                                color: root.selected.indexOf(modelData.name) >= 0 ? colors.primary : colors.foreground
+                                text: modelData.name + (modelData.isDir ? "/" : "")
+                                color: isSel || modelData.isDir ? colors.primary : colors.foreground
                                 font.family: colors.fontSans
-                                font.pixelSize: 10
+                                font.pixelSize: 11
+                                font.weight: modelData.isDir ? Font.DemiBold : Font.Normal
                                 elide: Text.ElideRight
                                 Layout.fillWidth: true
+                            }
+                            Text {
+                                visible: root.pullState === modelData.name
+                                text: root.pullTotal > 0 ? Math.round(100 * Math.min(1, root.pullGot / root.pullTotal)) + "%" : "pulling…"
+                                color: colors.primary
+                                font.family: colors.fontSans
+                                font.pixelSize: 9
+                                font.weight: Font.Bold
                             }
                         }
                         Rectangle {
                             visible: root.pullState === modelData.name
                             anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
-                            anchors { leftMargin: 8; rightMargin: 8; bottomMargin: 2 }
+                            anchors.leftMargin: 10
+                            anchors.rightMargin: 10
+                            anchors.bottomMargin: 2
                             height: 3
                             radius: 1.5
-                            color: colors.alpha(colors.surfaceVariant, 0.5)
+                            color: colors.alpha(colors.surfaceVariant, 0.6)
                             Rectangle {
                                 anchors.left: parent.left
                                 anchors.top: parent.top
@@ -1425,64 +1414,37 @@ FloatingWindow {
                             }
                         }
                     }
-                    header: Rectangle {
-                        id: upRow
-                        visible: root.remoteDir !== "/sdcard"
-                        width: remoteList.width
-                        height: 24
-                        radius: 8
-                        color: upMa.containsMouse ? colors.alpha(colors.primary, 0.12) : "transparent"
-                        Text {
-                            anchors.left: parent.left
-                            anchors.leftMargin: 8
-                            anchors.verticalCenter: parent.verticalCenter
-                            text: "‹ up"
-                            color: colors.primary
-                            font.family: colors.fontSans
-                            font.pixelSize: 10
-                            font.weight: Font.Bold
-                        }
-                        MouseArea { id: upMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.enterRemote("..") }
-                    }
                 }
             }
 
-            RowLayout {
-                visible: root.connected
+            // ── footer: status message replaces the key hints while active ──
+            Item {
                 Layout.fillWidth: true
+                Layout.preferredHeight: 18
                 Text {
-                    text: "j/k move · l open · p pull · s sel · S shot · y yank · c clip · r ring · d dnd · t timeout · g/G ends · h up · / find · esc close"
-                    color: colors.alpha(colors.outline, 0.4)
-                    font.family: colors.fontSans
-                    font.pixelSize: 7
-                    horizontalAlignment: Text.AlignHCenter
-                    elide: Text.ElideRight
-                    Layout.fillWidth: true
-                }
-            }
-
-            // status pill — transient messages, bottom-anchored
-            Rectangle {
-                visible: root.statusMsg !== ""
-                Layout.fillWidth: true
-                Layout.preferredHeight: 22
-                radius: 11
-                color: colors.alpha(colors.secondary, 0.12)
-                border.width: 1
-                border.color: colors.alpha(colors.secondary, 0.2)
-                Text {
-                    anchors.centerIn: parent
+                    anchors.fill: parent
+                    visible: root.statusMsg !== ""
                     text: root.statusMsg
                     color: colors.secondary
                     font.family: colors.fontSans
-                    font.pixelSize: 8
+                    font.pixelSize: 11
+                    font.weight: Font.DemiBold
                     elide: Text.ElideRight
-                    Layout.fillWidth: true
                     horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                }
+                Text {
+                    anchors.fill: parent
+                    visible: root.statusMsg === ""
+                    text: "j/k move · l open · h up · s select · p pull · y yank · / find · r ring · d dnd · t timeout · esc close"
+                    color: colors.alpha(colors.outline, 0.6)
+                    font.family: colors.fontSans
+                    font.pixelSize: 9
+                    elide: Text.ElideRight
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
                 }
             }
-
-            Item { Layout.fillHeight: true }
         }
 
         Keys.onPressed: (e) => {
@@ -1494,7 +1456,7 @@ FloatingWindow {
                     root.searchBuf = ""
                 } else if (e.key === Qt.Key_Backspace) {
                     root.searchBuf = root.searchBuf.slice(0, -1)
-                    root.searchTimer.restart()
+                    searchTimer.restart()
                     root.findJump()
                 } else if (e.key === Qt.Key_Escape) {
                     root.clearSearch()
@@ -1508,7 +1470,7 @@ FloatingWindow {
                     }
                 } else if (e.text.length > 0 && e.text.charCodeAt(0) > 31) {
                     root.searchBuf += e.text
-                    root.searchTimer.restart()
+                    searchTimer.restart()
                     root.findJump()
                 }
                 return

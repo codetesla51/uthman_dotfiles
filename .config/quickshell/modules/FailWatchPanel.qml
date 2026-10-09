@@ -26,12 +26,28 @@ FloatingWindow {
     // log button shows loading, the rest stay usable
     property string openingKey: ""
     Timer { id: openingClear; interval: 2500; onTriggered: root.openingKey = "" }
+    property var liveLines: []
+    property bool tailBusy: false
+    function fixHint(name) {
+        var n = String(name || "")
+        if (n.indexOf("portal-gtk") !== -1)
+            return { why: "The GNOME portal has nothing to do on Hyprland, so it exits.", fix: "systemctl --user mask xdg-desktop-portal-gtk.service" }
+        if (n.indexOf("blueman") !== -1)
+            return { why: "Bluetooth tray applet crashed at login.", fix: "systemctl --user disable app-blueman@autostart.service" }
+        return { why: "", fix: "" }
+    }
+    function pollTail() {
+        if (root.tailBusy) return
+        root.tailBusy = true
+        tailProc.command = ["journalctl", "-n", "12", "-p", "warning", "--output=short", "--no-pager"]
+        tailProc.running = true
+    }
 
     title: "FailWatch"
-    implicitWidth: 620
-    implicitHeight: 440
-    minimumSize: Qt.size(520, 380)
-    maximumSize: Qt.size(760, 560)
+    implicitWidth: 660
+    implicitHeight: 620
+    minimumSize: Qt.size(560, 480)
+    maximumSize: Qt.size(760, 680)
     color: "transparent"
     visible: root.open || closeAnim.running
 
@@ -78,6 +94,29 @@ FloatingWindow {
         repeat: true
         triggeredOnStart: true
         onTriggered: root.pollLive()
+    }
+    Process {
+        id: tailProc
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: {
+                root.tailBusy = false
+                var lines = String(text).split("\n")
+                var keep = []
+                for (var i = 0; i < lines.length; i++) {
+                    var ln = lines[i].trim()
+                    if (ln !== "") keep.push(ln)
+                }
+                root.liveLines = keep.slice(-30)
+            }
+        }
+    }
+    Timer {
+        interval: 5000
+        running: root.open
+        repeat: true
+        triggeredOnStart: true
+        onTriggered: root.pollTail()
     }
 
     function shQuote(s) { return "'" + String(s).replace(/'/g, "'\\''") + "'" }
@@ -174,13 +213,6 @@ FloatingWindow {
                     Layout.alignment: Qt.AlignVCenter
                 }
                 Item { Layout.fillWidth: true }
-                Rectangle {
-                    width: 28; height: 28; radius: 14
-                    color: fwCloseMa.containsMouse ? colors.alpha(colors.surfaceVariant, 0.6) : colors.alpha(colors.surface, 0.6)
-                    border.width: 1; border.color: colors.alpha(colors.outline, 0.15)
-                    Text { anchors.centerIn: parent; text: "x"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 12; font.weight: Font.Bold }
-                    MouseArea { id: fwCloseMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.open = false }
-                }
             }
 
             // daemon status — no dot: state lives in the border tint + text,
@@ -203,51 +235,65 @@ FloatingWindow {
                 }
             }
 
-            // failed units
-            Text { text: "FAILED UNITS" + (root.failedCount > 0 ? " (" + root.failedCount + ")" : " — NONE"); color: colors.alpha(colors.outline, 0.6); font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold; font.letterSpacing: 1.5 }
+            // HEIGHT BUDGET 620: margins 28 + header 30 + daemon 30 + failedcap 14
+            //   + failedlist (0 when clean) + jcap 14 + errlist (fill, min 80)
+            //   + console 104 + pkg 26 + 7x8 gaps. FOCAL: diagnosis cards.
+            // failed units — diagnosis cards: what, why, fix
+            Text { visible: root.failed.length > 0; text: "NEEDS YOU (" + root.failedCount + ")"; color: colors.error; font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold; font.letterSpacing: 1.5 }
             ListView {
                 id: failList
-                Layout.fillWidth: true
-                Layout.preferredHeight: Math.min(3 * 48, Math.max(48, root.failed.length * 48))
                 visible: root.failed.length > 0
+                Layout.fillWidth: true
+                Layout.preferredHeight: Math.min(2 * 124, Math.max(120, root.failed.length * 124))
                 clip: true
                 model: root.failed
-                spacing: 4
+                spacing: 8
                 boundsBehavior: Flickable.StopAtBounds
                 ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
                 delegate: Rectangle {
                     required property var modelData
                     required property int index
                     width: failList.width
-                    height: 44
-                    radius: 10
-                    color: index % 2 === 0 ? colors.alpha(colors.surface, 0.35) : "transparent"
-                    border.width: 1; border.color: colors.alpha(colors.error, 0.25)
-                    RowLayout {
+                    height: 116
+                    radius: 12
+                    color: colors.alpha(colors.surface, 0.4)
+                    border.width: 1; border.color: colors.alpha(colors.error, 0.3)
+                    Rectangle { width: 3; anchors.left: parent.left; anchors.top: parent.top; anchors.bottom: parent.bottom; anchors.topMargin: 12; anchors.bottomMargin: 12; radius: 1.5; color: colors.error }
+                    ColumnLayout {
                         anchors.fill: parent
-                        anchors.leftMargin: 10; anchors.rightMargin: 8
-                        spacing: 8
-                        Rectangle { width: 3; Layout.preferredHeight: 24; radius: 1.5; color: colors.error; Layout.alignment: Qt.AlignVCenter }
-                        Text { text: modelData.name; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.Bold; elide: Text.ElideRight; Layout.fillWidth: true }
-                        Text { text: (modelData.scope || "") + " " + (modelData.active || "") + "/" + (modelData.sub || ""); color: colors.alpha(colors.outline, 0.6); font.family: colors.fontSans; font.pixelSize: 8 }
-                        Rectangle {
-                            width: 52; height: 24; radius: 8
-                            color: logMa.containsMouse ? colors.alpha(colors.primary, 0.25) : colors.alpha(colors.primary, 0.1)
-                            border.width: 1; border.color: colors.alpha(colors.primary, 0.35)
-                            Text { anchors.centerIn: parent; text: root.openingKey === "u:" + modelData.name ? "…" : "logs"; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold }
-                            MouseArea { id: logMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.openLog("u:" + modelData.name, root.unitLogCmd(modelData.name)) }
-                        }
-                        Rectangle {
-                            width: 52; height: 24; radius: 8
-                            color: cpMa.containsMouse ? colors.alpha(colors.secondary, 0.25) : colors.alpha(colors.secondary, 0.1)
-                            border.width: 1; border.color: colors.alpha(colors.secondary, 0.35)
-                            Text { anchors.centerIn: parent; text: "copy"; color: colors.secondary; font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold }
-                            MouseArea { id: cpMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.copyCmd(root.unitLogCmd(modelData.name)) }
+                        anchors.leftMargin: 14; anchors.rightMargin: 10
+                        anchors.topMargin: 8; anchors.bottomMargin: 8
+                        spacing: 3
+                        Text { text: root.fixHint(modelData.name).why !== '' ? modelData.name.split('.')[0] + ' keeps failing' : modelData.name; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 13; font.weight: Font.Bold; elide: Text.ElideRight; Layout.fillWidth: true }
+                        Text { text: root.fixHint(modelData.name).why !== '' ? root.fixHint(modelData.name).why : (modelData.scope || '') + ' ' + (modelData.active || '') + '/' + (modelData.sub || ''); color: colors.alpha(colors.outline, 0.7); font.family: colors.fontSans; font.pixelSize: 11; elide: Text.ElideRight; Layout.fillWidth: true }
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 8
+                            Text { text: root.fixHint(modelData.name).fix !== '' ? root.fixHint(modelData.name).fix : root.unitLogCmd(modelData.name); color: colors.primary; font.family: colors.fontSans; font.pixelSize: 10; elide: Text.ElideRight; Layout.fillWidth: true }
+                            Rectangle {
+                                width: 56; height: 24; radius: 8
+                                color: colors.primary
+                                Text { anchors.centerIn: parent; text: 'copy'; color: colors.background; font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold }
+                                MouseArea { anchors.fill: parent; hoverEnabled: true; onClicked: { var h = root.fixHint(modelData.name); root.copyCmd(h.fix !== '' ? h.fix : root.unitLogCmd(modelData.name)) } }
+                            }
+                            Rectangle {
+                                width: 52; height: 24; radius: 8
+                                color: logMa.containsMouse ? colors.alpha(colors.primary, 0.25) : colors.alpha(colors.primary, 0.1)
+                                border.width: 1; border.color: colors.alpha(colors.primary, 0.35)
+                                Text { anchors.centerIn: parent; text: root.openingKey === 'u:' + modelData.name ? '…' : 'logs'; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold }
+                                MouseArea { id: logMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.openLog('u:' + modelData.name, root.unitLogCmd(modelData.name)) }
+                            }
                         }
                     }
                 }
             }
 
+            // all clear — one calm line when both lists are empty
+            Text {
+                visible: root.failed.length === 0 && root.errors.length === 0 && root.daemonState === 'on'
+                text: "Healthy — 0 failed units, journal quiet. Console below is the proof."
+                color: colors.alpha(colors.primary, 0.85); font.family: colors.fontSans; font.pixelSize: 10; font.weight: Font.Bold
+            }
             // journal errors
             Text { text: "JOURNAL ERRORS — OOM · SEGFAULT · OOPS (" + root.errors.length + " kept)"; color: colors.alpha(colors.outline, 0.6); font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold; font.letterSpacing: 1.5 }
             ListView {
@@ -313,6 +359,44 @@ FloatingWindow {
                 visible: root.errors.length === 0 && root.daemonState === "on"
                 text: "No oops / segfaults / OOM kills recorded in the last 7 days."
                 color: colors.alpha(colors.outline, 0.5); font.family: colors.fontSans; font.pixelSize: 9
+            }
+
+            // live console — journal warnings tail, proof under the lists
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 104
+                radius: 10
+                color: colors.alpha(colors.surface, 0.45)
+                border.width: 1
+                border.color: colors.alpha(colors.primary, 0.25)
+                clip: true
+                ListView {
+                    id: tailList
+                    anchors.fill: parent
+                    anchors.margins: 8
+                    clip: true
+                    spacing: 1
+                    model: root.liveLines
+                    boundsBehavior: Flickable.StopAtBounds
+                    onCountChanged: if (count > 0) positionViewAtEnd()
+                    delegate: Text {
+                        required property var modelData
+                        width: tailList.width
+                        text: modelData
+                        color: colors.alpha(colors.foreground, 0.75)
+                        font.family: colors.fontSans
+                        font.pixelSize: 9
+                        elide: Text.ElideRight
+                    }
+                    Text {
+                        visible: root.liveLines.length === 0
+                        anchors.centerIn: parent
+                        text: "tail starting…"
+                        color: colors.alpha(colors.outline, 0.5)
+                        font.family: colors.fontSans
+                        font.pixelSize: 9
+                    }
+                }
             }
 
             // footer — package integrity (on-demand, slow)

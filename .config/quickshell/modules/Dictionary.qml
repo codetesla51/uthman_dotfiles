@@ -353,7 +353,7 @@ FloatingWindow {
             RowLayout {
                 Layout.fillWidth: true
                 spacing: 8
-                Text { text: "dict>"; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 13; font.weight: Font.Bold; Layout.alignment: Qt.AlignVCenter }
+                Text { text: "dict>"; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 14; font.weight: Font.Bold; Layout.alignment: Qt.AlignVCenter }
                 TextField {
                     id: searchField
                     Layout.fillWidth: true
@@ -362,7 +362,7 @@ FloatingWindow {
                     placeholderTextColor: colors.alpha(colors.outline, 0.5)
                     color: colors.foreground
                     font.family: colors.fontSans
-                    font.pixelSize: 13
+                    font.pixelSize: 14
                     selectByMouse: true
                     background: null
                     onAccepted: root.lookup(text)
@@ -398,7 +398,7 @@ FloatingWindow {
                                 text: modelData
                                 color: histMa.containsMouse ? colors.primary : colors.alpha(colors.outline, 0.75)
                                 font.family: colors.fontSans
-                                font.pixelSize: 10
+                                font.pixelSize: 11
                                 MouseArea { id: histMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.lookup(modelData) }
                             }
                             Text { visible: index < root.history.length - 1; text: "·"; color: colors.alpha(colors.outline, 0.4); font.family: colors.fontSans; font.pixelSize: 10 }
@@ -469,7 +469,7 @@ FloatingWindow {
                         text: root.entry ? root.entry.word.toUpperCase() + (root.entry.phonetic !== '' ? '  ' + root.entry.phonetic : '') : ''
                         color: colors.foreground
                         font.family: colors.fontSans
-                        font.pixelSize: 15
+                        font.pixelSize: 20
                         font.weight: Font.ExtraBold
                         font.letterSpacing: 0.5
                         Layout.fillWidth: true
@@ -478,19 +478,19 @@ FloatingWindow {
                     RowLayout {
                         Layout.fillWidth: true
                         spacing: 12
-                        Text {
+                        Rectangle {
                             visible: root.entry && root.entry.audio !== ""
-                            text: "play"
-                            color: playMa.containsMouse ? colors.tertiary : colors.alpha(colors.tertiary, 0.7)
-                            font.family: colors.fontSans
-                            font.pixelSize: 10
-                            MouseArea { id: playMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.playAudio() }
+                            width: 30; height: 30; radius: 15
+                            color: audioMa.containsMouse ? colors.alpha(colors.tertiary, 0.28) : colors.alpha(colors.tertiary, 0.12)
+                            border.width: 1; border.color: colors.alpha(colors.tertiary, 0.4)
+                            Text { anchors.centerIn: parent; text: ""; color: colors.tertiary; font.family: "Phosphor"; font.pixelSize: 15 }
+                            MouseArea { id: audioMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.playAudio() }
                         }
                         Text {
-                            text: "copy"
+                            text: "copy definition"
                             color: copyMa.containsMouse ? colors.secondary : colors.alpha(colors.secondary, 0.7)
                             font.family: colors.fontSans
-                            font.pixelSize: 10
+                            font.pixelSize: 11
                             MouseArea { id: copyMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.copyEntry() }
                         }
                     }
@@ -500,7 +500,7 @@ FloatingWindow {
                             required property var modelData
                             Layout.fillWidth: true
                             spacing: 2
-                            Text { text: (modelData.pos || "").toUpperCase(); color: colors.tertiary; font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold; font.letterSpacing: 1.2 }
+                            Text { text: (modelData.pos || "").toUpperCase(); color: colors.tertiary; font.family: colors.fontSans; font.pixelSize: 10; font.weight: Font.Bold; font.letterSpacing: 1.2 }
                             Repeater {
                                 model: modelData.defs
                                 delegate: ColumnLayout {
@@ -512,12 +512,12 @@ FloatingWindow {
                                         Layout.fillWidth: true
                                         spacing: 8
                                         Text { text: (index + 1) + "."; color: colors.alpha(colors.outline, 0.5); font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.Bold; Layout.alignment: Qt.AlignTop }
-                                        Text { text: modelData.def; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 11; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+                                        Text { text: modelData.def; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 13; wrapMode: Text.WordWrap; Layout.fillWidth: true }
                                     }
                                     Text {
                                         visible: modelData.example !== ""
                                         text: "eg. \"" + modelData.example + "\""
-                                        color: colors.alpha(colors.outline, 0.7); font.family: colors.fontSans; font.pixelSize: 10; font.italic: true
+                                        color: colors.alpha(colors.outline, 0.7); font.family: colors.fontSans; font.pixelSize: 12; font.italic: true
                                         wrapMode: Text.WordWrap; Layout.fillWidth: true; Layout.leftMargin: 22
                                     }
                                 }
@@ -534,7 +534,7 @@ FloatingWindow {
                                         text: modelData
                                         color: synMa.containsMouse ? colors.secondary : colors.alpha(colors.secondary, 0.75)
                                         font.family: colors.fontSans
-                                        font.pixelSize: 10
+                                        font.pixelSize: 12
                                         font.underline: synMa.containsMouse
                                         MouseArea { id: synMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.lookup(modelData) }
                                     }
@@ -546,7 +546,7 @@ FloatingWindow {
                                         text: modelData
                                         color: antMa.containsMouse ? colors.error : colors.alpha(colors.error, 0.75)
                                         font.family: colors.fontSans
-                                        font.pixelSize: 10
+                                        font.pixelSize: 12
                                         font.underline: antMa.containsMouse
                                         MouseArea { id: antMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.lookup(modelData) }
                                     }
@@ -566,7 +566,7 @@ FloatingWindow {
                                 text: modelData
                                 color: rsMa.containsMouse ? colors.primary : colors.alpha(colors.primary, 0.75)
                                 font.family: colors.fontSans
-                                font.pixelSize: 10
+                                font.pixelSize: 12
                                 font.underline: rsMa.containsMouse
                                 MouseArea { id: rsMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.lookup(modelData) }
                             }

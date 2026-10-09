@@ -64,6 +64,11 @@ PanelWindow {
     WlrLayershell.namespace: "qs-lyrics"
 
     onTrackKeyChanged: root.maybeFetch()
+    onPlayingChanged: {
+        root.posBase = root.player ? root.player.position : 0
+        root.stampBase = Date.now()
+        root.pos = root.posBase
+    }
     onOpenChanged: {
         if (root.open) root.maybeFetch()
     }

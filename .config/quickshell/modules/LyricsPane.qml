@@ -83,6 +83,7 @@ PanelWindow {
     }
     function fetchAttempt() {
         root.lines = []
+        root.winLines = []
         root.currentIdx = -1
         root.karaP = 0
         root.state = "fetching"
@@ -314,14 +315,16 @@ PanelWindow {
         readonly property real midY: height / 2
         readonly property real drumR: height * 0.4
 
-        // window band hairlines
+        // window band hairlines (ready only — plain has its own block)
         Rectangle {
+            visible: root.state === "ready"
             width: parent.width
             height: 1
             y: parent.midY - 27
             color: colors.alpha(colors.outline, 0.2)
         }
         Rectangle {
+            visible: root.state === "ready"
             width: parent.width
             height: 1
             y: parent.midY + 27
@@ -329,6 +332,7 @@ PanelWindow {
         }
         // pointers
         Shape {
+            visible: root.state === "ready"
             width: 14
             height: 18
             y: parent.midY - 9
@@ -342,6 +346,7 @@ PanelWindow {
             }
         }
         Shape {
+            visible: root.state === "ready"
             width: 14
             height: 18
             x: parent.width - 14
@@ -357,7 +362,7 @@ PanelWindow {
         }
 
         Repeater {
-            model: root.winLines
+            model: root.state === "ready" ? root.winLines : []
             delegate: Item {
                 required property var modelData
                 required property int index

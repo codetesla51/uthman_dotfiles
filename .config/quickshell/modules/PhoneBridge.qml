@@ -70,7 +70,6 @@ FloatingWindow {
     property bool hotspotBusy: false
     property bool hotspotWant: false
     property bool dndOn: false
-    property int phoneVol: -1            // music stream 0..15, -1 unknown
     property int screenTimeout: 60000   // ms
 
     // --- type-ahead find ---
@@ -86,9 +85,9 @@ FloatingWindow {
 
     title: "PhoneBridge"
     implicitWidth: 700
-    implicitHeight: 660
-    minimumSize: Qt.size(700, 660)
-    maximumSize: Qt.size(700, 660)
+    implicitHeight: 700
+    minimumSize: Qt.size(700, 700)
+    maximumSize: Qt.size(700, 700)
     color: "transparent"
     visible: root.open || closeAnim.running
 
@@ -189,7 +188,6 @@ FloatingWindow {
         if (!signalProc.running) { signalProc.command = root.adbArgs(["dumpsys", "telephony.registry"]); signalProc.running = true }
         if (!dataProc.running) { dataProc.command = root.adbArgs(["cat", "/proc/net/dev"]); dataProc.running = true }
         if (!dndGetProc.running) { dndGetProc.command = root.adbArgs(["settings", "get", "global", "zen_mode"]); dndGetProc.running = true }
-        if (!volGetProc.running) { volGetProc.command = root.adbArgs(["settings", "get", "system", "volume_music_speaker"]); volGetProc.running = true }
         if (!timeoutGetProc.running) { timeoutGetProc.command = root.adbArgs(["settings", "get", "system", "screen_off_timeout"]); timeoutGetProc.running = true }
         if (!hotspotStatProc.running) { hotspotStatProc.command = root.adbArgs(["dumpsys", "wifi"]); hotspotStatProc.running = true }
     }
@@ -221,11 +219,6 @@ FloatingWindow {
         if (root.screenTimeout >= steps[steps.length - 1]) next = steps[0]
         timeoutSetProc.command = root.adbArgs(["settings", "put", "system", "screen_off_timeout", String(next)])
         timeoutSetProc.running = true
-    }
-    function setVolume(v) {
-        if (!root.connected) return
-        volSetProc.command = root.adbArgs(["cmd", "media_session", "volume", "--stream", "3", "--set", String(v)])
-        volSetProc.running = true
     }
     function toggleHotspot() {
         if (!root.connected || root.hotspotBusy) return
@@ -861,20 +854,6 @@ FloatingWindow {
             if (code !== 0) root.say("DND failed — screen on and unlocked?")
         }
     }    Process {
-        id: volGetProc
-        stdout: StdioCollector {
-            waitForEnd: true
-            onStreamFinished: { var v = parseInt(text.trim()); if (!isNaN(v)) root.phoneVol = Math.max(0, Math.min(15, v)) }
-        }
-    }
-    Process {
-        id: volSetProc
-        onExited: function (code) {
-            if (code === 0) { volGetProc.command = root.adbArgs(["settings", "get", "system", "volume_music_speaker"]); volGetProc.running = true }
-            else root.say("Volume failed — screen on and unlocked?")
-        }
-    }
-    Process {
         id: timeoutGetProc
         stdout: StdioCollector {
             waitForEnd: true
@@ -1018,13 +997,6 @@ FloatingWindow {
             RowLayout {
                 Layout.fillWidth: true
                 spacing: 8
-                Rectangle {
-                    width: 8
-                    height: 8
-                    radius: 4
-                    Layout.alignment: Qt.AlignVCenter
-                    color: root.hotspotBusy ? colors.tertiary : root.connected ? colors.primary : colors.alpha(colors.outline, 0.4)
-                }
                 ColumnLayout {
                     spacing: 0
                     Layout.fillWidth: true
@@ -1168,22 +1140,6 @@ FloatingWindow {
                 ActionTile { glyph: ""; label: "Clip"; tapped: () => root.sendClipboard() }
                 ActionTile { glyph: ""; label: root.dndOn ? "DND on" : "DND"; lit: root.dndOn; tapped: () => root.toggleDnd() }
                 ActionTile { glyph: ""; label: root.timeoutLabel(); tapped: () => root.cycleTimeout() }
-            }
-            RowLayout {
-                visible: root.connected
-                Layout.fillWidth: true
-                spacing: 8
-                Text { text: ""; color: colors.alpha(colors.primary, 0.85); font.family: "Phosphor"; font.pixelSize: 14; Layout.alignment: Qt.AlignVCenter }
-                Slider {
-                    Layout.fillWidth: true
-                    from: 0
-                    to: 15
-                    stepSize: 1
-                    enabled: root.phoneVol >= 0
-                    value: root.phoneVol
-                    onMoved: root.setVolume(Math.round(value))
-                }
-                Text { text: root.phoneVol < 0 ? "…" : root.phoneVol + "/15"; color: colors.alpha(colors.outline, 0.6); font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold }
             }
             // ---- SEND: drop zone tile ----
             RowLayout {

@@ -48,10 +48,10 @@ one-shot subcommands and polls on timers. Pairing/config: `~/phonebridge/init.sh
   double-count), and a hotspot toggle (`cmd wifi start/stop-softap`) with a
   link-lost → watchdog re-link state. 2 GB cap is `dataCapMb`.
 - **Quick actions** — Ring, Shot (`S`), Clip, DND toggle (`d`), screen-timeout
-  cycler (`t`: 15s→10m), media-volume slider (`cmd media_session`, proven by
-  ring). Keys: `r` ring, `S` shot (`s` stays select), `d` DND, `t` timeout.
-  Torch is deliberately absent: no stable adb API on this ROM (needs relay-app
-  support).
+  cycler (`t`: 15s→10m). Keys: `r` ring, `S` shot (`s` stays select), `d` DND,
+  `t` timeout. Torch is deliberately absent: no stable adb API on this ROM
+  (needs relay-app support). Volume slider was tried and cut (default chrome,
+  didn't earn its row).
 - **Notify forwarder** — every 4 s while a phone is paired it polls the
   notification shade and when a *new* notification appears from an
   allowlisted app it pings the desktop with `notify-send` (sender name only —

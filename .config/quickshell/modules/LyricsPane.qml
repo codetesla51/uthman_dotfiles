@@ -264,7 +264,7 @@ PanelWindow {
             height: 18
             y: parent.midY - 9
             ShapePath {
-                fillColor: colors.secondary
+                fillColor: colors.tertiary
                 strokeColor: "transparent"
                 PathMove { x: 0; y: 0 }
                 PathLine { x: 14; y: 9 }
@@ -278,7 +278,7 @@ PanelWindow {
             x: parent.width - 14
             y: parent.midY - 9
             ShapePath {
-                fillColor: colors.secondary
+                fillColor: colors.tertiary
                 strokeColor: "transparent"
                 PathMove { x: 14; y: 0 }
                 PathLine { x: 0; y: 9 }
@@ -326,14 +326,14 @@ PanelWindow {
                     radius: 2
                     x: 27
                     y: 26 - 1.5
-                    color: isActive ? colors.secondary : colors.alpha(colors.foreground, 0.55)
+                    color: isActive ? colors.tertiary : colors.alpha(colors.foreground, 0.55)
                 }
                 // line number
                 Text {
                     x: 27
                     y: 26 + 8
                     text: li + 1 < 10 ? "0" + (li + 1) : "" + (li + 1)
-                    color: isActive ? colors.secondary : colors.alpha(colors.foreground, 0.4)
+                    color: isActive ? colors.tertiary : colors.alpha(colors.foreground, 0.4)
                     font.family: "JetBrainsMono Nerd Font Mono"
                     font.pixelSize: 12
                     font.letterSpacing: 2
@@ -349,8 +349,8 @@ PanelWindow {
                             required property int index
                             readonly property real lit: isActive ? Math.max(0, Math.min(1, root.karaP * words.length - index)) : 0
                             text: modelData
-                            color: isPast ? colors.alpha(colors.secondary, 0.75)
-                                : isActive ? (lit >= 0.5 ? colors.secondary : colors.alpha(colors.foreground, 0.35))
+                            color: isPast ? colors.alpha(colors.tertiary, 0.75)
+                                : isActive ? (lit >= 0.5 ? colors.tertiary : colors.alpha(colors.foreground, 0.35))
                                 : colors.alpha(colors.foreground, 0.35)
                             font.family: "Inter"
                             font.pixelSize: lineSize

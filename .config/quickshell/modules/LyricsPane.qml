@@ -135,7 +135,7 @@ PanelWindow {
     function fitSize(raw) {
         var fs = 26
         while (fs > 13) {
-            var rows = Math.ceil(raw.length * fs * 0.6 / 540)
+            var rows = Math.ceil(raw.length * fs * 0.72 / 540)
             if (rows * fs * 1.15 <= 73) return fs
             fs--
         }

@@ -972,8 +972,9 @@ FloatingWindow {
             anchors.margins: 16
             spacing: 10
 
-            // HEIGHT BUDGET 700: margins 32 + main row (fill) + 10 + footer 18.
-            // Main row 640: rail fixed 556 + spacer; right drop 56 + head 24 + browser fill.
+            // HEIGHT BUDGET 700: margins 32 + main row 640 + 10 + footer 18.
+            // Rail fixed 568 (104+70+112+160+32 + 9x10 gaps) + spacer 72.
+            // Right: drop 120 + head ~16 + browser fill (~484) + 2x10 gaps.
             // FOCAL: phone file list (right, fills). Rank2: status rail. Rank3: footer.
             RowLayout {
                 Layout.fillWidth: true
@@ -1086,7 +1087,7 @@ FloatingWindow {
                     Surface {
                         visible: root.connected
                         Layout.fillWidth: true
-                        Layout.preferredHeight: 100
+                        Layout.preferredHeight: 112
                         ColumnLayout {
                             anchors.fill: parent
                             anchors.leftMargin: 14

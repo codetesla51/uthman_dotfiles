@@ -301,16 +301,16 @@ PanelWindow {
                 height: 52
                 visible: Math.abs(d) <= 3
                 y: stage.midY + stage.drumR * Math.sin(d * Math.PI / 6) - 26
-                Behavior on y { NumberAnimation { duration: 1000; easing.type: Easing.OutCubic } }
+                Behavior on y { NumberAnimation { duration: 450; easing.type: Easing.OutCubic } }
                 opacity: Math.max(0, 1 - Math.abs(d) * 0.3)
-                Behavior on opacity { NumberAnimation { duration: 900; easing.type: Easing.OutCubic } }
+                Behavior on opacity { NumberAnimation { duration: 400; easing.type: Easing.OutCubic } }
                 rotation: 0
                 transform: Rotation {
                     axis { x: 1; y: 0; z: 0 }
                     origin.x: width / 2
                     origin.y: 26
                     angle: -d * 30
-                    Behavior on angle { NumberAnimation { duration: 1000; easing.type: Easing.OutCubic } }
+                    Behavior on angle { NumberAnimation { duration: 450; easing.type: Easing.OutCubic } }
                 }
                 layer.enabled: Math.abs(d) > 0
                 layer.effect: FastBlur {

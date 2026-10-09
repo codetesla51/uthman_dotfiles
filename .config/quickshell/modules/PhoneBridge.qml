@@ -994,62 +994,73 @@ FloatingWindow {
                             anchors.topMargin: 11
                             anchors.bottomMargin: 11
                             spacing: 3
-                            Text {
-                                text: root.connected ? root.deviceName : root.linkLost ? "Link lost" : "No phone paired"
-                                color: root.linkLost ? colors.error : colors.foreground
-                                font.family: colors.fontSans
-                                font.pixelSize: 13
-                                font.weight: Font.Bold
-                                elide: Text.ElideRight
-                                Layout.fillWidth: true
-                            }
-                            Text {
-                                text: root.hotspotBusy ? "Switching hotspot, link may drop"
-                                    : root.connected ? root.deviceId + " · wifi"
-                                    : root.linkLost ? "Watching, retrying in " + root.reconnectDelay + "s"
-                                    : "Run adb tcpip 5555 once"
-                                color: root.hotspotBusy ? colors.tertiary : root.connected ? colors.alpha(colors.primary, 0.85) : colors.alpha(colors.outline, 0.7)
-                                font.family: colors.fontSans
-                                font.pixelSize: 9
-                                elide: Text.ElideRight
-                                Layout.fillWidth: true
-                            }
                             RowLayout {
                                 Layout.fillWidth: true
                                 spacing: 10
                                 ColumnLayout {
-                                    spacing: 1
+                                    spacing: 3
                                     Layout.fillWidth: true
-                                    Text { text: root.battery >= 0 ? root.battery + "%" : "…"; color: root.battery >= 0 && root.battery < 15 && !root.charging ? colors.error : colors.foreground; font.family: colors.fontSans; font.pixelSize: 13; font.weight: Font.Bold }
-                                    Text { text: root.charging ? "CHARGING" + (root.plugged !== "" ? " · " + root.plugged : "") : "ON BATTERY"; color: root.charging ? colors.primary : colors.alpha(colors.outline, 0.75); font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold; font.letterSpacing: 0.8 }
-                                }
-                                ColumnLayout {
-                                    visible: root.connected && root.signalLevel >= 0
-                                    spacing: 4
-                                    Item {
-                                        Layout.alignment: Qt.AlignRight
-                                        width: 19
-                                        height: 13
-                                        Repeater {
-                                            model: 4
-                                            Rectangle {
-                                                required property int index
-                                                x: index * 5
-                                                width: 4
-                                                height: 4 + index * 3
-                                                y: 13 - height
-                                                radius: 1
-                                                color: index < root.signalLevel ? colors.primary : colors.alpha(colors.outline, 0.3)
-                                            }
-                                        }
+                                    Text {
+                                        text: root.connected ? root.deviceName : root.linkLost ? "Link lost" : "No phone paired"
+                                        color: root.linkLost ? colors.error : colors.foreground
+                                        font.family: colors.fontSans
+                                        font.pixelSize: 13
+                                        font.weight: Font.Bold
+                                        elide: Text.ElideRight
+                                        Layout.fillWidth: true
                                     }
                                     Text {
-                                        text: (root.signalNet !== "" ? root.signalNet + " · " : "") + root.signalLevel + "/4"
-                                        color: colors.alpha(colors.outline, 0.75)
+                                        text: root.hotspotBusy ? "Switching hotspot, link may drop"
+                                            : root.connected ? root.deviceId + " · wifi"
+                                            : root.linkLost ? "Watching, retrying in " + root.reconnectDelay + "s"
+                                            : "Run adb tcpip 5555 once"
+                                        color: root.hotspotBusy ? colors.tertiary : root.connected ? colors.alpha(colors.primary, 0.85) : colors.alpha(colors.outline, 0.7)
+                                        font.family: colors.fontSans
+                                        font.pixelSize: 9
+                                        elide: Text.ElideRight
+                                        Layout.fillWidth: true
+                                    }
+                                    Text {
+                                        visible: root.connected
+                                        text: root.charging ? "CHARGING" + (root.plugged !== "" ? " · " + root.plugged : "") : "ON BATTERY"
+                                        color: root.charging ? colors.primary : colors.alpha(colors.outline, 0.75)
                                         font.family: colors.fontSans
                                         font.pixelSize: 9
                                         font.weight: Font.Bold
+                                        font.letterSpacing: 0.8
+                                    }
+                                }
+                                ColumnLayout {
+                                    visible: root.connected
+                                    spacing: 2
+                                    Text { text: root.battery >= 0 ? root.battery + "%" : "…"; color: root.battery >= 0 && root.battery < 15 && !root.charging ? colors.error : colors.foreground; font.family: colors.fontSans; font.pixelSize: 17; font.weight: Font.ExtraBold; Layout.alignment: Qt.AlignRight }
+                                    RowLayout {
+                                        spacing: 5
                                         Layout.alignment: Qt.AlignRight
+                                        visible: root.signalLevel >= 0
+                                        Item {
+                                            width: 19
+                                            height: 13
+                                            Repeater {
+                                                model: 4
+                                                Rectangle {
+                                                    required property int index
+                                                    x: index * 5
+                                                    width: 4
+                                                    height: 4 + index * 3
+                                                    y: 13 - height
+                                                    radius: 1
+                                                    color: index < root.signalLevel ? colors.primary : colors.alpha(colors.outline, 0.3)
+                                                }
+                                            }
+                                        }
+                                        Text {
+                                            text: (root.signalNet !== "" ? root.signalNet + " · " : "") + root.signalLevel + "/4"
+                                            color: colors.alpha(colors.outline, 0.75)
+                                            font.family: colors.fontSans
+                                            font.pixelSize: 9
+                                            font.weight: Font.Bold
+                                        }
                                     }
                                 }
                             }

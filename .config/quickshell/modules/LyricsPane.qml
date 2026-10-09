@@ -105,6 +105,36 @@ PanelWindow {
         if (root.lines.length > 10) out.push("…")
         return out.join("\n")
     }
+    readonly property string terHex: "#" + colors.tertiary.toString().slice(-6)
+    readonly property string dimHex: "#" + colors.outline.toString().slice(-6)
+    function escHtml(s) {
+        return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    }
+    // mock fit(): wrap estimate, shrink until block height fits 73px (17% of stage)
+    function fitSize(raw) {
+        var fs = 26
+        while (fs > 13) {
+            var rows = Math.ceil(raw.length * fs * 0.6 / 540)
+            if (rows * fs * 1.15 <= 73) return fs
+            fs--
+        }
+        return 13
+    }
+    function richLine(raw, li) {
+        var ws = String(raw).split(" ")
+        var d = li - root.currentIdx
+        var out = []
+        for (var i = 0; i < ws.length; i++) {
+            var c
+            if (d < 0) c = root.terHex
+            else if (d === 0) {
+                var lit = Math.max(0, Math.min(1, root.karaP * ws.length - i))
+                c = lit >= 0.5 ? root.terHex : root.dimHex
+            } else c = root.dimHex
+            out.push('<font color="' + c + '">' + root.escHtml(ws[i]) + "</font>")
+        }
+        return out.join(" ")
+    }
     function lineDur(a) {
         if (a < 0 || a >= root.lines.length) return 0
         if (a + 1 < root.lines.length) return root.lines[a + 1].t - root.lines[a].t
@@ -296,12 +326,11 @@ PanelWindow {
                 readonly property int d: li - root.currentIdx
                 readonly property bool isActive: d === 0
                 readonly property bool isPast: d < 0
-                readonly property var words: String(modelData.x).split(" ")
-                readonly property int lineSize: String(modelData.x).length > 70 ? 18 : String(modelData.x).length > 50 ? 21 : String(modelData.x).length > 34 ? 23 : 26
+                readonly property string raw: String(modelData.x)
                 width: stage.width
-                height: 52
+                height: Math.max(52, lyricText.implicitHeight + 10)
                 visible: Math.abs(d) <= 3
-                y: stage.midY + stage.drumR * Math.sin(d * Math.PI / 6) - 26
+                y: stage.midY + stage.drumR * Math.sin(d * Math.PI / 6) - height / 2
                 Behavior on y { NumberAnimation { duration: 450; easing.type: Easing.OutCubic } }
                 opacity: Math.max(0, 1 - Math.abs(d) * 0.3)
                 Behavior on opacity { NumberAnimation { duration: 400; easing.type: Easing.OutCubic } }
@@ -309,7 +338,7 @@ PanelWindow {
                 transform: Rotation {
                     axis { x: 1; y: 0; z: 0 }
                     origin.x: width / 2
-                    origin.y: 26
+                    origin.y: height / 2
                     angle: -d * 30
                     Behavior on angle { NumberAnimation { duration: 450; easing.type: Easing.OutCubic } }
                 }
@@ -338,28 +367,24 @@ PanelWindow {
                     font.pixelSize: 12
                     font.letterSpacing: 2
                 }
-                // words
-                Row {
-                    anchors.centerIn: parent
-                    spacing: 9
-                    Repeater {
-                        model: words
-                        delegate: Text {
-                            required property string modelData
-                            required property int index
-                            readonly property real lit: isActive ? Math.max(0, Math.min(1, root.karaP * words.length - index)) : 0
-                            text: modelData
-                            color: isPast ? colors.alpha(colors.tertiary, 0.75)
-                                : isActive ? (lit >= 0.5 ? colors.tertiary : colors.alpha(colors.foreground, 0.35))
-                                : colors.alpha(colors.foreground, 0.35)
-                            font.family: "Inter"
-                            font.pixelSize: lineSize
-                            font.weight: Font.Bold
-                            font.letterSpacing: -0.4
-                            style: Text.Outline
-                            styleColor: Qt.rgba(0, 0, 0, 0.85)
-                        }
-                    }
+                // words: centered wrapping rich text — long lines wrap then
+                // shrink until the block fits 73px; rails never touched
+                Text {
+                    id: lyricText
+                    width: 540
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    y: (parent.height - implicitHeight) / 2
+                    horizontalAlignment: Text.AlignHCenter
+                    wrapMode: Text.WordWrap
+                    textFormat: Text.RichText
+                    text: root.richLine(raw, li)
+                    font.family: "Inter"
+                    font.pixelSize: root.fitSize(raw)
+                    font.weight: Font.Bold
+                    font.letterSpacing: -0.4
+                    lineHeight: 1.15
+                    style: Text.Outline
+                    styleColor: Qt.rgba(0, 0, 0, 0.85)
                 }
             }
         }

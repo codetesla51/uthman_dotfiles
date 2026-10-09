@@ -327,97 +327,72 @@ FloatingWindow {
             anchors.margins: 14
             spacing: 8
 
-            // header — no X: Esc closes, hub tile reopens
+            // HEIGHT BUDGET 500: margins 28 + prompt 34 + hairline 9 + history 24
+            //   + body (fill) + footer 16 + 5x8 gaps. FOCAL: the word line.
+            // prompt
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 10
-                Rectangle {
-                    Layout.preferredWidth: 26; Layout.preferredHeight: 26; radius: 13
-                    color: colors.alpha(colors.tertiary, 0.15)
-                    border.width: 1; border.color: colors.alpha(colors.tertiary, 0.3)
-                    Text { anchors.centerIn: parent; text: ""; color: colors.tertiary; font.family: colors.fontSans; font.pixelSize: 12 }
+                spacing: 8
+                Text { text: "dict>"; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 13; font.weight: Font.Bold; Layout.alignment: Qt.AlignVCenter }
+                TextField {
+                    id: searchField
+                    Layout.fillWidth: true
                     Layout.alignment: Qt.AlignVCenter
+                    placeholderText: "type a word…"
+                    placeholderTextColor: colors.alpha(colors.outline, 0.5)
+                    color: colors.foreground
+                    font.family: colors.fontSans
+                    font.pixelSize: 13
+                    selectByMouse: true
+                    background: null
+                    onAccepted: root.lookup(text)
+                    Keys.onEscapePressed: root.open = false
                 }
-                Text { text: "DICTIONARY"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 12; font.weight: Font.ExtraBold; font.letterSpacing: 1.3; Layout.alignment: Qt.AlignVCenter }
-                Item { Layout.fillWidth: true }
-                Text { text: "esc closes"; color: colors.alpha(colors.outline, 0.4); font.family: colors.fontSans; font.pixelSize: 8; Layout.alignment: Qt.AlignVCenter }
-            }
-
-            // search bar
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.preferredHeight: 42
-                radius: 12
-                color: colors.alpha(colors.surface, 0.6)
-                border.width: 1
-                border.color: searchField.activeFocus ? colors.alpha(colors.tertiary, 0.5) : colors.alpha(colors.outline, 0.15)
-                Behavior on border.color { ColorAnimation { duration: 150 } }
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.leftMargin: 14; anchors.rightMargin: 8
-                    spacing: 8
-                    Text { text: "Aa"; color: colors.alpha(colors.outline, 0.7); font.family: colors.fontSans; font.pixelSize: 13; font.weight: Font.Bold; Layout.alignment: Qt.AlignVCenter }
-                    TextField {
-                        id: searchField
-                        Layout.fillWidth: true
-                        Layout.alignment: Qt.AlignVCenter
-                        placeholderText: "Type a word, hit Enter…"
-                        placeholderTextColor: colors.alpha(colors.outline, 0.5)
-                        color: colors.foreground
-                        font.family: colors.fontSans
-                        font.pixelSize: 14
-                        selectByMouse: true
-                        background: null
-                        onAccepted: root.lookup(text)
-                        Keys.onEscapePressed: root.open = false
-                    }
-                    Rectangle {
-                        width: 64; height: 28; radius: 9
-                        color: goMa.containsMouse ? colors.alpha(colors.tertiary, 0.28) : colors.alpha(colors.tertiary, 0.13)
-                        border.width: 1; border.color: colors.alpha(colors.tertiary, 0.4)
-                        Text { anchors.centerIn: parent; text: root.state === "loading" ? "…" : "define"; color: colors.tertiary; font.family: colors.fontSans; font.pixelSize: 10; font.weight: Font.Bold }
-                        MouseArea { id: goMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.lookup(searchField.text) }
-                    }
+                Rectangle {
+                    width: 64; height: 28; radius: 9
+                    color: goMa.containsMouse ? colors.alpha(colors.tertiary, 0.28) : colors.alpha(colors.tertiary, 0.13)
+                    border.width: 1; border.color: colors.alpha(colors.tertiary, 0.4)
+                    Text { anchors.centerIn: parent; text: root.state === "loading" ? "…" : "define"; color: colors.tertiary; font.family: colors.fontSans; font.pixelSize: 10; font.weight: Font.Bold }
+                    MouseArea { id: goMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.lookup(searchField.text) }
                 }
             }
 
-            // recent history
+            Rectangle { Layout.fillWidth: true; height: 1; color: colors.alpha(colors.outline, 0.12) }
+
+            // history line
             RowLayout {
                 visible: root.history.length > 0
                 Layout.fillWidth: true
-                spacing: 6
-                Text { text: "RECENT"; color: colors.alpha(colors.outline, 0.55); font.family: colors.fontSans; font.pixelSize: 7; font.weight: Font.Bold; font.letterSpacing: 1.3; Layout.alignment: Qt.AlignVCenter }
+                spacing: 4
+                Text { text: "history:"; color: colors.alpha(colors.outline, 0.55); font.family: colors.fontSans; font.pixelSize: 10; Layout.alignment: Qt.AlignVCenter }
                 Flow {
                     Layout.fillWidth: true
-                    spacing: 6
+                    spacing: 4
                     Repeater {
                         model: root.history
-                        delegate: Rectangle {
+                        delegate: RowLayout {
                             required property var modelData
-                            width: histLbl.implicitWidth + 18; height: 22; radius: 11
-                            color: histMa.containsMouse ? colors.alpha(colors.tertiary, 0.22) : colors.alpha(colors.surface, 0.6)
-                            border.width: 1; border.color: colors.alpha(colors.outline, 0.15)
-                            Text { id: histLbl; anchors.centerIn: parent; text: modelData; color: colors.alpha(colors.foreground, 0.8); font.family: colors.fontSans; font.pixelSize: 9 }
-                            MouseArea { id: histMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.lookup(modelData) }
+                            required property int index
+                            spacing: 4
+                            Text {
+                                text: modelData
+                                color: histMa.containsMouse ? colors.primary : colors.alpha(colors.outline, 0.75)
+                                font.family: colors.fontSans
+                                font.pixelSize: 10
+                                MouseArea { id: histMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.lookup(modelData) }
+                            }
+                            Text { visible: index < root.history.length - 1; text: "·"; color: colors.alpha(colors.outline, 0.4); font.family: colors.fontSans; font.pixelSize: 10 }
                         }
                     }
                 }
             }
 
-            Rectangle { visible: root.history.length > 0; Layout.fillWidth: true; height: 1; color: colors.alpha(colors.outline, 0.12) }
-
-            // ---- body states ----
-            // idle hint
+            // idle
             Item {
                 visible: root.state === "idle"
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                ColumnLayout {
-                    anchors.centerIn: parent
-                    spacing: 6
-                    Text { text: ""; color: colors.alpha(colors.outline, 0.3); font.family: colors.fontSans; font.pixelSize: 30; font.weight: Font.ExtraBold; Layout.alignment: Qt.AlignHCenter }
-                    Text { text: "Look up any English word — definitions, examples, synonyms."; color: colors.alpha(colors.outline, 0.55); font.family: colors.fontSans; font.pixelSize: 10; Layout.alignment: Qt.AlignHCenter }
-                }
+                Text { anchors.centerIn: parent; text: "type a word after the prompt."; color: colors.alpha(colors.outline, 0.55); font.family: colors.fontSans; font.pixelSize: 11 }
             }
 
             // loading
@@ -425,46 +400,31 @@ FloatingWindow {
                 visible: root.state === "loading"
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                ColumnLayout {
+                RowLayout {
                     anchors.centerIn: parent
                     spacing: 8
                     Text {
-                        text: "↻"; color: colors.tertiary; font.family: colors.fontSans; font.pixelSize: 26
-                        Layout.alignment: Qt.AlignHCenter
-                        RotationAnimation on rotation { running: root.state === "loading"; loops: Animation.Infinite; duration: 1200; from: 0; to: 360 }
+                        text: "↻"; color: colors.tertiary; font.family: colors.fontSans; font.pixelSize: 18
+                        RotationAnimation on rotation { running: root.state === 'loading'; loops: Animation.Infinite; duration: 1200; from: 0; to: 360 }
                     }
-                    Text { text: root.mirror ? "Trying mirror…" : "Looking up…"; color: colors.alpha(colors.outline, 0.6); font.family: colors.fontSans; font.pixelSize: 10; Layout.alignment: Qt.AlignHCenter }
+                    Text { text: root.mirror ? "trying mirror…" : "resolving…"; color: colors.alpha(colors.outline, 0.6); font.family: colors.fontSans; font.pixelSize: 11 }
                 }
             }
 
-            // error — icon + reason + retry, not a bare red strip
-            Rectangle {
+            // error — plain red line + retry, same footprint as body
+            Item {
                 visible: root.state === "error"
                 Layout.fillWidth: true
-                Layout.preferredHeight: errCol.implicitHeight + 28
-                radius: 12
-                color: colors.alpha(colors.error, 0.07)
-                border.width: 1; border.color: colors.alpha(colors.error, 0.3)
+                Layout.fillHeight: true
                 ColumnLayout {
-                    id: errCol
-                    anchors.left: parent.left; anchors.right: parent.right
-                    anchors.verticalCenter: parent.verticalCenter
-                    anchors.leftMargin: 16; anchors.rightMargin: 16
-                    spacing: 6
+                    anchors.centerIn: parent
+                    spacing: 8
+                    Text { text: root.errMsg; color: colors.error; font.family: colors.fontSans; font.pixelSize: 11; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap; width: 420; Layout.alignment: Qt.AlignHCenter }
                     Rectangle {
-                        Layout.preferredWidth: 26; Layout.preferredHeight: 26; radius: 13
-                        color: colors.alpha(colors.error, 0.14)
-                        border.width: 1; border.color: colors.alpha(colors.error, 0.4)
-                        Text { anchors.centerIn: parent; text: "!"; color: colors.error; font.family: colors.fontSans; font.pixelSize: 13; font.weight: Font.ExtraBold }
-                        Layout.alignment: Qt.AlignHCenter
-                    }
-                    Text { text: "No definition found"; color: colors.error; font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.Bold; horizontalAlignment: Text.AlignHCenter; Layout.fillWidth: true }
-                    Text { text: root.errMsg; color: colors.alpha(colors.foreground, 0.75); font.family: colors.fontSans; font.pixelSize: 10; wrapMode: Text.WordWrap; horizontalAlignment: Text.AlignHCenter; Layout.fillWidth: true }
-                    Rectangle {
-                        width: 76; height: 26; radius: 13
+                        width: 64; height: 26; radius: 9
                         color: retryMa.containsMouse ? colors.alpha(colors.tertiary, 0.28) : colors.alpha(colors.tertiary, 0.12)
                         border.width: 1; border.color: colors.alpha(colors.tertiary, 0.4)
-                        Text { anchors.centerIn: parent; text: "retry"; color: colors.tertiary; font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold }
+                        Text { anchors.centerIn: parent; text: "retry"; color: colors.tertiary; font.family: colors.fontSans; font.pixelSize: 10; font.weight: Font.Bold }
                         MouseArea { id: retryMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.lookup(searchField.text) }
                         Layout.alignment: Qt.AlignHCenter
                     }
@@ -481,168 +441,137 @@ FloatingWindow {
                 ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
                 contentWidth: availableWidth
                 contentHeight: resultCol.implicitHeight
-
                 ColumnLayout {
                     id: resultCol
                     width: dictScroll.availableWidth
-                    spacing: 10
-
-                    // word hero
-                    Rectangle {
+                    spacing: 4
+                    Text {
+                        text: root.entry ? root.entry.word.toUpperCase() + (root.entry.phonetic !== '' ? '  ' + root.entry.phonetic : '') : ''
+                        color: colors.foreground
+                        font.family: colors.fontSans
+                        font.pixelSize: 15
+                        font.weight: Font.ExtraBold
+                        font.letterSpacing: 0.5
                         Layout.fillWidth: true
-                        Layout.preferredHeight: heroCol.implicitHeight + 24
-                        radius: 14
-                        color: colors.alpha(colors.surface, 0.5)
-                        border.width: 1; border.color: colors.alpha(colors.tertiary, 0.3)
-                        ColumnLayout {
-                            id: heroCol
-                            anchors.left: parent.left; anchors.right: parent.right
-                            anchors.verticalCenter: parent.verticalCenter
-                            anchors.leftMargin: 16; anchors.rightMargin: 12
-                            spacing: 2
-                            RowLayout {
-                                Layout.fillWidth: true
-                                spacing: 10
-                                Text { text: root.entry ? root.entry.word : ""; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 20; font.weight: Font.ExtraBold; elide: Text.ElideRight; Layout.fillWidth: true }
-                                Rectangle {
-                                    visible: root.entry && root.entry.audio !== ""
-                                    width: 26; height: 26; radius: 13
-                                    color: audioMa.containsMouse ? colors.alpha(colors.tertiary, 0.28) : colors.alpha(colors.tertiary, 0.12)
-                                    border.width: 1; border.color: colors.alpha(colors.tertiary, 0.4)
-                                    Text { anchors.centerIn: parent; text: "♪"; color: colors.tertiary; font.family: colors.fontSans; font.pixelSize: 12 }
-                                    MouseArea { id: audioMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.playAudio() }
-                                }
-                                Rectangle {
-                                    width: 26; height: 26; radius: 13
-                                    color: copyMa.containsMouse ? colors.alpha(colors.secondary, 0.28) : "transparent"
-                                    border.width: 1; border.color: colors.alpha(colors.secondary, 0.35)
-                                    Text { anchors.centerIn: parent; text: "⧉"; color: colors.secondary; font.family: colors.fontSans; font.pixelSize: 12 }
-                                    MouseArea { id: copyMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.copyEntry() }
-                                }
-                            }
-                            Text {
-                                visible: root.entry && root.entry.phonetic !== ""
-                                text: root.entry ? root.entry.phonetic : ""
-                                color: colors.alpha(colors.outline, 0.7); font.family: colors.fontSans; font.pixelSize: 11
-                            }
+                        elide: Text.ElideRight
+                    }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 12
+                        Text {
+                            visible: root.entry && root.entry.audio !== ""
+                            text: "play"
+                            color: playMa.containsMouse ? colors.tertiary : colors.alpha(colors.tertiary, 0.7)
+                            font.family: colors.fontSans
+                            font.pixelSize: 10
+                            MouseArea { id: playMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.playAudio() }
+                        }
+                        Text {
+                            text: "copy"
+                            color: copyMa.containsMouse ? colors.secondary : colors.alpha(colors.secondary, 0.7)
+                            font.family: colors.fontSans
+                            font.pixelSize: 10
+                            MouseArea { id: copyMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.copyEntry() }
                         }
                     }
-
-                    // meanings
                     Repeater {
                         model: root.entry ? root.entry.meanings : []
                         delegate: ColumnLayout {
                             required property var modelData
                             Layout.fillWidth: true
-                            spacing: 6
-                            Text { text: (modelData.pos || "").toUpperCase(); color: colors.tertiary; font.family: colors.fontSans; font.pixelSize: 7; font.weight: Font.Bold; font.letterSpacing: 1.3 }
-
+                            spacing: 2
+                            Text { text: (modelData.pos || "").toUpperCase(); color: colors.tertiary; font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold; font.letterSpacing: 1.2 }
                             Repeater {
                                 model: modelData.defs
                                 delegate: ColumnLayout {
                                     required property var modelData
                                     required property int index
                                     Layout.fillWidth: true
-                                    spacing: 2
+                                    spacing: 1
                                     RowLayout {
                                         Layout.fillWidth: true
                                         spacing: 8
-                                        Text { text: (index + 1) + "."; color: colors.alpha(colors.outline, 0.5); font.family: colors.fontSans; font.pixelSize: 10; font.weight: Font.Bold; Layout.alignment: Qt.AlignTop }
+                                        Text { text: (index + 1) + "."; color: colors.alpha(colors.outline, 0.5); font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.Bold; Layout.alignment: Qt.AlignTop }
                                         Text { text: modelData.def; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 11; wrapMode: Text.WordWrap; Layout.fillWidth: true }
                                     }
                                     Text {
                                         visible: modelData.example !== ""
-                                        text: "“" + modelData.example + "”"
-                                        color: colors.alpha(colors.outline, 0.75); font.family: colors.fontSans; font.pixelSize: 10; font.italic: true
+                                        text: "eg. \"" + modelData.example + "\""
+                                        color: colors.alpha(colors.outline, 0.7); font.family: colors.fontSans; font.pixelSize: 10; font.italic: true
                                         wrapMode: Text.WordWrap; Layout.fillWidth: true; Layout.leftMargin: 22
                                     }
-                                    Flow {
-                                        visible: modelData.synonyms.length > 0 || modelData.antonyms.length > 0
-                                        Layout.fillWidth: true
-                                        Layout.leftMargin: 22
-                                        spacing: 5
-                                        Repeater {
-                                            model: modelData.synonyms
-                                            delegate: Rectangle {
-                                                required property var modelData
-                                                width: synLbl.implicitWidth + 16; height: 20; radius: 10
-                                                color: synMa.containsMouse ? colors.alpha(colors.secondary, 0.28) : colors.alpha(colors.secondary, 0.1)
-                                                border.width: 1; border.color: colors.alpha(colors.secondary, 0.35)
-                                                Text { id: synLbl; anchors.centerIn: parent; text: modelData; color: colors.secondary; font.family: colors.fontSans; font.pixelSize: 8 }
-                                                MouseArea { id: synMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.lookup(modelData) }
-                                            }
-                                        }
-                                        Repeater {
-                                            model: modelData.antonyms
-                                            delegate: Rectangle {
-                                                required property var modelData
-                                                width: antLbl.implicitWidth + 16; height: 20; radius: 10
-                                                color: antMa.containsMouse ? colors.alpha(colors.error, 0.28) : colors.alpha(colors.error, 0.08)
-                                                border.width: 1; border.color: colors.alpha(colors.error, 0.35)
-                                                Text { id: antLbl; anchors.centerIn: parent; text: "≠ " + modelData; color: colors.error; font.family: colors.fontSans; font.pixelSize: 8 }
-                                                MouseArea { id: antMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.lookup(modelData) }
-                                            }
-                                        }
+                                }
+                            }
+                            Flow {
+                                visible: modelData.synonyms.length > 0 || modelData.antonyms.length > 0
+                                Layout.fillWidth: true
+                                Layout.leftMargin: 22
+                                spacing: 6
+                                Repeater {
+                                    model: modelData.synonyms
+                                    delegate: Text {
+                                        required property var modelData
+                                        text: modelData
+                                        color: synMa.containsMouse ? colors.secondary : colors.alpha(colors.secondary, 0.75)
+                                        font.family: colors.fontSans
+                                        font.pixelSize: 10
+                                        font.underline: synMa.containsMouse
+                                        MouseArea { id: synMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.lookup(modelData) }
+                                    }
+                                }
+                                Repeater {
+                                    model: modelData.antonyms
+                                    delegate: Text {
+                                        required property var modelData
+                                        text: modelData
+                                        color: antMa.containsMouse ? colors.error : colors.alpha(colors.error, 0.75)
+                                        font.family: colors.fontSans
+                                        font.pixelSize: 10
+                                        font.underline: antMa.containsMouse
+                                        MouseArea { id: antMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.lookup(modelData) }
                                     }
                                 }
                             }
                         }
                     }
-
-                    // related (Datamuse)
-                    ColumnLayout {
+                    Flow {
                         visible: root.relatedSyn.length > 0 || root.relatedSound.length > 0
                         Layout.fillWidth: true
                         spacing: 6
-                        Text { text: "RELATED"; color: colors.alpha(colors.outline, 0.55); font.family: colors.fontSans; font.pixelSize: 7; font.weight: Font.Bold; font.letterSpacing: 1.3 }
-                        Flow {
-                            visible: root.relatedSyn.length > 0
-                            Layout.fillWidth: true
-                            spacing: 5
-                            Repeater {
-                                model: root.relatedSyn
-                                delegate: Rectangle {
-                                    required property var modelData
-                                    width: rsLbl.implicitWidth + 16; height: 20; radius: 10
-                                    color: rsMa.containsMouse ? colors.alpha(colors.primary, 0.28) : colors.alpha(colors.primary, 0.1)
-                                    border.width: 1; border.color: colors.alpha(colors.primary, 0.35)
-                                    Text { id: rsLbl; anchors.centerIn: parent; text: modelData; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 8 }
-                                    MouseArea { id: rsMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.lookup(modelData) }
-                                }
-                            }
-                        }
-                        Flow {
-                            visible: root.relatedSound.length > 0
-                            Layout.fillWidth: true
-                            spacing: 5
-                            Text { text: "sounds like:"; color: colors.alpha(colors.outline, 0.5); font.family: colors.fontSans; font.pixelSize: 8 }
-                            Repeater {
-                                model: root.relatedSound
-                                delegate: Rectangle {
-                                    required property var modelData
-                                    width: rhLbl.implicitWidth + 16; height: 20; radius: 10
-                                    color: rhMa.containsMouse ? colors.alpha(colors.outline, 0.3) : "transparent"
-                                    border.width: 1; border.color: colors.alpha(colors.outline, 0.3)
-                                    Text { id: rhLbl; anchors.centerIn: parent; text: modelData; color: colors.alpha(colors.foreground, 0.8); font.family: colors.fontSans; font.pixelSize: 8 }
-                                    MouseArea { id: rhMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.lookup(modelData) }
-                                }
+                        Text { visible: root.relatedSyn.length > 0; text: "related:"; color: colors.alpha(colors.outline, 0.55); font.family: colors.fontSans; font.pixelSize: 10 }
+                        Repeater {
+                            model: root.relatedSyn
+                            delegate: Text {
+                                required property var modelData
+                                text: modelData
+                                color: rsMa.containsMouse ? colors.primary : colors.alpha(colors.primary, 0.75)
+                                font.family: colors.fontSans
+                                font.pixelSize: 10
+                                font.underline: rsMa.containsMouse
+                                MouseArea { id: rsMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.lookup(modelData) }
                             }
                         }
                     }
-
-                    // source
-                    RowLayout {
+                    Text {
                         visible: root.entry && root.entry.sourceUrl !== ""
-                        Layout.fillWidth: true
-                        spacing: 6
-                        Text { text: "Source: wiktionary"; color: colors.alpha(colors.outline, 0.45); font.family: colors.fontSans; font.pixelSize: 8; Layout.fillWidth: true; elide: Text.ElideRight }
-                        Text {
-                            text: "open →"; color: colors.tertiary; font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold
-                            MouseArea { anchors.fill: parent; hoverEnabled: true; onClicked: if (root.entry) Quickshell.execDetached(["xdg-open", root.entry.sourceUrl]) }
-                        }
+                        text: "source: wiktionary (open)"
+                        color: colors.alpha(colors.outline, 0.5)
+                        font.family: colors.fontSans
+                        font.pixelSize: 9
+                        MouseArea { anchors.fill: parent; hoverEnabled: true; onClicked: if (root.entry) Quickshell.execDetached(["xdg-open", root.entry.sourceUrl]) }
                     }
                 }
             }
+
+            Text {
+                text: "enter define · esc close"
+                color: colors.alpha(colors.outline, 0.4)
+                font.family: colors.fontSans
+                font.pixelSize: 9
+                horizontalAlignment: Text.AlignHCenter
+                Layout.fillWidth: true
+            }
+
         }
     }
 }

@@ -1,0 +1,6 @@
+Bibata Modern Ice (base for Matugen cursor)
+
+Upstream: https://github.com/ful1e5/Bibata_Cursor
+Source: https://github.com/ful1e5/Bibata_Cursor/releases/tag/v2.0.7
+The active Matugen-Cursor theme is generated from this base by .local/bin/matugen-cursor.
+License: GPL-3.0; see LICENSE.

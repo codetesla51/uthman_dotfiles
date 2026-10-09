@@ -43,15 +43,23 @@ one-shot subcommands and polls on timers. Pairing/config: `~/phonebridge/init.sh
 - **Battery + status** — device row shows the paired phone and battery %,
   refreshed on a 15 s timer while the panel is open.
 - **Charge / signal / data / hotspot** — header adds charging state + plug
-  type (`dumpsys battery`), cell net + bars (`dumpsys telephony.registry`),
-  mobile-data used since reboot (`/proc/net/dev` rmnet/ccmni/qmap only, no
-  double-count), and a hotspot toggle (`cmd wifi start/stop-softap`) with a
+  type (`dumpsys battery`), cell net + bars (max `mLte` level + data radio tech
+  from `dumpsys telephony.registry`; the dump's first `level=` is always the
+  dead cdma entry), mobile-data used since reboot (`/proc/net/dev`
+  rmnet/ccmni/qmap/**seth_** — this phone's Unisoc stack uses `seth_lte0`),
+  and a hotspot toggle (`cmd wifi start/stop-softap`) with a
   link-lost → watchdog re-link state. 2 GB cap is `dataCapMb`.
-- **Quick actions** — Ring, Shot (`S`), Clip, DND toggle (`d`), screen-timeout
-  cycler (`t`: 15s→10m). Keys: `r` ring, `S` shot (`s` stays select), `d` DND,
-  `t` timeout. Torch is deliberately absent: no stable adb API on this ROM
-  (needs relay-app support). Volume slider was tried and cut (default chrome,
-  didn't earn its row).
+- **DND via `cmd notification set_dnd`** — `settings put global zen_mode` is a
+  silent no-op on this ROM (verified); reads still use `settings get`.
+- **Split layout (option B)** — left rail (status, data, hotspot, keyed
+  actions, re-link) + right file pane (drop, queue, browser). Focal: the file
+  list. Height budget + ranks live as comments above the layout.
+- **Quick actions** — Ring (`r`), Shot (`S`), Clip (`c`), DND toggle (`d`),
+  screen-timeout cycler (`t`), every button carrying its key hint. `S` stays
+  capital-S because `s` is select; the mock showed lowercase.
+- **Icons, not text arrows** — Phosphor (name-verified + in-font): caret-up for
+  up-row, upload-simple while sending, check-circle on sent, x on error, check
+  on selected. Signal bars stay drawn Rectangles.
 - **Notify forwarder** — every 4 s while a phone is paired it polls the
   notification shade and when a *new* notification appears from an
   allowlisted app it pings the desktop with `notify-send` (sender name only —

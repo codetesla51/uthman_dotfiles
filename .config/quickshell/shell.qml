@@ -149,6 +149,25 @@ ShellRoot {
     }
     property bool ebWarm: false
     onEbOpenChanged: { if (ebLoader.item) ebLoader.item.open = ebOpen }
+
+    // LyricsPane — transparent synced lyrics (SUPER ALT L)
+    property bool lyOpen: false
+    IpcHandler {
+        target: "lyrics"
+        function toggle(): void {
+            if (lyOpen && lyLoader.status === Loader.Loading) return
+            lyOpen = !lyOpen
+        }
+    }
+    Loader {
+        id: lyLoader
+        active: lyOpen || lyWarm
+        asynchronous: true
+        source: "modules/LyricsPane.qml"
+        onLoaded: { lyWarm = true; item.colors = barPalette; item.open = true }
+    }
+    property bool lyWarm: false
+    onLyOpenChanged: { if (lyLoader.item) lyLoader.item.open = lyOpen }
     Connections {
         target: ebLoader.item
         function onOpenChanged() { if (ebLoader.item && !ebLoader.item.open) ebOpen = false }

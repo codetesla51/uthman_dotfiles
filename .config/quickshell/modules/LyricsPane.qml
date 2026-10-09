@@ -3,15 +3,15 @@ import Quickshell.Io
 import Quickshell.Services.Mpris
 import Quickshell.Wayland
 import QtQuick
+import Qt5Compat.GraphicalEffects
 
-// LyricsPane — transparent synced-lyrics overlay. No background, no chrome:
-// text only, floating bottom-center. Lyrics come from lrclib (direct
-// artist+title lookup, ~1s, synced LRC lines included) instead of the
-// player's own slower round-trip. Toggle with `ipc call lyrics toggle`
-// (SUPER ALT L). Fetches only while open, one request per track.
+// LyricsPane — "Focus" design: one sharp active line, context lines fall off
+// by distance (blur d*2.6, opacity 1-d*.3 floor .1, scale 1-d*.07 floor .8),
+// track auto-centers, left origin. Transparent, draggable anywhere.
+// Lyrics from lrclib, fetched only while open, one request per track.
+// Toggle: `ipc call lyrics toggle` (SUPER ALT L).
 //
-// HEIGHT BUDGET ~250: credit 18 + list 190 + margins 42.
-// FOCAL: the current line. Rank2: context lines. Rank3: credit.
+// FOCAL: the active line. Nothing else competes.
 PanelWindow {
     id: root
 
@@ -30,19 +30,34 @@ PanelWindow {
     property string fetchedKey: ""
     property string state: "idle"   // idle | fetching | ready | plain | none | quiet
 
-    anchors { bottom: true }
-    margins { bottom: 64 }
-    implicitWidth: 640
-    implicitHeight: 250
+    readonly property int screenW: {
+        try {
+            var ss = Quickshell.screens
+            var list = (ss && ss.values) ? ss.values : ss
+            if (list && list.length) return list[0].width || 1920
+        } catch (e) {}
+        return 1920
+    }
+    readonly property int screenH: {
+        try {
+            var ss = Quickshell.screens
+            var list = (ss && ss.values) ? ss.values : ss
+            if (list && list.length) return list[0].height || 1080
+        } catch (e) {}
+        return 1080
+    }
+
+    property bool freeMove: false
+    property int offX: 620
+    property int offY: 676
+    anchors { left: root.freeMove; top: root.freeMove; bottom: !root.freeMove }
+    margins { left: root.offX; top: root.offY; bottom: 64 }
+    implicitWidth: 680
+    implicitHeight: 340
     exclusionMode: ExclusionMode.Ignore
     color: "transparent"
     visible: root.open
     WlrLayershell.namespace: "qs-lyrics"
-
-    IpcHandler {
-        target: "lyrics"
-        function toggle(): void { root.open = !root.open }
-    }
 
     onTrackKeyChanged: root.maybeFetch()
     onOpenChanged: {
@@ -132,56 +147,81 @@ PanelWindow {
         }
     }
 
-    // state line: credit / status, dim and small — never the focus
+    // drag anywhere on the pane to move it; margins follow, stays where dropped
+    MouseArea {
+        id: dragMa
+        anchors.fill: parent
+        hoverEnabled: true
+        cursorShape: dragMa.pressed ? Qt.ClosedHandCursor : Qt.OpenHandCursor
+        property int px: 0
+        property int py: 0
+        onPressed: function (e) { root.freeMove = true; px = e.x; py = e.y }
+        onPositionChanged: function (e) {
+            if (!pressed) return
+            root.offX += Math.round(e.x - px)
+            root.offY += Math.round(e.y - py)
+        }
+    }
+
     Text {
-        id: credit
-        anchors.top: parent.top
+        id: stateLine
+        visible: root.lines.length === 0
         anchors.left: parent.left
         anchors.right: parent.right
-        anchors.topMargin: 12
-        horizontalAlignment: Text.AlignHCenter
+        anchors.leftMargin: 58
+        anchors.rightMargin: 58
+        anchors.verticalCenter: parent.verticalCenter
         text: root.state === "quiet" ? "nothing playing"
             : root.state === "fetching" ? "finding lyrics…"
             : root.state === "none" ? "no lyrics found"
-            : root.trackKey
-        color: colors.alpha(colors.outline, 0.7)
-        font.family: colors.fontSans
-        font.pixelSize: 10
-        font.letterSpacing: 1.2
+            : ""
+        color: colors.alpha(colors.foreground, 0.5)
+        font.family: "Inter"
+        font.pixelSize: 22
+        font.weight: Font.ExtraBold
         style: Text.Outline
-        styleColor: Qt.rgba(0, 0, 0, 0.75)
+        styleColor: Qt.rgba(0, 0, 0, 0.85)
     }
 
     ListView {
         id: lineList
         visible: root.lines.length > 0
-        anchors.top: credit.bottom
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.bottom: parent.bottom
-        anchors.topMargin: 6
+        anchors.fill: parent
+        anchors.leftMargin: 58
+        anchors.rightMargin: 58
         clip: true
         model: root.lines
         interactive: false
+        spacing: 26
         currentIndex: root.currentIdx
         highlightRangeMode: ListView.StrictlyEnforceRange
-        preferredHighlightBegin: 70
-        preferredHighlightEnd: 110
-        highlightMoveDuration: 250
+        preferredHighlightBegin: 130
+        preferredHighlightEnd: 170
+        highlightMoveDuration: 900
+        highlightMoveVelocity: -1
         delegate: Text {
             required property var modelData
             required property int index
+            readonly property int d: Math.abs(index - root.currentIdx)
+            readonly property real fall: Math.max(0.8, 1 - d * 0.07)
             width: lineList.width
-            horizontalAlignment: Text.AlignHCenter
             wrapMode: Text.WordWrap
             text: modelData.x
-            color: index === root.currentIdx ? colors.primary : colors.alpha(colors.foreground, 0.55)
-            font.family: colors.fontSans
-            font.pixelSize: index === root.currentIdx ? 17 : 13
-            font.weight: index === root.currentIdx ? Font.Bold : Font.Normal
+            color: d === 0 ? colors.foreground : colors.alpha(colors.foreground, Math.max(0.1, 1 - d * 0.3))
+            opacity: d === 0 ? 1 : Math.max(0.1, 1 - d * 0.3)
+            font.family: "Inter"
+            font.pixelSize: Math.round(34 * fall)
+            font.weight: Font.ExtraBold
+            font.letterSpacing: -0.7
+            lineHeight: 1.12
             style: Text.Outline
-            styleColor: Qt.rgba(0, 0, 0, 0.8)
-            Behavior on color { ColorAnimation { duration: 200 } }
+            styleColor: Qt.rgba(0, 0, 0, 0.85)
+            layer.enabled: d > 0
+            layer.effect: FastBlur {
+                radius: Math.min(16, d * 2.6)
+                transparentBorder: true
+            }
+            Behavior on opacity { NumberAnimation { duration: 900; easing.type: Easing.OutCubic } }
         }
     }
 }

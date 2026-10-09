@@ -369,7 +369,7 @@ FloatingWindow {
                     selectByMouse: true
                     background: null
                     onAccepted: root.lookup(text)
-                    Keys.onEscapePressed: root.open = false
+                    Keys.onEscapePressed: searchField.focus = false
                 }
                 Rectangle {
                     width: 64; height: 28; radius: 9
@@ -589,7 +589,7 @@ FloatingWindow {
             }
 
             Text {
-                text: "enter define · p play · y copy · r retry · esc close"
+                text: "enter define · esc exits field, again closes · p play · y copy · r retry"
                 color: colors.alpha(colors.outline, 0.4)
                 font.family: colors.fontSans
                 font.pixelSize: 9

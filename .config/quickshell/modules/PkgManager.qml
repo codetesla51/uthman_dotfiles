@@ -1040,7 +1040,7 @@ FloatingWindow {
                                     if(e.key===Qt.Key_Escape){ card.forceActiveFocus(); e.accepted=true }
                                     else if(e.key===Qt.Key_Down){ if(root.searchFiltered.length>0){ root.searchNav=Math.min(root.searchNav+1, root.searchFiltered.length-1); searchList.positionViewAtIndex(root.searchNav, ListView.Contain); e.accepted=true } }
                                     else if(e.key===Qt.Key_Up){ if(root.searchFiltered.length>0){ root.searchNav=Math.max(root.searchNav-1,0); searchList.positionViewAtIndex(root.searchNav, ListView.Contain); e.accepted=true } }
-                                    else if(e.key===Qt.Key_Return || e.key===Qt.Key_Enter || e.key===Qt.Key_Space){ var p=root.searchFiltered[root.searchNav]; if(p){ root.toggleSelect(p)} else if(root.searchFiltered.length>0) root.toggleSelect(root.searchFiltered[0]); e.accepted=true }
+                                    else if(e.key===Qt.Key_Return || e.key===Qt.Key_Enter){ var p=root.searchFiltered[root.searchNav]; if(p){ root.toggleSelect(p)} else if(root.searchFiltered.length>0) root.toggleSelect(root.searchFiltered[0]); e.accepted=true }
                                     else if(e.key===Qt.Key_D && e.modifiers===Qt.ControlModifier){ var dd=root.searchFiltered[root.searchNav]; if(dd) root.quickInstall(dd); else if(root.searchFiltered.length>0) root.quickInstall(root.searchFiltered[0]); e.accepted=true }
                                 }
                             }

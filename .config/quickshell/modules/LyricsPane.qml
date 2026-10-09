@@ -34,6 +34,7 @@ PanelWindow {
     property real pos: 0
     property real karaP: 0      // 0..1 progress through the active line
     property string fetchedKey: ""
+    property int attempt: 0        // 0 = artist+title+duration, 1 = no duration, 2+ = timed retries
     property string state: "idle"   // idle | fetching | ready | plain | none | quiet
 
     // drum window: ±3 lines instantiated, the rest stay out of the tree
@@ -70,6 +71,10 @@ PanelWindow {
         if (root.trackKey === "") { root.state = "quiet"; root.lines = []; return }
         if (root.trackKey === root.fetchedKey) return
         root.fetchedKey = root.trackKey
+        root.attempt = 0
+        root.fetchAttempt()
+    }
+    function fetchAttempt() {
         root.lines = []
         root.currentIdx = -1
         root.karaP = 0
@@ -77,9 +82,25 @@ PanelWindow {
         var dur = (root.player && root.player.length > 0) ? Math.round(root.player.length) : 0
         var url = "https://lrclib.net/api/get?artist_name=" + encodeURIComponent(root.artist)
             + "&track_name=" + encodeURIComponent(root.title)
-            + (dur > 0 ? "&duration=" + dur : "")
+            + (root.attempt === 0 && dur > 0 ? "&duration=" + dur : "")
         fetchProc.command = ["curl", "-s", "--max-time", "8", url]
         fetchProc.running = true
+    }
+    // miss ladder: drop duration (mismatch is the top miss reason), then two
+    // timed retries for hotspot blips. 3 attempts total, then rest on none.
+    function scheduleRetry() {
+        if (root.attempt >= 2) { root.state = "none"; return }
+        root.attempt += 1
+        retryTimer.interval = root.attempt === 1 ? 100 : 8000
+        retryTimer.restart()
+    }
+    Timer {
+        id: retryTimer
+        repeat: false
+        onTriggered: {
+            if (!root.open || root.trackKey === "" || root.trackKey !== root.fetchedKey) return
+            root.fetchAttempt()
+        }
     }
 
     function parseLrc(synced) {
@@ -201,11 +222,11 @@ PanelWindow {
                     }
                     root.lines = arr
                     root.state = arr.length > 0 ? "plain" : "none"
-                } else root.state = "none"
+                } else root.scheduleRetry()
             }
         }
         onExited: function (code) {
-            if (code !== 0 && root.state === "fetching") root.state = "none"
+            if (code !== 0 && root.state === "fetching") root.scheduleRetry()
         }
     }
 

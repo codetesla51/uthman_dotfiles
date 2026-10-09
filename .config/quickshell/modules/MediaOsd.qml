@@ -17,19 +17,8 @@ PanelWindow {
     readonly property bool show: _show
     property bool _show: false
 
-    // screen height for vertical centring — a stretched window would make the
-    // compositor blur the whole column, not just the chip
-    readonly property int screenH: {
-        try {
-            var ss = Quickshell.screens
-            var list = (ss && ss.values) ? ss.values : ss
-            if (list && list.length) return list[0].height || 900
-        } catch (e) {}
-        return 900
-    }
-
-    anchors { left: true; top: true }
-    margins { left: 12; top: Math.max(0, Math.round((root.screenH - chip.bodyH) / 2)) }
+    anchors { top: true }
+    margins { top: 70 }
     implicitWidth: chip.bodyW
     implicitHeight: chip.bodyH
     exclusionMode: ExclusionMode.Ignore
@@ -98,8 +87,8 @@ PanelWindow {
         id: chip
         anchors.fill: parent
         colors: root.colors
-        vertical: true
-        tailLength: 130
+        vertical: false
+        tailLength: 200
         // surface @ 0.78 + primary @ 0.25 hairline — the fill the OSD shipped
         // with before it became a chip. OsdChip already defaults to exactly
         // this, so don't override it.
@@ -125,24 +114,24 @@ PanelWindow {
             Behavior on color { ColorAnimation { duration: 200 } }
         }
 
-        // level bar alone on the tail, vertically centred in the band
+        // level bar along the tail, centred in the band
         tailSlot: Rectangle {
-            anchors.horizontalCenter: parent.horizontalCenter
-            anchors.top: parent.top
-            width: 10
-            height: parent.height
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.left: parent.left
+            width: parent.width
+            height: 10
             radius: 5
             color: colors.alpha(colors.outline, 0.35)
 
             Rectangle {
-                width: parent.width
-                height: parent.height * root.value / 100
+                width: parent.width * root.value / 100
+                height: parent.height
                 radius: 5
-                anchors.bottom: parent.bottom
+                anchors.left: parent.left
                 color: root.off ? colors.error
                      : root.mode === "brightness" ? colors.tertiary
                      : colors.primary
-                Behavior on height { NumberAnimation { duration: 120; easing.type: Easing.OutQuad } }
+                Behavior on width { NumberAnimation { duration: 120; easing.type: Easing.OutQuad } }
                 Behavior on color { ColorAnimation { duration: 200 } }
             }
         }

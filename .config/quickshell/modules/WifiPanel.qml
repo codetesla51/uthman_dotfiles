@@ -1003,7 +1003,6 @@ PanelWindow {
                             var amp = 10 + boost * (height / 2 - 8)
                             var ph = root.ropePhase
 
-                            var crestX = 0, crestTop = 1e9
                             for (var i = 0; i < N; i++) {
                                 var x = 2 + i * ((width - 4) / (N - 1))
                                 var a = i * 0.42 - ph * 3.0
@@ -1017,15 +1016,6 @@ PanelWindow {
                                 ctx.moveTo(x, y1)
                                 ctx.lineTo(x, y1 + lh)
                                 ctx.stroke()
-                                if (y1 < crestTop) { crestTop = y1; crestX = x }
-                            }
-
-                            // rider dot only when idle — testing stays clean, number + rope only
-                            if (!root.speedTesting) {
-                                ctx.fillStyle = colors.tertiary
-                                ctx.beginPath()
-                                ctx.arc(crestX, Math.max(4, crestTop - 5), 3, 0, Math.PI * 2)
-                                ctx.fill()
                             }
                         }
                     }

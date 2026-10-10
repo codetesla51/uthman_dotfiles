@@ -441,7 +441,7 @@ PanelWindow {
                     var wv = Math.sin(i * 0.35 - t * 2.2) * 0.5 + 0.5
                     var r0 = stage.discR + 4
                     var r1 = (stage.rad * 0.66 + wv * stage.rad * 0.3) * pulse
-                    var accent = i % 6 === 0 ? colors.tertiary : (i % 2 ? colors.secondary : root.albumColor)
+                    var accent = i % 6 === 0 ? colors.tertiary : root.albumColor
                     ctx.strokeStyle = colors.alpha(accent, i % 6 === 0 ? 0.95 : 0.6)
                     ctx.lineWidth = (i % 6 === 0 ? 2.4 : 1.8) + root.vizLevel / 100 * 1.2
                     ctx.lineCap = "round"

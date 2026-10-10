@@ -318,7 +318,6 @@ PanelWindow {
             // every 4s. No MouseArea: clicks pass through.
             Item {
                 id: islandLine
-                property real wavePhase: 0
                 anchors { left: parent.left; right: parent.right; top: parent.top }
                 anchors.leftMargin: island.inset + 8
                 anchors.rightMargin: island.inset + 8
@@ -339,18 +338,7 @@ PanelWindow {
                     }
                 }
 
-                // intertwined sines (picked option C x3): three waves, three accents,
-                // three wavelengths scrolling at different rates — 15fps timer
-                Timer {
-                    interval: 66
-                    running: true
-                    repeat: true
-                    triggeredOnStart: true
-                    onTriggered: {
-                        islandLine.wavePhase += 0.28
-                        waveCanvas.requestPaint()
-                    }
-                }
+                // static intertwined sines: three accents, three wavelengths
                 Canvas {
                     id: waveCanvas
                     anchors { left: parent.left; right: parent.right; top: parent.top }
@@ -358,28 +346,22 @@ PanelWindow {
                     onPaint: {
                         var ctx = getContext("2d")
                         ctx.reset()
-                        var t = islandLine.wavePhase
                         var midY = 5.5
-                        // static intertwined curves, marching dashes = the motion.
-                        // Dashes crawl even when the wave is 1px tall.
-                        function wave(col, amp, waves, march, lw) {
+                        function wave(col, amp, waves, phase, lw) {
                             ctx.strokeStyle = col
                             ctx.lineWidth = lw
                             ctx.lineCap = "round"
-                            ctx.setLineDash([7, 5])
-                            ctx.lineDashOffset = march
                             ctx.beginPath()
                             for (var x = 0; x <= width; x += 3) {
-                                var y = midY + amp * Math.sin((x / width) * Math.PI * 2 * waves + t * 0.15)
+                                var y = midY + amp * Math.sin((x / width) * Math.PI * 2 * waves + phase)
                                 if (x === 0) ctx.moveTo(x, y)
                                 else ctx.lineTo(x, y)
                             }
                             ctx.stroke()
-                            ctx.setLineDash([])
                         }
-                        wave(colors.alpha(colors.primary, 0.8), 1.8, 2.5, -t * 18, 1.2)
-                        wave(colors.alpha(colors.secondary, 0.65), 1.3, 3.5, t * 26, 1.0)
-                        wave(colors.alpha(colors.tertiary, 0.65), 0.9, 5.0, -t * 12, 1.0)
+                        wave(colors.alpha(colors.primary, 0.8), 2.4, 2.5, 0.0, 1.2)
+                        wave(colors.alpha(colors.secondary, 0.65), 1.8, 3.5, 2.1, 1.0)
+                        wave(colors.alpha(colors.tertiary, 0.65), 1.3, 5.0, 4.2, 1.0)
                     }
                 }
             }

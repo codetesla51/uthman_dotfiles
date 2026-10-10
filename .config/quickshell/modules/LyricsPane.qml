@@ -450,11 +450,21 @@ PanelWindow {
                 for (var i = 0; i < n; i++) {
                     var a = i / n * Math.PI * 2 - Math.PI / 2
                     var len = 4 + (lv[i] || 0) / 100 * maxLen
-                    ctx.strokeStyle = root.segMix(colors.primary, colors.tertiary, (Math.sin(a) + 1) / 2)
+                    var col = root.segMix(colors.primary, colors.tertiary, (Math.sin(a) + 1) / 2)
+                    var tipR = Math.max(3, 2 * Math.PI * r / n * 0.55) / 2
+                    ctx.strokeStyle = col
                     ctx.beginPath()
                     ctx.moveTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r)
                     ctx.lineTo(cx + Math.cos(a) * (r + len), cy + Math.sin(a) * (r + len))
                     ctx.stroke()
+                    // guaranteed round tip + base whatever the cap state
+                    ctx.fillStyle = col
+                    ctx.beginPath()
+                    ctx.arc(cx + Math.cos(a) * (r + len), cy + Math.sin(a) * (r + len), tipR, 0, Math.PI * 2)
+                    ctx.fill()
+                    ctx.beginPath()
+                    ctx.arc(cx + Math.cos(a) * r, cy + Math.sin(a) * r, tipR, 0, Math.PI * 2)
+                    ctx.fill()
                 }
             }
         }

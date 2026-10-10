@@ -36,6 +36,7 @@ PanelWindow {
     property double stampBase: 0
     property real karaP: 0      // 0..1 progress through the active line
     property var vizLevels: []    // cava bars; ray i listens to its own band
+    property real vortexPhase: 0  // steady rotation for the vortex
     function segMix(a, b, t) {
         return Qt.rgba(a.r + (b.r - a.r) * t, a.g + (b.g - a.g) * t,
                        a.b + (b.b - a.b) * t, 1)
@@ -424,6 +425,7 @@ PanelWindow {
             repeat: true
             triggeredOnStart: true
             onTriggered: {
+                root.vortexPhase += 0.09
                 if (!root.playing && root.vizLevels.length > 0) {
                     var d = root.vizLevels.slice()
                     for (var k = 0; k < d.length; k++) d[k] *= 0.9
@@ -439,32 +441,24 @@ PanelWindow {
             onPaint: {
                 var ctx = getContext("2d")
                 ctx.clearRect(0, 0, width, height)
+                var t = root.vortexPhase
+                var cx = stage.midX, cy = stage.midY
                 var lv = root.vizLevels
                 var n = lv.length
-                if (n < 8) return
-                var cx = stage.midX, cy = stage.midY
-                var r = stage.discR + 10
-                var maxLen = stage.rad - r - 6
                 ctx.lineCap = "round"
-                ctx.lineWidth = Math.max(3, 2 * Math.PI * r / n * 0.55)
-                for (var i = 0; i < n; i++) {
-                    var a = i / n * Math.PI * 2 - Math.PI / 2
-                    var len = 4 + (lv[i] || 0) / 100 * maxLen
-                    var col = root.segMix(colors.primary, colors.tertiary, (Math.sin(a) + 1) / 2)
-                    var tipR = Math.max(3, 2 * Math.PI * r / n * 0.55) / 2
-                    ctx.strokeStyle = col
+                ctx.lineWidth = 1.8
+                for (var i = 0; i < 72; i++) {
+                    // vortex twist outside, spectrum band inside each ray
+                    var a = (i / 72) * Math.PI * 2 + t * 0.4
+                    var wv = Math.sin(i * 0.35 - t * 2.2) * 0.5 + 0.5
+                    var lvl = n > 0 ? (lv[Math.floor(i / 72 * n)] || 0) / 100 : 0
+                    var r0 = stage.discR + 4
+                    var r1 = r0 + wv * stage.rad * 0.22 + lvl * stage.rad * 0.5
+                    ctx.strokeStyle = root.segMix(colors.primary, colors.tertiary, (Math.sin(a) + 1) / 2)
                     ctx.beginPath()
-                    ctx.moveTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r)
-                    ctx.lineTo(cx + Math.cos(a) * (r + len), cy + Math.sin(a) * (r + len))
+                    ctx.moveTo(cx + Math.cos(a) * r0, cy + Math.sin(a) * r0)
+                    ctx.lineTo(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1)
                     ctx.stroke()
-                    // guaranteed round tip + base whatever the cap state
-                    ctx.fillStyle = col
-                    ctx.beginPath()
-                    ctx.arc(cx + Math.cos(a) * (r + len), cy + Math.sin(a) * (r + len), tipR, 0, Math.PI * 2)
-                    ctx.fill()
-                    ctx.beginPath()
-                    ctx.arc(cx + Math.cos(a) * r, cy + Math.sin(a) * r, tipR, 0, Math.PI * 2)
-                    ctx.fill()
                 }
             }
         }

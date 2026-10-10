@@ -37,6 +37,8 @@ FloatingWindow {
     property string devName: "No earbuds"
     property bool connected: false
     property bool busy: false
+    property bool adapterOn: false
+    property bool powerPending: false   // power-on chained pods connect
     // batteries, L then R: {pct: -1|0..100, charging: bool}.
     // Single-source hardware (one level for the set) shows one ring; labels
     // only make sense with two real sources.
@@ -56,7 +58,56 @@ FloatingWindow {
 
     function probe() {
         if (root.busy) return
+        powProc.running = true
         devProc.running = true
+    }
+    // adapter power state; chains a pending pods connect
+    Process {
+        id: powProc
+        command: ["sh", "-c", "timeout 8 bluetoothctl show 2>/dev/null | grep -i 'Powered:'"]
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: {
+                root.adapterOn = text.toLowerCase().indexOf("yes") !== -1
+                if (root.adapterOn && root.powerPending) {
+                    root.powerPending = false
+                    root.probe()
+                    probeWait.restart()
+                }
+            }
+        }
+    }
+    Process {
+        id: powSetProc
+        command: ["sh", "-c", "timeout 8 bluetoothctl power on >/dev/null 2>&1"]
+        onExited: root.probe()
+    }
+    Timer {
+        id: probeWait
+        interval: 2000; repeat: false
+        onTriggered: {
+            if (root.connected || root.busy) return
+            if (root.mac !== "") root.actClicked()
+            else { root.setBusy(false); root.statusText = "Pods not around — out of the case?"; statusClear.restart() }
+        }
+    }
+    // footer hero: powers on first when the adapter is off, then connects
+    function powerConnect() {
+        if (root.busy) return
+        if (root.connected) { root.actClicked(); return }
+        if (!root.adapterOn) {
+            root.powerPending = true
+            root.statusText = "Powering on…"
+            powSetProc.running = true
+            return
+        }
+        if (root.mac === "") {
+            root.statusText = "Looking for pods…"
+            root.probe()
+            probeWait.restart()
+            return
+        }
+        root.actClicked()
     }
 
     // 1. paired devices -> pick target (connected one, else first paired)
@@ -322,15 +373,15 @@ FloatingWindow {
                     width: 124; height: 36; radius: 10
                     color: actMa.containsMouse ? colors.alpha(colors.primary, 0.16) : colors.alpha(colors.surfaceVariant, 0.4)
                     border.width: 1; border.color: actMa.containsMouse ? colors.alpha(colors.primary, 0.5) : colors.alpha(colors.outline, 0.2)
-                    opacity: root.mac === "" ? 0.45 : 1
+                    opacity: root.busy ? 0.45 : 1
                     transform: Translate {
                         y: actMa.containsMouse ? -2 : 0
                         Behavior on y { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
                     }
                     Behavior on color { ColorAnimation { duration: 150 } }
                     Behavior on border.color { ColorAnimation { duration: 150 } }
-                    Text { anchors.centerIn: parent; text: root.connected ? "Disconnect" : "Connect"; color: colors.foreground; font.family: root.fontUi; font.pixelSize: 13; font.weight: Font.DemiBold }
-                    MouseArea { id: actMa; anchors.fill: parent; hoverEnabled: true; enabled: root.mac !== ""; onClicked: root.actClicked() }
+                    Text { anchors.centerIn: parent; text: root.connected ? "Disconnect" : (!root.adapterOn ? "Power on" : "Connect"); color: colors.foreground; font.family: root.fontUi; font.pixelSize: 13; font.weight: Font.DemiBold }
+                    MouseArea { id: actMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.powerConnect() }
                 }
             }
         }

@@ -145,13 +145,13 @@ PanelWindow {
     // mock fit(): wrap estimate, shrink until block height fits 60px —
     // two capped neighbors (42px halves) must stay inside 86px drum spacing
     function fitSize(raw) {
-        var fs = 26
-        while (fs > 13) {
+        var fs = 30
+        while (fs > 14) {
             var rows = Math.ceil(raw.length * fs * 0.72 / 300)
             if (rows * fs * 1.35 <= 54) return fs
             fs--
         }
-        return 13
+        return 14
     }
     function richLine(raw, li) {
         var ws = String(raw).split(" ")
@@ -298,7 +298,7 @@ PanelWindow {
         horizontalAlignment: Text.AlignHCenter
         text: root.plainText()
         color: colors.alpha(colors.foreground, 0.75)
-        font.family: "Inter"
+        font.family: "Inter Display"
         font.pixelSize: 15
         font.weight: Font.Bold
         lineHeight: 1.9
@@ -321,7 +321,7 @@ PanelWindow {
             : root.state === "none" ? "no lyrics found"
             : ""
         color: colors.alpha(colors.foreground, 0.5)
-        font.family: "Inter"
+        font.family: "Inter Display"
         font.pixelSize: 22
         font.weight: Font.ExtraBold
         style: Text.Outline
@@ -452,8 +452,8 @@ PanelWindow {
                     wrapMode: Text.WordWrap
                     textFormat: Text.RichText
                     text: root.richLine(raw, li)
-                    font.family: "Inter"
-                    font.pixelSize: root.fitSize(raw)
+                    font.family: "Inter Display"
+                    font.pixelSize: root.fitSize(raw) * (isActive ? 1.15 : 1)
                     font.weight: Font.Bold
                     font.letterSpacing: -0.4
                     lineHeight: 1.35

@@ -1,216 +1,239 @@
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
+import QtQuick.LocalStorage 2.0
 import Quickshell
 import Quickshell.Io
-import QtQuick
-import QtQuick.Layouts
-import QtQuick.Controls
-import QtQuick.LocalStorage 2.0
 
-// Clipboard Manager — Hyprland floating window + a Sticky shelf for things
-// you copy constantly. Stickies live in LocalStorage (qs_stickies) and
-// survive cliphist wipes.
-//   SUPER CTRL V  open the window
-//   SUPER CTRL P  pin whatever is on the clipboard right now, from any app
-//   SUPER ALT 1-9 fire a sticky straight to the clipboard, no window
-// Inside the window: type to filter, arrows move, Enter copies,
-// CTRL P pins the selected row, Delete drops it, / jumps back to search,
-// Esc clears the search first, then closes.
+// Clipboard Manager: history from cliphist plus 9 pinned notes.
+//   SUPER CTRL V   open the window
+//   SUPER CTRL P   pin whatever is on the clipboard right now
+//   SUPER ALT 1-9  copy a pinned note to the clipboard, no window
+// In the window: type to filter, Up/Down move, Enter copies, CTRL P pins
+// the selected clip, Delete drops it, Esc clears the search then closes.
+// Drag a text clip onto a slot to pin it there. Drag a note onto another
+// slot to swap them. Slot number = the SUPER ALT key.
 FloatingWindow {
     id: root
     property var colors
     property bool open: false
     property string filter: ""
-    property var entries: [] // {id, preview, isImage}
+    property var entries: []                  // {id, preview, isImage}
+    property var pins: ["","","","","","","","",""]   // index 0 = slot 1, "" = empty
 
     title: "Clipboard"
-    implicitWidth: 640
-    implicitHeight: 700
+    implicitWidth: 620
+    implicitHeight: 680
     minimumSize: Qt.size(560, 600)
     maximumSize: Qt.size(660, 730)
     color: "transparent"
     visible: root.open || closeAnim.running
 
-    // NOTE: no IpcHandler here — Bar.qml owns targets "clipboard" and "sticky".
+    // NOTE: no IpcHandler here, Bar.qml owns targets "clipboard" and "sticky".
 
-    function refresh(){
-        listProc.running = true
-    }
-    function copyEntry(id){
-        Quickshell.execDetached(["sh","-c","cliphist decode "+id+" | wl-copy && notify-send -u low -a 'Clipboard' 'Clipboard' 'Copied'"])
-        root.open = false
-    }
-    function deleteEntry(id){
-        Quickshell.execDetached(["sh","-c","cliphist delete "+id+" 2>/dev/null; "])
-        var arr = entries.slice()
-        for(var i=0;i<arr.length;i++) if(arr[i].id===id){ arr.splice(i,1); break }
-        entries = arr
-    }
-    function clearAll(){
-        Quickshell.execDetached(["sh","-c","cliphist wipe 2>/dev/null; notify-send -u low -a 'Clipboard' 'Clipboard' 'Cleared'"])
-        entries = []
-    }
-    function pinSelected(){
-        var e = filtered[navIndex]
-        if(e) addSticky(e.id, null)
-    }
-    function deleteSelected(){
-        if (root.shelfVisible && root.stickyNav > 0 && root.stickies[root.stickyNav-1]) {
-            deleteSticky(root.stickies[root.stickyNav-1].id)
-            return
-        }
-        var e = filtered[navIndex]
-        if(e) deleteEntry(e.id)
-    }
+    readonly property var noteColors: ["#f3d877", "#f2a7b5", "#a8d8b9", "#a7c7f0", "#c9b6ee"]
+    readonly property color fill: colors.alpha(colors.foreground, 0.06)
+    readonly property color fill2: colors.alpha(colors.foreground, 0.11)
 
-    // ---- stickies ----
-    property var stickies: [] // {id, text, slot, created}
-
-    function stickyDb() { return LocalStorage.openDatabaseSync("qs_stickies", "1.0", "clipboard stickies", 200000) }
-
-    function loadStickies(){
-        var d = stickyDb()
-        d.transaction(function(tx){
-            tx.executeSql('CREATE TABLE IF NOT EXISTS stickies(id INTEGER PRIMARY KEY AUTOINCREMENT, text TEXT, created INTEGER)')
-            var rs = tx.executeSql('SELECT * FROM stickies ORDER BY id ASC')
-            var arr = []
-            for (var i=0;i<rs.rows.length;i++) {
-                var r = rs.rows.item(i)
-                arr.push({id: r.id, text: r.text, slot: i+1, created: r.created})
-            }
-            root.stickies = arr
-        })
-    }
-    // stick clipboard entry id, or raw text when id is null
-    function addSticky(id, rawText){
-        if (stickies.length >= 9) {
-            Quickshell.execDetached(["notify-send","-u","low","-a","Clipboard","Clipboard","Sticky shelf full (9)"])
-            return
-        }
-        var body = rawText
-        if (id !== null && id !== undefined) {
-            var src = entries.filter(function(e){ return e.id === id })[0]
-            if (!src) return
-            if (src.isImage) {
-                Quickshell.execDetached(["notify-send","-u","low","-a","Clipboard","Clipboard","Can't stick images yet"])
-                return
-            }
-            body = src.preview
-        }
-        if (!body || !body.trim()) return
-        var dup = stickies.filter(function(s){ return s.text === body.trim() })[0]
-        if (dup) {
-            Quickshell.execDetached(["notify-send","-u","low","-a","Clipboard","Clipboard","Already on the shelf"])
-            return
-        }
-        var d = stickyDb()
-        d.transaction(function(tx){
-            tx.executeSql('INSERT INTO stickies(text,created) VALUES(?,?)', [body.trim(), Date.now()])
-        })
-        loadStickies()
-    }
-    function addStickyFromClipboard(){
-        captureProc.running = true
-    }
-    function deleteSticky(id){
-        var d = stickyDb()
-        d.transaction(function(tx){ tx.executeSql('DELETE FROM stickies WHERE id=?', [id]) })
-        loadStickies()
-    }
-    function clearStickies(){
-        var d = stickyDb()
-        d.transaction(function(tx){ tx.executeSql('DELETE FROM stickies') })
-        loadStickies()
-    }
-    function copySticky(s){
-        if (!s || !s.text) return
-        var esc = s.text.replace(/'/g, "'\\''")
-        Quickshell.execDetached(["sh","-c","printf '%s' '"+esc+"' | wl-copy && notify-send -u low -a 'Clipboard' 'Sticky' 'Copied'"])
-        if (root.open) root.open = false
-    }
-    function copyStickyBySlot(slot){
-        var n = parseInt(slot)
-        if (isNaN(n) || n < 1) return
-        var s = stickies.filter(function(x){ return x.slot === n })[0]
-        if (s) copySticky(s)
-    }
-    function preview(text){
-        if (!text) return ""
-        var one = text.replace(/\s+/g, " ").trim()
-        return one.length > 90 ? one.substring(0, 90) + "…" : one
-    }
-    // true when this clipboard entry is already on the shelf
-    function isSticky(preview){
-        return stickies.some(function(s){ return s.text === preview })
-    }
-
-    property int navIndex: 0
-    property int stickyNav: 0
+    // ---- cursor: pinned notes first (in slot order), then history ----
+    property int cursor: 0
     property bool allowHover: false
-    onOpenChanged: { if(open){ filter=""; filterField.text=""; navIndex = 0; stickyNav = 0; allowHover = false; refresh(); loadStickies(); Qt.callLater(function(){ filterField.forceActiveFocus() }); openAnim.restart() } else closeAnim.restart() }
-    onFilterChanged: navIndex = 0
-    onEntriesChanged: navIndex = 0
-    onStickiesChanged: stickyNav = 0
 
     readonly property var filtered: {
-        if(filter.trim()==="") return entries
-        var q=filter.trim().toLowerCase()
-        return entries.filter(function(e){ return e.preview.toLowerCase().includes(q) })
+        if (filter.trim() === "") return entries
+        var q = filter.trim().toLowerCase()
+        return entries.filter(function(e) { return e.preview.toLowerCase().includes(q) })
     }
-    // when searching, the shelf hides so matches aren't buried under stickies
-    readonly property bool shelfVisible: root.filter.trim() === "" && root.stickies.length > 0
+    // only the filled slots, as {slot, text}
+    readonly property var pinnedList: {
+        var list = []
+        for (var i = 0; i < 9; i++)
+            if (pins[i] !== "") list.push({ slot: i + 1, text: pins[i] })
+        return list
+    }
+    // the pinned board hides while searching so matches are not buried
+    readonly property bool boardVisible: filter.trim() === ""
+    readonly property int pinnedCount: boardVisible ? pinnedList.length : 0
+    readonly property int total: pinnedCount + filtered.length
 
-    Component.onCompleted: loadStickies()
+    function pinnedIndex(slot) {
+        for (var i = 0; i < pinnedList.length; i++)
+            if (pinnedList[i].slot === slot) return i
+        return -1
+    }
+    function moveCursor(step) {
+        cursor = Math.max(0, Math.min(total - 1, cursor + step))
+        if (cursor >= pinnedCount) clipList.positionViewAtIndex(cursor - pinnedCount, ListView.Contain)
+    }
+    function entryAtCursor() { return cursor >= pinnedCount ? filtered[cursor - pinnedCount] : null }
+    function copyCursor() {
+        if (cursor < pinnedCount) copyPin(pinnedList[cursor].slot)
+        else if (entryAtCursor()) copyEntry(entryAtCursor().id)
+    }
+    function pinCursor() { if (entryAtCursor()) pinEntry(entryAtCursor()) }
+    function deleteCursor() {
+        if (cursor < pinnedCount) setPin(pinnedList[cursor].slot, "")
+        else if (entryAtCursor()) deleteEntry(entryAtCursor().id)
+    }
+
+    // ---- history ----
+    function refresh() { listProc.running = true }
+    function notify(msg) { Quickshell.execDetached(["notify-send", "-u", "low", "-a", "Clipboard", "Clipboard", msg]) }
+    function copyEntry(id) {
+        Quickshell.execDetached(["sh", "-c", "cliphist decode " + id + " | wl-copy && notify-send -u low -a 'Clipboard' 'Clipboard' 'Copied'"])
+        root.open = false
+    }
+    function deleteEntry(id) {
+        Quickshell.execDetached(["sh", "-c", "cliphist delete " + id + " 2>/dev/null"])
+        entries = entries.filter(function(e) { return e.id !== id })
+    }
+    function clearAll() {
+        Quickshell.execDetached(["sh", "-c", "cliphist wipe 2>/dev/null; notify-send -u low -a 'Clipboard' 'Clipboard' 'Cleared'"])
+        entries = []
+    }
+
+    // ---- pins (LocalStorage, table pins(slot, text); survives cliphist wipes) ----
+    function db() { return LocalStorage.openDatabaseSync("qs_stickies", "1.0", "clipboard stickies", 200000) }
+
+    function loadPins() {
+        db().transaction(function(tx) {
+            tx.executeSql("CREATE TABLE IF NOT EXISTS pins(slot INTEGER PRIMARY KEY, text TEXT)")
+            var rs = tx.executeSql("SELECT slot, text FROM pins")
+            var arr = ["","","","","","","","",""]
+            for (var i = 0; i < rs.rows.length; i++) arr[rs.rows.item(i).slot - 1] = rs.rows.item(i).text
+            root.pins = arr
+        })
+    }
+    // text "" empties the slot
+    function savePin(slot, text) {
+        db().transaction(function(tx) {
+            if (text === "") tx.executeSql("DELETE FROM pins WHERE slot=?", [slot])
+            else tx.executeSql("INSERT OR REPLACE INTO pins(slot, text) VALUES(?,?)", [slot, text])
+        })
+    }
+    function setPin(slot, text) { savePin(slot, text); loadPins() }
+    function swapPins(a, b) {
+        var ta = pins[a - 1], tb = pins[b - 1]
+        savePin(a, tb); savePin(b, ta); loadPins()
+    }
+    // pin into a chosen slot (drag) or the first free one (button, CTRL P)
+    function pinText(text, slot) {
+        var t = text.trim()
+        if (!t) return
+        if (pins.indexOf(t) >= 0) { notify("Already pinned"); return }
+        var target = slot > 0 ? slot : pins.indexOf("") + 1
+        if (target < 1) { notify("All 9 slots are full"); return }
+        setPin(target, t)
+    }
+    function pinEntry(e) {
+        if (e.isImage) notify("Images can't be pinned yet")
+        else pinText(e.preview, 0)
+    }
+    function addStickyFromClipboard() { captureProc.running = true }
+    function clearStickies() { db().transaction(function(tx) { tx.executeSql("DELETE FROM pins") }); loadPins() }
+
+    function copyText(text, label) {
+        var esc = text.replace(/'/g, "'\\''")
+        Quickshell.execDetached(["sh", "-c", "printf '%s' '" + esc + "' | wl-copy && notify-send -u low -a 'Clipboard' '" + label + "' 'Copied'"])
+        if (root.open) root.open = false
+    }
+    function copyPin(slot) { if (pins[slot - 1] !== "") copyText(pins[slot - 1], "Note " + slot) }
+    function copyStickyBySlot(slot) {
+        var n = parseInt(slot)
+        if (!isNaN(n) && n >= 1 && n <= 9) copyPin(n)
+    }
+
+    // ---- drag and drop (one ghost for every source) ----
+    property bool dragging: false
+    property string dragText: ""
+    property int dragFromSlot: 0              // 0 = dragged from history
+    property point dragPos: Qt.point(0, 0)    // in card coordinates
+    property int hoverSlot: 0
+
+    function slotAt(x, y) {
+        if (!boardVisible) return 0
+        for (var i = 0; i < 9; i++) {
+            var cell = slotRepeater.itemAt(i)
+            var p = cell.mapFromItem(card, x, y)
+            if (p.x >= 0 && p.y >= 0 && p.x <= cell.width && p.y <= cell.height) return i + 1
+        }
+        return 0
+    }
+    function beginDrag(text, fromSlot) { dragText = text; dragFromSlot = fromSlot; dragging = true }
+    function moveDrag(scenePos) {
+        dragPos = card.mapFromItem(null, scenePos.x, scenePos.y)
+        hoverSlot = slotAt(dragPos.x, dragPos.y)
+    }
+    function endDrag() {
+        if (hoverSlot > 0) {
+            if (dragFromSlot > 0) { if (dragFromSlot !== hoverSlot) swapPins(dragFromSlot, hoverSlot) }
+            else pinText(dragText, hoverSlot)
+        }
+        dragging = false
+        hoverSlot = 0
+    }
+    component DragSource: DragHandler {
+        required property string payload
+        property int fromSlot: 0
+        target: null
+        onActiveChanged: active ? root.beginDrag(payload, fromSlot) : root.endDrag()
+        onCentroidChanged: if (active) root.moveDrag(centroid.scenePosition)
+    }
+
+    onOpenChanged: {
+        if (open) {
+            filter = ""; filterField.text = ""; cursor = 0; allowHover = false
+            refresh(); loadPins()
+            Qt.callLater(function() { filterField.forceActiveFocus() })
+            openAnim.restart()
+        } else closeAnim.restart()
+    }
+    onFilterChanged: cursor = 0
+    onEntriesChanged: cursor = 0
+    onPinsChanged: cursor = 0
+    Component.onCompleted: loadPins()
 
     Process {
         id: listProc
-        command: ["sh","-c","cliphist list 2>/dev/null | head -n 50"]
+        command: ["sh", "-c", "cliphist list 2>/dev/null | head -n 50"]
         stdout: StdioCollector {
             waitForEnd: true
             onStreamFinished: {
-                var lines=text.trim().split("\n")
-                var arr=[]
-                for(var i=0;i<lines.length;i++){
-                    var line=lines[i]
-                    if(!line.trim()) continue
-                    var tab=line.indexOf("\t")
-                    if(tab<0) continue
-                    var id=line.substring(0,tab).trim()
-                    var preview=line.substring(tab+1).trim()
-                    var isImage=preview.startsWith("[[ binary data")
-                    arr.push({id:id, preview:preview, isImage:isImage})
+                var lines = text.trim().split("\n")
+                var arr = []
+                for (var i = 0; i < lines.length; i++) {
+                    var line = lines[i]
+                    var tab = line.indexOf("\t")
+                    if (!line.trim() || tab < 0) continue
+                    var preview = line.substring(tab + 1).trim()
+                    arr.push({ id: line.substring(0, tab).trim(), preview: preview, isImage: preview.startsWith("[[ binary data") })
                 }
-                root.entries=arr
+                root.entries = arr
             }
         }
     }
 
-    // captures the live system clipboard straight into a sticky.
-    // single process (no temp file): the old two-step version raced
-    // wl-paste against cat and almost always read an empty file.
+    // pin whatever is on the live clipboard (single process, no temp file)
     Process {
         id: captureProc
-        running: false
-        command: ["sh","-c","wl-paste --no-newline 2>/dev/null | head -c 2000"]
+        command: ["sh", "-c", "wl-paste --no-newline 2>/dev/null | head -c 2000"]
         stdout: StdioCollector {
             waitForEnd: true
             onStreamFinished: {
-                var body = text.replace(/\s+$/,"")
-                if (body.trim()) root.addSticky(null, body)
-                else Quickshell.execDetached(["notify-send","-u","low","-a","Clipboard","Clipboard","Clipboard is empty"])
+                var body = text.replace(/\s+$/, "")
+                if (body.trim()) root.pinText(body, 0)
+                else root.notify("Clipboard is empty")
             }
         }
     }
 
-    // window glass — transparent surface so Hyprland's decoration blur
-    // shows through, same recipe as the other floating windows
     Rectangle {
         id: card
         anchors.fill: parent
-        radius: 16
-        color: colors.alpha(colors.surface, 0.52)
-        border.width:1; border.color: colors.alpha(colors.outline, 0.15)
+        radius: 22
+        color: colors.alpha(colors.surface, 0.62)
         focus: root.open
-        // bezier pair — open pops with overshoot bounce (fast), close hurries
-        // out with none. Same curves as the notification drawer.
+
         ParallelAnimation {
             id: openAnim
             NumberAnimation { target: card; property: "opacity"; from: 0; to: 1; duration: 220; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
@@ -221,230 +244,130 @@ FloatingWindow {
             NumberAnimation { target: card; property: "opacity"; to: 0; duration: 160; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
             NumberAnimation { target: card; property: "scale"; to: 0.94; duration: 180; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
         }
-        Keys.onEscapePressed: root.open=false
-        Keys.onPressed: function(event) {
-            if ((event.modifiers & Qt.ControlModifier) && event.key === Qt.Key_P) { root.pinSelected(); event.accepted = true }
-            else if (event.key === Qt.Key_Delete) { root.deleteSelected(); event.accepted = true }
-            else if (event.key === Qt.Key_Slash && !filterField.activeFocus) { filterField.forceActiveFocus(); event.accepted = true }
-        }
 
         ColumnLayout {
             anchors.fill: parent
-            anchors.margins: 16
-            spacing: 12
+            anchors.margins: 20
+            spacing: 14
 
+            // header
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 10
-                Text { text: "Clipboard"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 14; font.weight: Font.ExtraBold; Layout.fillWidth:true }
-                // stick whatever is currently on the clipboard
+                Text { text: "Clipboard"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 16; font.weight: Font.DemiBold; Layout.fillWidth: true }
                 Rectangle {
-                    width: 30; height: 26; radius: 13
-                    color: pinMa.containsMouse?colors.alpha(colors.primary,0.18):colors.alpha(colors.surface,0.5)
-                    border.width:1; border.color: colors.alpha(colors.outline,0.14)
-                    Text {
-                        anchors.centerIn: parent
-                        text: "󰐃"
-                        color: pinMa.containsMouse?colors.primary:colors.alpha(colors.outline,0.75)
-                        font.family: colors.fontSans; font.pixelSize: 12
-                        Behavior on color { ColorAnimation { duration: 150 } }
-                    }
-                    MouseArea { id: pinMa; anchors.fill: parent; hoverEnabled:true; onClicked: root.addStickyFromClipboard() }
-                }
-                Rectangle {
-                    width: 68; height: 26; radius: 13
-                    color: clearMa.containsMouse?colors.alpha(colors.error,0.15):colors.alpha(colors.surface,0.5)
-                    border.width:1; border.color: colors.alpha(colors.outline,0.14)
-                    Text { anchors.centerIn: parent; text: "Clear"; color: clearMa.containsMouse?colors.error:colors.alpha(colors.outline,0.65); font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold }
-                    MouseArea { id: clearMa; anchors.fill: parent; hoverEnabled:true; onClicked: root.clearAll() }
-                }
-                Rectangle {
-                    width: 26; height: 26; radius: 13
-                    color: closeMa.containsMouse?colors.alpha(colors.surfaceVariant,0.4):"transparent"
-                    Text { anchors.centerIn: parent; text: "󰅖"; color: closeMa.containsMouse?colors.foreground:colors.alpha(colors.outline,0.7); font.family: colors.fontSans; font.pixelSize: 12 }
-                    MouseArea { id: closeMa; anchors.fill: parent; hoverEnabled:true; onClicked: root.open=false }
+                    implicitWidth: clearLabel.implicitWidth + 24; implicitHeight: 28; radius: 14
+                    color: clearMa.containsMouse ? root.fill2 : root.fill
+                    Text { id: clearLabel; anchors.centerIn: parent; text: "Clear history"; color: colors.alpha(colors.foreground, 0.6); font.family: colors.fontSans; font.pixelSize: 10 }
+                    MouseArea { id: clearMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.clearAll() }
                 }
             }
 
+            // search
             TextField {
                 id: filterField
                 Layout.fillWidth: true
-                implicitHeight: 36
-                leftPadding: 14; rightPadding: 14
-                placeholderText: "Search clipboard…  ( / focuses · CTRL P pins · DEL drops )"
-                placeholderTextColor: colors.alpha(colors.outline,0.5)
+                implicitHeight: 42
+                leftPadding: 18; rightPadding: 18
+                placeholderText: "Search clipboard"
+                placeholderTextColor: colors.alpha(colors.foreground, 0.4)
                 color: colors.foreground
                 font.family: colors.fontSans; font.pixelSize: 11
-                background: Rectangle {
-                    radius: 10
-                    color: colors.alpha(colors.surface,0.5)
-                    border.width:1; border.color: filterField.activeFocus?colors.alpha(colors.primary,0.4):colors.alpha(colors.outline,0.15)
-                }
-                onTextChanged: { root.filter=text; root.navIndex = 0 }
+                background: Rectangle { radius: 21; color: filterField.activeFocus ? root.fill2 : root.fill }
+                onTextChanged: root.filter = text
                 Keys.onPressed: function(event) {
-                    if ((event.modifiers & Qt.ControlModifier) && event.key === Qt.Key_P) { root.pinSelected(); event.accepted = true }
-                    else if (event.key === Qt.Key_Delete) { root.deleteSelected(); event.accepted = true }
-                    else if (event.key === Qt.Key_Tab) {
-                        root.stickyNav = Math.min(root.stickyNav+1, Math.max(0, root.stickies.length-1))
-                        event.accepted = true
-                    }
-                    else if (event.key === Qt.Key_Backtab) {
-                        root.stickyNav = Math.max(root.stickyNav-1, 0)
-                        event.accepted = true
-                    }
-                    else if (event.key === Qt.Key_Down) {
-                        if (root.shelfVisible && root.stickies.length > 0) {
-                            root.stickyNav = Math.min(root.stickyNav+1, root.stickies.length-1)
-                            event.accepted = true
-                        } else {
-                            root.navIndex = Math.min(root.navIndex+1, root.filtered.length-1)
-                            clipList.positionViewAtIndex(root.navIndex, ListView.Contain)
-                            event.accepted = true
-                        }
-                    }
-                    else if (event.key === Qt.Key_Up) {
-                        if (root.shelfVisible && root.stickyNav > 0) {
-                            root.stickyNav = root.stickyNav-1
-                            event.accepted = true
-                        } else {
-                            root.navIndex = Math.max(root.navIndex-1, 0)
-                            clipList.positionViewAtIndex(root.navIndex, ListView.Contain)
-                            event.accepted = true
-                        }
-                    }
-                    else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
-                        if (root.shelfVisible && root.stickyNav > 0 && root.stickies[root.stickyNav-1]) {
-                            root.copySticky(root.stickies[root.stickyNav-1])
-                        } else {
-                            var e = root.filtered[root.navIndex]
-                            if(e) root.copyEntry(e.id)
-                        }
-                        event.accepted = true
-                    }
+                    if ((event.modifiers & Qt.ControlModifier) && event.key === Qt.Key_P) { root.pinCursor(); event.accepted = true }
+                    else if (event.key === Qt.Key_Delete) { root.deleteCursor(); event.accepted = true }
+                    else if (event.key === Qt.Key_Down) { root.moveCursor(1); event.accepted = true }
+                    else if (event.key === Qt.Key_Up) { root.moveCursor(-1); event.accepted = true }
+                    else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) { root.copyCursor(); event.accepted = true }
                     else if (event.key === Qt.Key_Escape) {
-                        if (filterField.text !== "") { filterField.text = ""; event.accepted = true }
-                        else { root.open = false; event.accepted = true }
+                        if (text !== "") text = ""
+                        else root.open = false
+                        event.accepted = true
                     }
                 }
             }
 
-            // ── Sticky shelf ──────────────────────────────────────────
-            // Pinned snippets you copy constantly. SUPER ALT 1-9 fires one
-            // without opening this panel, so they work from any app.
+            // pinned notes: 3x3, slot number = SUPER ALT key
             ColumnLayout {
-                id: shelf
                 Layout.fillWidth: true
-                visible: root.shelfVisible
-                Layout.preferredHeight: root.shelfVisible ? implicitHeight : 0
+                visible: root.boardVisible
                 spacing: 8
-
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: 8
-                    Rectangle { width:3; height:12; radius:1.5; color: colors.alpha(colors.primary,0.7) }
-                    Text {
-                        text: "STICKY"
-                        color: colors.alpha(colors.outline,0.55)
-                        font.family: colors.fontSans; font.pixelSize: 7; font.weight: Font.Bold; font.letterSpacing: 1.3
-                    }
-                    Rectangle { width:1; height:8; color: colors.alpha(colors.outline,0.2) }
-                    Text {
-                        text: root.stickies.length + " of 9"
-                        color: colors.alpha(colors.outline,0.45)
-                        font.family: colors.fontSans; font.pixelSize: 7
-                    }
-                    Item { Layout.fillWidth: true }
-                    Text {
-                        text: "SUPER ALT 1-9 fire · DEL removes"
-                        color: colors.alpha(colors.outline,0.4)
-                        font.family: colors.fontSans; font.pixelSize: 7
-                    }
+                Text {
+                    text: "Pinned, " + root.pinnedList.length + " of 9"
+                    color: colors.alpha(colors.foreground, 0.5)
+                    font.family: colors.fontSans; font.pixelSize: 10
                 }
-
-                ListView {
-                    id: stickyList
+                Grid {
+                    id: pinGrid
                     Layout.fillWidth: true
-                    Layout.preferredHeight: Math.min(3*46, count*46)
-                    clip: true
-                    interactive: true
-                    model: root.stickies
+                    columns: 3
                     spacing: 6
-                    boundsBehavior: Flickable.StopAtBounds
-                    ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
 
-                    delegate: Rectangle {
-                        id: stickyEntry
-                        required property var modelData
-                        required property int index
-                        readonly property bool selected: modelData.slot === root.stickyNav
-                        width: stickyList.width
-                        height: 46
-                        radius: 10
-                        color: selected ? colors.alpha(colors.primary,0.18) : sma.containsMouse ? colors.alpha(colors.primary,0.10) : colors.alpha(colors.surface,0.5)
-                        border.width: 1
-                        border.color: selected ? colors.alpha(colors.primary,0.5) : sma.containsMouse ? colors.alpha(colors.primary,0.3) : colors.alpha(colors.outline,0.12)
+                    Repeater {
+                        id: slotRepeater
+                        model: 9
+                        delegate: Item {
+                            id: cell
+                            required property int index
+                            readonly property int slot: index + 1
+                            readonly property string value: root.pins[index]
+                            readonly property bool selected: value !== "" && root.pinnedIndex(slot) === root.cursor
+                            width: (pinGrid.width - 2 * pinGrid.spacing) / 3
+                            height: 38
 
-                        RowLayout {
-                            anchors.fill: parent
-                            anchors.leftMargin: 8; anchors.rightMargin: 8
-                            spacing: 8
-
-                            // slot chip — the number you press
+                            // the empty slot underneath, also the drop highlight
                             Rectangle {
-                                Layout.preferredWidth: 24; Layout.preferredHeight: 24; radius: 12
-                                color: colors.alpha(colors.primary,0.15)
-                                border.width: 1; border.color: colors.alpha(colors.primary,0.3)
+                                anchors.fill: parent
+                                radius: 11
+                                color: root.hoverSlot === cell.slot ? colors.alpha(colors.primary, 0.4) : colors.alpha(colors.foreground, 0.04)
                                 Text {
                                     anchors.centerIn: parent
-                                    text: modelData.slot
-                                    color: colors.primary
-                                    font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.Bold
+                                    visible: cell.value === ""
+                                    text: cell.slot
+                                    color: colors.alpha(colors.foreground, 0.25)
+                                    font.family: colors.fontSans; font.pixelSize: 10
                                 }
                             }
 
-                            Text {
-                                Layout.fillWidth: true
-                                text: root.preview(modelData.text)
-                                color: colors.foreground
-                                font.family: colors.fontSans; font.pixelSize: 10
-                                elide: Text.ElideRight
-                                maximumLineCount: 2
-                                wrapMode: Text.Wrap
-                            }
-                        }
+                            Rectangle {
+                                id: note
+                                visible: cell.value !== ""
+                                anchors.fill: parent
+                                anchors.topMargin: (cell.selected || noteMa.containsMouse) ? -2 : 0
+                                anchors.bottomMargin: (cell.selected || noteMa.containsMouse) ? 2 : 0
+                                radius: 11
+                                color: root.noteColors[cell.index % 5]
+                                opacity: root.dragging && root.dragFromSlot === cell.slot ? 0.3 : 1
+                                Behavior on anchors.topMargin { NumberAnimation { duration: 120 } }
 
-                        MouseArea {
-                            id: sma
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            acceptedButtons: Qt.LeftButton
-                            onEntered: root.stickyNav = modelData.slot
-                            onClicked: root.copySticky(modelData)
+                                RowLayout {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: 10; anchors.rightMargin: 10
+                                    spacing: 8
+                                    Text { text: cell.slot; color: "#241f12"; opacity: 0.55; font.family: colors.fontSans; font.pixelSize: 10; font.weight: Font.DemiBold }
+                                    Text { Layout.fillWidth: true; text: cell.value; color: "#241f12"; elide: Text.ElideRight; maximumLineCount: 1; font.family: colors.fontSans; font.pixelSize: 10; font.weight: Font.Medium }
+                                    Text {
+                                        id: unpinLabel
+                                        visible: noteMa.containsMouse || cell.selected
+                                        text: "Unpin"; color: "#241f12"; opacity: 0.6
+                                        font.family: colors.fontSans; font.pixelSize: 9
+                                        MouseArea { anchors.fill: parent; anchors.margins: -4; onClicked: root.setPin(cell.slot, "") }
+                                    }
+                                }
+                                MouseArea { id: noteMa; anchors.fill: parent; z: -1; hoverEnabled: true; onClicked: root.copyPin(cell.slot) }
+                                DragSource { payload: cell.value; fromSlot: cell.slot }
+                            }
                         }
                     }
                 }
             }
 
-            // ── section split: shelf above, history below ─────────────
-            // only exists when the shelf is showing — otherwise history
-            // is the whole window and needs no introduction.
-            RowLayout {
-                Layout.fillWidth: true
-                visible: root.shelfVisible
-                Layout.preferredHeight: root.shelfVisible ? implicitHeight : 0
-                spacing: 10
-                Rectangle { Layout.fillWidth: true; height: 1; color: colors.alpha(colors.outline,0.18) }
-                Text {
-                    text: "HISTORY"
-                    color: colors.alpha(colors.outline,0.55)
-                    font.family: colors.fontSans; font.pixelSize: 7; font.weight: Font.Bold; font.letterSpacing: 1.3
-                }
-                Text {
-                    text: root.filtered.length + ""
-                    color: colors.alpha(colors.outline,0.45)
-                    font.family: colors.fontSans; font.pixelSize: 7
-                }
-                Rectangle { Layout.fillWidth: true; height: 1; color: colors.alpha(colors.outline,0.18) }
+            // history
+            Text {
+                text: root.filter.trim() === "" ? "History" : root.filtered.length + " found"
+                color: colors.alpha(colors.foreground, 0.5)
+                font.family: colors.fontSans; font.pixelSize: 10
             }
 
             ListView {
@@ -452,125 +375,116 @@ FloatingWindow {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 clip: true
-                interactive: true
-                model: root.filtered
-                currentIndex: root.navIndex
-                onCurrentIndexChanged: root.navIndex = currentIndex
                 spacing: 6
+                model: root.filtered
                 boundsBehavior: Flickable.StopAtBounds
                 ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+
                 delegate: Rectangle {
-                    id: clipEntry
+                    id: rowItem
                     required property var modelData
                     required property int index
+                    readonly property int cur: root.pinnedCount + index
+                    readonly property bool selected: cur === root.cursor
+                    readonly property bool pinned: !modelData.isImage && root.pins.indexOf(modelData.preview) >= 0
                     property string thumbPath: "/tmp/quickshell-cliphist/" + modelData.id + ".png"
                     property bool thumbReady: false
-                    readonly property bool stickied: !modelData.isImage && root.isSticky(modelData.preview)
-                    onThumbPathChanged: { thumbReady = false; if(modelData.isImage) thumbProc.running = true }
-                    Component.onCompleted: if(modelData.isImage) thumbProc.running = true
+
                     width: clipList.width
-                    height: modelData.isImage ? 72 : 48
-                    radius: 12
-                    color: index === root.navIndex ? colors.alpha(colors.primary,0.18) : ma.containsMouse ? colors.alpha(colors.primary,0.10) : colors.alpha(colors.surface,0.5)
-                    border.width:1; border.color: index === root.navIndex ? colors.alpha(colors.primary,0.5) : ma.containsMouse?colors.alpha(colors.primary,0.3):colors.alpha(colors.outline,0.12)
+                    height: modelData.isImage ? 60 : 44
+                    radius: 14
+                    color: selected ? colors.alpha(colors.primary, 0.22) : rowMa.containsMouse ? root.fill2 : root.fill
+                    Component.onCompleted: if (modelData.isImage) thumbProc.running = true
+
+                    MouseArea {
+                        id: rowMa
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        onEntered: if (root.allowHover) root.cursor = rowItem.cur
+                        onPositionChanged: if (!root.allowHover) root.allowHover = true
+                        onClicked: root.copyEntry(rowItem.modelData.id)
+                    }
+                    // text clips can be dragged onto a slot
+                    DragSource { enabled: !rowItem.modelData.isImage; payload: rowItem.modelData.preview }
+
                     RowLayout {
                         anchors.fill: parent
-                        anchors.leftMargin: 10; anchors.rightMargin: 8
-                        spacing: 10
-                        // image preview for binary data — actual thumbnail from cliphist decode
+                        anchors.leftMargin: modelData.isImage ? 8 : 16
+                        anchors.rightMargin: 8
+                        spacing: 12
+
+                        // small thumbnail for images
                         Rectangle {
-                            visible: modelData.isImage
-                            Layout.preferredWidth: 56
-                            Layout.preferredHeight: 56
-                            radius: 8
-                            color: colors.alpha(colors.surfaceVariant,0.3)
+                            visible: rowItem.modelData.isImage
+                            Layout.preferredWidth: 64; Layout.preferredHeight: 44
+                            color: colors.alpha(colors.foreground, 0.08)
                             clip: true
                             Image {
-                                id: thumbImg
                                 anchors.fill: parent
-                                anchors.margins: 2
-                                source: clipEntry.thumbReady ? "file://" + clipEntry.thumbPath : ""
+                                source: rowItem.thumbReady ? "file://" + rowItem.thumbPath : ""
                                 fillMode: Image.PreserveAspectCrop
                                 asynchronous: true
                                 cache: false
-                                visible: status === Image.Ready
                             }
-                            Text {
-                                anchors.centerIn: parent
-                                visible: thumbImg.status !== Image.Ready
-                                text: ""
-                                color: colors.primary
-                                font.family: colors.fontSans
-                                font.pixelSize: 18
-                            }
-                            Text {
-                                anchors.bottom: parent.bottom
-                                anchors.horizontalCenter: parent.horizontalCenter
-                                anchors.bottomMargin: 2
-                                visible: thumbImg.status !== Image.Ready
-                                text: {
-                                    var m=modelData.preview.match(/(\d+)\s*x\s*(\d+)/)
-                                    return m ? m[1]+"×"+m[2] : "IMG"
-                                }
-                                color: colors.alpha(colors.outline,0.7)
-                                font.family: colors.fontSans
-                                font.pixelSize: 7
-                            }
-                        }
-                        Rectangle {
-                            visible: !modelData.isImage
-                            Layout.preferredWidth: 32; Layout.preferredHeight: 32; radius: 8
-                            color: colors.alpha(colors.primary,0.12)
-                            Text { anchors.centerIn: parent; text: "󰅍"; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 14 }
                         }
                         Text {
                             Layout.fillWidth: true
-                            text: modelData.preview
+                            text: rowItem.modelData.isImage ? "Image" : rowItem.modelData.preview
                             color: colors.foreground
-                            font.family: colors.fontSans
-                            font.pixelSize: 10
-                            elide: Text.ElideRight
-                            maximumLineCount: 2
-                            wrapMode: Text.Wrap
+                            elide: Text.ElideRight; maximumLineCount: 1
+                            font.family: colors.fontSans; font.pixelSize: 11
                         }
-                        // pin this entry to the sticky shelf
+                        Text {
+                            visible: rowItem.modelData.isImage
+                            text: { var m = rowItem.modelData.preview.match(/(\d+)\s*x\s*(\d+)/); return m ? m[1] + " x " + m[2] : "" }
+                            color: colors.alpha(colors.foreground, 0.5)
+                            font.family: colors.fontSans; font.pixelSize: 10
+                        }
                         Rectangle {
-                            visible: !modelData.isImage
-                            Layout.preferredWidth: 24; Layout.preferredHeight: 24; radius: 12
-                            color: pma.containsMouse?colors.alpha(colors.primary,0.2):(clipEntry.stickied?colors.alpha(colors.primary,0.15):"transparent")
-                            border.width: clipEntry.stickied?1:0
-                            border.color: colors.alpha(colors.primary,0.3)
-                            Text {
-                                anchors.centerIn: parent
-                                text: clipEntry.stickied ? "󰐃" : "󰤱"
-                                color: clipEntry.stickied ? colors.primary : (pma.containsMouse?colors.primary:colors.alpha(colors.outline,0.4))
-                                font.family: colors.fontSans; font.pixelSize: 11
-                                Behavior on color { ColorAnimation { duration: 150 } }
-                            }
-                            MouseArea { id: pma; anchors.fill: parent; hoverEnabled:true; onClicked: root.addSticky(modelData.id, null) }
+                            visible: !rowItem.modelData.isImage && (rowItem.selected || rowMa.containsMouse)
+                            implicitWidth: pinLabel.implicitWidth + 24; implicitHeight: 26; radius: 13
+                            color: pinMa.containsMouse ? colors.alpha(colors.foreground, 0.18) : root.fill2
+                            Text { id: pinLabel; anchors.centerIn: parent; text: rowItem.pinned ? "Pinned" : "Pin"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 10 }
+                            MouseArea { id: pinMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.pinEntry(rowItem.modelData) }
                         }
                     }
-                    // decode image to /tmp for thumbnail (cached, only once per id)
+
+                    // decode image to /tmp for the thumbnail (cached, once per id)
                     Process {
                         id: thumbProc
-                        running: false
-                        command: ["sh","-c", "mkdir -p /tmp/quickshell-cliphist; [ -f " + clipEntry.thumbPath + " ] || cliphist decode " + modelData.id + " > " + clipEntry.thumbPath + " 2>/dev/null; echo done"]
-                        stdout: StdioCollector {
-                            waitForEnd: true
-                            onStreamFinished: clipEntry.thumbReady = true
-                        }
+                        command: ["sh", "-c", "mkdir -p /tmp/quickshell-cliphist; [ -f " + rowItem.thumbPath + " ] || cliphist decode " + rowItem.modelData.id + " > " + rowItem.thumbPath + " 2>/dev/null; echo done"]
+                        stdout: StdioCollector { waitForEnd: true; onStreamFinished: rowItem.thumbReady = true }
                     }
-                    MouseArea { id: ma; anchors.fill: parent; hoverEnabled:true; onEntered: if(root.allowHover) root.navIndex = index; onPositionChanged: if(!root.allowHover) root.allowHover = true; onClicked: root.copyEntry(modelData.id) }
                 }
             }
 
             Text {
-                visible: root.filtered.length===0 && !root.shelfVisible
-                text: root.entries.length===0 ? "No clipboard history" : "No matches"
-                color: colors.alpha(colors.outline,0.5)
-                font.family: colors.fontSans; font.pixelSize: 10
+                visible: root.filtered.length === 0
+                text: root.entries.length === 0 ? "No clipboard history" : "No matches"
+                color: colors.alpha(colors.foreground, 0.5)
+                font.family: colors.fontSans; font.pixelSize: 11
                 Layout.alignment: Qt.AlignHCenter
             }
+
+            Text {
+                Layout.fillWidth: true
+                text: "↑↓ move    Enter copy    CTRL P pin    Del remove    Drag to a slot to pin    SUPER ALT 1-9 paste a note"
+                color: colors.alpha(colors.foreground, 0.4)
+                font.family: colors.fontSans; font.pixelSize: 9
+                elide: Text.ElideRight
+            }
+        }
+
+        // follows the pointer while dragging; lives on the card so the list can't clip it
+        Rectangle {
+            visible: root.dragging
+            z: 100
+            x: root.dragPos.x - width / 2
+            y: root.dragPos.y - height / 2
+            width: Math.min(220, ghostText.implicitWidth + 28); height: 32; radius: 11
+            color: "#f3d877"
+            opacity: 0.95
+            Text { id: ghostText; anchors.centerIn: parent; width: parent.width - 28; text: root.dragText; color: "#241f12"; elide: Text.ElideRight; maximumLineCount: 1; font.family: colors.fontSans; font.pixelSize: 10; font.weight: Font.Medium }
         }
     }
 }

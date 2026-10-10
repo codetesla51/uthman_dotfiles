@@ -36,6 +36,7 @@ PanelWindow {
     property double stampBase: 0
     property real karaP: 0      // 0..1 progress through the active line
     property real vortexPhase: 0  // UI-only twist phase (visual layer)
+    property real vizLevel: 0     // smoothed cava average 0..100, drives the vortex
     property string fetchedKey: ""
     property int attempt: 0        // 0 = artist+title+duration, 1 = no duration, 2+ = timed retries
     property string state: "idle"   // idle | fetching | ready | plain | none | quiet
@@ -221,6 +222,24 @@ PanelWindow {
         }
     }
 
+    // rhythm feed — same cava tap as control center, averaged to one level
+    Process {
+        id: vizProc
+        command: ["cava", "-p", Quickshell.env("HOME") + "/.config/quickshell/scripts/cava-qs.conf"]
+        running: root.open && root.playing
+        stdout: SplitParser {
+            splitMarker: "\n"
+            onRead: function(line) {
+                var parts = line.trim().split(";")
+                if (parts.length < 8) return
+                var sum = 0
+                for (var i = 0; i < parts.length; i++) sum += Math.max(0, Math.min(100, parseInt(parts[i]) || 0))
+                var avg = sum / parts.length
+                root.vizLevel = Math.max(avg, root.vizLevel * 0.92)
+            }
+        }
+    }
+
     Process {
         id: fetchProc
         stdout: StdioCollector {
@@ -358,7 +377,8 @@ PanelWindow {
             repeat: true
             triggeredOnStart: true
             onTriggered: {
-                root.vortexPhase += 0.09
+                root.vortexPhase += 0.09 + root.vizLevel / 100 * 0.3
+                if (!root.playing) root.vizLevel *= 0.9
                 vortex.requestPaint()
             }
         }
@@ -371,14 +391,15 @@ PanelWindow {
                 ctx.reset()
                 var t = root.vortexPhase
                 var cx = stage.midX, cy = stage.midY
+                var pulse = 1 + root.vizLevel / 100 * 0.9   // rays breathe with the beat
                 for (var i = 0; i < 72; i++) {
                     var a = (i / 72) * Math.PI * 2 + t * 0.4
                     var wv = Math.sin(i * 0.35 - t * 2.2) * 0.5 + 0.5
                     var r0 = stage.discR + 4
-                    var r1 = stage.rad * 0.66 + wv * stage.rad * 0.3
+                    var r1 = (stage.rad * 0.66 + wv * stage.rad * 0.3) * pulse
                     var accent = i % 6 === 0 ? colors.tertiary : (i % 2 ? colors.primary : colors.secondary)
                     ctx.strokeStyle = colors.alpha(accent, i % 6 === 0 ? 0.95 : 0.6)
-                    ctx.lineWidth = i % 6 === 0 ? 2.4 : 1.8
+                    ctx.lineWidth = (i % 6 === 0 ? 2.4 : 1.8) + root.vizLevel / 100 * 1.2
                     ctx.lineCap = "round"
                     ctx.beginPath()
                     ctx.moveTo(cx + Math.cos(a) * r0, cy + Math.sin(a) * r0)

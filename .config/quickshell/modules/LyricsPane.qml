@@ -136,6 +136,7 @@ PanelWindow {
     }
     readonly property string terHex: "#" + colors.tertiary.toString().slice(-6)
     readonly property string dimHex: "#" + colors.outline.toString().slice(-6)
+    readonly property string foreHex: "#" + colors.foreground.toString().slice(-6)
     function escHtml(s) {
         return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
     }
@@ -159,8 +160,8 @@ PanelWindow {
             if (d < 0) c = root.terHex
             else if (d === 0) {
                 var lit = Math.max(0, Math.min(1, root.karaP * ws.length - i))
-                c = lit >= 0.5 ? root.terHex : root.dimHex
-            } else c = root.dimHex
+                c = lit >= 0.5 ? root.terHex : root.foreHex
+            } else c = root.foreHex
             out.push('<font color="' + c + '">' + root.escHtml(ws[i]) + "</font>")
         }
         return out.join(" ")
@@ -307,21 +308,6 @@ PanelWindow {
         styleColor: Qt.rgba(0, 0, 0, 0.85)
     }
 
-    // ---- fade-glass container (picked option C): full-stage vertical
-    // gradient, opaque at the center, dissolving at the edges. Borderless
-    // by design — no border line. Visual only, engine untouched.
-    Rectangle {
-        visible: root.lines.length > 0
-        anchors.fill: parent
-        radius: 30
-        gradient: Gradient {
-            GradientStop { position: 0.0; color: "transparent" }
-            GradientStop { position: 0.3; color: colors.alpha(colors.surface, 0.5) }
-            GradientStop { position: 0.7; color: colors.alpha(colors.surface, 0.5) }
-            GradientStop { position: 1.0; color: "transparent" }
-        }
-    }
-
     // ---- drum stage ----
     Item {
         id: stage
@@ -445,6 +431,15 @@ PanelWindow {
                     lineHeight: 1.35
                     style: Text.Outline
                     styleColor: Qt.rgba(0, 0, 0, 0.85)
+                    // bare-wallpaper halo: active line carries its own glow,
+                    // neighbors keep the drum blur for depth
+                    layer.enabled: isActive
+                    layer.effect: DropShadow {
+                        radius: 12
+                        samples: 25
+                        color: "#a0000000"
+                        transparentBorder: true
+                    }
                 }
             }
         }

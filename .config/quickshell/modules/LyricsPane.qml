@@ -35,6 +35,7 @@ PanelWindow {
     property real posBase: 0
     property double stampBase: 0
     property real karaP: 0      // 0..1 progress through the active line
+    property real vortexPhase: 0  // UI-only twist phase (visual layer)
     property string fetchedKey: ""
     property int attempt: 0        // 0 = artist+title+duration, 1 = no duration, 2+ = timed retries
     property string state: "idle"   // idle | fetching | ready | plain | none | quiet
@@ -56,8 +57,8 @@ PanelWindow {
     property int offY: 590
     anchors { left: root.freeMove; top: root.freeMove; bottom: !root.freeMove }
     margins { left: root.offX; top: root.offY; bottom: 64 }
-    implicitWidth: 680
-    implicitHeight: 430
+    implicitWidth: 660
+    implicitHeight: 560
     exclusionMode: ExclusionMode.Ignore
     color: "transparent"
     visible: root.open
@@ -145,8 +146,8 @@ PanelWindow {
     function fitSize(raw) {
         var fs = 26
         while (fs > 13) {
-            var rows = Math.ceil(raw.length * fs * 0.72 / 540)
-            if (rows * fs * 1.35 <= 60) return fs
+            var rows = Math.ceil(raw.length * fs * 0.72 / 300)
+            if (rows * fs * 1.35 <= 54) return fs
             fs--
         }
         return 13
@@ -314,51 +315,76 @@ PanelWindow {
         visible: root.lines.length > 0
         anchors.fill: parent
         readonly property real midY: height / 2
-        readonly property real drumR: height * 0.4
+        readonly property real midX: width / 2
+        readonly property real rad: Math.min(width, height) / 2 - 8
+        readonly property real discR: rad * 0.62
+        readonly property real drumR: discR - 30
 
-        // window band hairlines (ready only — plain has its own block)
-        Rectangle {
+        // art living inside the vortex hollow: blurred disc + legibility scrim
+        Item {
             visible: root.state === "ready"
-            width: parent.width
-            height: 1
-            y: parent.midY - 27
-            color: colors.alpha(colors.outline, 0.2)
-        }
-        Rectangle {
-            visible: root.state === "ready"
-            width: parent.width
-            height: 1
-            y: parent.midY + 27
-            color: colors.alpha(colors.outline, 0.2)
-        }
-        // pointers
-        Shape {
-            visible: root.state === "ready"
-            width: 14
-            height: 18
-            y: parent.midY - 9
-            ShapePath {
-                fillColor: colors.tertiary
-                strokeColor: "transparent"
-                PathMove { x: 0; y: 0 }
-                PathLine { x: 14; y: 9 }
-                PathLine { x: 0; y: 18 }
-                PathLine { x: 0; y: 0 }
+            anchors.centerIn: parent
+            width: stage.discR * 2
+            height: stage.discR * 2
+            layer.enabled: true
+            layer.effect: OpacityMask {
+                maskSource: Rectangle { width: stage.discR * 2; height: stage.discR * 2; radius: stage.discR }
+            }
+            Image {
+                id: artImg
+                anchors.fill: parent
+                source: root.player ? root.player.trackArtUrl : ""
+                fillMode: Image.PreserveAspectCrop
+                asynchronous: true
+                cache: true
+                layer.enabled: true
+                layer.effect: FastBlur { radius: 24; transparentBorder: true }
+            }
+            Rectangle {
+                anchors.fill: parent
+                visible: artImg.status !== Image.Ready
+                color: colors.alpha(colors.surface, 0.3)
+            }
+            Rectangle {
+                anchors.fill: parent
+                color: colors.alpha(colors.background, 0.45)
             }
         }
-        Shape {
+
+        // stored spiral-C orbiting the disc (timer sits with its canvas)
+        Timer {
+            interval: 50
+            running: root.open && root.state === "ready"
+            repeat: true
+            triggeredOnStart: true
+            onTriggered: {
+                root.vortexPhase += 0.09
+                vortex.requestPaint()
+            }
+        }
+        Canvas {
+            id: vortex
             visible: root.state === "ready"
-            width: 14
-            height: 18
-            x: parent.width - 14
-            y: parent.midY - 9
-            ShapePath {
-                fillColor: colors.tertiary
-                strokeColor: "transparent"
-                PathMove { x: 14; y: 0 }
-                PathLine { x: 0; y: 9 }
-                PathLine { x: 14; y: 18 }
-                PathLine { x: 14; y: 0 }
+            anchors.fill: parent
+            onPaint: {
+                var ctx = getContext("2d")
+                ctx.reset()
+                var t = root.vortexPhase
+                var cx = stage.midX, cy = stage.midY
+                for (var i = 0; i < 72; i++) {
+                    var a = (i / 72) * Math.PI * 2 + t * 0.4
+                    var wv = Math.sin(i * 0.35 - t * 2.2) * 0.5 + 0.5
+                    var r0 = stage.discR + 4
+                    var r1 = stage.rad * 0.66 + wv * stage.rad * 0.3
+                    var accent = i % 6 === 0 ? colors.tertiary : (i % 2 ? colors.primary : colors.secondary)
+                    ctx.strokeStyle = colors.alpha(accent, i % 6 === 0 ? 0.95 : 0.6)
+                    ctx.lineWidth = i % 6 === 0 ? 2.4 : 1.8
+                    ctx.lineCap = "round"
+                    ctx.beginPath()
+                    ctx.moveTo(cx + Math.cos(a) * r0, cy + Math.sin(a) * r0)
+                    ctx.lineTo(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1)
+                    ctx.stroke()
+                }
             }
         }
 
@@ -395,30 +421,10 @@ PanelWindow {
                     transparentBorder: true
                 }
 
-                // tick
-                Rectangle {
-                    width: 34
-                    height: 3
-                    radius: 2
-                    x: 27
-                    y: parent.height / 2 - 1.5
-                    color: isActive ? colors.tertiary : colors.alpha(colors.foreground, 0.55)
-                }
-                // line number
-                Text {
-                    x: 27
-                    y: parent.height / 2 + 8
-                    text: li + 1 < 10 ? "0" + (li + 1) : "" + (li + 1)
-                    color: isActive ? colors.tertiary : colors.alpha(colors.foreground, 0.4)
-                    font.family: "JetBrainsMono Nerd Font Mono"
-                    font.pixelSize: 12
-                    font.letterSpacing: 2
-                }
-                // words: centered wrapping rich text — long lines wrap then
-                // shrink until the block fits 73px; rails never touched
+                // words: centered wrapping rich text, capped to the disc width
                 Text {
                     id: lyricText
-                    width: 540
+                    width: stage.discR * 1.45
                     anchors.horizontalCenter: parent.horizontalCenter
                     y: (parent.height - implicitHeight) / 2
                     horizontalAlignment: Text.AlignHCenter

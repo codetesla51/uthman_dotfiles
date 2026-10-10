@@ -388,7 +388,8 @@ PanelWindow {
                     angle: -d * 30
                     Behavior on angle { NumberAnimation { duration: 450; easing.type: Easing.OutCubic } }
                 }
-                layer.enabled: Math.abs(d) > 0
+                // blur suspends mid-drag: layers don't re-render every move event
+                layer.enabled: Math.abs(d) > 0 && !dragMa.pressed
                 layer.effect: FastBlur {
                     radius: Math.min(10, Math.abs(d) * 1.6)
                     transparentBorder: true

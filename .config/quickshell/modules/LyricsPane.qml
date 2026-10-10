@@ -36,7 +36,7 @@ PanelWindow {
     property double stampBase: 0
     property real karaP: 0      // 0..1 progress through the active line
     property real vortexPhase: 0  // UI-only twist phase (visual layer)
-    property real vizLevel: 0     // smoothed cava average 0..100, drives the vortex
+    property var vizLevels: []    // cava bars; ray i listens to its own band
     property string fetchedKey: ""
     property int attempt: 0        // 0 = artist+title+duration, 1 = no duration, 2+ = timed retries
     property string state: "idle"   // idle | fetching | ready | plain | none | quiet
@@ -233,10 +233,10 @@ PanelWindow {
             onRead: function(line) {
                 var parts = line.trim().split(";")
                 if (parts.length < 8) return
-                var sum = 0
-                for (var i = 0; i < parts.length; i++) sum += Math.max(0, Math.min(100, parseInt(parts[i]) || 0))
-                var avg = sum / parts.length
-                root.vizLevel = Math.max(avg, root.vizLevel * 0.92)
+                var arr = new Array(parts.length)
+                for (var i = 0; i < parts.length; i++)
+                    arr[i] = Math.max(0, Math.min(100, parseInt(parts[i]) || 0))
+                root.vizLevels = arr
             }
         }
     }
@@ -421,8 +421,12 @@ PanelWindow {
             repeat: true
             triggeredOnStart: true
             onTriggered: {
-                root.vortexPhase += 0.09 + root.vizLevel / 100 * 0.3
-                if (!root.playing) root.vizLevel *= 0.9
+                root.vortexPhase += 0.09
+                if (!root.playing && root.vizLevels.length > 0) {
+                    var d = root.vizLevels.slice()
+                    for (var k = 0; k < d.length; k++) d[k] *= 0.9
+                    root.vizLevels = d
+                }
                 vortex.requestPaint()
             }
         }
@@ -435,15 +439,18 @@ PanelWindow {
                 ctx.reset()
                 var t = root.vortexPhase
                 var cx = stage.midX, cy = stage.midY
-                var pulse = 1 + root.vizLevel / 100 * 0.9   // rays breathe with the beat
+                var bands = root.vizLevels
+                var nb = bands.length
                 for (var i = 0; i < 72; i++) {
                     var a = (i / 72) * Math.PI * 2 + t * 0.4
                     var wv = Math.sin(i * 0.35 - t * 2.2) * 0.5 + 0.5
+                    // each ray dances to its own frequency band, ripple shapes it
+                    var lvl = nb > 0 ? bands[Math.floor(i / 72 * nb)] / 100 : 0
                     var r0 = stage.discR + 4
-                    var r1 = (stage.rad * 0.66 + wv * stage.rad * 0.3) * pulse
+                    var r1 = stage.rad * 0.6 + wv * stage.rad * 0.18 + lvl * stage.rad * 0.5
                     var accent = i % 6 === 0 ? colors.tertiary : root.albumColor
                     ctx.strokeStyle = colors.alpha(accent, i % 6 === 0 ? 0.95 : 0.6)
-                    ctx.lineWidth = (i % 6 === 0 ? 2.4 : 1.8) + root.vizLevel / 100 * 1.2
+                    ctx.lineWidth = i % 6 === 0 ? 2.4 : 1.8
                     ctx.lineCap = "round"
                     ctx.beginPath()
                     ctx.moveTo(cx + Math.cos(a) * r0, cy + Math.sin(a) * r0)

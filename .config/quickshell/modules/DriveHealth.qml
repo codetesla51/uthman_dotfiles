@@ -60,6 +60,7 @@ FloatingWindow {
     property real readMBs: 0
     property real liveWriteMBs: 0
     property real liveReadMBs: 0
+    property real vortexPhase: 0   // UI-only twist phase for the vortex (visual layer)
     property string speedFile: ""
     // --- self-test ---
     property bool selfBusy: false
@@ -648,12 +649,23 @@ FloatingWindow {
                 }
             }
 
-            // ── Speedometer ──
+            // ── Vortex (stored spiral-C): 72 rays, traveling ripple + slow rotation,
+            // peak MB/s in the middle, write/read legend kept from the old gauge ──
             Canvas {
                 id: speedo
                 Layout.fillWidth: true
-                Layout.preferredHeight: 100
+                Layout.preferredHeight: 200
                 antialiasing: true
+                Timer {
+                    interval: 50
+                    running: root.open            // never burns CPU while the panel is shut
+                    repeat: true
+                    triggeredOnStart: true
+                    onTriggered: {
+                        root.vortexPhase += root.speedBusy ? 0.3 : 0.07
+                        speedo.requestPaint()
+                    }
+                }
                 Connections {
                     target: root
                     function onReadMBsChanged() { speedo.requestPaint() }
@@ -664,72 +676,49 @@ FloatingWindow {
                     var ctx = getContext("2d")
                     var W = width, H = height
                     ctx.clearRect(0, 0, W, H)
-                    var cx = W / 2, cy = H - 8
-                    var R = Math.min(W / 2 - 40, H - 20)
+                    var cx = W / 2, cy = H / 2
+                    var R = Math.min(W, H) / 2 - 6
                     var dw = root.speedBusy ? root.liveWriteMBs : root.writeMBs
                     var dr = root.speedBusy ? root.liveReadMBs : root.readMBs
-                    var maxV = Math.max(600, dr * 1.2, dw * 1.2)
-                    // background arc
-                    ctx.beginPath()
-                    ctx.arc(cx, cy, R, Math.PI, 0)
-                    ctx.strokeStyle = colors.alpha(colors.outline, 0.12)
-                    ctx.lineWidth = 8
-                    ctx.lineCap = "round"
-                    ctx.stroke()
-                    // ticks
-                    for (var i = 0; i <= 6; i++) {
-                        var a = Math.PI - i / 6 * Math.PI
-                        var inner = i % 2 === 0 ? R - 14 : R - 10
-                        var x1 = cx + Math.cos(a) * inner, y1 = cy + Math.sin(a) * inner
-                        var x2 = cx + Math.cos(a) * R, y2 = cy + Math.sin(a) * R
-                        ctx.beginPath()
-                        ctx.moveTo(x1, y1); ctx.lineTo(x2, y2)
-                        ctx.strokeStyle = colors.alpha(colors.outline, i % 2 === 0 ? 0.3 : 0.15)
-                        ctx.lineWidth = i % 2 === 0 ? 1.2 : 0.6
-                        ctx.stroke()
-                        if (i % 2 === 0) {
-                            ctx.font = "7px 'FiraCode Nerd Font', monospace"
-                            ctx.textAlign = "center"
-                            ctx.fillStyle = colors.alpha(colors.outline, 0.45)
-                            ctx.fillText(Math.round(maxV * i / 6), cx + Math.cos(a) * (R + 14), cy + Math.sin(a) * (R + 14) + 3)
-                        }
-                    }
-                    // colored arcs
-                    var drawArc = function (v, color, width) {
-                        if (v <= 0) return
-                        var endA = Math.PI - Math.min(1, v / maxV) * Math.PI
-                        ctx.beginPath()
-                        ctx.arc(cx, cy, R - 3, Math.PI, endA)
-                        ctx.strokeStyle = color
-                        ctx.lineWidth = width
-                        ctx.lineCap = "round"
-                        ctx.stroke()
-                    }
-                    drawArc(dw, colors.primary, 5)
-                    drawArc(dr, colors.secondary, 3)
-                    // value
                     var peak = Math.max(dw, dr)
+                    var t = root.vortexPhase
+                    var RAYS = 72
+                    var r0 = R * 0.42
+                    for (var i = 0; i < RAYS; i++) {
+                        var a = (i / RAYS) * Math.PI * 2 + t * 0.4
+                        var wave = Math.sin(i * 0.35 - t * 2.2) * 0.5 + 0.5
+                        var r1 = R * 0.5 + wave * (R * 0.42)
+                        var accent = i % 6 === 0 ? colors.tertiary : (i % 2 ? colors.primary : colors.secondary)
+                        ctx.strokeStyle = colors.alpha(accent, i % 6 === 0 ? 0.95 : 0.55)
+                        ctx.lineWidth = i % 6 === 0 ? 2.4 : 1.6
+                        ctx.lineCap = "round"
+                        ctx.beginPath()
+                        ctx.moveTo(cx + Math.cos(a) * r0, cy + Math.sin(a) * r0)
+                        ctx.lineTo(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1)
+                        ctx.stroke()
+                    }
+                    // center value (same content the gauge showed)
+                    ctx.textAlign = "center"
                     if (peak <= 0) {
                         ctx.fillStyle = colors.alpha(colors.outline, 0.4)
                         ctx.font = "9px 'FiraCode Nerd Font', monospace"
-                        ctx.textAlign = "center"
-                        ctx.fillText("run a speed test", cx, cy - 20)
+                        ctx.fillText("run a speed test", cx, cy + 3)
                     } else {
                         ctx.fillStyle = colors.foreground
-                        ctx.font = "bold 20px 'FiraCode Nerd Font', monospace"
-                        ctx.textAlign = "center"
-                        ctx.fillText(Math.round(peak), cx, cy - 22)
-                        ctx.font = "8px 'FiraCode Nerd Font', monospace"
+                        ctx.font = "bold 26px 'FiraCode Nerd Font', monospace"
+                        ctx.fillText(Math.round(peak), cx, cy + 4)
+                        ctx.font = "9px 'FiraCode Nerd Font', monospace"
                         ctx.fillStyle = colors.alpha(colors.outline, 0.5)
-                        ctx.fillText("MB/s", cx, cy - 10)
+                        ctx.fillText("MB/s", cx, cy + 18)
                     }
                     // legend
                     ctx.textAlign = "left"
-                    ctx.fillStyle = colors.primary
                     ctx.font = "8px 'FiraCode Nerd Font', monospace"
+                    ctx.fillStyle = colors.primary
                     ctx.fillText("— write " + Math.round(dw), 6, H - 4)
                     ctx.fillStyle = colors.secondary
-                    ctx.fillText("— read " + Math.round(dr), 6 + ctx.measureText("— write " + Math.round(dw)).width + 16, H - 4)
+                    var ww = ctx.measureText("— write " + Math.round(dw)).width
+                    ctx.fillText("— read " + Math.round(dr), 6 + ww + 16, H - 4)
                 }
             }
         }

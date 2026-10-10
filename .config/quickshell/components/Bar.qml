@@ -318,7 +318,7 @@ PanelWindow {
             // every 4s. No MouseArea: clicks pass through.
             Item {
                 id: islandLine
-                property real ropePhase: 0
+                property real wavePhase: 0
                 anchors { left: parent.left; right: parent.right; top: parent.top }
                 anchors.leftMargin: island.inset + 8
                 anchors.rightMargin: island.inset + 8
@@ -339,39 +339,42 @@ PanelWindow {
                     }
                 }
 
-                // sharp vortex line: mini twisted rope, always twisting (15fps timer)
+                // intertwined sines (picked option C x3): three waves, three accents,
+                // three wavelengths scrolling at different rates — 15fps timer
                 Timer {
                     interval: 66
                     running: true
                     repeat: true
                     triggeredOnStart: true
                     onTriggered: {
-                        islandLine.ropePhase += 0.28
-                        ropeCanvas.requestPaint()
+                        islandLine.wavePhase += 0.28
+                        waveCanvas.requestPaint()
                     }
                 }
                 Canvas {
-                    id: ropeCanvas
+                    id: waveCanvas
                     anchors { left: parent.left; right: parent.right; top: parent.top }
                     height: 11
                     onPaint: {
                         var ctx = getContext("2d")
                         ctx.reset()
-                        var N = 28
-                        var ph = islandLine.ropePhase
-                        for (var i = 0; i < N; i++) {
-                            var x = 4 + i * ((width - 8) / (N - 1))
-                            var a = i * 0.45 - ph * 3.0
-                            var lh = 2 + Math.abs(Math.sin(a)) * 7
-                            var y1 = (11 - lh) / 2
-                            ctx.strokeStyle = colors.alpha(island.glowBase, 0.35 + Math.abs(Math.cos(a)) * 0.55)
-                            ctx.lineWidth = 1.5
+                        var t = islandLine.wavePhase
+                        var midY = 5.5
+                        function wave(col, amp, waves, speed, lw) {
+                            ctx.strokeStyle = col
+                            ctx.lineWidth = lw
                             ctx.lineCap = "round"
                             ctx.beginPath()
-                            ctx.moveTo(x, y1)
-                            ctx.lineTo(x, y1 + lh)
+                            for (var x = 0; x <= width; x += 3) {
+                                var y = midY + amp * Math.sin((x / width) * Math.PI * 2 * waves + t * speed)
+                                if (x === 0) ctx.moveTo(x, y)
+                                else ctx.lineTo(x, y)
+                            }
                             ctx.stroke()
                         }
+                        wave(colors.alpha(colors.primary, 0.8), 1.8, 2.5, 1.0, 1.2)
+                        wave(colors.alpha(colors.secondary, 0.65), 1.3, 3.5, -1.3, 1.0)
+                        wave(colors.alpha(colors.tertiary, 0.65), 0.9, 5.0, 0.7, 1.0)
                     }
                 }
             }

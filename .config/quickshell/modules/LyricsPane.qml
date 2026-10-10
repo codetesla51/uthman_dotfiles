@@ -431,14 +431,6 @@ PanelWindow {
                     lineHeight: 1.35
                     style: Text.Outline
                     styleColor: Qt.rgba(0, 0, 0, 0.85)
-                    // active line carries its own halo over bare wallpaper
-                    layer.enabled: isActive
-                    layer.effect: DropShadow {
-                        radius: 12
-                        samples: 25
-                        color: "#a0000000"
-                        transparentBorder: true
-                    }
                 }
             }
         }

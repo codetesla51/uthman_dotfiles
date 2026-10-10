@@ -313,7 +313,7 @@ PanelWindow {
     Rectangle {
         visible: root.lines.length > 0
         anchors.fill: parent
-        radius: 22
+        radius: 30
         gradient: Gradient {
             GradientStop { position: 0.0; color: "transparent" }
             GradientStop { position: 0.3; color: colors.alpha(colors.surface, 0.5) }

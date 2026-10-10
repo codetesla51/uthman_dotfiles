@@ -36,6 +36,7 @@ PanelWindow {
     property double stampBase: 0
     property real karaP: 0      // 0..1 progress through the active line
     property var vizLevels: []    // cava bars; ray i listens to its own band
+    property real _lastViz: 0     // repaint throttle timestamp
     property real vortexPhase: 0  // steady rotation for the vortex
     function segMix(a, b, t) {
         return Qt.rgba(a.r + (b.r - a.r) * t, a.g + (b.g - a.g) * t,
@@ -230,11 +231,14 @@ PanelWindow {
     // rhythm feed — same cava tap as control center, averaged to one level
     Process {
         id: vizProc
-        command: ["cava", "-p", Quickshell.env("HOME") + "/.config/quickshell/scripts/cava-qs.conf"]
+        command: ["cava", "-p", Quickshell.env("HOME") + "/.config/quickshell/scripts/cava-lyrics.conf"]
         running: root.open && root.playing
         stdout: SplitParser {
             splitMarker: "\n"
             onRead: function(line) {
+                var now = Date.now()
+                if (now - root._lastViz < 33) return   // cap repaints at ~30/s
+                root._lastViz = now
                 var parts = line.trim().split(";")
                 if (parts.length < 8) return
                 var arr = new Array(parts.length)

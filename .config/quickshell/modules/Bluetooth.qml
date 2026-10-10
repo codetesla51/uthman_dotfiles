@@ -35,9 +35,18 @@ FloatingWindow {
     property string statusMsg: ""
     property string busyMac: ""  // device with an in-flight action (spinner state)
     // pods-only smart connect: nothing else gets auto-touch, hangs get killed
-    property string podsMac: "41:42:18:25:3A:8E"
+    // pods-only smart connect: matched by NAME — these buds rotate their MAC,
+    // a hardcoded address goes stale (18:25:3A:8E died, C0:07:20:51 lives)
     property string podsName: "Max AirPro"
     property bool podsPending: false   // power-on chained connect
+    function podsEntry() {
+        for (var i = 0; i < root.devices.length; i++) {
+            var nm = String(root.devices[i].name || "").trim().toLowerCase()
+            if (nm === root.podsName.toLowerCase() || nm.indexOf(root.podsName.toLowerCase() + " ") === 0) return root.devices[i]
+        }
+        return null
+    }
+    function podsMac() { var e = root.podsEntry(); return e ? e.mac : "" }
 
     onOpenChanged: { if (open) { refresh(); openAnim.restart() } else { scanStop(); closeAnim.restart() } }
     Timer { id: pollTimer; interval: 5000; running: root.open; repeat: true; onTriggered: root.refresh() }
@@ -190,11 +199,6 @@ FloatingWindow {
     Timer { id: refreshTimer; interval: 1200; onTriggered: root.refresh() }
 
     // ---- pods-only smart connect ----
-    function podsEntry() {
-        for (var i = 0; i < root.devices.length; i++)
-            if (root.devices[i].mac === root.podsMac) return root.devices[i]
-        return null
-    }
     function connectPods() {
         var e = root.podsEntry()
         if (e && e.connected) { root.statusMsg = "Pods already connected"; return }
@@ -217,9 +221,9 @@ FloatingWindow {
             if (!e) { root.statusMsg = "Pods not around — out of the case?"; return }
             if (!e.paired) { root.statusMsg = "Pods aren't paired — pair them first"; return }
             if (e.connected) { root.statusMsg = "Pods already connected"; return }
-            root.busyMac = root.podsMac
+            root.busyMac = e.mac
             root.statusMsg = e.rssi === 0 ? "Pods quiet — trying anyway…" : "Connecting to pods…"
-            actProc.command = ["sh", "-c", "timeout 20 bluetoothctl connect '" + root.podsMac + "' 2>&1 | tail -n 3"]
+            actProc.command = ["sh", "-c", "timeout 20 bluetoothctl connect '" + e.mac.replace(/'/g, "'\\''") + "' 2>&1 | tail -n 3"]
             actProc.running = true
             podsWatch.restart()
         }
@@ -228,11 +232,15 @@ FloatingWindow {
     Timer {
         id: podsWatch
         interval: 12000; repeat: false
-        onTriggered: podsVerifyProc.running = true
+        onTriggered: {
+            var mac = root.podsMac()
+            if (!mac) { root.busyMac = ""; root.statusMsg = "Pods vanished mid-try"; return }
+            podsVerifyProc.command = ["sh", "-c", "timeout 8 bluetoothctl info '" + mac.replace(/'/g, "'\\''") + "' 2>/dev/null | grep -i 'Connected:'"]
+            podsVerifyProc.running = true
+        }
     }
     Process {
         id: podsVerifyProc
-        command: ["sh", "-c", "timeout 8 bluetoothctl info '" + root.podsMac + "' 2>/dev/null | grep -i 'Connected:'"]
         stdout: StdioCollector {
             waitForEnd: true
             onStreamFinished: {
@@ -328,7 +336,7 @@ FloatingWindow {
                         width: 9; height: 9; radius: 4.5
                         Layout.alignment: Qt.AlignVCenter
                         color: root.podsEntry() && root.podsEntry().connected ? colors.primary
-                             : root.busyMac === root.podsMac ? colors.secondary
+                             : root.busyMac !== "" && root.busyMac === root.podsMac() ? colors.secondary
                              : root.podsEntry() ? colors.tertiary : colors.alpha(colors.outline, 0.4)
                     }
                     Text {
@@ -341,7 +349,7 @@ FloatingWindow {
                     }
                     Text {
                         text: root.podsEntry() && root.podsEntry().connected ? "Connected"
-                            : root.busyMac === root.podsMac ? "Connecting…" : "Connect"
+                            : root.busyMac !== "" && root.busyMac === root.podsMac() ? "Connecting…" : "Connect"
                         color: colors.primary
                         font.family: root.fontUi; font.pixelSize: 11; font.weight: Font.Bold
                         Layout.alignment: Qt.AlignVCenter
@@ -353,7 +361,7 @@ FloatingWindow {
                     hoverEnabled: true
                     onClicked: {
                         var e = root.podsEntry()
-                        if (e && e.connected) root.act(root.podsMac, "disconnect")
+                        if (e && e.connected) root.act(e.mac, "disconnect")
                         else root.connectPods()
                     }
                 }

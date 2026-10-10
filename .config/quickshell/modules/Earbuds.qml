@@ -32,7 +32,7 @@ FloatingWindow {
     // nothing and logs "registered but will not be used".
 
     // ── state ──
-    property string podsMac: "41:42:18:25:3A:8E"   // preferred target, picked first
+    property string podsName: "Max AirPro"   // matched by name: the buds rotate MACs
     property string mac: ""
     property string devName: "No earbuds"
     property bool connected: false
@@ -123,7 +123,7 @@ FloatingWindow {
                     var m = lines[i].match(/^Device\s+([0-9A-Fa-f:]{17})\s+(.+)$/)
                     if (m) {
                         if (!first) { first = m[1]; fname = m[2].trim() }
-                        if (m[1] === root.podsMac) { first = m[1]; fname = m[2].trim(); break }
+                        if (m[2].trim().toLowerCase() === root.podsName.toLowerCase()) { first = m[1]; fname = m[2].trim(); break }
                     }
                 }
                 if (!first) {

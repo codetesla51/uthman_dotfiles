@@ -682,14 +682,7 @@ FloatingWindow {
                     var dr = root.speedBusy ? root.liveReadMBs : root.readMBs
                     var peak = Math.max(dw, dr)
                     var t = root.vortexPhase
-                    if (peak <= 0) {
-                        // calm empty state: faint ring only, so the text never fights rays
-                        ctx.strokeStyle = colors.alpha(colors.outline, 0.14)
-                        ctx.lineWidth = 1.5
-                        ctx.beginPath()
-                        ctx.arc(cx, cy, R * 0.7, 0, Math.PI * 2)
-                        ctx.stroke()
-                    } else {
+                    // vortex always spins (slow idle, fast testing) — no empty text at all
                     var RAYS = 72
                     var r0 = R * 0.42
                     for (var i = 0; i < RAYS; i++) {
@@ -705,14 +698,9 @@ FloatingWindow {
                         ctx.lineTo(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1)
                         ctx.stroke()
                     }
-                    }
                     // center value (same content the gauge showed)
                     ctx.textAlign = "center"
-                    if (peak <= 0) {
-                        ctx.fillStyle = colors.alpha(colors.outline, 0.4)
-                        ctx.font = "9px 'FiraCode Nerd Font', monospace"
-                        ctx.fillText("run a speed test", cx, cy + 3)
-                    } else {
+                    if (peak > 0) {
                         ctx.fillStyle = colors.foreground
                         ctx.font = "bold 26px 'FiraCode Nerd Font', monospace"
                         ctx.fillText(Math.round(peak), cx, cy + 4)

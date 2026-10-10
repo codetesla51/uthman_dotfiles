@@ -360,21 +360,26 @@ PanelWindow {
                         ctx.reset()
                         var t = islandLine.wavePhase
                         var midY = 5.5
-                        function wave(col, amp, waves, speed, lw) {
+                        // static intertwined curves, marching dashes = the motion.
+                        // Dashes crawl even when the wave is 1px tall.
+                        function wave(col, amp, waves, march, lw) {
                             ctx.strokeStyle = col
                             ctx.lineWidth = lw
                             ctx.lineCap = "round"
+                            ctx.setLineDash([7, 5])
+                            ctx.lineDashOffset = march
                             ctx.beginPath()
                             for (var x = 0; x <= width; x += 3) {
-                                var y = midY + amp * Math.sin((x / width) * Math.PI * 2 * waves + t * speed)
+                                var y = midY + amp * Math.sin((x / width) * Math.PI * 2 * waves + t * 0.15)
                                 if (x === 0) ctx.moveTo(x, y)
                                 else ctx.lineTo(x, y)
                             }
                             ctx.stroke()
+                            ctx.setLineDash([])
                         }
-                        wave(colors.alpha(colors.primary, 0.8), 1.8, 2.5, 1.0, 1.2)
-                        wave(colors.alpha(colors.secondary, 0.65), 1.3, 3.5, -1.3, 1.0)
-                        wave(colors.alpha(colors.tertiary, 0.65), 0.9, 5.0, 0.7, 1.0)
+                        wave(colors.alpha(colors.primary, 0.8), 1.8, 2.5, -t * 18, 1.2)
+                        wave(colors.alpha(colors.secondary, 0.65), 1.3, 3.5, t * 26, 1.0)
+                        wave(colors.alpha(colors.tertiary, 0.65), 0.9, 5.0, -t * 12, 1.0)
                     }
                 }
             }

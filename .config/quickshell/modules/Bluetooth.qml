@@ -148,12 +148,15 @@ FloatingWindow {
     Timer { id: scanTick2; interval: 8000; onTriggered: devProc.running = true }
     Timer { id: scanTick3; interval: 12000; onTriggered: devProc.running = true }
 
-    // per-device actions; result lands in the status line, list refreshes after
+    // per-device actions; result lands in the status line, list refreshes after.
+    // remove disconnects first — BlueZ refuses to drop a live link.
     function act(mac, what) {
         root.busyMac = mac
         root.statusMsg = {pair: "Pairing…", connect: "Connecting…", disconnect: "Disconnecting…", remove: "Forgetting…", trust: "Trusting…"}[what] || "Working…"
-        var cmd = "timeout 20 bluetoothctl " + what + " '" + mac.replace(/'/g, "'\\''") + "' 2>&1 | tail -n 3"
-        if (what === "pair") cmd += "; timeout 8 bluetoothctl trust '" + mac.replace(/'/g, "'\\''") + "' >/dev/null 2>&1"
+        var q = "'" + mac.replace(/'/g, "'\\''") + "'"
+        var cmd = "timeout 20 bluetoothctl " + what + " " + q + " 2>&1 | tail -n 3"
+        if (what === "pair") cmd += "; timeout 8 bluetoothctl trust " + q + " >/dev/null 2>&1"
+        if (what === "remove") cmd = "timeout 8 bluetoothctl disconnect " + q + " >/dev/null 2>&1; sleep 1; timeout 8 bluetoothctl remove " + q + " 2>&1 | tail -n 3"
         actProc.command = ["sh", "-c", cmd]
         actProc.running = true
     }

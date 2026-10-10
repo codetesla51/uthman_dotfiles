@@ -59,6 +59,11 @@ FloatingWindow {
             onStreamFinished: {
                 root.powered = text.toLowerCase().indexOf("yes") !== -1
                 if (root.powered && root.podsPending) { root.podsPending = false; root.connectPods() }
+                if (root.powered && root.pendingAction) {
+                    var a = root.pendingAction
+                    root.pendingAction = null
+                    root.act(a.mac, a.what)
+                }
             }
         }
     }
@@ -150,7 +155,16 @@ FloatingWindow {
 
     // per-device actions; result lands in the status line, list refreshes after.
     // remove disconnects first — BlueZ refuses to drop a live link.
+    // any action with the adapter off powers it on first and queues (NotReady
+    // was the whole remove saga: rfkill had the adapter soft-blocked).
+    property var pendingAction: null
     function act(mac, what) {
+        if (!root.powered && (what === "pair" || what === "connect" || what === "remove" || what === "trust")) {
+            root.pendingAction = { mac: mac, what: what }
+            root.statusMsg = "Powering on…"
+            setPower(true)
+            return
+        }
         root.busyMac = mac
         root.statusMsg = {pair: "Pairing…", connect: "Connecting…", disconnect: "Disconnecting…", remove: "Forgetting…", trust: "Trusting…"}[what] || "Working…"
         var q = "'" + mac.replace(/'/g, "'\\''") + "'"

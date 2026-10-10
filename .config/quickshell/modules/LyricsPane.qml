@@ -88,6 +88,7 @@ PanelWindow {
         root.winLines = []
         root.currentIdx = -1
         root.karaP = 0
+        root.albumColor = colors.primary
         root.state = "fetching"
         var dur = (root.player && root.player.length > 0) ? Math.round(root.player.length) : 0
         var url = "https://lrclib.net/api/get?artist_name=" + encodeURIComponent(root.artist)
@@ -237,6 +238,49 @@ PanelWindow {
                 var avg = sum / parts.length
                 root.vizLevel = Math.max(avg, root.vizLevel * 0.92)
             }
+        }
+    }
+
+    // album hue for the vortex: 1x1 dominant-color sample of the cover art
+    // (same trick as NowPlaying — cached Image, no extra downloads)
+    property color albumColor: colors.primary
+    Image {
+        id: artProbe
+        width: 32; height: 32
+        visible: false
+        asynchronous: true
+        cache: true
+        source: root.player ? root.player.trackArtUrl : ""
+        onStatusChanged: {
+            if (status === Image.Ready) {
+                artSampler.pendingUrl = source
+                artSampler.loadImage(source)
+            } else if (status === Image.Error) {
+                root.albumColor = colors.primary
+            }
+        }
+    }
+    Canvas {
+        id: artSampler
+        width: 1; height: 1
+        visible: false
+        property string pendingUrl: ""
+        onImageLoaded: {
+            var ctx = getContext("2d")
+            ctx.drawImage(pendingUrl, 0, 0, 1, 1)
+            requestPaint()
+        }
+        onPaint: {
+            var ctx = getContext("2d")
+            var px = ctx.getImageData(0, 0, 1, 1).data
+            var r = px[0] / 255, g = px[1] / 255, b = px[2] / 255
+            var lum = 0.2126 * r + 0.7152 * g + 0.0722 * b
+            if (lum < 0.10) { root.albumColor = colors.primary; return }
+            var avg = (r + g + b) / 3, boost = 1.6
+            root.albumColor = Qt.rgba(
+                Math.min(1, Math.max(0, avg + (r - avg) * boost)),
+                Math.min(1, Math.max(0, avg + (g - avg) * boost)),
+                Math.min(1, Math.max(0, avg + (b - avg) * boost)), 1)
         }
     }
 
@@ -397,7 +441,7 @@ PanelWindow {
                     var wv = Math.sin(i * 0.35 - t * 2.2) * 0.5 + 0.5
                     var r0 = stage.discR + 4
                     var r1 = (stage.rad * 0.66 + wv * stage.rad * 0.3) * pulse
-                    var accent = i % 6 === 0 ? colors.tertiary : (i % 2 ? colors.primary : colors.secondary)
+                    var accent = i % 6 === 0 ? colors.tertiary : (i % 2 ? colors.secondary : root.albumColor)
                     ctx.strokeStyle = colors.alpha(accent, i % 6 === 0 ? 0.95 : 0.6)
                     ctx.lineWidth = (i % 6 === 0 ? 2.4 : 1.8) + root.vizLevel / 100 * 1.2
                     ctx.lineCap = "round"

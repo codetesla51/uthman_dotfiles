@@ -308,15 +308,6 @@ PanelWindow {
         styleColor: Qt.rgba(0, 0, 0, 0.85)
     }
 
-    // ---- ghost container: full-stage panel you barely see — a whisper of
-    // fill so the blur-behind catches, no border line. Text does the talking.
-    Rectangle {
-        visible: root.lines.length > 0
-        anchors.fill: parent
-        radius: 30
-        color: colors.alpha(colors.surface, 0.22)
-    }
-
     // ---- drum stage ----
     Item {
         id: stage
@@ -440,8 +431,7 @@ PanelWindow {
                     lineHeight: 1.35
                     style: Text.Outline
                     styleColor: Qt.rgba(0, 0, 0, 0.85)
-                    // bare-wallpaper halo: active line carries its own glow,
-                    // neighbors keep the drum blur for depth
+                    // active line carries its own halo over bare wallpaper
                     layer.enabled: isActive
                     layer.effect: DropShadow {
                         radius: 12

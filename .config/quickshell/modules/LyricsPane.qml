@@ -307,6 +307,21 @@ PanelWindow {
         styleColor: Qt.rgba(0, 0, 0, 0.85)
     }
 
+    // ---- fade-glass container (picked option C): full-stage vertical
+    // gradient, opaque at the center, dissolving at the edges. Borderless
+    // by design — no border line. Visual only, engine untouched.
+    Rectangle {
+        visible: root.lines.length > 0
+        anchors.fill: parent
+        radius: 22
+        gradient: Gradient {
+            GradientStop { position: 0.0; color: "transparent" }
+            GradientStop { position: 0.3; color: colors.alpha(colors.surface, 0.5) }
+            GradientStop { position: 0.7; color: colors.alpha(colors.surface, 0.5) }
+            GradientStop { position: 1.0; color: "transparent" }
+        }
+    }
+
     // ---- drum stage ----
     Item {
         id: stage

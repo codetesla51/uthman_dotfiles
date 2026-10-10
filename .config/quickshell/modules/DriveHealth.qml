@@ -682,6 +682,14 @@ FloatingWindow {
                     var dr = root.speedBusy ? root.liveReadMBs : root.readMBs
                     var peak = Math.max(dw, dr)
                     var t = root.vortexPhase
+                    if (peak <= 0) {
+                        // calm empty state: faint ring only, so the text never fights rays
+                        ctx.strokeStyle = colors.alpha(colors.outline, 0.14)
+                        ctx.lineWidth = 1.5
+                        ctx.beginPath()
+                        ctx.arc(cx, cy, R * 0.7, 0, Math.PI * 2)
+                        ctx.stroke()
+                    } else {
                     var RAYS = 72
                     var r0 = R * 0.42
                     for (var i = 0; i < RAYS; i++) {
@@ -697,6 +705,7 @@ FloatingWindow {
                         ctx.lineTo(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1)
                         ctx.stroke()
                     }
+                    }
                     // center value (same content the gauge showed)
                     ctx.textAlign = "center"
                     if (peak <= 0) {
@@ -711,7 +720,8 @@ FloatingWindow {
                         ctx.fillStyle = colors.alpha(colors.outline, 0.5)
                         ctx.fillText("MB/s", cx, cy + 18)
                     }
-                    // legend
+                    // legend (only with data — zeros are noise)
+                    if (peak > 0) {
                     ctx.textAlign = "left"
                     ctx.font = "8px 'FiraCode Nerd Font', monospace"
                     ctx.fillStyle = colors.primary
@@ -719,6 +729,7 @@ FloatingWindow {
                     ctx.fillStyle = colors.secondary
                     var ww = ctx.measureText("— write " + Math.round(dw)).width
                     ctx.fillText("— read " + Math.round(dr), 6 + ww + 16, H - 4)
+                    }
                 }
             }
         }

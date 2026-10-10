@@ -35,8 +35,11 @@ PanelWindow {
     property real posBase: 0
     property double stampBase: 0
     property real karaP: 0      // 0..1 progress through the active line
-    property real vortexPhase: 0  // UI-only twist phase (visual layer)
     property var vizLevels: []    // cava bars; ray i listens to its own band
+    function segMix(a, b, t) {
+        return Qt.rgba(a.r + (b.r - a.r) * t, a.g + (b.g - a.g) * t,
+                       a.b + (b.b - a.b) * t, 1)
+    }
     property string fetchedKey: ""
     property int attempt: 0        // 0 = artist+title+duration, 1 = no duration, 2+ = timed retries
     property string state: "idle"   // idle | fetching | ready | plain | none | quiet
@@ -414,47 +417,43 @@ PanelWindow {
             }
         }
 
-        // stored spiral-C orbiting the disc (timer sits with its canvas)
+        // radial spectrum ring around the art disc (timer sits with its canvas)
         Timer {
             interval: 50
             running: root.open && root.state === "ready"
             repeat: true
             triggeredOnStart: true
             onTriggered: {
-                root.vortexPhase += 0.09
                 if (!root.playing && root.vizLevels.length > 0) {
                     var d = root.vizLevels.slice()
                     for (var k = 0; k < d.length; k++) d[k] *= 0.9
                     root.vizLevels = d
                 }
-                vortex.requestPaint()
             }
         }
         Canvas {
             id: vortex
             visible: root.state === "ready"
             anchors.fill: parent
+            Connections { target: root; function onVizLevelsChanged() { vortex.requestPaint() } }
             onPaint: {
                 var ctx = getContext("2d")
-                ctx.reset()
-                var t = root.vortexPhase
+                ctx.clearRect(0, 0, width, height)
+                var lv = root.vizLevels
+                var n = lv.length
+                if (n < 8) return
                 var cx = stage.midX, cy = stage.midY
-                var bands = root.vizLevels
-                var nb = bands.length
-                for (var i = 0; i < 72; i++) {
-                    var a = (i / 72) * Math.PI * 2 + t * 0.4
-                    var wv = Math.sin(i * 0.35 - t * 2.2) * 0.5 + 0.5
-                    // each ray dances to its own frequency band, ripple shapes it
-                    var lvl = nb > 0 ? bands[Math.floor(i / 72 * nb)] / 100 : 0
-                    var r0 = stage.discR + 4
-                    var r1 = stage.rad * 0.6 + wv * stage.rad * 0.18 + lvl * stage.rad * 0.5
-                    var accent = i % 6 === 0 ? colors.tertiary : root.albumColor
-                    ctx.strokeStyle = colors.alpha(accent, i % 6 === 0 ? 0.95 : 0.6)
-                    ctx.lineWidth = i % 6 === 0 ? 2.4 : 1.8
-                    ctx.lineCap = "round"
+                var r = stage.discR + 10
+                var maxLen = stage.rad - r - 6
+                ctx.lineCap = "round"
+                ctx.lineWidth = Math.max(3, 2 * Math.PI * r / n * 0.55)
+                for (var i = 0; i < n; i++) {
+                    var a = i / n * Math.PI * 2 - Math.PI / 2
+                    var len = 4 + (lv[i] || 0) / 100 * maxLen
+                    ctx.strokeStyle = root.segMix(colors.primary, colors.tertiary, (Math.sin(a) + 1) / 2)
                     ctx.beginPath()
-                    ctx.moveTo(cx + Math.cos(a) * r0, cy + Math.sin(a) * r0)
-                    ctx.lineTo(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1)
+                    ctx.moveTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r)
+                    ctx.lineTo(cx + Math.cos(a) * (r + len), cy + Math.sin(a) * (r + len))
                     ctx.stroke()
                 }
             }

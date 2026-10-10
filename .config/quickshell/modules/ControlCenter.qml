@@ -812,31 +812,30 @@ FloatingWindow {
                             Rectangle { width: 22; height: 22; radius: 11; color: colors.alpha(colors.tertiary,0.15); border.width:1; border.color: colors.alpha(colors.tertiary,0.3); Text { anchors.centerIn: parent; text: "󰐊"; color: colors.tertiary; font.family: colors.fontSans; font.pixelSize: 11 } }
                             Text { text: "VISUALIZER"; Layout.alignment: Qt.AlignVCenter; color: colors.alpha(colors.outline,0.65); font.family: colors.fontSans; font.pixelSize: 7; font.weight: Font.Bold; font.letterSpacing: 1.3 }
                         }
-                        Item {
+                        Canvas {
+                            id: mirror
                             Layout.fillWidth: true; Layout.fillHeight: true
-                            Row {
-                                id: vizRow
-                                anchors.fill: parent
-                                spacing: 2
-                                Repeater {
-                                    model: root.vizBars
-                                    delegate: Rectangle {
-                                        required property int index
-                                        readonly property real v: (root.vizLevels[index] || 0) / 100
-                                        width: (vizRow.width - (root.vizBars - 1) * vizRow.spacing) / root.vizBars
-                                        height: Math.max(4, vizRow.height * v)
-                                        radius: width / 2
-                                        y: vizRow.height - height
-                                        gradient: Gradient {
-                                            orientation: Gradient.Vertical
-                                            GradientStop { position: 0; color: colors.primary }
-                                            GradientStop { position: 1; color: colors.tertiary }
-                                        }
-                                        Behavior on height { NumberAnimation { duration: 90; easing.type: Easing.OutQuad } }
-                                    }
+                            Connections { target: root; function onVizLevelsChanged() { mirror.requestPaint() } }
+                            onPaint: {
+                                var ctx = getContext("2d")
+                                ctx.clearRect(0, 0, width, height)
+                                var n = root.vizBars, gap = 3
+                                var w = (width - gap * (n - 1)) / n      // bar width
+                                var mid = height / 2                      // centre line
+                                for (var i = 0; i < n; i++) {
+                                    var h = Math.max(4, (root.vizLevels[i] || 0) / 100 * height)   // full bar height
+                                    var g = ctx.createLinearGradient(0, mid - h / 2, 0, mid + h / 2)
+                                    g.addColorStop(0, colors.primary)
+                                    g.addColorStop(1, colors.tertiary)
+                                    ctx.fillStyle = g
+                                    var bx = i * (w + gap), by = mid - h / 2
+                                    if (ctx.roundRect) {
+                                        ctx.beginPath()
+                                        ctx.roundRect(bx, by, w, h, w / 2)
+                                        ctx.fill()
+                                    } else ctx.fillRect(bx, by, w, h)
                                 }
                             }
-                            Text { anchors.centerIn: parent; visible: root.vizLevels.length===0; text: "listening…"; color: colors.alpha(colors.outline,0.45); font.family: colors.fontSans; font.pixelSize: 7 }
                         }
                     }
                 }

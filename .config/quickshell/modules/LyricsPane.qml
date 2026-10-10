@@ -308,6 +308,15 @@ PanelWindow {
         styleColor: Qt.rgba(0, 0, 0, 0.85)
     }
 
+    // ---- ghost container: full-stage panel you barely see — a whisper of
+    // fill so the blur-behind catches, no border line. Text does the talking.
+    Rectangle {
+        visible: root.lines.length > 0
+        anchors.fill: parent
+        radius: 30
+        color: colors.alpha(colors.surface, 0.22)
+    }
+
     // ---- drum stage ----
     Item {
         id: stage

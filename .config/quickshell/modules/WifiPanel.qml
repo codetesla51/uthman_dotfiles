@@ -25,6 +25,7 @@ PanelWindow {
     property real shownMbps: 0        // eased display counter
     property var stSamples: []        // instantaneous samples for the live chart
     property real stProgress: 0       // 0..1 through the download
+    property real ropePhase: 0        // UI-only twist phase for the rope chart (visual layer)
     property int stPhase: 0           // 0 idle, 1 downloading, 2 uploading, 3 done
     property real ulMbps: 0           // measured upload Mbps
     property real shownUl: 0
@@ -961,74 +962,72 @@ PanelWindow {
                     }
                 }
 
-                // live zig-zag of instantaneous throughput while testing
+                // twisted rope: straight-line port of picked option D — 48 phase-twisted
+                // verticals fake a spiral viewed from the side, tertiary dot rides the crest.
+                // Idle twists slow, testing twists fast, amplitude follows live throughput.
                 Rectangle {
                     Layout.fillWidth: true
-                    height: 46                       // fixed — shows live samples while testing, last run idle
+                    height: 46                       // fixed — same budget as the old trace box
                     radius: 10
                     clip: true
                     color: colors.alpha(colors.surface, 0.35)
                     border.width: 1
                     border.color: colors.alpha(colors.outline, 0.12)
 
+                    Timer {
+                        interval: 50
+                        running: root.open           // never burns CPU while the panel is shut
+                        repeat: true
+                        triggeredOnStart: true
+                        onTriggered: {
+                            var h = root.stSamples
+                            var last = h.length > 0 ? h[h.length - 1] : 0
+                            root.ropePhase += 0.07 + (root.speedTesting ? 0.23 : 0) + Math.min(0.1, last / 600)
+                            stRope.requestPaint()
+                        }
+                    }
+
                     Canvas {
-                        id: stChart
+                        id: stRope
                         anchors.fill: parent
                         anchors.margins: 4
-
-                        Connections {
-                            target: root
-                            function onStSamplesChanged() { stChart.requestPaint() }
-                        }
 
                         onPaint: {
                             var ctx = getContext("2d")
                             ctx.reset()
 
-                            // faint baseline + mid guide so the box reads as a chart even when empty
-                            ctx.strokeStyle = colors.alpha(colors.outline, 0.12)
-                            ctx.lineWidth = 1
-                            ctx.beginPath()
-                            ctx.moveTo(0, height - 1); ctx.lineTo(width, height - 1)
-                            ctx.moveTo(0, height / 2); ctx.lineTo(width, height / 2)
-                            ctx.stroke()
-
+                            var N = 48
                             var h = root.stSamples
-                            if (h.length < 2) return
+                            var last = h.length > 0 ? h[h.length - 1] : 0
+                            var boost = Math.min(1, last / 80)
+                            var amp = 10 + boost * (height / 2 - 8)
+                            var ph = root.ropePhase
 
-                            var maxV = 5
-                            for (var i = 0; i < h.length; i++) maxV = Math.max(maxV, h[i])
-
-                            var n = h.length
-                            function px(i) { return (i / Math.max(59, n - 1)) * width }
-                            function py(v) { return height - 2 - (v / maxV) * (height - 6) }
-
-                            ctx.beginPath()
-                            ctx.moveTo(0, height)
-                            for (var i = 0; i < n; i++) ctx.lineTo(px(i), py(h[i]))
-                            ctx.lineTo(px(n - 1), height)
-                            ctx.closePath()
-                            ctx.fillStyle = colors.alpha(colors.primary, 0.14)
-                            ctx.fill()
-
-                            ctx.beginPath()
-                            for (var j = 0; j < n; j++) {
-                                if (j === 0) ctx.moveTo(px(j), py(h[j]))
-                                else ctx.lineTo(px(j), py(h[j]))
+                            var crestX = 0, crestTop = 1e9
+                            for (var i = 0; i < N; i++) {
+                                var x = 2 + i * ((width - 4) / (N - 1))
+                                var a = i * 0.42 - ph * 3.0
+                                var s = Math.abs(Math.sin(a))
+                                var lh = 5 + s * amp
+                                var y1 = height / 2 - lh / 2
+                                ctx.strokeStyle = colors.alpha(i % 2 ? colors.primary : colors.secondary, 0.3 + Math.abs(Math.cos(a)) * 0.5)
+                                ctx.lineWidth = 2
+                                ctx.lineCap = "round"
+                                ctx.beginPath()
+                                ctx.moveTo(x, y1)
+                                ctx.lineTo(x, y1 + lh)
+                                ctx.stroke()
+                                if (y1 < crestTop) { crestTop = y1; crestX = x }
                             }
-                            ctx.strokeStyle = colors.tertiary
-                            ctx.lineWidth = 1.5
-                            ctx.lineJoin = "round"
-                            ctx.stroke()
+
+                            // rider dot only when idle — testing stays clean, number + rope only
+                            if (!root.speedTesting) {
+                                ctx.fillStyle = colors.tertiary
+                                ctx.beginPath()
+                                ctx.arc(crestX, Math.max(4, crestTop - 5), 3, 0, Math.PI * 2)
+                                ctx.fill()
+                            }
                         }
-                    }
-                    Text {
-                        anchors.centerIn: parent
-                        visible: !root.speedTesting && root.stSamples.length < 2
-                        text: "throughput trace appears while testing"
-                        color: colors.alpha(colors.outline, 0.5)
-                        font.family: colors.fontSans
-                        font.pixelSize: 8
                     }
                 }
 

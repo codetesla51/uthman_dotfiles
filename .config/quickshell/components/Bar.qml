@@ -318,6 +318,7 @@ PanelWindow {
             // every 4s. No MouseArea: clicks pass through.
             Item {
                 id: islandLine
+                property real ropePhase: 0
                 anchors { left: parent.left; right: parent.right; top: parent.top }
                 anchors.leftMargin: island.inset + 8
                 anchors.rightMargin: island.inset + 8
@@ -338,25 +339,38 @@ PanelWindow {
                     }
                 }
 
-                // comet: bright head, fading tail, crosses every 4s (clip fades the ends)
-                Rectangle {
-                    y: 4
-                    width: 90
-                    height: 3
-                    radius: 1.5
-                    gradient: Gradient {
-                        orientation: Gradient.Horizontal
-                        GradientStop { position: 0.0; color: "transparent" }
-                        GradientStop { position: 1.0; color: island.glowBase }
+                // sharp vortex line: mini twisted rope, always twisting (15fps timer)
+                Timer {
+                    interval: 66
+                    running: true
+                    repeat: true
+                    triggeredOnStart: true
+                    onTriggered: {
+                        islandLine.ropePhase += 0.28
+                        ropeCanvas.requestPaint()
                     }
-                    SequentialAnimation on x {
-                        loops: Animation.Infinite
-                        PauseAnimation { duration: 3100 }
-                        NumberAnimation {
-                            from: -90
-                            to: islandLine.width
-                            duration: 900
-                            easing.type: Easing.Bezier; easing.bezierCurve: [0.2, 0.8, 0.2, 1]
+                }
+                Canvas {
+                    id: ropeCanvas
+                    anchors { left: parent.left; right: parent.right; top: parent.top }
+                    height: 11
+                    onPaint: {
+                        var ctx = getContext("2d")
+                        ctx.reset()
+                        var N = 28
+                        var ph = islandLine.ropePhase
+                        for (var i = 0; i < N; i++) {
+                            var x = 4 + i * ((width - 8) / (N - 1))
+                            var a = i * 0.45 - ph * 3.0
+                            var lh = 2 + Math.abs(Math.sin(a)) * 7
+                            var y1 = (11 - lh) / 2
+                            ctx.strokeStyle = colors.alpha(island.glowBase, 0.35 + Math.abs(Math.cos(a)) * 0.55)
+                            ctx.lineWidth = 1.5
+                            ctx.lineCap = "round"
+                            ctx.beginPath()
+                            ctx.moveTo(x, y1)
+                            ctx.lineTo(x, y1 + lh)
+                            ctx.stroke()
                         }
                     }
                 }

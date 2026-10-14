@@ -126,6 +126,16 @@ plan.md
 .local/bin/zed
 # downloaded AppImages — 100MB+ binaries, not source
 .local/opt/*.AppImage
+# vendored prebuilt binaries dropped into ~/.local/bin — ~128MB of someone
+# else's build output, all redownloadable. Meetcap.qml shells out to the
+# `meetcap` binary, so that module expects it on PATH from a separate install.
+.local/bin/lightpanda
+.local/bin/meetcap
+.local/bin/railpack
+.local/bin/apktool.jar
+# LICENSE/README belonging to the above vendored downloads (railpack's MIT)
+.local/bin/LICENSE
+.local/bin/README.md
 # matugen-generated outputs — regenerated on every wallpaper apply, never commit
 .config/cava/config
 .config/quickshell/colors.css

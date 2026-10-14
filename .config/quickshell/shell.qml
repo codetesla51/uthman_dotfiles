@@ -379,5 +379,29 @@ ShellRoot {
         function onOpenChanged() { if (notesLoader.item && !notesLoader.item.open) notesOpen = false }
     }
 
+    // Meetcap — meeting recorder (SUPER ALT M)
+    property bool meetOpen: false
+    IpcHandler {
+        target: "meetcap"
+        function toggle(): void {
+            if (meetOpen && meetLoader.status === Loader.Loading) return
+            meetOpen = !meetOpen
+        }
+        function close(): void { if (meetOpen && meetLoader.status === Loader.Loading) return; meetOpen = false }
+    }
+    Loader {
+        id: meetLoader
+        active: meetOpen || meetWarm
+        asynchronous: true
+        source: "modules/Meetcap.qml"
+        onLoaded: { meetWarm = true; item.colors = barPalette; item.open = true }
+    }
+    property bool meetWarm: false
+    onMeetOpenChanged: { if (meetLoader.item) meetLoader.item.open = meetOpen }
+    Connections {
+        target: meetLoader.item
+        function onOpenChanged() { if (meetLoader.item && !meetLoader.item.open) meetOpen = false }
+    }
+
     Colors { id: barPalette }
 }

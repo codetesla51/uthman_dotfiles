@@ -7,6 +7,36 @@
 pkill -x slurp 2>/dev/null; sleep 0.1
 DIR=~/Pictures/Screenshots
 mkdir -p "$DIR"
+if [[ "$1" == "pretty" ]]; then
+  # Active window -> rounded + blurred-wallpaper backdrop (mac-style).
+  # Falls back to the most-recently-focused window if hyprctl reports none.
+  GEO=$(hyprctl -j activewindow 2>/dev/null | python3 -c "
+import json,sys
+try: w=json.load(sys.stdin)
+except Exception: w={}
+if w.get('at'): print(f\"{w['at'][0]},{w['at'][1]} {w['size'][0]}x{w['size'][1]}\")
+") || exit 1
+  if [ -z "$GEO" ]; then
+    GEO=$(hyprctl -j clients 2>/dev/null | python3 -c "
+import json,sys
+try: cs=json.load(sys.stdin)
+except Exception: cs=[]
+cs=[c for c in cs if c.get('mapped') and not c.get('hidden')]
+cs.sort(key=lambda c: c.get('focusHistoryID', 99))
+if cs: w=cs[0]; print(f\"{w['at'][0]},{w['at'][1]} {w['size'][0]}x{w['size'][1]}\")
+") || exit 1
+  fi
+  [ -n "$GEO" ] || { notify-send -u critical 'shot' 'no active window' 2>/dev/null; exit 1; }
+  TMP=$(mktemp /tmp/shot-win-XXXXXX.png)
+  grim -g "$GEO" "$TMP" || exit 1
+  WALL=$(readlink ~/.config/theme/current/background 2>/dev/null)
+  [ -f "$WALL" ] || WALL="$TMP"  # fallback: blur the window itself
+  FILE="$DIR/shot-pretty-$(date +%Y%m%d-%H%M%S).png"
+  python3 ~/.local/bin/shot-pretty.py "$TMP" "$WALL" "$FILE" \
+    && wl-copy < "$FILE" && notify-send -u low 'Pretty screenshot saved' "$FILE" 2>/dev/null
+  rm -f "$TMP"
+  exit $?
+fi
 if [[ "$1" == "full" ]]; then
   FILE="$DIR/shot-$(date +%Y%m%d-%H%M%S).png"
   grim "$FILE" && wl-copy < "$FILE" && notify-send -u low 'Screenshot saved' "$FILE" 2>/dev/null

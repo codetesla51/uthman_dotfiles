@@ -1009,7 +1009,7 @@ PanelWindow {
                                 var s = Math.abs(Math.sin(a))
                                 var lh = 5 + s * amp
                                 var y1 = height / 2 - lh / 2
-                                ctx.strokeStyle = colors.alpha(i % 2 ? colors.primary : colors.secondary, 0.3 + Math.abs(Math.cos(a)) * 0.5)
+                                ctx.strokeStyle = colors.alpha(colors.tertiary, 0.3 + Math.abs(Math.cos(a)) * 0.5)
                                 ctx.lineWidth = 2
                                 ctx.lineCap = "round"
                                 ctx.beginPath()

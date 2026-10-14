@@ -110,7 +110,8 @@ PanelWindow {
     MediaOsd { id: mediaOsd; colors: palette }
 
     // bar sides toggle — SUPER SHIFT SPACE leaves middle island
-    property bool barsVisible: true
+    // default: island only, full bar appears on toggle
+    property bool barsVisible: false
     // center style — SUPER ALT SPACE flips trapezoid tab against the Dynamic Island
     property bool dynamicIsland: false
     // island hover swells the NowPlaying glass card; the linger timer keeps it from
@@ -319,6 +320,9 @@ PanelWindow {
             Item {
                 id: islandLine
                 property real wavePhase: 0
+                property real cpuUsage: 0
+                property int _pTotal: 0
+                property int _pIdle: 0
                 anchors { left: parent.left; right: parent.right; top: parent.top }
                 anchors.leftMargin: island.inset + 8
                 anchors.rightMargin: island.inset + 8
@@ -340,15 +344,47 @@ PanelWindow {
                 }
 
                 // smooth-scrolling intertwined sines: solid curves, traveling phase
+                // speed follows CPU: idle crawls (~0.5x), full load sprints (~3.5x)
                 Timer {
                     interval: 66
                     running: true
                     repeat: true
                     triggeredOnStart: true
                     onTriggered: {
-                        islandLine.wavePhase += 0.28
+                        var mult = 0.5 + (islandLine.cpuUsage / 100) * 3.0
+                        islandLine.wavePhase += 0.28 * mult
                         waveCanvas.requestPaint()
                     }
+                }
+                // lightweight CPU sampler (own /proc/stat poll — Cpu pill polls
+                // every 3s for itself, this one every 2s so the wave reacts fast)
+                Process {
+                    id: islandCpuProc
+                    command: ["sh", "-c", "grep '^cpu ' /proc/stat"]
+                    stdout: StdioCollector {
+                        waitForEnd: true
+                        onStreamFinished: {
+                            var f = this.text.trim().split(/\s+/).slice(1).map(Number)
+                            if (f.length < 5) return
+                            var idle = f[3] + f[4]
+                            var total = f.reduce(function(a, b) { return a + b }, 0)
+                            if (islandLine._pTotal > 0) {
+                                var dT = total - islandLine._pTotal
+                                var dI = idle - islandLine._pIdle
+                                if (dT > 0)
+                                    islandLine.cpuUsage = Math.max(0, Math.min(100, Math.round(100 * (1 - dI / dT))))
+                            }
+                            islandLine._pTotal = total
+                            islandLine._pIdle = idle
+                        }
+                    }
+                }
+                Timer {
+                    interval: 2000
+                    running: true
+                    repeat: true
+                    triggeredOnStart: true
+                    onTriggered: islandCpuProc.running = true
                 }
                 Canvas {
                     id: waveCanvas

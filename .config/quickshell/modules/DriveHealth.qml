@@ -689,9 +689,8 @@ FloatingWindow {
                         var a = (i / RAYS) * Math.PI * 2 + t * 0.4
                         var wave = Math.sin(i * 0.35 - t * 2.2) * 0.5 + 0.5
                         var r1 = R * 0.5 + wave * (R * 0.42)
-                        var accent = i % 6 === 0 ? colors.tertiary : (i % 2 ? colors.primary : colors.secondary)
-                        ctx.strokeStyle = colors.alpha(accent, i % 6 === 0 ? 0.95 : 0.55)
-                        ctx.lineWidth = i % 6 === 0 ? 2.4 : 1.6
+                        ctx.strokeStyle = colors.alpha(colors.tertiary, 0.3 + wave * 0.55)
+                        ctx.lineWidth = 2
                         ctx.lineCap = "round"
                         ctx.beginPath()
                         ctx.moveTo(cx + Math.cos(a) * r0, cy + Math.sin(a) * r0)

@@ -1,0 +1,278 @@
+#!/usr/bin/env python3
+"""vortex — fullscreen terminal radial-twist (stored spiral-C math).
+
+120 dense rays, breathing radius, counter-rotating ghost layer, click pulses.
+Move the mouse: the vortex reaches for it. Click: shockwave ring.
+Colors come from Matugen's colors.css, so it follows the wallpaper theme.
+Quit: q / Esc / Ctrl-C.
+"""
+import math
+import os
+import select
+import shutil
+import sys
+import termios
+import time
+import tty
+import re
+
+THEME = {
+    "primary": "#c7c6cd",
+    "secondary": "#c8c6c9",
+    "tertiary": "#d0c5b8",
+    "outline": "#97969b",
+}
+try:
+    with open(os.path.expanduser("~/.config/quickshell/colors.css")) as f:
+        css = f.read()
+    for key in THEME:
+        m = re.search(r"@define-color\s+" + key + r"\s+(#[0-9a-fA-F]{6})", css)
+        if m:
+            THEME[key] = m.group(1)
+except OSError:
+    pass
+
+
+def fg(hexcode):
+    h = hexcode.lstrip("#")
+    return "\x1b[38;2;%d;%d;%dm" % (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
+
+
+def dim(hexcode, f=0.35):
+    h = hexcode.lstrip("#")
+    return "\x1b[38;2;%d;%d;%dm" % (
+        int(int(h[0:2], 16) * f), int(int(h[2:4], 16) * f), int(int(h[4:6], 16) * f))
+
+
+PALETTE = [fg(THEME["primary"]), fg(THEME["secondary"]), fg(THEME["tertiary"])]
+GHOST = dim(THEME["secondary"], 0.25)
+PULSE_C = dim(THEME["tertiary"], 0.8)
+RESET = "\x1b[0m"
+RAYS = 72
+GHOST_RAYS = 36
+
+
+def bit(dx, dy):
+    if dx == 0:
+        return 6 if dy == 3 else dy
+    return 7 if dy == 3 else dy + 3
+
+
+def parse_mouse(buf):
+    """Pull X10 mouse events off buf. Returns (events, rest)."""
+    events = []
+    i = 0
+    while i < len(buf):
+        if buf[i:i + 3] == b"\x1b[M" and len(buf) >= i + 6:
+            cb, bx, by = buf[i + 3], buf[i + 4] - 33, buf[i + 5] - 33
+            events.append((cb - 32, bx, by))
+            i += 6
+            continue
+        if buf[i:i + 1] == b"\x1b" and buf[i + 1:i + 2] == b"[":
+            # CSI reply/sequence (terminal answers, arrows): skip whole, never as keys
+            j = i + 2
+            while j < len(buf) and not (0x40 <= buf[j] <= 0x7E):
+                j += 1
+            i = j + 1
+            continue
+        if buf[i:i + 1] == b"\x1b" and i == len(buf) - 1:
+            events.append(("esc",))  # lone Esc (full sequences arrive together)
+            i += 1
+            continue
+        elif buf[i:i + 1] in (b"q", b"Q", b"\x03"):
+            events.append(("quit",))
+            i += 1
+        elif buf[i:i + 1] in (b"1", b"2", b"3", b"4"):
+            events.append(("mode", int(buf[i:i + 1]) - 1))
+            i += 1
+        elif buf[i:i + 1] in (b"\t", b" "):
+            events.append(("cycle",))
+            i += 1
+        else:
+            i += 1
+    return events, b""
+
+
+class Vortex:
+    MODES = ("twist", "rings", "arms", "march")
+
+    def __init__(self):
+        self.t = 0.0
+        self.mx = self.my = None  # mouse in dot coords
+        self.pulses = []          # expanding click rings (radius in dots)
+        self.mode = 0             # twist = the keeper
+
+    def frame(self, cols, rows):
+        px = cols * 2
+        prow = max(8, (rows - 2) * 4)
+        gw, gh = cols, prow // 4
+        cx, cy = px / 2, prow / 2  # pinned — only the arms reach
+        # breathe
+        base_r = min(px, prow) / 2 - 2
+        radius = base_r * (1 + 0.045 * math.sin(self.t * 0.9))
+        r0 = radius * 0.40
+
+        masks = {}
+        colof = {}
+
+        def plot(x, y, c, wide=False):
+            for ox, oy in ((0, 0), (1, 0)) if wide else ((0, 0),):
+                xx, yy = x + ox, y + oy
+                if 0 <= xx < px and 0 <= yy < prow:
+                    k = (xx // 2, yy // 4)
+                    masks[k] = masks.get(k, 0) | (1 << bit(xx % 2, yy % 4))
+                    colof[k] = c
+
+        # cursor pull, computed per ray
+        has_mouse = self.mx is not None
+        if has_mouse:
+            mdx, mdy = self.mx - cx, self.my - cy
+            mdist = math.hypot(mdx, mdy) or 1.0
+            mang = math.atan2(mdy, mdx)
+            prox = max(0.0, min(1.0, 1.2 - mdist / (radius * 1.6)))
+        else:
+            mang, prox = 0.0, 0.0
+
+        def interact(a):
+            """Bend one angle toward the cursor. Returns (bent angle, reach)."""
+            if has_mouse and prox > 0:
+                diff = (mang - a + math.pi) % (math.pi * 2) - math.pi
+                return (a + math.sin(diff) * 0.5 * prox,
+                        1 + 0.35 * prox * max(0.0, math.cos(diff)))
+            return a, 1.0
+
+        mode = self.MODES[self.mode]
+        if mode == "twist":  # stored spiral-C: ripple rays
+            for i in range(RAYS):
+                a = (i / RAYS) * math.pi * 2 + self.t * 0.4
+                a, reach = interact(a)
+                wave = math.sin(i * 0.35 - self.t * 2.2) * 0.5 + 0.5
+                r1 = (radius * 0.45 + wave * radius * 0.5) * reach
+                c = 2 if i % 6 == 0 else (0 if i % 2 else 1)
+                steps = max(8, int(r1 - r0))
+                for s in range(steps + 1):
+                    r = r0 + (r1 - r0) * s / steps
+                    plot(int(cx + math.cos(a) * r), int(cy + math.sin(a) * r), c, True)
+        elif mode == "rings":  # option A: dashed orbit rings, alternating directions
+            for frac, c, speed in ((0.92, 0, 0.5), (0.74, 1, -0.8),
+                                   (0.56, 2, 1.1), (0.38, 0, -1.6)):
+                rk = radius * frac
+                rot = self.t * speed
+                n = max(24, int(2 * math.pi * rk))
+                off = int(self.t * 20 * (1 if speed > 0 else -1))
+                for k in range(n):
+                    if (k + off) % 5 >= 3:
+                        continue
+                    a = k / n * math.pi * 2 + rot
+                    a, reach = interact(a)
+                    r = rk * reach
+                    plot(int(cx + math.cos(a) * r), int(cy + math.sin(a) * r), c)
+        elif mode == "arms":  # option B: phyllotaxis spiral arms
+            arms = 48
+            for i in range(arms):
+                c = i % 3
+                for k in range(29):
+                    tt = k / 28
+                    a = tt * 4.2 + i * (math.pi * 2 / arms) + self.t * 0.5
+                    a, reach = interact(a)
+                    r = (r0 * 0.4 + tt * (radius * 0.96 - r0 * 0.4)) * reach
+                    plot(int(cx + math.cos(a) * r), int(cy + math.sin(a) * r), c)
+        elif mode == "march":  # option D: marching spiral path, no dot
+            turns, total = 6, 540
+            off = int(self.t * 30)
+            for k in range(total):
+                if (k + off) % 10 >= 6:
+                    continue
+                s = k / total
+                a = s * turns * math.pi * 2 - math.pi / 2 + self.t * 0.25
+                a, reach = interact(a)
+                r = (r0 * 0.5 + s * (radius * 0.94 - r0 * 0.5)) * reach
+                plot(int(cx + math.cos(a) * r), int(cy + math.sin(a) * r), 0, True)
+
+        # click shockwaves
+        alive = []
+        for pr in self.pulses:
+            pr += 7
+            if pr < radius * 2.4:
+                alive.append(pr)
+                k = 0
+                while k < 360:
+                    a = math.radians(k)
+                    plot(int(cx + math.cos(a) * pr), int(cy + math.sin(a) * pr), 4)
+                    k += 2
+        self.pulses = alive
+
+        palette = PALETTE + [GHOST, PULSE_C]
+        out = []
+        for gy in range(gh):
+            cur = -2
+            for gx in range(gw):
+                m = masks.get((gx, gy), 0)
+                if not m:
+                    if cur != -1:
+                        out.append(RESET)
+                        cur = -1
+                    out.append(" ")
+                else:
+                    c = colof[(gx, gy)]
+                    if c != cur:
+                        out.append(palette[c])
+                        cur = c
+                    out.append(chr(0x2800 + m))
+            out.append(RESET + "\n")
+        out.append("  vortex · %s · 1-4/tab switch · q to quit\n" % self.MODES[self.mode])
+        return "".join(out)
+
+
+def main():
+    maxframes = int(os.environ.get("VORTEX_FRAMES", "0"))
+    interactive = sys.stdin.isatty() and maxframes == 0
+    old = None
+    fd = None
+    try:
+        v = Vortex()
+        if interactive:
+            fd = sys.stdin.fileno()
+            old = termios.tcgetattr(fd)
+            tty.setcbreak(fd)
+            sys.stdout.write("\x1b[?1049h\x1b[?25l\x1b[?1000h\x1b[?1003h")
+        pending = b""
+        while True:
+            cols, rows = shutil.get_terminal_size()
+            if interactive:
+                sys.stdout.write("\x1b[H")
+            sys.stdout.write(v.frame(cols, rows))
+            sys.stdout.flush()
+            v.t += 0.09
+            if maxframes:
+                maxframes -= 1
+                if maxframes <= 0:
+                    break
+                time.sleep(0.05)
+                continue
+            if select.select([sys.stdin], [], [], 0.05)[0]:
+                pending += os.read(fd, 256)
+                events, pending = parse_mouse(pending)
+                for ev in events:
+                    if ev[0] in ("quit", "esc"):
+                        return
+                    if ev[0] == "mode":
+                        v.mode = ev[1] % len(v.MODES)
+                        continue
+                    elif ev[0] == "cycle":
+                        v.mode = (v.mode + 1) % len(v.MODES)
+                        continue
+                    else:
+                        cb, bx, by = ev
+                    v.mx, v.my = bx * 2, by * 4
+                    if cb == 0:  # left press: shockwave
+                        v.pulses.append(6.0)
+    finally:
+        if interactive:
+            sys.stdout.write("\x1b[?1000l\x1b[?1003l\x1b[?25h\x1b[?1049l" + RESET)
+            sys.stdout.flush()
+            termios.tcsetattr(fd, termios.TCSADRAIN, old)
+
+
+if __name__ == "__main__":
+    main()

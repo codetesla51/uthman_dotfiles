@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+# rice-larp — autopilot rice showcase. Opens a narrated tour of the desktop:
+# eye-candy terminals, quickshell panels, launcher, and a wallpaper swap.
+#
+# Everything visual happens in the `special:larp` workspace, so your current
+# workspace is never touched. Wallpaper is restored at the end unless
+# --keep-theme is given.
+#
+# Usage: rice-larp [--dry-run] [--fast] [--no-wallpaper] [--keep-theme]
+# Stop anytime: pkill -f rice-larp   (also closes every LARP window)
+
+set -u
+STEP=3
+DRY=0
+WALLPAPER=1
+KEEP_THEME=0
+for a in "$@"; do
+    case "$a" in
+        --dry-run) DRY=1 ;;
+        --fast) STEP=1 ;;
+        --no-wallpaper) WALLPAPER=0 ;;
+        --keep-theme) KEEP_THEME=1 ;;
+        -h|--help) sed -n '2,10p' "$0"; exit 0 ;;
+        *) echo "unknown flag: $a" >&2; exit 2 ;;
+    esac
+done
+
+QS="quickshell -p ~/.config/quickshell"
+ORIG_BG="$(readlink ~/.config/theme/current/background 2>/dev/null || true)"
+
+say()  { notify-send -a LARP "rice-larp" "$1"; }
+pause() { sleep "$STEP"; }
+run()  { (( DRY )) && { echo "+ $*"; return; }; "$@"; }
+
+cleanup() {
+    say "Show's over — striking the set."
+    # Close only our titled windows, nothing else.
+    for t in larp-matrix larp-top larp-fetch; do
+        run hyprctl dispatch closewindow "title:^$t$" >/dev/null 2>&1 || true
+    done
+    if (( WALLPAPER && ! KEEP_THEME )) && [[ -n "$ORIG_BG" && -f "$ORIG_BG" ]]; then
+        run set-wallpaper "$ORIG_BG" >/dev/null 2>&1 || true
+    fi
+    exit 0
+}
+trap cleanup INT TERM
+
+need() { command -v "$1" >/dev/null 2>&1 || { echo "missing: $1" >&2; exit 1; }; }
+need hyprctl; need notify-send; need kitty
+
+say "Act I — terminals. Stop me with: pkill -f rice-larp"
+run hyprctl dispatch 'exec [workspace special:larp] kitty --title larp-matrix cmatrix'
+pause
+run hyprctl dispatch 'exec [workspace special:larp] kitty --title larp-top btop'
+pause
+run hyprctl dispatch "exec [workspace special:larp] kitty --title larp-fetch sh -c 'fastfetch; exec zsh'"
+pause
+run hyprctl dispatch togglespecialworkspace larp
+pause; pause
+
+say "Act II — panels. Control center, system monitor, wifi."
+for p in controlcenter sysmon wifi; do
+    run $QS ipc call "$p" toggle
+    pause; pause
+    run $QS ipc call "$p" toggle
+    pause
+done
+
+say "Act III — launcher, keybinds, phone bridge."
+for p in launcher keybinds phonebridge; do
+    run $QS ipc call "$p" toggle
+    pause; pause
+    run $QS ipc call "$p" toggle
+    pause
+done
+
+if (( WALLPAPER )); then
+    BGDIR="$(dirname "$ORIG_BG")"
+    NEXT="$(ls "$BGDIR" 2>/dev/null | grep -v '^background' | grep -iE '\.(jpg|jpeg|png|webp|gif)$' | grep -vF "$(basename "$ORIG_BG")" | head -n 1)"
+    if [[ -n "${NEXT:-}" ]]; then
+        say "Act IV — new wallpaper, whole desktop recolors."
+        run set-wallpaper "$BGDIR/$NEXT"
+        pause; pause; pause
+    else
+        say "Act IV skipped — no spare wallpaper found."
+    fi
+fi
+
+# Back to terminals for the finale, then strike the set.
+run hyprctl dispatch togglespecialworkspace larp
+pause
+say "Finale — that was the whole rice. Bye."
+pause
+cleanup

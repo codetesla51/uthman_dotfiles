@@ -124,12 +124,18 @@ Lessons from "upload/download not centered" + "address not aligned" + "hairline 
 
 ---
 
-## 6. Networking API (Quickshell.Networking, iwd backend)
+## 6. Networking API (Quickshell.Networking, NetworkManager backend)
 
+> Verified against the installed binary + `quickshell-network.qmltypes` (0.3.2) on 2026-10-16. The old notes here said "iwd" and "0-100" and cost real bugs — measure before trusting this list.
+
+* Backend is **NetworkManager**, and it is the *only* one compiled in: `NetworkBackendType` is `["None", "NetworkManager"]`, and `strings /usr/bin/quickshell | grep -i iwd` is empty. iwd is not an option here.
 * `Networking.devices.values` → `WifiDevice`/`WiredDevice`. Filter by `d.type === DeviceType.Wifi`.
-* `wifiDev.networks.values` → `WifiNetwork[]` with `name` (ssid), `signalStrength` (0-100), `security` (`WifiSecurityType.None` vs secured), `connected`, `known`, `address`.
-* Sorting for the list: connected first, then known, then `signalStrength` descending.
-* Connect: `net.connect()` (open or known) vs `net.connectWithPsk("password")` (secured+unknown). No `rescan()` method exists — toggle `wifiDev.scannerEnabled = false; ... = true`.
+* `wifiDev.networks.values` → `WifiNetwork[]` with `name` (ssid), `signalStrength`, `security`, `connected`, `known`, `address`, `nmSettings`.
+* **`signalStrength` is 0.0–1.0, not 0–100.** Measured: the connected AP reports `0.58`. Comparing it to 80/60/40 silently pins every network to the weakest icon and prints "0.58%".
+* **`WifiSecurityType` has no `None` member.** Variants: `Wpa3SuiteB192`, `Sae`, `Wpa2Eap`, `Wpa2Psk`, `WpaEap`, `WpaPsk`, `StaticWep`, `DynamicWep`, `Leap`, `Owe`, `Open`, `Unknown`. Passwordless = `Open` (value 10) or `Owe` (9). A `WifiSecurityType.None` comparison is always `false`, so passwordless APs get a password prompt and then fail to join.
+* Sorting for the list: connected first, then known, then `signalStrength` descending (scale-agnostic, so safe either way).
+* Connect: `net.connect()` for open/known. `net.connectWithPsk("password")` for a PSK — only valid when `security` is `WpaPsk`, `Wpa2Psk`, or `Sae`; any other type is rejected by the backend. No `rescan()` method exists — toggle `wifiDev.scannerEnabled = false; ... = true`.
+* Debugging: quickshell's `exec-once` line discards stdout/stderr. If a panel misbehaves with no error anywhere, that is why — relaunch with `> /tmp/qs-bar.log 2>&1` and the real error appears.
 * Rescan spinner: `scannerEnabled` is always-on background flag, useless as signal. Drive a local `scanSpinning: bool` on click + `Timer { interval:4000 }` + `onNetsChanged` early-stop.
 
 ---

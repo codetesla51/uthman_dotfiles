@@ -58,7 +58,14 @@ PanelWindow {
     NetRate { id: rate }
 
     function strengthGlyph(sig) {
-        return sig >= 80 ? "󰤨" : sig >= 60 ? "󰤥" : sig >= 40 ? "󰤢" : "󰤟"
+        return sig >= 0.8 ? "󰤨" : sig >= 0.6 ? "󰤥" : sig >= 0.4 ? "󰤢" : "󰤟"
+    }
+
+    // True for networks that take no secret. The enum has no `None` -- the
+    // open value is `Open`, and `Owe` is enhanced-open. Everything else
+    // (WPA/WPA2/WPA3, WEP, EAP) prompts.
+    function isPasswordless(sec) {
+        return sec === WifiSecurityType.Open || sec === WifiSecurityType.Owe
     }
 
     function connectTo(net) {
@@ -97,7 +104,7 @@ PanelWindow {
     function connectSelected() {
         var n = root.filteredNets[root.selectedIndex]
         if (!n || n.connected) return
-        if (!n.security || n.security === WifiSecurityType.None || n.known) root.connectTo(n)
+        if (root.isPasswordless(n.security) || n.known) root.connectTo(n)
         else root.askPwSsid = n.name.trim()
     }
     function forgetSelected() {
@@ -347,7 +354,7 @@ PanelWindow {
                         }
 
                         Text {
-                            text: "signal " + ((root.connectedNet || {}).signalStrength ?? 0) + "%"
+                            text: "signal " + Math.round(((root.connectedNet || {}).signalStrength ?? 0) * 100) + "%"
                             color: colors.alpha(colors.outline, 0.7)
                             font.family: colors.fontSans
                             font.pixelSize: 9
@@ -747,7 +754,7 @@ PanelWindow {
                             }
 
                             Text {
-                                visible: modelData.security !== undefined && modelData.security !== WifiSecurityType.None
+                                visible: !root.isPasswordless(modelData.security)
                                 text: ""
                                 color: colors.alpha(colors.outline, 0.65)
                                 font.family: colors.fontSans
@@ -844,7 +851,7 @@ PanelWindow {
                         propagateComposedEvents: true
                         onClicked: {
                             if (modelData.connected || isConnecting) return
-                            if (!modelData.security || modelData.security === WifiSecurityType.None || modelData.known) {
+                            if (root.isPasswordless(modelData.security) || modelData.known) {
                                 root.connectTo(modelData)
                             } else {
                                 if (root.askPwSsid === modelData.name.trim()) {

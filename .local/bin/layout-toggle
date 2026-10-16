@@ -1,6 +1,31 @@
 #!/bin/bash
-# layout-toggle — toggle dwindle/master tiling layout via hyprctl
-export HYPRLAND_INSTANCE_SIGNATURE=$(ls -t /run/user/1000/hypr/ 2>/dev/null | head -1)
-CUR=$(hyprctl getoption general:layout 2>/dev/null | awk '/str:/{print $2}')
-if [[ "$CUR" == "master" ]]; then hyprctl keyword general:layout dwindle >/dev/null
-else hyprctl keyword general:layout master >/dev/null; fi
+# layout-toggle — cycle the built-in tiling layouts:
+#   dwindle -> master -> scrolling -> dwindle
+#
+# Bound to SUPER ALT Z in bindings.conf. The vendor config also binds this on
+# SUPER L, but bindings.conf unbinds that and claims SUPER L for lock screen,
+# so the script needs its own bind to stay reachable.
+set -u
+
+# Hyprland sets this in its own binds, but `hyprctl` from a bare shell needs it.
+export HYPRLAND_INSTANCE_SIGNATURE="${HYPRLAND_INSTANCE_SIGNATURE:-$(ls -t "/run/user/$(id -u)/hypr/" 2>/dev/null | head -1)}"
+
+CUR=$(hyprctl getoption general:layout 2>/dev/null | awk '/^str:/{print $2}')
+
+case "$CUR" in
+    master)    NEXT=scrolling ;;
+    scrolling) NEXT=dwindle   ;;
+    *)         NEXT=master    ;;
+esac
+
+hyprctl keyword general:layout "$NEXT" >/dev/null 2>&1
+
+case "$NEXT" in
+    dwindle)   AFTER=master    ;;
+    master)    AFTER=scrolling ;;
+    *)         AFTER=dwindle   ;;
+esac
+
+# Say where it landed — a half-empty workspace gives no other clue which
+# layout is active.
+notify-send -a Hyprland -u low -t 1500 "Layout: $NEXT" "next press → $AFTER"

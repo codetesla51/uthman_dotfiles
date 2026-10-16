@@ -25,7 +25,9 @@ SHADOW_ALPHA = 105  # 0-255, was 200 - far too heavy
 SHADOW_OFFSET_Y = 14
 SHADOW_LIFT = 3     # dark contact shadow hugging the window
 
-WALL_BLUR = 14      # light touch - wallpaper should still read as a wallpaper
+WALL_BLUR = 1       # near-crisp. The wallpaper is the point - it should read as
+                    # a picture. 14 turned the 96px band around the window into
+                    # mush; the downscale from 5504px wide already softens it.
 WALL_DARKEN = 0.28  # keep enough brightness to see the image
 WALL_SATURATE = 1.15
 VIGNETTE = 0.22     # corner falloff so the window sits forward

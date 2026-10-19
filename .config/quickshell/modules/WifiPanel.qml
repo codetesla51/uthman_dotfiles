@@ -6,7 +6,7 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
 
-// Wi-Fi panel — network selector + password entry + live throughput + speed test.
+// Wi-Fi panel — network selector + PassPrompt join + live throughput + speed test.
 // Opens from the Network pill (or `quickshell -p ~/.config/quickshell ipc call wifi toggle`).
 // Single fullscreen window w/ dim backdrop; Esc / click-outside closes.
 PanelWindow {
@@ -82,7 +82,7 @@ PanelWindow {
             if (root.connectingSsid !== "") {
                 root.errorText = "\"" + root.connectingSsid + "\" is taking too long — wrong password?"
                 root.connectingSsid = ""
-                root.failClear.restart()
+                failClear.restart()
             }
         }
     }
@@ -99,13 +99,81 @@ PanelWindow {
 
     // ── keyboard selection / actions ──
     property int selectedIndex: 0
-    property string askPwSsid: ""   // which row shows the password field
+    property var pendingPskNet: null   // network waiting on PassPrompt
+
+    function shellQuote(s) { return "'" + String(s).replace(/'/g, "'\\''") + "'" }
+
+    // Secured, unknown networks ask through the shared PassPrompt overlay. The
+    // old inline field lived on this layer-shell surface and never reliably got
+    // keyboard focus; PassPrompt force-focuses its own field in an overlay.
+    function askPsk(net) {
+        if (!net) return
+        root.pendingPskNet = net
+        root.errorText = ""
+        var prompt = "Wi-Fi " + net.name.trim() + " — password needed to join"
+        passAskProc.command = ["sh", "-c",
+            "quickshell -p $HOME/.config/quickshell ipc call passprompt ask " +
+            root.shellQuote(prompt) + " >/dev/null 2>&1"]
+        passAskProc.running = true
+    }
 
     function connectSelected() {
         var n = root.filteredNets[root.selectedIndex]
         if (!n || n.connected) return
         if (root.isPasswordless(n.security) || n.known) root.connectTo(n)
-        else root.askPwSsid = n.name.trim()
+        else root.askPsk(n)
+    }
+
+    // PassPrompt bridge: ask -> poll st() -> read result() -> connectWithPsk.
+    Process {
+        id: passAskProc
+        running: false
+        onExited: function(code) {
+            if (code !== 0) {
+                root.errorText = "Could not open the password prompt"
+                root.pendingPskNet = null
+                failClear.restart()
+                return
+            }
+            passPoll.restart()
+        }
+    }
+    Timer { id: passPoll; interval: 250; repeat: true; onTriggered: passStProc.running = true }
+    Process {
+        id: passStProc
+        running: false
+        command: ["sh","-c","quickshell -p $HOME/.config/quickshell ipc call passprompt st 2>/dev/null | tr -d '\" '"]
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: {
+                var st = text.trim()
+                if (st === "done") {
+                    passPoll.stop()
+                    passResProc.running = true
+                } else if (st === "cancelled" || st === "idle") {
+                    passPoll.stop()
+                    root.pendingPskNet = null
+                }
+            }
+        }
+    }
+    Process {
+        id: passResProc
+        running: false
+        command: ["sh","-c","quickshell -p $HOME/.config/quickshell ipc call passprompt result 2>/dev/null | sed 's/^\"//; s/\"$//'"]
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: {
+                var net = root.pendingPskNet
+                root.pendingPskNet = null
+                var pw = text.trim()
+                if (net && pw !== "") {
+                    root.connectingSsid = net.name.trim()
+                    connectWatch.restart()
+                    net.connectWithPsk(pw)
+                }
+            }
+        }
     }
     function forgetSelected() {
         var n = root.filteredNets[root.selectedIndex]
@@ -135,7 +203,13 @@ PanelWindow {
     // Close plays out before the window hides (visible binds running).
     onOpenChanged: {
         if (root.open) openAnim.restart()
-        else { root.connectingSsid = ""; root.errorText = ""; closeAnim.restart() }
+        else {
+            root.connectingSsid = ""
+            root.errorText = ""
+            wifiSearch.text = ""      // fresh search every open
+            root.searchQuery = ""
+            closeAnim.restart()
+        }
     }
 
     Timer {
@@ -178,6 +252,9 @@ PanelWindow {
         focus: root.open
         Keys.onEscapePressed: root.open = false
         Keys.onPressed: function(event){
+            // Arrows keep steering the list even while the search field is typing
+            if (event.key === Qt.Key_Down) { root.moveSel(1); event.accepted = true; return }
+            if (event.key === Qt.Key_Up) { root.moveSel(-1); event.accepted = true; return }
             if (wifiSearch.activeFocus) return
             var txt = event.text ? event.text.toLowerCase() : ""
             if (txt === "s" || event.key === Qt.Key_S) {
@@ -187,8 +264,6 @@ PanelWindow {
             else if (event.key === Qt.Key_C || event.key === Qt.Key_Return || event.key === Qt.Key_Enter) { root.connectSelected(); event.accepted = true }
             else if (event.key === Qt.Key_D) { if (root.connectedNet) root.connectedNet.disconnect(); event.accepted = true }
             else if (event.key === Qt.Key_F) { root.forgetSelected(); event.accepted = true }
-            else if (event.key === Qt.Key_Down) { root.moveSel(1); event.accepted = true }
-            else if (event.key === Qt.Key_Up) { root.moveSel(-1); event.accepted = true }
         }
 
         transform: [
@@ -579,7 +654,7 @@ PanelWindow {
             Text {
                 Layout.fillWidth: true
                 horizontalAlignment: Text.AlignHCenter
-                text: "󰇚 " + rate.fmtTotal(rate.totalRxMb) + "   \u00B7   󰕒 " + rate.fmtTotal(rate.totalTxMb)
+                text: "󰇚 " + rate.fmtTotal(rate.totalRxMb) + "   ·   󰕒 " + rate.fmtTotal(rate.totalTxMb)
                 color: colors.alpha(colors.outline, 0.6)
                 font.family: colors.fontSans
                 font.pixelSize: 9
@@ -615,7 +690,7 @@ PanelWindow {
                 implicitHeight: 40
                 leftPadding: 12
                 rightPadding: 12
-                placeholderText: "Search networks…  (S)"
+                placeholderText: "Search networks…"
                 placeholderTextColor: colors.alpha(colors.outline,0.5)
                 color: colors.foreground
                 font.family: colors.fontSans
@@ -627,6 +702,13 @@ PanelWindow {
                     border.color: wifiSearch.activeFocus ? colors.alpha(colors.primary,0.5) : colors.alpha(colors.outline,0.15)
                 }
                 onTextChanged: root.searchQuery = text
+                Keys.onEscapePressed: function(event) {
+                    // leave the field first: Esc clears the query and hands focus
+                    // back to the panel. A second Esc (field not focused) closes.
+                    wifiSearch.text = ""
+                    card.forceActiveFocus()
+                    event.accepted = true
+                }
             }
 
             // ══════════ section label ══════════
@@ -655,8 +737,7 @@ PanelWindow {
                     required property var modelData
                     required property int index
 
-                    property bool hovered: rowArea.containsMouse
-                    readonly property bool askPw: root.askPwSsid === modelData.name.trim()
+                    property bool hovered: rowArea.containsMouse || fgMouse.containsMouse
                     readonly property bool isSelected: index === root.selectedIndex
                     readonly property bool isConnecting: modelData.stateChanging || modelData.state === ConnectionState.Connecting
 
@@ -667,7 +748,7 @@ PanelWindow {
                             if (root.connectingSsid === modelData.name.trim()) {
                                 root.errorText = "Failed to join \"" + modelData.name.trim() + "\": " + root.failText(reason)
                                 root.connectingSsid = ""
-                                root.failClear.restart()
+                                failClear.restart()
                             }
                         }
                         function onStateChanged(state) {
@@ -679,7 +760,7 @@ PanelWindow {
                     }
 
                     width: netList.width - 8
-                    height: askPw ? 120 : isConnecting ? 68 : 44
+                    height: isConnecting ? 68 : 44
                     radius: 10
                     color: hovered ? colors.alpha(colors.surfaceVariant, 0.3) : "transparent"
                     border.width: modelData.connected || isSelected ? 1 : 0
@@ -687,6 +768,21 @@ PanelWindow {
                                                       : colors.alpha(colors.outline, 0.35)
 
                     Behavior on height { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
+
+                    // Row click lives UNDER the content so the nested forget
+                    // button gets its clicks first. It used to be declared last,
+                    // sat on top of everything and swallowed the trash clicks.
+                    MouseArea {
+                        id: rowArea
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        onClicked: {
+                            root.selectedIndex = index   // F/C/D etc. follow the last click
+                            if (modelData.connected || isConnecting) return
+                            if (root.isPasswordless(modelData.security) || modelData.known) root.connectTo(modelData)
+                            else root.askPsk(modelData)
+                        }
+                    }
 
                     ColumnLayout {
                         anchors.fill: parent
@@ -770,64 +866,6 @@ PanelWindow {
                             }
                         }
 
-                        // password entry (secured + unknown only)
-                        RowLayout {
-                            visible: askPw
-                            Layout.fillWidth: true
-                            spacing: 6
-
-                            TextField {
-                                id: pwField
-                                Layout.fillWidth: true
-                                implicitHeight: 36
-                                leftPadding: 12
-                                rightPadding: 12
-                                topPadding: 8
-                                bottomPadding: 8
-                                echoMode: TextInput.Password
-                                font.family: colors.fontSans
-                                font.pixelSize: 12
-                                color: colors.foreground
-                                placeholderText: "Enter WiFi password…"
-                                placeholderTextColor: colors.alpha(colors.outline,0.6)
-                                background: Rectangle {
-                                    radius: 10
-                                    color: colors.alpha(colors.surface, 0.85)
-                                    border.width: 1
-                                    border.color: pwField.activeFocus ? colors.alpha(colors.primary,0.5) : colors.alpha(colors.primary,0.3)
-                                    Behavior on border.color { ColorAnimation { duration: 150 } }
-                                }
-                                onAccepted: joinTap.tap()
-                            }
-
-                            Rectangle {
-                                width: 64; height: 36; radius: 10
-                                color: pwField.text.length >= 8 ? colors.primary : colors.alpha(colors.surfaceVariant,0.35)
-                                border.width: 1
-                                border.color: pwField.text.length >= 8 ? colors.primary : colors.alpha(colors.outline,0.15)
-                                Text {
-                                    anchors.centerIn: parent
-                                    text: "Join"
-                                    color: pwField.text.length >= 8 ? colors.background : colors.alpha(colors.outline,0.6)
-                                    font.family: colors.fontSans
-                                    font.pixelSize: 11
-                                    font.weight: Font.Bold
-                                }
-
-                                TapHandler {
-                                    id: joinTap
-                                    function tap() {
-                                        if (pwField.text.length < 8) return
-                                        root.connectingSsid = modelData.name.trim()
-                                        root.connectWatch.restart()
-                                        modelData.connectWithPsk(pwField.text)
-                                        pwField.text = ""
-                                        root.askPwSsid = ""
-                                    }
-                                }
-                            }
-                        }
-
                         Text {
                             visible: isConnecting
                             text: "connecting…"
@@ -839,27 +877,6 @@ PanelWindow {
                                 loops: Animation.Infinite
                                 NumberAnimation { to: 0.35; duration: 500 }
                                 NumberAnimation { to: 1; duration: 500 }
-                            }
-                        }
-                    }
-
-                    MouseArea {
-                        id: rowArea
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        enabled: !askPw
-                        propagateComposedEvents: true
-                        onClicked: {
-                            if (modelData.connected || isConnecting) return
-                            if (root.isPasswordless(modelData.security) || modelData.known) {
-                                root.connectTo(modelData)
-                            } else {
-                                if (root.askPwSsid === modelData.name.trim()) {
-                                    root.askPwSsid = ""
-                                } else {
-                                    root.askPwSsid = modelData.name.trim()
-                                    Qt.callLater(function(){ pwField.forceActiveFocus() })
-                                }
                             }
                         }
                     }
@@ -1101,7 +1118,7 @@ PanelWindow {
         shownMbps = speedMbps
         stProgress = Math.min(1, root.stDlGot / 5000000)
         root.stPhase = 2
-        root.stUpProc.running = true   // upload phase
+        stUpProc.running = true        // upload phase
     }
 
     Process {
@@ -1167,7 +1184,7 @@ PanelWindow {
     // throttle or block the endpoint; on failure we show download only (honest n/a).
     Process {
         id: stUpProc
-        command: ["sh", "-c", "dd if=/dev/zero of=/tmp/.qs-upload bs=1M count=8 2>/dev/null; curl -s -o /dev/null --max-time 12 -H 'Expect:' -w '%{http_code}|%{speed_upload}' --data-binary @/tmp/.qs-upload https://speed.cloudflare.com/__up 2>/dev/null; rm -f /tmp/.qs-upload"]
+        command: ["sh", "-c", "dd if=/dev/zero of=/tmp/.qs-upload bs=1M count=4 2>/dev/null; curl -s -o /dev/null --max-time 10 -H 'Expect:' -w '%{http_code}|%{size_upload}|%{time_total}' --data-binary @/tmp/.qs-upload https://speed.cloudflare.com/__up 2>/dev/null; rm -f /tmp/.qs-upload"]
         stdout: StdioCollector {
             waitForEnd: true
             onStreamFinished: root.stUpOutText = text.trim()
@@ -1175,14 +1192,15 @@ PanelWindow {
         onExited: function (code) {
             root.speedTesting = false
             var parts = root.stUpOutText.split("|")
-            var http = parseInt(parts[0]) || 0
-            var up = parseInt(parts[1]) || 0
-            if (code === 0 && http === 200 && up > 0) {
-                root.ulMbps = up * 8 / 1000000
+            var up = parseFloat(parts[1]) || 0      // bytes actually sent
+            var secs = parseFloat(parts[2]) || 0    // wall clock of the attempt
+            if (up > 0 && secs > 0.5) {
+                // partial byte counts stay usable even on --max-time aborts
+                root.ulMbps = up * 8 / secs / 1000000
                 root.shownUl = root.ulMbps
                 root.stPhase = 3
             } else if (root.stPhase === 2) {
-                // upload blocked/throttled — keep the download result, mark up as n/a
+                // upload blocked — keep the download result, mark up as n/a
                 root.ulMbps = -1
                 root.shownUl = -1
                 root.stPhase = 3

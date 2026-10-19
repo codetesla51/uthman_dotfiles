@@ -35,10 +35,9 @@ PanelWindow {
     // register the same target — see MonitorSettings lesson). Bar pills
     // call toggleX()/showX(); Hyprland binds call `ipc call <target> toggle`.
 
-    // WifiPanel (1183 lines, heaviest) — Network pill + `wifi` bind
+    // WifiPanel (1183 lines, heaviest) — `wifi` bind (SUPER+H), no bar pill
     WifiPanel { id: wifiPanel; colors: palette }
     IpcHandler { target: "wifi"; function toggle(): void { wifiPanel.open = !wifiPanel.open } }
-    function toggleWifi() { wifiPanel.open = !wifiPanel.open }
 
     // SystemMonitor (544 lines) — Memory/Cpu pills + `sysmon` bind
     SystemMonitor { id: sysPanel; colors: palette }
@@ -432,10 +431,6 @@ PanelWindow {
             }
             Memory { colors: bar.colors; onOpenRequested: showSysMon() }
             Cpu { colors: bar.colors; onOpenRequested: showSysMon() }
-            Network {
-                colors: bar.colors
-                onOpenRequested: toggleWifi()
-            }
             WatchCat {
                 colors: bar.colors
                 onOpenRequested: toggleWatchCat()

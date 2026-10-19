@@ -22,7 +22,7 @@ Item {
     readonly property string essid: wifiNet ? (wifiNet.name ?? "").trim() : ""
     readonly property bool disconnected: !ethUp && essid === ""
 
-    // compact cap — small names stay small, long SSIDs elide at ~96px total
+    // compact cap — icon-only for wifi, short labels for wired/off
     readonly property int maxLabelW: 64
     implicitWidth: Math.min(label.implicitWidth + 32, root.maxLabelW + 32)
     implicitHeight: 30
@@ -46,7 +46,7 @@ Item {
             elide: Text.ElideRight
             horizontalAlignment: Text.AlignHCenter
             text: root.ethUp ? "󰈀 Ethernet"
-                : root.essid !== "" ? "󰖩 " + root.essid
+                : root.essid !== "" ? "󰖩"
                 : "󰖪 Off"
             color: root.disconnected ? colors.error
                  : root.hovered ? colors.foreground

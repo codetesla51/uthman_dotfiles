@@ -270,11 +270,11 @@ The daemon samples in 12s chunks, flags "hot" processes (over 500 KB/s for 10s+)
 | `SUPER+,` / `SUPER SHIFT+,` | Notifications / do-not-disturb |
 | `SUPER CTRL+V` / `SUPER CTRL+P` / `SUPER+N` | Clipboard window / pin clipboard to sticky shelf / system info |
 | `SUPER ALT+Space` / `SUPER SHIFT+Space` | Island style / bar sides |
-| `SUPER+Escape` / `SUPER SHIFT+Q` | Power menu / shutdown (reboot lives in the power menu) |
+| `SUPER+Escape` / `SUPER SHIFT+Q` / `SUPER SHIFT+L` | Power menu / shutdown / log out (reboot lives in the power menu) |
 | `SUPER+arrows`, `SUPER+1-0` | Focus, workspaces |
 | Fn row | Volume/brightness/mic via the quickshell OSD |
 
-The full list lives in `.config/hypr/bindings.conf` (vendored defaults alongside in `.config/hypr/vendor/`). Every panel also closes on `Esc`.
+The full list lives in `.config/hypr/bindings.lua` (vendored defaults alongside in `.config/hypr/vendor/`). Every panel also closes on `Esc`.
 
 ## Helper scripts
 

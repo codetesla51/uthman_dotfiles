@@ -21,6 +21,14 @@ output_path = "~/.config/omarchy/current/theme/colors.conf"
 input_path = "~/.config/matugen/templates/hyprland-colors.conf"
 output_path = "~/.config/theme/current/colors.conf"
 
+[templates.hyprland-lua-theme]
+input_path = "~/.config/matugen/templates/hyprland-colors.lua"
+output_path = "~/.config/theme/themes/snow_black/colors.lua"
+
+[templates.hyprland-lua-standalone]
+input_path = "~/.config/matugen/templates/hyprland-colors.lua"
+output_path = "~/.config/theme/current/colors.lua"
+
 [templates.hyprlock-current]
 input_path = "~/.config/matugen/templates/hyprlock-colors.conf"
 output_path = "~/.config/omarchy/current/theme/hyprlock.conf"

@@ -17,7 +17,7 @@ local panels = {
   { "Hardware Health", 600, 640 },
   { "Dictionary", 560, 500 },
   { "WatchCat", 920, 440 },
-  { "Control Center", 760, 600 },
+  { "Control Center", 980, 720 },
   { "PDF Library", 960, 640 },
   { "Wallshelf", 980, 700 },
   { "Pomodoro", 400, 540 },

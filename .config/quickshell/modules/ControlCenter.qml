@@ -3,33 +3,43 @@ import Quickshell.Io
 import Quickshell.Services.Mpris
 import QtQuick
 import QtQuick.Layouts
-import QtQuick.Controls
-import QtQuick.LocalStorage 2.0
 import QtQuick.Effects
 import Qt5Compat.GraphicalEffects
 
-// Control Center — bento-grid regular Hyprland window (FloatingWindow, NOT layershell overlay).
-// Opens with SUPER ALT P, behaves like a normal window: floats centered, focusable, tileable if you unfloat.
+// Control Center — "Focus" layout. Regular floating window (SUPER ALT P).
+//
+//   header   clock | weather | feels / humidity / wind
+//   middle   now playing (artist art as background) | volume, brightness, network
+//   bottom   week + pixel bot, then screen time showcase
+//
+// Height budget (720): 720 - 18 top - 18 bottom - 14 gap - 14 gap
+// = 684 content. Header 68 + middle 328 + bottom 260 = 684.
+//
+// Same integrations as before: Mpris, cava, wttr.in, wpctl/brightnessctl,
+// `screentime --export`, NetRate, PixelBot, WeatherIcon.
 FloatingWindow {
     id: root
     property var colors
     property bool open: false
 
-    property real brightness: 0.62
-    property real volume: 0.48
+    // Body copy follows the shared font knob (FiraCode Nerd Font), matching
+    // the previous control panel. Glyphs stay on the same family so the
+    // private-use icon codepoints still resolve.
+    readonly property string uiFont: colors ? colors.fontSans : "FiraCode Nerd Font"
+
+    // ── state ────────────────────────────────────────────────────────────
+    property real brightness: 0
+    property real volume: 0
     property bool muted: false
-    property var githubEvents: [
-        { type: "PushEvent", repo: "uthman/dotfiles", msg: "feat: add package manager", time: "2h ago" },
-        { type: "PullRequestEvent", repo: "uthman/dotfiles", msg: "opened PR #12", time: "5h ago" },
-        { type: "PushEvent", repo: "uthman/habit", msg: "fix: heatmap off-by-one", time: "1d ago" }
-    ]
-    property var githubHeatCells: []
-    property string weatherTemp: "25°"
-    property string weatherFeel: "26°"
-    property string weatherLoc: "Lagos"
-    property string weatherCond: "Overcast"
-    property string weatherIcon: "󰖐"
-    property string weatherKind: "cloud"
+
+    property string weatherTemp: "--°"
+    property string weatherFeel: "--°"
+    property string weatherLoc: "—"
+    property string weatherCond: "…"
+    property string weatherKind: "partly"
+    property string weatherHumidity: "—"
+    property string weatherWind: "—"
+
     function condKind(c) {
         var t = String(c || "").toLowerCase()
         if (t.indexOf("thunder") !== -1 || t.indexOf("storm") !== -1) return "storm"
@@ -37,33 +47,64 @@ FloatingWindow {
         if (t.indexOf("rain") !== -1 || t.indexOf("drizzle") !== -1 || t.indexOf("shower") !== -1) return "rain"
         if (t.indexOf("fog") !== -1 || t.indexOf("mist") !== -1 || t.indexOf("haze") !== -1) return "fog"
         if (t.indexOf("partly") !== -1 || t.indexOf("part") !== -1) return "partly"
-        if (t.indexOf("clear") !== -1) return "clear"
-        if (t.indexOf("sun") !== -1) return "clear"
+        if (t.indexOf("clear") !== -1 || t.indexOf("sun") !== -1) return "clear"
         if (t.indexOf("cloud") !== -1 || t.indexOf("overcast") !== -1) return "cloud"
         return "partly"
-    }
-    property string weatherHumidity: "87%"
-    property string weatherWind: "22 km/h"
-    property string weatherHigh: "26°"
-    property string weatherLow: "25°"
-    function condGlyph(c) {
-        var t = String(c || "").toLowerCase()
-        if (t.indexOf("thunder") !== -1 || t.indexOf("storm") !== -1) return "󰙾"
-        if (t.indexOf("snow") !== -1 || t.indexOf("sleet") !== -1 || t.indexOf("hail") !== -1) return "󰖘"
-        if (t.indexOf("rain") !== -1 || t.indexOf("drizzle") !== -1 || t.indexOf("shower") !== -1) return "󰖗"
-        if (t.indexOf("fog") !== -1 || t.indexOf("mist") !== -1 || t.indexOf("haze") !== -1) return "󰖑"
-        if (t.indexOf("clear") !== -1) return "󰖙"
-        if (t.indexOf("sun") !== -1) return "󰖙"
-        if (t.indexOf("partly") !== -1 || t.indexOf("part") !== -1) return "󰖕"
-        if (t.indexOf("cloud") !== -1 || t.indexOf("overcast") !== -1) return "󰖐"
-        return "󰖕"
     }
     function hiResArt(u) {
         var s = String(u || "")
         if (s.indexOf("googleusercontent.com") === -1) return s
         return s.replace(/([=&])w\d+-h\d+([-_a-z0-9]*)/gi, "$1w640-h640")
     }
+    function mix(a, b, t) {
+        return Qt.rgba(a.r + (b.r - a.r) * t, a.g + (b.g - a.g) * t, a.b + (b.b - a.b) * t, 1)
+    }
+    function fmtClock(sec) {
+        var s = Math.floor(sec); var m = Math.floor(s / 60); s = s % 60
+        return m + ":" + (s < 10 ? "0" : "") + s
+    }
+    function fmtHM(secs) {
+        var m = Math.round(secs / 60)
+        return Math.floor(m / 60) + "h " + (m % 60 < 10 ? "0" : "") + (m % 60) + "m"
+    }
 
+    // ── clock + week ─────────────────────────────────────────────────────
+    property string clockText: "--:--"
+    Timer {
+        interval: 1000; running: root.open; repeat: true; triggeredOnStart: true
+        onTriggered: {
+            var n = new Date()
+            root.clockText = Qt.formatTime(n, "HH:mm")
+        }
+    }
+    property var weekDays: []
+    property string monthLabel: ""
+    property string weekLabel: ""
+    function isoWeek(d) {
+        var t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()))
+        var day = (t.getUTCDay() + 6) % 7
+        t.setUTCDate(t.getUTCDate() - day + 3)
+        var first = new Date(Date.UTC(t.getUTCFullYear(), 0, 4))
+        var fday = (first.getUTCDay() + 6) % 7
+        first.setUTCDate(first.getUTCDate() - fday + 3)
+        return 1 + Math.round((t - first) / (7 * 864e5))
+    }
+    function buildWeek() {
+        var n = new Date()
+        var off = (n.getDay() + 6) % 7
+        var mon = new Date(n.getFullYear(), n.getMonth(), n.getDate() - off)
+        var names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+        var out = []
+        for (var i = 0; i < 7; i++) {
+            var d = new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + i)
+            out.push({ dow: names[i], day: d.getDate(), today: i === off, wknd: i >= 5 })
+        }
+        weekDays = out
+        monthLabel = Qt.formatDate(n, "MMMM yyyy")
+        weekLabel = "Week " + isoWeek(n)
+    }
+
+    // ── media ────────────────────────────────────────────────────────────
     property var player: Mpris.players.values.find(function(p){ return p.isPlaying }) || Mpris.players.values[0] || null
     readonly property bool hasPlayer: player !== null
     readonly property bool isPlaying: hasPlayer && player.playbackState === MprisPlaybackState.Playing
@@ -71,54 +112,22 @@ FloatingWindow {
     property string npArtist: {
         if (!hasPlayer) return ""
         var a = player.trackArtist
-        return a && a.length>0 ? a : "Unknown artist"
+        return a && a.length > 0 ? a : "Unknown artist"
     }
     property real npPos: {
-        if (!hasPlayer || !player.length || player.length<=0) return 0.38
+        if (!hasPlayer || !player.length || player.length <= 0) return 0
         return Math.max(0, Math.min(1, player.position / player.length))
     }
-    property string npCur: {
-        if (!hasPlayer || player.length<=0) return "1:22"
-        var s = Math.floor(player.position); var m=Math.floor(s/60); s=s%60; return m+":"+(s<10?"0":"")+s
-    }
-    property string npTot: {
-        if (!hasPlayer || player.length<=0) return "3:20"
-        var s = Math.floor(player.length); var m=Math.floor(s/60); s=s%60; return m+":"+(s<10?"0":"")+s
-    }
-    // segmented seekbar — 44 bars, played stretch lit, playhead bounces while
-    // playing. Heights are a fixed pseudo-random shape, same every load.
-    // Played bars run the theme gradient (primary -> secondary -> tertiary),
-    // same three stops the old pill fill used — never one flat color.
-    readonly property int segCount: 44
-    property real segPhase: 0
-    function segMix(a, b, t) {
-        return Qt.rgba(a.r + (b.r - a.r) * t, a.g + (b.g - a.g) * t,
-                       a.b + (b.b - a.b) * t, 1)
-    }
-    function segRamp(i, n) {
-        if (n <= 1) return colors.primary
-        var t = Math.max(0, Math.min(1, i / (n - 1)))
-        if (t < 0.5) return root.segMix(colors.primary, colors.secondary, t * 2)
-        return root.segMix(colors.secondary, colors.tertiary, (t - 0.5) * 2)
-    }
-    function segColor(i) {
-        return root.segRamp(i, Math.round(root.npPos * root.segCount))
-    }
-    function segScale(i) {
-        var n = Math.round(root.npPos * root.segCount)
-        if (root.isPlaying && i < n) {
-            if (i === n - 1) return 1.25
-            var near = Math.max(0, 1 - (n - 1 - i) / 10)
-            return 0.7 + 0.3 * Math.sin(root.segPhase * 1.6 + i * 0.55) * near + 0.3 * near
-        }
-        return 1
-    }
-    // drives the bounce; silent unless the panel is open and music is playing
-    Timer { id: segTick; interval: 50; running: root.open && root.isPlaying; repeat: true; onTriggered: root.segPhase += 0.3 }
-    // visualizer — live cava feed, embedded here (moved from SUPER ALT V window)
+    property string npCur: (!hasPlayer || player.length <= 0) ? "0:00" : fmtClock(player.position)
+    property string npTot: (!hasPlayer || player.length <= 0) ? "0:00" : fmtClock(player.length)
+    // position only ticks when asked to
+    Timer { interval: 1000; running: root.open && root.isPlaying; repeat: true; onTriggered: if (root.hasPlayer) root.player.positionChanged() }
+
+    // visualizer — live cava feed (24 values, drawn as 48 mirrored bars)
     readonly property int vizBars: 24
+    readonly property int vizDraw: 48
     property var vizLevels: []
-    function vizApply(line){
+    function vizApply(line) {
         var parts = line.trim().split(";")
         if (parts.length < root.vizBars) return
         var arr = new Array(root.vizBars)
@@ -126,90 +135,36 @@ FloatingWindow {
             arr[i] = Math.max(0, Math.min(100, parseInt(parts[i]) || 0))
         vizLevels = arr
     }
-
-    // pomodoro — moved here from CalendarPanel (SUPER ALT C retired)
-    property int timerSeconds: 25*60
-    property int timerTotal: 25*60
-    property int pomodoroWork: 25*60
-    property int pomodoroBreak: 5*60
-    property bool pomodoroIsBreak: false
-    property int pomodoroCycles: 0
-    property bool timerRunning: false
-    property real pacmanMouth: 0.25
-    function fmtPomo(s){ var m=Math.floor(s/60), sec=s%60; return (m<10?"0"+m:m)+":"+(sec<10?"0"+sec:sec) }
-    Timer { id: pacmanAnim; interval: 120; running: root.open && root.timerRunning; repeat: true; onTriggered: root.pacmanMouth = root.pacmanMouth===0.25?0.05:0.25 }
-    Timer {
-        id: pomoTick
-        interval: 1000; running: root.timerRunning; repeat: true
-        onTriggered: {
-            if (root.timerSeconds > 0) root.timerSeconds--
-            else {
-                root.timerRunning = false
-                var msg = root.pomodoroIsBreak ? "Break over — back to focus!" : "Focus done — break time!"
-                Quickshell.execDetached(["notify-send", "-u", "critical", "-a", "Pomodoro", "Pomodoro", msg])
-                Quickshell.execDetached(["sh","-c","paplay /usr/share/sounds/freedesktop/stereo/complete.oga 2>/dev/null || paplay /usr/share/sounds/freedesktop/stereo/alarm-clock-elapsed.oga 2>/dev/null || true"])
-                if (!root.pomodoroIsBreak) { root.pomodoroIsBreak = true; root.timerSeconds = root.pomodoroBreak; root.timerTotal = root.pomodoroBreak; root.timerRunning = true }
-                else { root.pomodoroIsBreak = false; root.pomodoroCycles++; root.timerSeconds = root.pomodoroWork; root.timerTotal = root.pomodoroWork }
-            }
-        }
+    function vizLevel(i) {
+        if (vizLevels.length < vizBars) return 0
+        var p = i * (vizBars - 1) / (vizDraw - 1)
+        var a = Math.floor(p), b = Math.min(vizBars - 1, a + 1)
+        return (vizLevels[a] + (vizLevels[b] - vizLevels[a]) * (p - a)) / 100
+    }
+    Process {
+        id: vizProc
+        command: ["cava", "-p", Quickshell.env("HOME") + "/.config/quickshell/scripts/cava-qs.conf"]
+        running: root.open
+        stdout: SplitParser { splitMarker: "\n"; onRead: function(line){ root.vizApply(line) } }
     }
 
-    // pet — lives only inside this card. It has a ~90px box, so anything that
-    // needs to travel or climb is meaningless here: no Walk/Run/Dash, no wall or
-    // ceiling grabs, no fall physics. The pool below is what the room allows.
-    property var petActions: ({})
-    property string petAssetsBase: Quickshell.env("HOME") + "/.config/quickshell/modules/pet/assets/"
-    property string petCurrentAction: "Stand"
-    property var petCurrentFrames: ["shime1.png","shime1a.png"]
-    property int petFrameIdx: 0
-    property bool petFacingRight: false
-    property string petBubble: ""
-    // in-place only — the sprite swaps frames where it stands, nothing moves
-    readonly property var petCalm: ["Stand","Sit","SitWithLegsUp","SitAndDangleLegs","WatchAction","WatchLoop","Sprawl","BePet","BePetDangleLegs","PetAction","PetActionDangleLegs"]
-    // bouncy in-place set — used while music plays
-    readonly property var petLively: ["PoseAction","EatBerryAction","ThrowNeedleAction","ThrowIe","Divide1","Grapple1","Grapple2","Grapple3","Grapple4"]
-    readonly property var petMusicLines: ["♪ bop!","this slaps","on beat","*nod*","ooh nice","keep it up"]
-    property var petPool: ["Stand"]
-    function rebuildPool() {
-        var want = (isPlaying && petLively.length) ? petCalm.concat(petLively) : petCalm
-        var out = []
-        for (var i=0;i<want.length;i++) if (petActions[want[i]] && petActions[want[i]].length) out.push(want[i])
-        petPool = out.length ? out : ["Stand"]
-    }
-    // music just started (or stopped) — react, don't wait for the next roll
-    onIsPlayingChanged: {
-        rebuildPool()
-        if (isPlaying && hasPlayer) {
-            var l = petMusicLines[Math.floor(Math.random()*petMusicLines.length)]
-            petBubble = hasPlayer && player.trackTitle ? l : l
-            var p = petPool[Math.floor(Math.random()*petPool.length)]
-            petCurrentAction = p
-            petCurrentFrames = petActions[p] || ["shime1.png"]
-            petFrameIdx = 0
-        } else {
-            petBubble = ""
-        }
-    }
-    function petReact() {
-        petCurrentAction = (petActions["PetAction"] && petCurrentAction !== "PetAction") ? "PetAction" : "PoseAction"
-        petCurrentFrames = petActions[petCurrentAction] || ["shime1.png"]
-        petFrameIdx = 0
-        petFacingRight = !petFacingRight
-        petBubble = isPlaying ? petMusicLines[Math.floor(Math.random()*petMusicLines.length)] : "heh"
-    }
-    property var topActivities: [
-        {app: "kitty", secs: 5400},
-        {app: "firefox", secs: 3200},
-        {app: "code", secs: 1800},
-        {app: "spotify", secs: 900}
-    ]
+    // ── screen time (same `screentime` daemon as ScreenTime.qml) ─────────
+    // Defaults are empty on purpose: the showcase only shows measured data.
     property var activityLast7: []
-    property real activityMax: 1
-    function fmtDurShort(s){ if(s<60) return s+"s"; var m=Math.floor(s/60); if(m<60) return m+"m"; var h=Math.floor(m/60); var rm=m%60; return h+"h"+(rm>0?" "+rm+"m":"") }
-    // activity comes from the same `screentime` Go daemon as ScreenTime.qml.
-    // was LocalStorage qs_screentime/app_time (dead table) — bars stayed empty / out of sync.
-    function loadTopActivities(){ topAppsFetcher.running = true }
-    function loadActivityLast7(){ activityFetcher.running = true }
+    property int chartHi: -1
+    readonly property real weekMax: {
+        var m = 1
+        for (var i = 0; i < activityLast7.length; i++)
+            if (activityLast7[i].secs > m) m = activityLast7[i].secs
+        return m
+    }
+    readonly property real avgDay: {
+        if (activityLast7.length === 0) return 0
+        var total = 0
+        for (var i = 0; i < activityLast7.length; i++) total += activityLast7[i].secs
+        return total / activityLast7.length
+    }
+    readonly property real usageToday: activityLast7.length > 0 ? activityLast7[activityLast7.length - 1].secs : 0
     Process {
         id: activityFetcher
         command: ["screentime", "--export", "all"]
@@ -220,92 +175,34 @@ FloatingWindow {
                     var j = JSON.parse(text)
                     var src = j.last7 || []
                     var days = []
-                    var maxS = 1
                     for (var i = 0; i < src.length; i++) {
-                        var s = src[i].secs || 0
-                        if (s > maxS) maxS = s
-                        var d = new Date(src[i].day + "T00:00:00")
-                        days.push({date: d, dow: "MTWTFSS"[(d.getDay()+6)%7], secs: s, today: !!src[i].today})
+                        days.push({
+                            display: src[i].display || src[i].day || "",
+                            secs: src[i].secs || 0,
+                            today: !!src[i].today
+                        })
                     }
-                    if (days.length > 0) {
-                        root.activityLast7 = days
-                        root.activityMax = maxS
-                    }
-                } catch (e) {}
-            }
-        }
-    }
-    Process {
-        id: topAppsFetcher
-        command: ["screentime", "--export", "today"]
-        stdout: StdioCollector {
-            waitForEnd: true
-            onStreamFinished: {
-                try {
-                    var j = JSON.parse(text)
-                    var by = j.by_app || {}
-                    var arr = []
-                    for (var k in by) arr.push({app: k, secs: by[k]})
-                    arr.sort(function(a, b) { return b.secs - a.secs })
-                    if (arr.length > 0) root.topActivities = arr.slice(0, 5)
+                    if (days.length > 0) root.activityLast7 = days
                 } catch (e) {}
             }
         }
     }
 
-    // mini calendar state: offset in months from today, rebuilt on open and on flip
-    property int calOffset: 0
-    property var calCells: []
-    property string calTitle: ""
-    function rebuildCal() {
-        var now = new Date()
-        var base = new Date(now.getFullYear(), now.getMonth() + root.calOffset, 1)
-        var y = base.getFullYear(), m = base.getMonth()
-        var first = (new Date(y, m, 1).getDay() + 6) % 7
-        var dim = new Date(y, m + 1, 0).getDate()
-        var cells = []
-        for (var i = 0; i < first; i++) cells.push({ d: 0, today: false, wd: i })
-        for (var d = 1; d <= dim; d++) cells.push({ d: d, today: root.calOffset === 0 && d === now.getDate(), wd: (first + d - 1) % 7 })
-        root.calCells = cells
-        root.calTitle = Qt.formatDate(base, "MMMM yyyy")
-    }
-    function isoWeek(d) {
-        var t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()))
-        var day = (t.getUTCDay() + 6) % 7
-        t.setUTCDate(t.getUTCDate() - day + 3)
-        var first = new Date(Date.UTC(t.getUTCFullYear(), 0, 4))
-        var fday = (first.getUTCDay() + 6) % 7
-        first.setUTCDate(first.getUTCDate() - fday + 3)
-        return 1 + Math.round((t - first) / (7 * 864e5))
-    }
+    // ── system controls ──────────────────────────────────────────────────
+    property real _volSent: -1
+    property real _briSent: -1
     function setBrightness(v){ Quickshell.execDetached(["sh","-c","brightnessctl set "+Math.round(v*100)+"% >/dev/null 2>&1 &"]) }
-    Process {
-        id: weatherProc
-        command: ["sh", "-c", "curl -s --max-time 8 'wttr.in/Lagos,Nigeria?format=j1' 2>/dev/null"]
-        stdout: StdioCollector {
-            waitForEnd: true
-            onStreamFinished: {
-                try {
-                    var j = JSON.parse(text)
-                    var cur = j.current_condition[0]
-                    root.weatherTemp = cur.temp_C + "°"
-                    root.weatherFeel = cur.FeelsLikeC + "°"
-                    root.weatherCond = cur.weatherDesc[0].value.trim()
-                    root.weatherIcon = root.condGlyph(root.weatherCond)
-                    root.weatherKind = root.condKind(root.weatherCond)
-                    root.weatherHumidity = (cur.humidity || "--") + "%"
-                    root.weatherWind = (cur.windspeedKmph || "--") + " km/h"
-                    if (j.weather && j.weather[0]) {
-                        root.weatherHigh = j.weather[0].maxtempC + "°"
-                        root.weatherLow = j.weather[0].mintempC + "°"
-                    }
-                    var area = j.nearest_area[0]
-                    if (area) root.weatherLoc = area.areaName[0].value
-                } catch (e) {}
-            }
-        }
-    }
     function setVolume(v){ Quickshell.execDetached(["sh","-c","wpctl set-volume @DEFAULT_AUDIO_SINK@ "+v.toFixed(2)+" >/dev/null 2>&1 || pactl set-sink-volume @DEFAULT_SINK@ "+Math.round(v*100)+"% >/dev/null 2>&1 &"]) }
+    function toggleMute(){ root.muted = !root.muted; Quickshell.execDetached(["sh","-c","wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle >/dev/null 2>&1 &"]) }
+    function dragVolume(v) {
+        if (root.muted) root.toggleMute()
+        root.volume = v
+        if (Math.abs(v - _volSent) > 0.05) { _volSent = v; root.setVolume(v) }
+    }
+    function dragBrightness(v) {
+        root.brightness = Math.max(0.01, v)
+        if (Math.abs(v - _briSent) > 0.05) { _briSent = v; root.setBrightness(root.brightness) }
+    }
     Process {
         id: volProbe
         command: ["sh", "-c", "echo \"v=$(wpctl get-volume @DEFAULT_AUDIO_SINK@ 2>/dev/null);b=$(brightnessctl g 2>/dev/null):$(brightnessctl m 2>/dev/null)\""]
@@ -322,866 +219,742 @@ FloatingWindow {
             }
         }
     }
-    function toggleMute(){ root.muted = !root.muted; Quickshell.execDetached(["sh","-c","wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle >/dev/null 2>&1 &"]) }
-
-    title: "Control Center"
-    implicitWidth: 760
-    implicitHeight: 580
-    minimumSize: Qt.size(700, 560)
-    maximumSize: Qt.size(820, 640)
-    color: "transparent"
-    visible: root.open || closeAnim.running
-
-    IpcHandler { target: "controlcenter"; function toggle(): void { root.open = !root.open } }
-
-    onOpenChanged: if(open) { ghUserProc.running=true; weatherProc.running=true; volProbe.running=true; root.calOffset=0; root.rebuildCal(); root.loadTopActivities(); root.loadActivityLast7(); Qt.callLater(function(){ card.forceActiveFocus() }); openAnim.restart() } else closeAnim.restart()
-
-    // pet action set — only the in-place ones, see petCalm/petLively
-    FileView {
-        id: petActionsFile
-        path: Quickshell.env("HOME") + "/.config/quickshell/modules/pet/config/pet-actions.json"
-        printErrors: false
-        onLoaded: {
-            try {
-                root.petActions = JSON.parse(text())
-                rebuildPool()
-                if (root.petActions[root.petCurrentAction]) root.petCurrentFrames = root.petActions[root.petCurrentAction]
-            } catch(e){}
-        }
-    }
-    Timer { interval: 2600; running: root.open; repeat: true; onTriggered: {
-        if (root.petPool.length === 0) return
-        var pick = root.petPool[Math.floor(Math.random()*root.petPool.length)]
-        root.petCurrentAction = pick
-        root.petCurrentFrames = root.petActions[pick] || ["shime1.png"]
-        root.petFrameIdx = 0
-        root.petFacingRight = Math.random()>0.5
-        // while music plays, murmur about it now and then
-        if (root.isPlaying && Math.random() < 0.4) {
-            root.petBubble = root.petMusicLines[Math.floor(Math.random()*root.petMusicLines.length)]
-        }
-    } }
-    Timer { interval: 180; running: root.open; repeat: true; onTriggered: {
-        if(root.petCurrentFrames.length>0) root.petFrameIdx=(root.petFrameIdx+1)%root.petCurrentFrames.length
-    } }
-    Timer { interval: 4000; running: root.open; repeat: true; onTriggered: { if (root.petBubble !== "") root.petBubble = "" } }
-
-    // visualizer feed — cava raw ascii, runs only while control center is open
     Process {
-        id: vizProc
-        command: ["cava", "-p", Quickshell.env("HOME") + "/.config/quickshell/scripts/cava-qs.conf"]
-        running: root.open
-        stdout: SplitParser {
-            splitMarker: "\n"
-            onRead: function(line){ root.vizApply(line) }
+        id: weatherProc
+        command: ["sh", "-c", "curl -s --max-time 8 'wttr.in/Lagos,Nigeria?format=j1' 2>/dev/null"]
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: {
+                try {
+                    var j = JSON.parse(text)
+                    var cur = j.current_condition[0]
+                    root.weatherTemp = cur.temp_C + "°"
+                    root.weatherFeel = cur.FeelsLikeC + "°"
+                    root.weatherCond = cur.weatherDesc[0].value.trim()
+                    root.weatherKind = root.condKind(root.weatherCond)
+                    root.weatherHumidity = (cur.humidity || "--") + "%"
+                    root.weatherWind = (cur.windspeedKmph || "--") + " km/h"
+                    var area = j.nearest_area[0]
+                    if (area) root.weatherLoc = area.areaName[0].value
+                } catch (e) {}
+            }
         }
-    }
-    // github — real events via gh cli
-    property string ghUser: "uthman"
-    Process {
-        id: ghUserProc
-        command: ["sh","-c","gh api user --jq .login 2>/dev/null | tr -d '\\n'"]
-        stdout: StdioCollector { waitForEnd:true; onStreamFinished: { var u=text.trim(); if(u) { root.ghUser=u; ghProc.running=true } } }
-    }
-    Process {
-        id: ghProc
-        command: ["sh","-c","gh api /users/"+root.ghUser+"/events --paginate 2>/dev/null | jq -r '.[0:100] | .[] | \"\\(.created_at)\"' 2>/dev/null | head -100"]
-        stdout: StdioCollector { waitForEnd:true; onStreamFinished: {
-            var lines=text.trim().split("\n")
-            // build heatmap like ScreenTime: 105 cells, 15x7
-            var byDay={}
-            for(var i=0;i<lines.length;i++){
-                var dstr=lines[i].trim().slice(0,10)
-                if(!dstr) continue
-                byDay[dstr]=(byDay[dstr]||0)+1
-            }
-            var now=new Date(); now.setHours(0,0,0,0)
-            var dow=(now.getDay()+6)%7
-            var start=new Date(now); start.setDate(now.getDate()-(14*7+dow))
-            var cells=[]
-            for(var c=0;c<105;c++){
-                var d=new Date(start); d.setDate(start.getDate()+c)
-                var ds=Qt.formatDate(d,"yyyy-MM-dd")
-                var cnt=byDay[ds]||0
-                cells.push({count:cnt, future: d>now, dateStr: ds})
-            }
-            root.githubHeatCells=cells
-            // also keep githubEvents list for fallback (first 3)
-            var arr=[]
-            for(var k=0;k<Math.min(3, lines.length);k++){
-                // reuse the same lines but need repo/type - fetch separately if needed
-                // keep existing githubEvents as is for now
-            }
-        }}
     }
 
     NetRate { id: netRate }
 
+    // ── window ───────────────────────────────────────────────────────────
+    title: "Control Center"
+    implicitWidth: 980
+    implicitHeight: 720
+    minimumSize: Qt.size(980, 720)
+    maximumSize: Qt.size(980, 720)
+    color: "transparent"
+    visible: root.open || closeAnim.running
+
+    onOpenChanged: if (open) {
+        weatherProc.running = true; volProbe.running = true
+        activityFetcher.running = true
+        root.buildWeek()
+        Qt.callLater(function(){ card.forceActiveFocus() })
+        openAnim.restart()
+    } else closeAnim.restart()
+
+    // ── small building blocks ────────────────────────────────────────────
+    component Card: Rectangle {
+        radius: 16
+        color: root.colors.alpha(root.colors.surface, 0.45)
+        border.width: 1
+        border.color: root.colors.alpha(root.colors.outline, 0.10)
+    }
+
+    // 20-segment slider. Drag, click or scroll.
+    component SegBar: Item {
+        id: sb
+        property real value: 0
+        property int count: 20
+        property color onColor
+        property color offColor
+        signal moved(real v)
+        signal released()
+        readonly property int lit: Math.round(value * count)
+        height: 24
+        Row {
+            anchors.fill: parent
+            spacing: 3
+            Repeater {
+                model: sb.count
+                Rectangle {
+                    width: (sb.width - (sb.count - 1) * 3) / sb.count
+                    height: sb.height
+                    radius: 3
+                    color: index < sb.lit ? sb.onColor : sb.offColor
+                    Behavior on color { ColorAnimation { duration: 100 } }
+                }
+            }
+        }
+        MouseArea {
+            anchors.fill: parent
+            cursorShape: Qt.PointingHandCursor
+            function setFrom(x) { sb.moved(Math.max(0, Math.min(1, x / width))) }
+            onPressed: function(mouse){ setFrom(mouse.x) }
+            onPositionChanged: function(mouse){ if (pressed) setFrom(mouse.x) }
+            onReleased: sb.released()
+            onWheel: function(w){ sb.moved(Math.max(0, Math.min(1, sb.value + (w.angleDelta.y > 0 ? 0.05 : -0.05)))); sb.released() }
+        }
+    }
+
+    component Glyph: Text {
+        font.family: root.colors ? root.colors.fontSans : "FiraCode Nerd Font"
+        font.pixelSize: 18
+        verticalAlignment: Text.AlignVCenter
+    }
+
+    // ── layout ───────────────────────────────────────────────────────────
     Rectangle {
         id: card
         anchors.fill: parent
-        radius: 20
+        radius: 16
         color: colors.alpha(colors.surface, 0.52)
         border.width: 1
         border.color: colors.alpha(colors.outline, 0.15)
-        // bezier pair — open pops with overshoot bounce, close hurries out
-        ParallelAnimation {
-            id: openAnim
-            NumberAnimation { target: card; property: "opacity"; from: 0; to: 1; duration: 220; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
-            NumberAnimation { target: card; property: "scale"; from: 0.94; to: 1; duration: 280; easing.type: Easing.Bezier; easing.bezierCurve: [0.34, 1.35, 0.64, 1] }
-        }
-        ParallelAnimation {
-            id: closeAnim
-            NumberAnimation { target: card; property: "opacity"; to: 0; duration: 160; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
-            NumberAnimation { target: card; property: "scale"; to: 0.94; duration: 180; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
-        }
+        clip: true
         focus: root.open
         Keys.onEscapePressed: root.open = false
 
-        ColumnLayout {
-            anchors.fill: parent
-            anchors.margins: 10
-            spacing: 6
+        ParallelAnimation {
+            id: openAnim
+            NumberAnimation { target: card; property: "opacity"; from: 0; to: 1; duration: 220; easing.type: Easing.BezierSpline; easing.bezierCurve: [0.2, 0.8, 0.2, 1, 1, 1] }
+            NumberAnimation { target: card; property: "scale"; from: 0.94; to: 1; duration: 280; easing.type: Easing.BezierSpline; easing.bezierCurve: [0.34, 1.35, 0.64, 1, 1, 1] }
+        }
+        ParallelAnimation {
+            id: closeAnim
+            NumberAnimation { target: card; property: "opacity"; to: 0; duration: 160; easing.type: Easing.BezierSpline; easing.bezierCurve: [0.2, 0.8, 0.2, 1, 1, 1] }
+            NumberAnimation { target: card; property: "scale"; to: 0.94; duration: 180; easing.type: Easing.BezierSpline; easing.bezierCurve: [0.2, 0.8, 0.2, 1, 1, 1] }
+        }
 
-            // ── HERO — Now Playing (tall left) | Weather ↑ Pomodoro ↓ (stacked right) ──
-            RowLayout {
+        ColumnLayout {
+            id: mainColumn
+            anchors.fill: parent
+            anchors.margins: 18
+            spacing: 14
+
+            // ── HEADER ──
+            Card {
+                id: headerCard
                 Layout.fillWidth: true
-                Layout.preferredHeight: 144
-                spacing: 8
-                // Now Playing — tall left, stretches
-                Rectangle {
-                    Layout.fillWidth: true; Layout.fillHeight: true
-                    radius: 16
+                Layout.minimumHeight: 68
+                Layout.preferredHeight: 68
+                Layout.maximumHeight: 68
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: 26; anchors.rightMargin: 26
+                    spacing: 24
+
+                    Text {
+                        text: root.clockText
+                        color: colors.foreground
+                        font.family: "Iceberg"; font.pixelSize: 34; font.weight: Font.Normal
+                        Layout.alignment: Qt.AlignVCenter
+                    }
+                    Rectangle { width: 1; height: 28; color: colors.alpha(colors.primary, 0.16) }
+                    RowLayout {
+                        spacing: 8
+                        WeatherIcon {
+                            width: 28; height: 28
+                            kind: root.weatherKind
+                            animate: root.open
+                            tint: colors.tertiary
+                            tintStrength: 0.5
+                        }
+                        Text { text: root.weatherTemp; color: colors.foreground; font.family: root.uiFont; font.pixelSize: 16; font.weight: Font.DemiBold }
+                        Text { text: root.weatherCond + " · " + root.weatherLoc; color: colors.alpha(colors.foreground, 0.68); font.family: root.uiFont; font.pixelSize: 13 }
+                    }
+                    Item { Layout.fillWidth: true }
+                    Repeater {
+                        model: [
+                            { g: "󰔏", l: "Feels", v: root.weatherFeel, c: colors.tertiary },
+                            { g: "󰸊", l: "Humidity", v: root.weatherHumidity, c: colors.primary },
+                            { g: "󰖝", l: "Wind", v: root.weatherWind, c: colors.primary }
+                        ]
+                        delegate: RowLayout {
+                            required property var modelData
+                            spacing: 8
+                            Glyph { text: modelData.g; color: modelData.c; font.pixelSize: 20 }
+                            ColumnLayout {
+                                spacing: 0
+                                Text { text: modelData.l; color: colors.alpha(colors.foreground, 0.68); font.family: root.uiFont; font.pixelSize: 12 }
+                                Text { text: modelData.v; color: colors.foreground; font.family: root.uiFont; font.pixelSize: 14; font.weight: Font.DemiBold }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ── MIDDLE ──
+            RowLayout {
+                id: midRow
+                Layout.fillWidth: true
+                Layout.minimumHeight: 328
+                Layout.preferredHeight: 328
+                Layout.maximumHeight: 328
+                spacing: 14
+
+                // Now playing — artist picture is the card background
+                Card {
+                    id: npCard
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
                     clip: true
-                    color: colors.alpha(colors.surface, 0.4)
-                    border.width: 1; border.color: colors.alpha(colors.outline, 0.14)
+
                     Item {
-                        id: npArtLayer
+                        id: npBgLayer
                         anchors.fill: parent
-                        visible: root.hasPlayer && root.player.trackArtUrl !== ""
                         layer.enabled: true
                         layer.effect: OpacityMask {
-                            maskSource: Rectangle { width: npArtLayer.width; height: npArtLayer.height; radius: 16 }
+                            maskSource: Rectangle { width: npBgLayer.width; height: npBgLayer.height; radius: 16 }
                         }
                         Image {
-                            id: npBg
                             anchors.fill: parent
                             source: root.hasPlayer ? root.hiResArt(root.player.trackArtUrl) : ""
                             fillMode: Image.PreserveAspectCrop
                             asynchronous: true
                             cache: true
                             mipmap: true
-                            smooth: true
                             sourceSize: Qt.size(640, 640)
-                            layer.enabled: true
-                            layer.effect: MultiEffect {
-                                blurEnabled: false
-                                saturation: 0.85
-                                brightness: -0.08
-                            }
+                            visible: status === Image.Ready
                         }
                         Rectangle {
                             anchors.fill: parent
                             gradient: Gradient {
-                                GradientStop { position: 0; color: colors.alpha(colors.background, 0.5) }
-                                GradientStop { position: 0.55; color: colors.alpha(colors.background, 0.4) }
-                                GradientStop { position: 1; color: colors.alpha(colors.background, 0.85) }
+                                GradientStop { position: 0.0; color: colors.alpha(colors.background, 0.45) }
+                                GradientStop { position: 0.4; color: colors.alpha(colors.background, 0.55) }
+                                GradientStop { position: 1.0; color: colors.alpha(colors.background, 0.92) }
                             }
                         }
                     }
-                    ColumnLayout {
-                        anchors.fill: parent; anchors.margins: 12; spacing: 4
-                        RowLayout {
-                            Layout.fillWidth: true
-                            Text { text: "NOW PLAYING"; color: colors.alpha(colors.outline,0.55); font.family: colors.fontSans; font.pixelSize: 7; font.weight: Font.Bold; font.letterSpacing: 1.3 }
-                            Item { Layout.fillWidth: true }
-                            Text { text: root.isPlaying ? "▶ PLAYING" : "PAUSED"; color: root.isPlaying ? colors.primary : colors.alpha(colors.outline,0.45); font.family: colors.fontSans; font.pixelSize: 7; font.weight: Font.Bold; font.letterSpacing: 1 }
-                        }
-                        Item { Layout.fillHeight: true }
-                        ColumnLayout {
-                            Layout.fillWidth: true; spacing: 5
-                            Text {
-                                Layout.fillWidth: true
-                                text: root.npTitle
-                                color: root.hasPlayer?colors.foreground:colors.alpha(colors.foreground,0.5)
-                                font.family: colors.fontSans; font.pixelSize: 14; font.weight: Font.ExtraBold; elide: Text.ElideRight
-                            }
-                            Text { text: root.hasPlayer?root.npArtist:"No player"; color: colors.alpha(colors.foreground,0.7); font.family: colors.fontSans; font.pixelSize: 9; elide: Text.ElideRight; Layout.fillWidth: true }
-                            Item {
-                                id: segStrip
-                                Layout.fillWidth: true; Layout.preferredHeight: 28
-                                function segSeek(x) {
-                                    if (!root.hasPlayer || !root.player.length || !root.player.canSeek) return
-                                    root.player.position = Math.max(0, Math.min(1, x / segStrip.width)) * root.player.length
-                                }
-                                Row {
-                                    id: segRow
-                                    anchors.fill: parent
-                                    spacing: 3
-                                    Repeater {
-                                        model: root.segCount
-                                        Rectangle {
-                                            width: Math.max(1, (segRow.width - (root.segCount - 1) * 3) / root.segCount)
-                                            height: segStrip.height * (0.30 + Math.abs(Math.sin(index * 0.7) * Math.cos(index * 0.23)) * 0.70)
-                                            anchors.verticalCenter: parent.verticalCenter
-                                            radius: 2
-                                            color: index < Math.round(root.npPos * root.segCount) ? root.segColor(index) : colors.alpha(colors.surfaceVariant, 0.55)
-                                            transform: Scale {
-                                                xScale: 1
-                                                yScale: root.segScale(index)
-                                                origin.x: width / 2
-                                                origin.y: height / 2
-                                            }
-                                        }
-                                    }
-                                }
-                                MouseArea {
-                                    anchors.fill: parent
-                                    onPressed: function(mouse){ segStrip.segSeek(mouse.x) }
-                                    onPositionChanged: function(mouse){ if (pressed) segStrip.segSeek(mouse.x) }
-                                }
-                            }
-                                Item { Layout.preferredHeight: 8 }
-                                RowLayout {
-                                    Layout.fillWidth: true
-                                    Text { text: root.npCur; Layout.alignment: Qt.AlignVCenter; color: colors.alpha(colors.outline,0.7); font.family: colors.fontSans; font.pixelSize: 8 }
-                                    Item { Layout.fillWidth: true }
-                                    RowLayout { spacing: 7
-                                        Rectangle { width: 30; height: 30; radius: 15
-                                            color: (root.hasPlayer && root.player.shuffle) ? colors.alpha(colors.tertiary,0.2) : shufMa.containsMouse ? colors.alpha(colors.surfaceVariant,0.4) : colors.alpha(colors.surface,0.55)
-                                            border.width: 1; border.color: (root.hasPlayer && root.player.shuffle) ? colors.alpha(colors.tertiary,0.45) : colors.alpha(colors.outline,0.15)
-                                            scale: shufMa.containsMouse ? 1.1 : 1
-                                            Behavior on scale { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
-                                            Text { anchors.centerIn: parent; text: "󰒝"; color: (root.hasPlayer && root.player.shuffle) ? colors.tertiary : colors.alpha(colors.foreground,0.7); font.family: colors.fontSans; font.pixelSize: 12 }
-                                            MouseArea { id: shufMa; anchors.fill: parent; hoverEnabled: true; onClicked: if(root.hasPlayer) root.player.shuffle = !root.player.shuffle } }
-                                        Rectangle { width: 32; height: 32; radius: 16
-                                            color: prevMa.containsMouse ? colors.alpha(colors.primary,0.16) : colors.alpha(colors.surface,0.55)
-                                            border.width: 1; border.color: prevMa.containsMouse ? colors.alpha(colors.primary,0.4) : colors.alpha(colors.outline,0.15)
-                                            scale: prevMa.containsMouse ? 1.1 : 1
-                                            Behavior on scale { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
-                                            Text { anchors.centerIn: parent; text: "󰒮"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 12 }
-                                            MouseArea { id: prevMa; anchors.fill: parent; hoverEnabled: true; onClicked: if(root.hasPlayer && root.player.canGoPrevious) root.player.previous() } }
-                                        Rectangle {
-                                            width: 44; height: 44; radius: 22
-                                            color: playMa.containsMouse ? colors.primary : colors.alpha(colors.primary,0.22)
-                                            border.width: 1; border.color: root.isPlaying ? colors.alpha(colors.primary,0.65) : colors.alpha(colors.primary,0.4)
-                                            scale: playMa.containsMouse ? 1.08 : 1
-                                            Behavior on scale { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
-                                            Text { anchors.centerIn: parent; text: root.isPlaying?"󰏤":"󰐊"; color: playMa.containsMouse ? colors.background : colors.primary; font.family: colors.fontSans; font.pixelSize: 17 }
-                                            MouseArea { id: playMa; anchors.fill: parent; hoverEnabled:true; onClicked: if(root.hasPlayer && root.player.canTogglePlaying) root.player.togglePlaying() }
-                                        }
-                                        Rectangle { width: 32; height: 32; radius: 16
-                                            color: nextMa.containsMouse ? colors.alpha(colors.primary,0.16) : colors.alpha(colors.surface,0.55)
-                                            border.width: 1; border.color: nextMa.containsMouse ? colors.alpha(colors.primary,0.4) : colors.alpha(colors.outline,0.15)
-                                            scale: nextMa.containsMouse ? 1.1 : 1
-                                            Behavior on scale { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
-                                            Text { anchors.centerIn: parent; text: "󰒭"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 12 }
-                                            MouseArea { id: nextMa; anchors.fill: parent; hoverEnabled: true; onClicked: if(root.hasPlayer && root.player.canGoNext) root.player.next() } }
-                                        Rectangle { width: 30; height: 30; radius: 15
-                                            color: (root.hasPlayer && root.player.loopState!==0) ? colors.alpha(colors.tertiary,0.2) : loopMa.containsMouse ? colors.alpha(colors.surfaceVariant,0.4) : colors.alpha(colors.surface,0.55)
-                                            border.width: 1; border.color: (root.hasPlayer && root.player.loopState!==0) ? colors.alpha(colors.tertiary,0.45) : colors.alpha(colors.outline,0.15)
-                                            scale: loopMa.containsMouse ? 1.1 : 1
-                                            Behavior on scale { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
-                                            Text { anchors.centerIn: parent; text: (root.hasPlayer && root.player.loopState===1) ? "󰑘" : "󰑖"; color: (root.hasPlayer && root.player.loopState!==0) ? colors.tertiary : colors.alpha(colors.foreground,0.7); font.family: colors.fontSans; font.pixelSize: 12 }
-                                            MouseArea { id: loopMa; anchors.fill: parent; hoverEnabled: true; onClicked: if(root.hasPlayer){ var s=root.player.loopState; root.player.loopState = s===0?2:(s===2?1:0) } } }
-                                    }
-                                    Item { Layout.fillWidth: true }
-                                    Text { text: root.npTot; Layout.alignment: Qt.AlignVCenter; color: colors.alpha(colors.outline,0.7); font.family: colors.fontSans; font.pixelSize: 8 }
-                                }
-                        }
-                        Item { Layout.fillHeight: true }
-                    }
-                }
-                // Weather — hero card, fills its 260px allocation edge-to-edge
-                Rectangle {
-                    Layout.preferredWidth: 260; Layout.maximumWidth: 260; Layout.minimumWidth: 260
-                    Layout.fillHeight: true
-                    radius: 16
-                    clip: true
-                    gradient: Gradient {
-                        GradientStop { position: 0; color: colors.alpha(colors.tertiary, 0.22) }
-                        GradientStop { position: 0.55; color: colors.alpha(colors.tertiary, 0.09) }
-                        GradientStop { position: 1; color: colors.alpha(colors.surface, 0.55) }
-                    }
-                    border.width: 1; border.color: colors.alpha(colors.tertiary, 0.30)
-                    // giant ghost icon backdrop — kills the empty feel, adds depth
-                    WeatherIcon {
-                        anchors.right: parent.right; anchors.top: parent.top
-                        anchors.rightMargin: -18; anchors.topMargin: -18
-                        width: 110; height: 110
-                        kind: root.weatherKind
-                        animate: false
-                        opacity: 0.13
-                        tint: colors.tertiary
-                        tintStrength: 0.2
-                    }
-                    ColumnLayout {
-                        anchors.fill: parent; anchors.margins: 11; spacing: 2
-                        RowLayout { spacing: 6; Layout.fillWidth: true
-                            Text { text: "WEATHER"; color: colors.alpha(colors.foreground,0.62); font.family: colors.fontSans; font.pixelSize: 7; font.weight: Font.Bold; font.letterSpacing: 1.4; Layout.alignment: Qt.AlignVCenter }
-                            Item { Layout.fillWidth: true }
-                            Rectangle {
-                                radius: 9
-                                Layout.alignment: Qt.AlignVCenter
-                                Layout.maximumWidth: 140
-                                width: Math.min(locText.implicitWidth + 20, 140); height: 20
-                                color: colors.alpha(colors.tertiary, 0.18)
-                                border.width: 1; border.color: colors.alpha(colors.tertiary, 0.42)
-                                Text { id: locText; anchors.centerIn: parent; width: parent.width - 12; elide: Text.ElideRight; horizontalAlignment: Text.AlignHCenter; text: "󰍎 " + root.weatherLoc; color: colors.tertiary; font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold }
-                            }
-                        }
-                        RowLayout { Layout.fillWidth: true; Layout.topMargin: 6; spacing: 10
-                            Rectangle {
-                                id: wxTile
-                                width: 56; height: 56; radius: 15
-                                Layout.alignment: Qt.AlignVCenter
-                                color: colors.alpha(colors.tertiary, 0.17)
-                                border.width: 1; border.color: colors.alpha(colors.tertiary, 0.40)
-                                clip: true
-                                WeatherIcon {
-                                    anchors.centerIn: parent
-                                    width: 44; height: 44
-                                    kind: root.weatherKind
-                                    animate: root.open
-                                    tint: colors.tertiary
-                                    tintStrength: 0.5
-                                }
-                            }
-                            ColumnLayout { Layout.fillWidth: true; spacing: 1; clip: true
-                                Text { text: root.weatherTemp; color: colors.foreground; font.family: "Iceland"; font.pixelSize: 42; font.weight: Font.Normal; lineHeight: 0.95; elide: Text.ElideRight; maximumLineCount: 1; Layout.fillWidth: true }
-                                Text { text: root.weatherCond; color: colors.alpha(colors.foreground,0.78); font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.DemiBold; elide: Text.ElideRight; Layout.fillWidth: true; maximumLineCount: 1; wrapMode: Text.NoWrap }
-                                Text { text: "H:" + root.weatherHigh + "  L:" + root.weatherLow; color: colors.alpha(colors.outline,0.75); font.family: colors.fontSans; font.pixelSize: 8; elide: Text.ElideRight; maximumLineCount: 1; Layout.fillWidth: true; wrapMode: Text.NoWrap }
-                            }
-                        }
-                        Item { Layout.fillHeight: true }
-                        Rectangle { Layout.fillWidth: true; height: 1; color: colors.alpha(colors.tertiary, 0.20) }
-                        RowLayout { Layout.fillWidth: true; Layout.topMargin: 6; Layout.bottomMargin: 2; Layout.leftMargin: 10; spacing: 8
-                            ColumnLayout { Layout.fillWidth: true; spacing: 2
-                                Text { text: "FEELS"; color: colors.alpha(colors.outline,0.60); font.family: colors.fontSans; font.pixelSize: 6; font.weight: Font.Bold; font.letterSpacing: 1.1; Layout.alignment: Qt.AlignHCenter }
-                                RowLayout { spacing: 3; Layout.alignment: Qt.AlignHCenter
-                                    Text { text: "󰔏"; color: colors.tertiary; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 13; Layout.alignment: Qt.AlignVCenter }
-                                    Text { text: root.weatherFeel; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 10; font.weight: Font.ExtraBold; Layout.alignment: Qt.AlignVCenter }
-                                }
-                            }
-                            Rectangle { width: 1; height: 22; Layout.alignment: Qt.AlignVCenter; color: colors.alpha(colors.tertiary, 0.20) }
-                            ColumnLayout { Layout.fillWidth: true; spacing: 2
-                                Text { text: "HUMIDITY"; color: colors.alpha(colors.outline,0.60); font.family: colors.fontSans; font.pixelSize: 6; font.weight: Font.Bold; font.letterSpacing: 1.1; Layout.alignment: Qt.AlignHCenter }
-                                RowLayout { spacing: 3; Layout.alignment: Qt.AlignHCenter
-                                    Text { text: "󰸊"; color: colors.tertiary; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 13; Layout.alignment: Qt.AlignVCenter }
-                                    Text { text: root.weatherHumidity; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 10; font.weight: Font.ExtraBold; Layout.alignment: Qt.AlignVCenter }
-                                }
-                            }
-                            Rectangle { width: 1; height: 22; Layout.alignment: Qt.AlignVCenter; color: colors.alpha(colors.tertiary, 0.20) }
-                            ColumnLayout { Layout.fillWidth: true; spacing: 2
-                                Text { text: "WIND"; color: colors.alpha(colors.outline,0.60); font.family: colors.fontSans; font.pixelSize: 6; font.weight: Font.Bold; font.letterSpacing: 1.1; Layout.alignment: Qt.AlignHCenter }
-                                RowLayout { spacing: 3; Layout.alignment: Qt.AlignHCenter
-                                    Text { text: "󰖝"; color: colors.tertiary; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 13; Layout.alignment: Qt.AlignVCenter }
-                                    Text { text: root.weatherWind; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 10; font.weight: Font.ExtraBold; Layout.alignment: Qt.AlignVCenter }
-                                }
-                            }
-                        }
-                    }
-                    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: weatherProc.running = true }
-                }
-            }
 
-            // ── QUICK CONTROLS ──
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.preferredHeight: 96
-                radius: 16
-                color: colors.alpha(colors.surface, 0.4)
-                border.width: 1; border.color: colors.alpha(colors.outline, 0.14)
-                clip: true
-                RowLayout {
-                    anchors.fill: parent; anchors.margins: 12
-                    spacing: 12
-                    // Brightness
                     ColumnLayout {
-                        Layout.fillWidth: true; spacing: 6
-                        RowLayout { spacing: 8; Layout.alignment: Qt.AlignVCenter; Layout.bottomMargin: 7
-                            Rectangle { width: 26; height: 26; radius: 13; color: colors.alpha(colors.secondary,0.15); border.width:1; border.color: colors.alpha(colors.secondary,0.3); Text { anchors.centerIn: parent; text: "󰃠"; color: colors.secondary; font.family: colors.fontSans; font.pixelSize: 12 } }
-                            Text { text: "BRIGHTNESS"; Layout.alignment: Qt.AlignVCenter; color: colors.alpha(colors.outline,0.65); font.family: colors.fontSans; font.pixelSize: 7; font.weight: Font.Bold; font.letterSpacing: 1.3 }
-                            Item { Layout.fillWidth: true }
-                            Text { text: Math.round(root.brightness*100)+"%"; Layout.alignment: Qt.AlignVCenter; color: colors.secondary; font.family: colors.fontSans; font.pixelSize: 10; font.weight: Font.ExtraBold }
+                        id: npContent
+                        anchors.fill: parent
+                        anchors.margins: 24
+                        spacing: 0
+
+                        Text { text: "NOW PLAYING"; color: colors.alpha(colors.foreground, 0.7); font.family: root.uiFont; font.pixelSize: 12; font.weight: Font.Bold; font.letterSpacing: 1.2 }
+                        Text {
+                            Layout.fillWidth: true; Layout.topMargin: 4
+                            text: root.npTitle
+                            color: colors.foreground
+                            font.family: root.uiFont; font.pixelSize: 34; font.weight: Font.Bold
+                            elide: Text.ElideRight
                         }
+                        Text {
+                            Layout.fillWidth: true
+                            text: root.hasPlayer ? root.npArtist : "No player"
+                            color: colors.alpha(colors.foreground, 0.85)
+                            font.family: root.uiFont; font.pixelSize: 16
+                            elide: Text.ElideRight
+                        }
+
+                        RowLayout {
+                            Layout.topMargin: 16
+                            spacing: 12
+                            Rectangle {
+                                width: 40; height: 40; radius: 20
+                                color: prevMa.containsMouse ? colors.alpha(colors.background, 0.75) : colors.alpha(colors.background, 0.5)
+                                border.width: 1; border.color: colors.alpha(colors.foreground, 0.28)
+                                scale: prevMa.containsMouse ? 1.06 : 1
+                                Behavior on scale { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
+                                Glyph { anchors.centerIn: parent; text: "󰒮"; color: colors.foreground; font.pixelSize: 17 }
+                                MouseArea { id: prevMa; anchors.fill: parent; hoverEnabled: true; onClicked: if (root.hasPlayer && root.player.canGoPrevious) root.player.previous() }
+                            }
+                            Rectangle {
+                                width: 54; height: 54; radius: 27
+                                color: colors.primary
+                                opacity: playMa.containsMouse ? 0.92 : 1
+                                scale: playMa.containsMouse ? 1.06 : 1
+                                Behavior on scale { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
+                                Glyph { anchors.centerIn: parent; text: root.isPlaying ? "󰏤" : "󰐊"; color: colors.background; font.pixelSize: 22 }
+                                MouseArea { id: playMa; anchors.fill: parent; hoverEnabled: true; onClicked: if (root.hasPlayer && root.player.canTogglePlaying) root.player.togglePlaying() }
+                            }
+                            Rectangle {
+                                width: 40; height: 40; radius: 20
+                                color: nextMa.containsMouse ? colors.alpha(colors.background, 0.75) : colors.alpha(colors.background, 0.5)
+                                border.width: 1; border.color: colors.alpha(colors.foreground, 0.28)
+                                scale: nextMa.containsMouse ? 1.06 : 1
+                                Behavior on scale { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
+                                Glyph { anchors.centerIn: parent; text: "󰒭"; color: colors.foreground; font.pixelSize: 17 }
+                                MouseArea { id: nextMa; anchors.fill: parent; hoverEnabled: true; onClicked: if (root.hasPlayer && root.player.canGoNext) root.player.next() }
+                            }
+                        }
+
+                        Item { Layout.fillHeight: true }
+
+                        // mirrored visualizer — lit up to the playhead, gradient primary -> tertiary
                         Item {
-                            id: briStrip
-                            Layout.fillWidth: true; Layout.preferredHeight: 26
-                            transformOrigin: Item.Center
-                            readonly property int count: 16
-                            readonly property int lit: Math.round(root.brightness * count)
-                            property real _lastSent: -1
-                            function stripSet(x) {
-                                if (briStrip.width <= 0) return
-                                var f = Math.max(0, Math.min(1, x / briStrip.width))
-                                root.brightness = f
-                                if (Math.abs(f - briStrip._lastSent) > 0.05) { briStrip._lastSent = f; root.setBrightness(f) }
-                            }
-                            SequentialAnimation {
-                                id: briBump
-                                NumberAnimation { target: briStrip; property: "scale"; to: 1.04; duration: 90; easing.type: Easing.OutCubic }
-                                NumberAnimation { target: briStrip; property: "scale"; to: 1; duration: 90; easing.type: Easing.OutCubic }
-                            }
-                            Row {
-                                id: briRow
-                                anchors.fill: parent
-                                spacing: 3
-                                Repeater {
-                                    model: briStrip.count
-                                    Item {
-                                        width: Math.max(1, (briRow.width - (briStrip.count - 1) * 3) / briStrip.count)
-                                        height: 26
-                                        Rectangle {
-                                            anchors.bottom: parent.bottom
-                                            width: parent.width; height: parent.height * (0.35 + index * 0.04)
-                                            radius: 2
-                                            color: index < briStrip.lit ? root.segRamp(index, briStrip.lit) : colors.alpha(colors.surfaceVariant, 0.55)
-                                        }
-                                    }
-                                }
-                            }
-                            MouseArea {
-                                anchors.fill: parent
-                                onPressed: function(mouse){ briStrip.stripSet(mouse.x) }
-                                onPositionChanged: function(mouse){ if (pressed) briStrip.stripSet(mouse.x) }
-                                onReleased: { root.setBrightness(root.brightness); briStrip._lastSent = root.brightness; briBump.restart() }
-                            }
-                        }
-                    }
-                    Rectangle { width: 1; height: parent.height - 14; color: colors.alpha(colors.outline,0.12) }
-                    // Volume
-                    ColumnLayout {
-                        Layout.fillWidth: true; spacing: 6
-                        RowLayout { spacing: 8; Layout.alignment: Qt.AlignVCenter; Layout.bottomMargin: 7
-                            Rectangle { width: 26; height: 26; radius: 13; color: colors.alpha(colors.primary,0.15); border.width:1; border.color: colors.alpha(colors.primary,0.3); Text { anchors.centerIn: parent; text: root.muted ? "󰝟" : ""; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 12 } MouseArea { anchors.fill: parent; onClicked: root.toggleMute() } }
-                            Text { text: "VOLUME"; Layout.alignment: Qt.AlignVCenter; color: colors.alpha(colors.outline,0.65); font.family: colors.fontSans; font.pixelSize: 7; font.weight: Font.Bold; font.letterSpacing: 1.3 }
-                            Item { Layout.fillWidth: true }
-                            Text { text: root.muted ? "MUTE" : Math.round(root.volume*100)+"%"; Layout.alignment: Qt.AlignVCenter; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 10; font.weight: Font.ExtraBold }
-                        }
-                        Item {
-                            id: volStrip
-                            Layout.fillWidth: true; Layout.preferredHeight: 26
-                            transformOrigin: Item.Center
-                            readonly property int count: 16
-                            readonly property int lit: root.muted ? 0 : Math.round(root.volume * count)
-                            property real _lastSent: -1
-                            function stripSet(x) {
-                                if (volStrip.width <= 0) return
-                                var f = Math.max(0, Math.min(1, x / volStrip.width))
-                                if (root.muted) root.toggleMute()
-                                root.volume = f
-                                if (Math.abs(f - volStrip._lastSent) > 0.05) { volStrip._lastSent = f; root.setVolume(f) }
-                            }
-                            SequentialAnimation {
-                                id: volBump
-                                NumberAnimation { target: volStrip; property: "scale"; to: 1.04; duration: 90; easing.type: Easing.OutCubic }
-                                NumberAnimation { target: volStrip; property: "scale"; to: 1; duration: 90; easing.type: Easing.OutCubic }
-                            }
-                            Row {
-                                id: volRow
-                                anchors.fill: parent
-                                spacing: 3
-                                Repeater {
-                                    model: volStrip.count
-                                    Item {
-                                        width: Math.max(1, (volRow.width - (volStrip.count - 1) * 3) / volStrip.count)
-                                        height: 26
-                                        Rectangle {
-                                            anchors.bottom: parent.bottom
-                                            width: parent.width; height: parent.height * (0.35 + index * 0.04)
-                                            radius: 2
-                                            color: index < volStrip.lit ? root.segRamp(index, volStrip.lit) : colors.alpha(colors.surfaceVariant, 0.55)
-                                        }
-                                    }
-                                }
-                            }
-                            MouseArea {
-                                anchors.fill: parent
-                                onPressed: function(mouse){ volStrip.stripSet(mouse.x) }
-                                onPositionChanged: function(mouse){ if (pressed) volStrip.stripSet(mouse.x) }
-                                onReleased: { root.setVolume(root.volume); volStrip._lastSent = root.volume; volBump.restart() }
-                            }
-                        }
-                    }
-                    Rectangle { width: 1; height: parent.height - 14; color: colors.alpha(colors.outline,0.12) }
-                    // Visualizer — live cava pill bars (moved here from SUPER ALT V window)
-                    ColumnLayout {
-                        Layout.fillWidth: true; Layout.preferredWidth: parent.width*0.32; spacing: 4
-                        RowLayout { spacing: 8
-                            Rectangle { width: 22; height: 22; radius: 11; color: colors.alpha(colors.tertiary,0.15); border.width:1; border.color: colors.alpha(colors.tertiary,0.3); Text { anchors.centerIn: parent; text: "󰐊"; color: colors.tertiary; font.family: colors.fontSans; font.pixelSize: 11 } }
-                            Text { text: "VISUALIZER"; Layout.alignment: Qt.AlignVCenter; color: colors.alpha(colors.outline,0.65); font.family: colors.fontSans; font.pixelSize: 7; font.weight: Font.Bold; font.letterSpacing: 1.3 }
-                        }
-                        Item {
-                            Layout.fillWidth: true; Layout.fillHeight: true
+                            id: vizBox
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 72
                             Row {
                                 id: vizRow
                                 anchors.fill: parent
-                                spacing: 2
+                                spacing: 3
                                 Repeater {
-                                    model: root.vizBars
+                                    model: root.vizDraw
                                     delegate: Rectangle {
                                         required property int index
-                                        readonly property real v: (root.vizLevels[index] || 0) / 100
-                                        width: (vizRow.width - (root.vizBars - 1) * vizRow.spacing) / root.vizBars
-                                        height: Math.max(4, vizRow.height * v)
+                                        readonly property real f: index / (root.vizDraw - 1)
+                                        width: (vizRow.width - (root.vizDraw - 1) * vizRow.spacing) / root.vizDraw
+                                        height: Math.max(4, vizRow.height * root.vizLevel(index))
                                         radius: width / 2
-                                        y: vizRow.height - height
-                                        gradient: Gradient {
-                                            orientation: Gradient.Vertical
-                                            GradientStop { position: 0; color: colors.primary }
-                                            GradientStop { position: 1; color: colors.tertiary }
-                                        }
-                                        Behavior on height { NumberAnimation { duration: 90; easing.type: Easing.OutQuad } }
-                                    }
-                                }
-                            }
-                            Text { anchors.centerIn: parent; visible: root.vizLevels.length===0; text: "listening…"; color: colors.alpha(colors.outline,0.45); font.family: colors.fontSans; font.pixelSize: 7 }
-                        }
-                    }
-                }
-            }
-
-            // ── NETWORK — compact ──
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.preferredHeight: 56
-                radius: 14
-                color: colors.alpha(colors.surface, 0.4)
-                border.width: 1; border.color: colors.alpha(colors.outline, 0.14)
-                clip: true
-                RowLayout {
-                    anchors.fill: parent; anchors.margins: 8
-                    spacing: 10
-                    Rectangle {
-                        Layout.fillWidth: true; Layout.fillHeight: true
-                        radius: 8
-                        color: colors.alpha(colors.surfaceVariant,0.25)
-                        border.width: 1; border.color: colors.alpha(colors.outline,0.08)
-                        Canvas {
-                            id: wifiSpark
-                            anchors.fill: parent
-                            anchors.margins: 4
-                            Connections {
-                                target: netRate
-                                function onRxHistoryChanged(){ wifiSpark.requestPaint() }
-                                function onTxHistoryChanged(){ wifiSpark.requestPaint() }
-                            }
-                            onPaint: {
-                                var ctx=getContext("2d")
-                                var W=width, H=height
-                                ctx.clearRect(0,0,W,H)
-                                var rx=netRate.rxHistory, tx=netRate.txHistory
-                                if(rx.length<2){
-                                    ctx.strokeStyle=colors.alpha(colors.outline,0.12); ctx.lineWidth=1
-                                    ctx.setLineDash([3,3]); ctx.beginPath(); ctx.moveTo(0,H/2); ctx.lineTo(W,H/2); ctx.stroke(); ctx.setLineDash([])
-                                    return
-                                }
-                                function curve(h, stroke){
-                                    var maxV=12; for(var i=0;i<h.length;i++) maxV=Math.max(maxV,h[i])
-                                    var n=h.length
-                                    var pts=[]
-                                    for(var i=0;i<n;i++) pts.push({x:(i/(n-1))*W, y:H-2-(h[i]/maxV)*(H-8)})
-                                    ctx.beginPath(); ctx.moveTo(pts[0].x,pts[0].y)
-                                    for(var k=1;k<pts.length;k++){
-                                        var cpx=(pts[k-1].x+pts[k].x)/2
-                                        ctx.bezierCurveTo(cpx,pts[k-1].y,cpx,pts[k].y,pts[k].x,pts[k].y)
-                                    }
-                                    ctx.strokeStyle=stroke; ctx.lineWidth=2; ctx.lineJoin="round"; ctx.stroke()
-                                    return pts
-                                }
-                                if(tx.length>=2) curve(tx, colors.alpha(colors.secondary,0.65))
-                                var pts=curve(rx, colors.tertiary)
-                                ctx.beginPath(); ctx.moveTo(pts[0].x,H)
-                                ctx.lineTo(pts[0].x,pts[0].y)
-                                for(var l=1;l<pts.length;l++){
-                                    var cpx2=(pts[l-1].x+pts[l].x)/2
-                                    ctx.bezierCurveTo(cpx2,pts[l-1].y,cpx2,pts[l].y,pts[l].x,pts[l].y)
-                                }
-                                ctx.lineTo(pts[pts.length-1].x,H); ctx.closePath()
-                                var grad=ctx.createLinearGradient(0,0,0,H)
-                                grad.addColorStop(0,colors.alpha(colors.tertiary,0.25))
-                                grad.addColorStop(1,"transparent")
-                                ctx.fillStyle=grad; ctx.fill()
-                                ctx.beginPath(); ctx.arc(pts[pts.length-1].x,pts[pts.length-1].y,2.5,0,Math.PI*2)
-                                ctx.fillStyle=colors.tertiary; ctx.fill()
-                            }
-                        }
-                        Text { anchors.centerIn: parent; visible: netRate.rxHistory.length<2; text: "collecting…"; color: colors.alpha(colors.outline,0.45); font.family: colors.fontSans; font.pixelSize: 7 }
-                    }
-                    Rectangle { width: 1; height: parent.height - 16; color: colors.alpha(colors.outline,0.12) }
-                    ColumnLayout {
-                        Layout.fillWidth: true; Layout.fillHeight: true; spacing: 1
-                        Layout.alignment: Qt.AlignHCenter
-                        RowLayout { spacing: 5; Layout.alignment: Qt.AlignHCenter
-                            Rectangle { width: 18; height: 18; radius: 9; color: colors.alpha(colors.primary,0.15); border.width:1; border.color: colors.alpha(colors.primary,0.3); Text { anchors.centerIn: parent; text: "󰇚"; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 9 } }
-                            Text { text: netRate.fmt(netRate.rxKbs); Layout.alignment: Qt.AlignVCenter; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 12; font.weight: Font.ExtraBold }
-                        }
-                        Text { text: "DOWNLOAD"; color: colors.alpha(colors.outline,0.55); font.family: colors.fontSans; font.pixelSize: 6; font.weight: Font.Bold; font.letterSpacing: 1.3; Layout.alignment: Qt.AlignHCenter }
-                        Text { text: "today " + netRate.fmtTotal(netRate.totalRxMb); color: colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 6; Layout.alignment: Qt.AlignHCenter; horizontalAlignment: Text.AlignHCenter }
-                    }
-                    Rectangle { width: 1; height: parent.height - 16; color: colors.alpha(colors.outline,0.12) }
-                    ColumnLayout {
-                        Layout.fillWidth: true; Layout.fillHeight: true; spacing: 1
-                        Layout.alignment: Qt.AlignHCenter
-                        RowLayout { spacing: 5; Layout.alignment: Qt.AlignHCenter
-                            Rectangle { width: 18; height: 18; radius: 9; color: colors.alpha(colors.secondary,0.15); border.width:1; border.color: colors.alpha(colors.secondary,0.3); Text { anchors.centerIn: parent; text: "󰕒"; color: colors.secondary; font.family: colors.fontSans; font.pixelSize: 9 } }
-                            Text { text: netRate.fmt(netRate.txKbs); Layout.alignment: Qt.AlignVCenter; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 12; font.weight: Font.ExtraBold }
-                        }
-                        Text { text: "UPLOAD"; color: colors.alpha(colors.outline,0.55); font.family: colors.fontSans; font.pixelSize: 6; font.weight: Font.Bold; font.letterSpacing: 1.3; Layout.alignment: Qt.AlignHCenter }
-                        Text { text: "today " + netRate.fmtTotal(netRate.totalTxMb); color: colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 6; Layout.alignment: Qt.AlignHCenter; horizontalAlignment: Text.AlignHCenter }
-                    }
-                }
-            }
-
-            // ── MIDDLE — Pet | Activity | Calendar ──
-            RowLayout {
-                Layout.fillWidth: true
-                Layout.preferredHeight: 126
-                spacing: 6
-                Rectangle {
-                    id: petCard
-                    Layout.fillWidth: true; Layout.fillHeight: true
-                    radius: 16
-                    color: colors.alpha(colors.surface, 0.4)
-                    border.width: 1
-                    border.color: petHover.hovered ? colors.alpha(colors.primary, 0.32) : colors.alpha(colors.outline, 0.14)
-                    clip: true
-                    Behavior on border.color { ColorAnimation { duration: 180 } }
-
-                    // stage — a glass well inset in the card, pet stands on its floor line
-                    Item {
-                        anchors.fill: parent
-                        anchors.margins: 10
-                        anchors.topMargin: 24
-                        anchors.bottomMargin: 22
-                        Rectangle {
-                            id: petWell
-                            anchors.fill: parent
-                            radius: 12
-                            gradient: Gradient {
-                                GradientStop { position: 0.0; color: colors.alpha(colors.surfaceVariant, 0.28) }
-                                GradientStop { position: 1.0; color: colors.alpha(colors.background, 0.08) }
-                            }
-                            border.width: 1
-                            border.color: root.isPlaying ? colors.alpha(colors.primary, 0.30) : colors.alpha(colors.outline, 0.10)
-                            Behavior on border.color { ColorAnimation { duration: 500 } }
-                            // music lights the stage — slow breathe, never a strobe
-                            Rectangle {
-                                anchors.centerIn: parent
-                                width: 66; height: 66; radius: 33
-                                color: colors.alpha(colors.primary, 0.10)
-                                visible: root.isPlaying
-                                SequentialAnimation on scale {
-                                    running: root.open && root.isPlaying; loops: Animation.Infinite
-                                    NumberAnimation { from: 0.88; to: 1.08; duration: 1100; easing.type: Easing.InOutSine }
-                                    NumberAnimation { from: 1.08; to: 0.88; duration: 1100; easing.type: Easing.InOutSine }
-                                }
-                                SequentialAnimation on opacity {
-                                    running: root.open && root.isPlaying; loops: Animation.Infinite
-                                    NumberAnimation { from: 0.45; to: 1; duration: 1100; easing.type: Easing.InOutSine }
-                                    NumberAnimation { from: 1; to: 0.45; duration: 1100; easing.type: Easing.InOutSine }
-                                }
-                            }
-                        }
-                        // floor line the pet stands on
-                        Rectangle {
-                            anchors.horizontalCenter: parent.horizontalCenter
-                            anchors.bottom: parent.bottom
-                            anchors.bottomMargin: 6
-                            width: 50; height: 4; radius: 2
-                            color: colors.alpha(colors.background, 0.42)
-                        }
-                        Image {
-                            id: alivePet
-                            anchors.centerIn: parent
-                            anchors.verticalCenterOffset: -6
-                            source: "file://" + root.petAssetsBase + (root.petCurrentFrames[root.petFrameIdx] || "shime1.png")
-                            width: 72; height: 72
-                            fillMode: Image.PreserveAspectFit
-                            smooth: false
-                            mirror: root.petFacingRight
-                            SequentialAnimation on y {
-                                running: root.open; loops: Animation.Infinite
-                                NumberAnimation { from: 0; to: -3; duration: 550; easing.type: Easing.InOutSine }
-                                NumberAnimation { from: -3; to: 0; duration: 550; easing.type: Easing.InOutSine }
-                            }
-                        }
-                        MouseArea { id: petHover; anchors.fill: parent; hoverEnabled: true; onClicked: root.petReact() }
-                    }
-
-                    Text {
-                        anchors.top: parent.top; anchors.left: parent.left; anchors.right: parent.right
-                        anchors.margins: 10
-                        text: "PET — HORNET"
-                        color: colors.alpha(colors.outline, 0.55)
-                        font.family: colors.fontSans; font.pixelSize: 7; font.weight: Font.Bold; font.letterSpacing: 1.2
-                        elide: Text.ElideRight
-                    }
-
-                    // status — no dot; state reads from the text plus the lit stage
-                    Text {
-                        anchors.bottom: parent.bottom; anchors.left: parent.left; anchors.right: parent.right
-                        anchors.margins: 10
-                        horizontalAlignment: Text.AlignHCenter
-                        text: root.petBubble !== "" ? root.petBubble : (root.isPlaying ? "PLAYING" : "IDLE")
-                        color: root.petBubble !== "" ? colors.alpha(colors.primary, 0.92)
-                              : (root.isPlaying ? colors.alpha(colors.primary, 0.78) : colors.alpha(colors.outline, 0.5))
-                        font.family: colors.fontSans; font.pixelSize: 7; font.weight: Font.Bold; font.letterSpacing: 1
-                        elide: Text.ElideRight
-                    }
-                }
-                Rectangle {
-                    Layout.fillWidth: true; Layout.fillHeight: true
-                    radius: 16
-                    color: colors.alpha(colors.surface, 0.4)
-                    border.width: 1; border.color: colors.alpha(colors.outline, 0.14)
-                    clip: true
-                    ColumnLayout {
-                        anchors.fill: parent; anchors.margins: 10; spacing: 5
-                        Text { text: "ACTIVITY — 7 DAYS"; Layout.alignment: Qt.AlignVCenter; color: colors.alpha(colors.outline,0.55); font.family: colors.fontSans; font.pixelSize: 7; font.weight: Font.Bold; font.letterSpacing: 1.3 }
-                        Item { Layout.fillWidth: true }
-                        Text { text: "PEAK " + root.fmtDurShort(root.activityMax); Layout.alignment: Qt.AlignVCenter; color: colors.alpha(colors.primary,0.75); font.family: colors.fontSans; font.pixelSize: 7; font.weight: Font.Bold }
-                        RowLayout {
-                            Layout.fillWidth: true; Layout.fillHeight: true; spacing: 5
-                            Repeater {
-                                model: root.activityLast7
-                                delegate: ColumnLayout {
-                                    required property var modelData
-                                    required property int index
-                                    Layout.fillWidth: true; Layout.fillHeight: true; spacing: 4
-                                    Rectangle {
-                                        Layout.fillWidth: true; Layout.fillHeight: true; radius: 6
-                                        color: colors.alpha(colors.primary, 0.1)
-                                        Rectangle {
-                                            anchors.bottom: parent.bottom
-                                            width: parent.width
-                                            height: {
-                                                var s = modelData.secs || 0
-                                                if (s <= 0) return 0
-                                                return Math.max(4, parent.height * s / Math.max(1, root.activityMax))
-                                            }
-                                            radius: 6
-                                            gradient: Gradient {
-                                                GradientStop { position: 0; color: colors.alpha(colors.primary, 0.25) }
-                                                GradientStop { position: 1; color: colors.primary }
-                                            }
-                                            opacity: modelData.today ? 1 : 0.8
-                                            Behavior on height { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
-                                        }
-                                    }
-                                    Item {
-                                        Layout.preferredHeight: 24
-                                        Layout.fillWidth: true
-                                        Text {
-                                            anchors.top: parent.top; anchors.horizontalCenter: parent.horizontalCenter
-                                            text: modelData.dow
-                                            color: modelData.today ? colors.primary : colors.alpha(colors.outline,0.6)
-                                            font.family: colors.fontSans; font.pixelSize: 7; font.weight: modelData.today ? Font.Bold : Font.Normal
-                                        }
-                                        Text {
-                                            anchors.top: parent.top; anchors.topMargin: 10; anchors.horizontalCenter: parent.horizontalCenter
-                                            text: root.fmtDurShort(modelData.secs || 0)
-                                            color: modelData.today ? colors.primary : colors.alpha(colors.outline,0.55)
-                                            font.family: colors.fontSans; font.pixelSize: 7; font.weight: modelData.today ? Font.Bold : Font.Normal
-                                        }
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        color: f < root.npPos ? root.mix(colors.primary, colors.tertiary, f) : colors.alpha(colors.foreground, 0.32)
+                                        Behavior on height { NumberAnimation { duration: 80; easing.type: Easing.OutQuad } }
                                     }
                                 }
                             }
                         }
-                    }
-                }
-                Rectangle {
-                    Layout.fillWidth: true; Layout.fillHeight: true
-                    radius: 16
-                    color: colors.alpha(colors.surface, 0.4)
-                    border.width: 1; border.color: colors.alpha(colors.outline, 0.14)
-                    clip: true
-                    ColumnLayout {
-                        anchors.fill: parent; anchors.margins: 10; spacing: 5
-                        RowLayout {
+
+                        // seek
+                        Item {
+                            id: seekBar
                             Layout.fillWidth: true
-                            spacing: 5
-                            Rectangle {
-                                width: 22; height: 22; radius: 11
-                                color: prevCalMa.containsMouse ? colors.alpha(colors.primary,0.2) : colors.alpha(colors.primary,0.08)
-                                Text { anchors.centerIn: parent; text: "‹"; color: colors.primary; font.pixelSize: 12 }
-                                MouseArea { id: prevCalMa; anchors.fill: parent; hoverEnabled: true; onClicked: { root.calOffset -= 1; root.rebuildCal() } }
+                            Layout.topMargin: 12
+                            Layout.preferredHeight: 14
+                            function seekTo(x) {
+                                if (!root.hasPlayer || !root.player.length || !root.player.canSeek) return
+                                root.player.position = Math.max(0, Math.min(1, x / width)) * root.player.length
                             }
-                            Text { text: root.calTitle; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.ExtraBold; Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter }
-                            Rectangle {
-                                visible: root.calOffset !== 0
-                                width: todayTxt.implicitWidth + 14; height: 22; radius: 11
-                                color: todayMa.containsMouse ? colors.alpha(colors.primary,0.2) : colors.alpha(colors.primary,0.08)
-                                border.width: 1; border.color: colors.alpha(colors.primary,0.3)
-                                Text { id: todayTxt; anchors.centerIn: parent; text: "today"; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold }
-                                MouseArea { id: todayMa; anchors.fill: parent; hoverEnabled: true; onClicked: { root.calOffset = 0; root.rebuildCal() } }
-                            }
-                            Rectangle {
-                                width: 22; height: 22; radius: 11
-                                color: nextCalMa.containsMouse ? colors.alpha(colors.primary,0.2) : colors.alpha(colors.primary,0.08)
-                                Text { anchors.centerIn: parent; text: "›"; color: colors.primary; font.pixelSize: 12 }
-                                MouseArea { id: nextCalMa; anchors.fill: parent; hoverEnabled: true; onClicked: { root.calOffset += 1; root.rebuildCal() } }
+                            Rectangle { anchors.verticalCenter: parent.verticalCenter; width: parent.width; height: 4; radius: 2; color: colors.alpha(colors.foreground, 0.25) }
+                            Rectangle { anchors.verticalCenter: parent.verticalCenter; width: parent.width * root.npPos; height: 4; radius: 2; color: colors.primary }
+                            MouseArea {
+                                anchors.fill: parent
+                                onPressed: function(mouse){ seekBar.seekTo(mouse.x) }
+                                onPositionChanged: function(mouse){ if (pressed) seekBar.seekTo(mouse.x) }
                             }
                         }
                         RowLayout {
                             Layout.fillWidth: true
-                            spacing: 6
-                            Text { id: calClock; text: "--:--"; Layout.alignment: Qt.AlignVCenter; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 20; font.weight: Font.ExtraBold }
-                            Text { id: calSecs; text: "--"; Layout.alignment: Qt.AlignBottom; Layout.bottomMargin: 3; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold }
+                            Layout.topMargin: 4
+                            Text { text: root.npCur; color: colors.alpha(colors.foreground, 0.85); font.family: root.uiFont; font.pixelSize: 12 }
                             Item { Layout.fillWidth: true }
+                            Text { text: root.npTot; color: colors.alpha(colors.foreground, 0.85); font.family: root.uiFont; font.pixelSize: 12 }
+                        }
+                    }
+                }
+
+                // Side column
+                ColumnLayout {
+                    id: sideRail
+                    Layout.preferredWidth: 300
+                    Layout.maximumWidth: 300
+                    Layout.minimumWidth: 300
+                    Layout.fillHeight: true
+                    spacing: 14
+
+                    // Volume
+                    Card {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 70
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.leftMargin: 18; anchors.rightMargin: 18
+                            spacing: 12
                             Rectangle {
-                                Layout.alignment: Qt.AlignVCenter
-                                width: calWeek.implicitWidth + 12; height: 18; radius: 9
-                                color: colors.alpha(colors.tertiary, 0.14)
-                                border.width: 1; border.color: colors.alpha(colors.tertiary, 0.3)
-                                Text { id: calWeek; anchors.centerIn: parent; text: "W–"; color: colors.tertiary; font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold }
+                                width: 40; height: 40; radius: 20
+                                color: colors.primary
+                                Glyph { anchors.centerIn: parent; text: root.muted ? "󰝟" : "󰕾"; color: colors.background }
+                                MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: root.toggleMute() }
                             }
-                            Text { id: calDate; text: "—"; Layout.alignment: Qt.AlignVCenter; color: colors.alpha(colors.outline,0.65); font.family: colors.fontSans; font.pixelSize: 7; font.weight: Font.Bold; font.letterSpacing: 0.8 }
-                            Timer {
-                                interval: 1000; running: root.open; repeat: true; triggeredOnStart: true
-                                onTriggered: {
-                                    var now = new Date()
-                                    calClock.text = Qt.formatTime(now, "HH:mm")
-                                    calSecs.text = Qt.formatTime(now, "ss")
-                                    calDate.text = Qt.formatDate(now, "ddd d MMM")
-                                    calWeek.text = "W" + root.isoWeek(now)
-                                }
+                            SegBar {
+                                Layout.fillWidth: true
+                                Layout.alignment: Qt.AlignVCenter
+                                value: root.muted ? 0 : root.volume
+                                onColor: colors.primary
+                                offColor: colors.alpha(colors.foreground, 0.14)
+                                onMoved: function(v){ root.dragVolume(v) }
+                                onReleased: { root.setVolume(root.volume); root._volSent = root.volume }
+                            }
+                            Text {
+                                Layout.preferredWidth: 42
+                                Layout.alignment: Qt.AlignVCenter
+                                horizontalAlignment: Text.AlignRight
+                                text: root.muted ? "Muted" : Math.round(root.volume * 100)
+                                color: colors.foreground
+                                font.family: root.uiFont; font.pixelSize: 13; font.weight: Font.DemiBold
                             }
                         }
-                        GridLayout {
-                            Layout.fillWidth: true; Layout.fillHeight: true; columns: 7; rowSpacing: 3; columnSpacing: 4
-                            Repeater {
-                                model: ["M","T","W","T","F","S","S"]
-                                delegate: Text {
-                                    required property var modelData
-                                    required property int index
-                                    text: modelData
-                                    color: index >= 5 ? colors.alpha(colors.tertiary,0.65) : colors.alpha(colors.outline,0.5)
-                                    font.family: colors.fontSans; font.pixelSize: 6; font.weight: Font.Bold
-                                    Layout.alignment: Qt.AlignHCenter
+                    }
+
+                    // Brightness
+                    Card {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 70
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.leftMargin: 18; anchors.rightMargin: 18
+                            spacing: 12
+                            Rectangle {
+                                width: 40; height: 40; radius: 20
+                                color: colors.primary
+                                Glyph { anchors.centerIn: parent; text: "󰃠"; color: colors.background }
+                            }
+                            SegBar {
+                                Layout.fillWidth: true
+                                Layout.alignment: Qt.AlignVCenter
+                                value: root.brightness
+                                onColor: colors.primary
+                                offColor: colors.alpha(colors.foreground, 0.14)
+                                onMoved: function(v){ root.dragBrightness(v) }
+                                onReleased: { root.setBrightness(root.brightness); root._briSent = root.brightness }
+                            }
+                            Text {
+                                Layout.preferredWidth: 42
+                                Layout.alignment: Qt.AlignVCenter
+                                horizontalAlignment: Text.AlignRight
+                                text: Math.round(root.brightness * 100)
+                                color: colors.foreground
+                                font.family: root.uiFont; font.pixelSize: 13; font.weight: Font.DemiBold
+                            }
+                        }
+                    }
+
+                    // Network
+                    Card {
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        ColumnLayout {
+                            anchors.fill: parent
+                            anchors.margins: 16
+                            spacing: 8
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Text { text: "Network"; color: colors.foreground; font.family: root.uiFont; font.pixelSize: 15; font.weight: Font.Bold }
+                                Item { Layout.fillWidth: true }
+                                Text { text: "Since boot · " + netRate.fmtTotal(netRate.totalRxMb + netRate.totalTxMb); color: colors.alpha(colors.foreground, 0.68); font.family: root.uiFont; font.pixelSize: 12 }
+                            }
+                            Rectangle {
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
+                                radius: 8
+                                color: colors.alpha(colors.surfaceVariant, 0.3)
+                                Canvas {
+                                    id: netGraph
+                                    anchors.fill: parent
+                                    anchors.margins: 4
+                                    Connections {
+                                        target: netRate
+                                        function onRxHistoryChanged() { netGraph.requestPaint() }
+                                        function onTxHistoryChanged() { netGraph.requestPaint() }
+                                    }
+                                    onPaint: {
+                                        var ctx = getContext("2d")
+                                        var W = width, H = height
+                                        ctx.clearRect(0, 0, W, H)
+                                        var rx = netRate.rxHistory, tx = netRate.txHistory
+                                        if (rx.length < 2) return
+                                        function curve(h, stroke, lw) {
+                                            var maxV = 12
+                                            for (var i = 0; i < rx.length; i++) maxV = Math.max(maxV, rx[i])
+                                            var n = h.length, pts = []
+                                            for (var i2 = 0; i2 < n; i2++) pts.push({ x: (i2 / (n - 1)) * W, y: H - 2 - (h[i2] / maxV) * (H - 8) })
+                                            ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y)
+                                            for (var k = 1; k < pts.length; k++) {
+                                                var cpx = (pts[k - 1].x + pts[k].x) / 2
+                                                ctx.bezierCurveTo(cpx, pts[k - 1].y, cpx, pts[k].y, pts[k].x, pts[k].y)
+                                            }
+                                            ctx.strokeStyle = stroke; ctx.lineWidth = lw; ctx.lineJoin = "round"; ctx.stroke()
+                                            return pts
+                                        }
+                                        if (tx.length >= 2) curve(tx, colors.tertiary, 1.6)
+                                        var pts = curve(rx, colors.primary, 2)
+                                        ctx.lineTo(pts[pts.length - 1].x, H); ctx.lineTo(0, H); ctx.closePath()
+                                        var g = ctx.createLinearGradient(0, 0, 0, H)
+                                        g.addColorStop(0, colors.alpha(colors.primary, 0.28))
+                                        g.addColorStop(1, "transparent")
+                                        ctx.fillStyle = g; ctx.fill()
+                                        ctx.beginPath(); ctx.arc(pts[pts.length - 1].x - 1, pts[pts.length - 1].y, 3, 0, Math.PI * 2)
+                                        ctx.fillStyle = colors.primary; ctx.fill()
+                                    }
                                 }
                             }
-                            Repeater {
-                                model: root.calCells
-                                delegate: Rectangle {
-                                    required property var modelData
-                                    Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredHeight: 14; radius: 6
-                                    color: modelData.today ? colors.primary : dayMa.containsMouse ? colors.alpha(colors.surfaceVariant,0.4) : "transparent"
-                                    Text { anchors.centerIn: parent; visible: modelData.d > 0; text: modelData.d; color: modelData.today ? colors.background : (modelData.wd >= 5 ? colors.alpha(colors.foreground,0.45) : colors.alpha(colors.foreground,0.8)); font.family: colors.fontSans; font.pixelSize: 8; font.weight: modelData.today ? Font.Bold : Font.Normal }
-                                    MouseArea { id: dayMa; anchors.fill: parent; hoverEnabled: true }
-                                }
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: 6
+                                Glyph { text: "󰇚"; color: colors.primary; font.pixelSize: 16 }
+                                Text { text: netRate.fmt(netRate.rxKbs); color: colors.foreground; font.family: root.uiFont; font.pixelSize: 14; font.weight: Font.DemiBold }
+                                Item { Layout.fillWidth: true }
+                                Glyph { text: "󰕒"; color: colors.tertiary; font.pixelSize: 16 }
+                                Text { text: netRate.fmt(netRate.txKbs); color: colors.foreground; font.family: root.uiFont; font.pixelSize: 14; font.weight: Font.DemiBold }
                             }
                         }
                     }
                 }
             }
 
+            // ── BOTTOM ──
+            ColumnLayout {
+                id: bottomColumn
+                Layout.fillWidth: true
+                Layout.minimumHeight: 260
+                Layout.preferredHeight: 260
+                Layout.maximumHeight: 260
+                spacing: 14
 
-            Text {
-                text: "Esc or SUPER ALT P to close  •  regular window — move / resize / tile like any other"
-                color: colors.alpha(colors.outline, 0.38)
-                font.family: colors.fontSans; font.pixelSize: 7; Layout.alignment: Qt.AlignHCenter
+                RowLayout {
+                    id: weekRow
+                    Layout.fillWidth: true
+                    Layout.minimumHeight: 96
+                    Layout.preferredHeight: 96
+                    Layout.maximumHeight: 96
+                    spacing: 14
+
+                    // Week — square tiles
+                    Card {
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.leftMargin: 22; anchors.rightMargin: 22
+                            spacing: 26
+                            ColumnLayout {
+                                spacing: 0
+                                Text { text: root.monthLabel; color: colors.foreground; font.family: root.uiFont; font.pixelSize: 16; font.weight: Font.Bold }
+                                Text { text: root.weekLabel; color: colors.alpha(colors.foreground, 0.68); font.family: root.uiFont; font.pixelSize: 13 }
+                            }
+                            Item {
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
+                                Row {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: parent.width
+                                    spacing: Math.max(6, (width - 7 * 64) / 6)
+                                    Repeater {
+                                        model: root.weekDays
+                                        delegate: Rectangle {
+                                            required property var modelData
+                                            width: 64; height: 64; radius: 12
+                                            color: modelData.today ? colors.primary : colors.alpha(colors.primary, 0.07)
+                                            Column {
+                                                anchors.centerIn: parent
+                                                spacing: 2
+                                                Text { anchors.horizontalCenter: parent.horizontalCenter; text: modelData.dow; color: modelData.today ? colors.background : colors.alpha(colors.foreground, 0.68); font.family: root.uiFont; font.pixelSize: 12 }
+                                                Text { anchors.horizontalCenter: parent.horizontalCenter; text: modelData.day; color: modelData.today ? colors.background : (modelData.wknd ? colors.alpha(colors.foreground, 0.55) : colors.foreground); font.family: root.uiFont; font.pixelSize: 20; font.weight: Font.DemiBold }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Pixel bot
+                    Card {
+                        Layout.preferredWidth: 210
+                        Layout.maximumWidth: 210
+                        Layout.minimumWidth: 210
+                        Layout.fillHeight: true
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.leftMargin: 18; anchors.rightMargin: 18
+                            spacing: 14
+                            Rectangle {
+                                width: 62; height: 62; radius: 12
+                                color: colors.alpha(colors.background, 0.5)
+                                clip: true
+                                PixelBot {
+                                    id: ccBot
+                                    active: root.open
+                                    registerIpc: false
+                                    colors: root.colors
+                                    pixelScale: 3
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    anchors.bottom: parent.bottom
+                                    anchors.bottomMargin: 6
+                                }
+                            }
+                            ColumnLayout {
+                                spacing: 0
+                                Text { text: "Pixel bot"; color: colors.foreground; font.family: root.uiFont; font.pixelSize: 15; font.weight: Font.Bold }
+                                Text { text: ccBot.mood; color: ccBot.mood === "error" ? colors.error : colors.primary; font.family: root.uiFont; font.pixelSize: 13 }
+                            }
+                        }
+                    }
+                }
+
+                // Screen time showcase
+                Card {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.margins: 18
+                        anchors.leftMargin: 22; anchors.rightMargin: 22
+                        spacing: 28
+
+                        ColumnLayout {
+                            Layout.preferredWidth: 190
+                            Layout.maximumWidth: 190
+                            Layout.fillHeight: true
+                            Layout.alignment: Qt.AlignTop
+                            spacing: 6
+                            Text { text: "SCREEN TIME TODAY"; color: colors.alpha(colors.foreground, 0.68); font.family: root.uiFont; font.pixelSize: 12; font.weight: Font.Bold; font.letterSpacing: 1.2 }
+                            Text { text: root.usageToday > 0 ? root.fmtHM(root.usageToday) : "—"; color: colors.foreground; font.family: "Iceberg"; font.pixelSize: 40; font.weight: Font.Normal }
+                        }
+
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            spacing: 4
+
+                            Item {
+                                id: weekChartBox
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
+                                Layout.minimumHeight: 0
+                                property int pad: 6
+                                function chartX(i) {
+                                    var n = Math.max(1, root.activityLast7.length - 1)
+                                    return pad + i * ((width - pad * 2) / n)
+                                }
+                                function chartY(v) {
+                                    return (height - 8) - (v / Math.max(1, root.weekMax)) * (height - 16)
+                                }
+
+                                Canvas {
+                                    id: weekChart
+                                    anchors.fill: parent
+                                    Connections {
+                                        target: root
+                                        function onActivityLast7Changed() { weekChart.requestPaint() }
+                                        function onChartHiChanged() { weekChart.requestPaint() }
+                                    }
+                                    onVisibleChanged: if (visible) requestPaint()
+                                    onPaint: {
+                                        var ctx = getContext("2d")
+                                        ctx.reset()
+                                        var days = root.activityLast7
+                                        if (days.length === 0) return
+                                        var mx = Math.max(1, root.weekMax)
+                                        var pad = 6
+                                        function X(i) { return pad + i * ((width - pad * 2) / Math.max(1, days.length - 1)) }
+                                        function Y(v) { return (height - 8) - (v / mx) * (height - 16) }
+                                        var acc = colors.tertiary
+
+                                        // Area fill under the smooth curve, exactly like ScreenTime.
+                                        ctx.beginPath()
+                                        ctx.moveTo(X(0), Y(days[0].secs))
+                                        for (var i = 1; i < days.length; i++) {
+                                            var cx = (X(i - 1) + X(i)) / 2
+                                            ctx.bezierCurveTo(cx, Y(days[i - 1].secs), cx, Y(days[i].secs), X(i), Y(days[i].secs))
+                                        }
+                                        ctx.lineTo(X(days.length - 1), height)
+                                        ctx.lineTo(X(0), height)
+                                        ctx.closePath()
+                                        ctx.fillStyle = colors.alpha(acc, 0.14)
+                                        ctx.fill()
+
+                                        // Average hairline.
+                                        ctx.beginPath()
+                                        ctx.moveTo(0, Y(root.avgDay))
+                                        ctx.lineTo(width, Y(root.avgDay))
+                                        ctx.strokeStyle = colors.alpha(colors.outline, 0.5)
+                                        ctx.lineWidth = 1
+                                        ctx.stroke()
+
+                                        // The curve itself.
+                                        ctx.beginPath()
+                                        ctx.moveTo(X(0), Y(days[0].secs))
+                                        for (var j = 1; j < days.length; j++) {
+                                            var cx2 = (X(j - 1) + X(j)) / 2
+                                            ctx.bezierCurveTo(cx2, Y(days[j - 1].secs), cx2, Y(days[j].secs), X(j), Y(days[j].secs))
+                                        }
+                                        ctx.strokeStyle = acc
+                                        ctx.lineWidth = 2.5
+                                        ctx.lineJoin = "round"
+                                        ctx.lineCap = "round"
+                                        ctx.stroke()
+
+                                        // Hovered-day guide, or today when nothing is hovered.
+                                        var hi = root.chartHi >= 0 && root.chartHi < days.length ? root.chartHi : days.length - 1
+                                        ctx.beginPath()
+                                        ctx.moveTo(X(hi), 0)
+                                        ctx.lineTo(X(hi), height)
+                                        ctx.strokeStyle = colors.alpha(colors.outline, root.chartHi >= 0 ? 0.35 : 0)
+                                        ctx.lineWidth = 1
+                                        ctx.stroke()
+
+                                        var tx = X(hi), ty = Y(days[hi].secs)
+                                        ctx.beginPath()
+                                        ctx.arc(tx, ty, 9, 0, 2 * Math.PI)
+                                        ctx.fillStyle = colors.alpha(acc, 0.2)
+                                        ctx.fill()
+                                        ctx.beginPath()
+                                        ctx.arc(tx, ty, 4.5, 0, 2 * Math.PI)
+                                        ctx.fillStyle = acc
+                                        ctx.fill()
+                                    }
+                                }
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    onPositionChanged: function(m) {
+                                        var n = Math.max(1, root.activityLast7.length - 1)
+                                        var i = Math.round((m.x - weekChartBox.pad) / ((width - weekChartBox.pad * 2) / n))
+                                        root.chartHi = Math.max(0, Math.min(n, i))
+                                    }
+                                    onExited: root.chartHi = -1
+                                }
+
+                                Rectangle {
+                                    readonly property var hoveredDay: root.chartHi >= 0 && root.chartHi < root.activityLast7.length ? root.activityLast7[root.chartHi] : null
+                                    visible: hoveredDay !== null
+                                    width: 104; height: 40; radius: 8
+                                    x: hoveredDay ? Math.min(Math.max(weekChartBox.chartX(root.chartHi) - 52, 2), Math.max(2, weekChartBox.width - 106)) : 2
+                                    y: hoveredDay ? Math.max(2, Math.min(weekChartBox.chartY(hoveredDay.secs) - 44, weekChartBox.height - 42)) : 2
+                                    color: colors.alpha(colors.surface, 0.96)
+                                    border.width: 1; border.color: colors.alpha(colors.outline, 0.25)
+                                    ColumnLayout {
+                                        anchors.centerIn: parent
+                                        spacing: 0
+                                        Text {
+                                            text: { if (root.chartHi < 0 || root.chartHi >= root.activityLast7.length) return ""; var p = String(root.activityLast7[root.chartHi].display).split(" "); return (p[0] + " " + (p[2] || "")).trim() }
+                                            color: colors.foreground
+                                            font.family: root.uiFont; font.pixelSize: 11; font.weight: Font.Bold
+                                            Layout.alignment: Qt.AlignHCenter
+                                        }
+                                        Text {
+                                            text: { if (root.chartHi < 0 || root.chartHi >= root.activityLast7.length) return ""; return root.fmtHM(root.activityLast7[root.chartHi].secs) }
+                                            color: colors.tertiary
+                                            font.family: root.uiFont; font.pixelSize: 11
+                                            Layout.alignment: Qt.AlignHCenter
+                                        }
+                                    }
+                                }
+                            }
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: 0
+                                Repeater {
+                                    model: root.activityLast7
+                                    Text {
+                                        required property var modelData
+                                        required property int index
+                                        Layout.fillWidth: true
+                                        horizontalAlignment: Text.AlignHCenter
+                                        text: { var p = String(modelData.display).split(" "); return (p[0] + " " + (p[2] || "")).trim() }
+                                        color: index === root.activityLast7.length - 1 ? colors.foreground : colors.alpha(colors.outline, 0.7)
+                                        font.family: root.uiFont; font.pixelSize: 11
+                                        font.weight: index === root.activityLast7.length - 1 ? Font.Bold : Font.Normal
+                                        elide: Text.ElideRight
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }

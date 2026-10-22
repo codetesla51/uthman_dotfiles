@@ -24,6 +24,10 @@ Item {
     property int _idCounter: 0
     property var _live: ({})   // nid -> live Notification object (for invoking actions)
 
+    // Bar's PixelBot listens to this — the bot replaced the bell as the
+    // ambient notification indicator.
+    signal notificationArrived()
+
     function togglePanel() { panelOpen = !panelOpen }
     function toggleDnd() { dnd = !dnd }
 
@@ -179,7 +183,10 @@ Item {
 
         onNotification: (notification) => {
             root.addToArchive(notification)
-            if (!root.dnd) root.popToast(notification)
+            if (!root.dnd) {
+                root.popToast(notification)
+                root.notificationArrived()
+            }
         }
     }
 

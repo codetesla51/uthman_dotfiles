@@ -26,6 +26,11 @@ PanelWindow {
     Colors { id: palette }
 
     NotificationCenter { id: ntfy; colors: palette }
+    Connections {
+        target: ntfy
+        // the bot is the bell now: every non-DND notification makes it alert
+        function onNotificationArrived() { bot.ping() }
+    }
 
     // ---- resident panels: every popup stays loaded, zero RAM saved but
     // zero first-paint white flash (the battery lesson — lazy Loaders
@@ -305,12 +310,14 @@ PanelWindow {
                     color: colors.alpha(colors.outline, 0.28)
                     Layout.alignment: Qt.AlignVCenter
                 }
-                // bell small right
-                BellButton {
+                // bot small right — replaces the notification bell; it reacts
+                // to notifications, CPU, battery, recording, music and idle
+                PixelBot {
+                    id: bot
                     colors: bar.colors
-                    historyCount: ntfy.historyCount
-                    panelOpen: ntfy.panelOpen
-                    onToggleRequested: ntfy.togglePanel()
+                    pixelScale: 2
+                    cpuUsage: cpuPill.usage
+                    helloOnWorkspace: true
                 }
             }
 
@@ -430,7 +437,7 @@ PanelWindow {
                 onToggleDndRequested: ntfy.toggleDnd()
             }
             Memory { colors: bar.colors; onOpenRequested: showSysMon() }
-            Cpu { colors: bar.colors; onOpenRequested: showSysMon() }
+            Cpu { id: cpuPill; colors: bar.colors; onOpenRequested: showSysMon() }
             WatchCat {
                 colors: bar.colors
                 onOpenRequested: toggleWatchCat()

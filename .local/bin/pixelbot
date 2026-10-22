@@ -1,0 +1,2 @@
+#!/bin/sh
+exec "$HOME/.config/quickshell/scripts/pixelbot-tui.py" "$@"

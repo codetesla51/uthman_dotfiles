@@ -66,6 +66,7 @@ Item {
     property real pingUntil: 0
     property real okUntil: 0
     property real helloUntil: Date.now() + 4000
+    property real chargingUntil: 0             // charging is a one-shot pulse, not a permanent mood
     property int frame: 0
     property string mood: "idle"
     property var rs: ({ x: 20, dir: 1, wait: 0, target: 20, moving: false })
@@ -84,6 +85,13 @@ Item {
         else if (cpu < cpuBusyAt - 20) busyLatch = false
     }
 
+    onChargingChanged: {
+        // Plugging in is a brief acknowledgement, not a state that owns the
+        // bot forever. It can appear only when nothing more interesting is
+        // happening, and it disappears after five seconds.
+        chargingUntil = charging ? Date.now() + 5000 : 0
+    }
+
     // One decision, shared by the renderer and the Control Center caption.
     readonly property var moodInfo: resolve({
         error: failed,
@@ -95,7 +103,7 @@ Item {
         cpu: cpu,
         busy: busyLatch,
         offline: !online,
-        chg: charging,
+        chg: charging && now < chargingUntil,
         music: music,
         focus: focusMode,
         muted: muted,
@@ -451,9 +459,9 @@ done
 
     // Strict priority. One state wins even when several are true:
     // failure > notification > done > low battery > recording > high CPU >
-    // offline > charging > music > focus > muted > sleepy > hello > idle.
-    // Charging + music + high CPU therefore shows busy; once CPU drops below
-    // 60% (hysteresis) it switches to charging, then to dance after unplug.
+    // offline > music > focus > muted > sleepy > hello > charging pulse > idle.
+    // Charging is deliberately last: it is a 5s acknowledgement after plug-in,
+    // so music/focus/idle-time always beat it and it never owns the bot forever.
     function resolve(i) {
         if (i.error) return ['error', 'build failed']
         if (i.ping) return ['alert', 'new notification']
@@ -462,12 +470,12 @@ done
         if (i.rec) return ['recording', 'recording is on']
         if (i.busy) return ['busy', 'CPU at ' + i.cpu + '%']
         if (i.offline) return ['offline', 'no network']
-        if (i.chg) return ['charging', 'plugged in']
         if (i.music) return ['dance', 'audio is playing']
         if (i.focus) return ['focus', 'do not disturb']
         if (i.muted) return ['muted', 'volume is muted']
         if (i.afk) return ['sleepy', 'away from the keyboard']
         if (i.hello) return ['hello', 'just woke up']
+        if (i.chg) return ['charging', 'plugged in']
         return ['idle', 'nothing going on']
     }
 }

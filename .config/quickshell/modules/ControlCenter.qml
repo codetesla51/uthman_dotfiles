@@ -785,6 +785,14 @@ FloatingWindow {
                                     color: (ccBot.mood === "error" || ccBot.mood === "offline" || ccBot.mood === "lowbat") ? colors.error : colors.primary
                                     font.family: root.uiFont; font.pixelSize: 13
                                 }
+                                Text {
+                                    Layout.fillWidth: true
+                                    visible: ccBot.charging
+                                    elide: Text.ElideRight
+                                    text: "Charging · " + ccBot.battery + "%"
+                                    color: colors.alpha(colors.tertiary, 0.9)
+                                    font.family: root.uiFont; font.pixelSize: 11
+                                }
                             }
                         }
                     }

@@ -66,7 +66,7 @@ Item {
     property real pingUntil: 0
     property real okUntil: 0
     property real helloUntil: Date.now() + 4000
-    property real chargingUntil: 0             // charging is a one-shot pulse, not a permanent mood
+    property real chargeSparkUntil: 0             // one-shot plug-in spark
     property int frame: 0
     property string mood: "idle"
     property var rs: ({ x: 20, dir: 1, wait: 0, target: 20, moving: false })
@@ -86,10 +86,14 @@ Item {
     }
 
     onChargingChanged: {
-        // Plugging in is a brief acknowledgement, not a state that owns the
-        // bot forever. It can appear only when nothing more interesting is
-        // happening, and it disappears after five seconds.
-        chargingUntil = charging ? Date.now() + 5000 : 0
+        // Charging is a status badge, never a mood. Plugging in gets a brief
+        // spark and one sound; the bot keeps doing whatever it was doing.
+        if (charging) {
+            chargeSparkUntil = Date.now() + 1800
+            if (soundReady && soundEnabled && moodSounds && active) playSound("charging")
+        } else {
+            chargeSparkUntil = 0
+        }
     }
 
     // One decision, shared by the renderer and the Control Center caption.
@@ -103,7 +107,6 @@ Item {
         cpu: cpu,
         busy: busyLatch,
         offline: !online,
-        chg: charging && now < chargingUntil,
         music: music,
         focus: focusMode,
         muted: muted,
@@ -438,6 +441,19 @@ done
         }
         for (const q of P.ov) { ctx.fillStyle = q[4]; ctx.fillRect(sx + q[0], sy + q[1], q[2], q[3]) }
         for (const q of P.ex) { ctx.fillStyle = q[4]; ctx.fillRect(x0 + q[0], q[1], q[2], q[3]) }
+
+        // Charging is a badge, not a mood: the bolt stays while plugged in,
+        // and a brief one-shot spark fires on the plug-in transition.
+        if (root.charging) {
+            ctx.fillStyle = pal.gn
+            for (const q of [[13,0],[12,1],[11,2],[12,2],[12,3]])
+                ctx.fillRect(sx + q[0], sy + q[1], 1, 1)
+            if (root.now < root.chargeSparkUntil) {
+                ctx.fillStyle = (f & 3) < 2 ? pal.ye : pal.cy
+                for (const q of [[10,0],[15,2],[14,4],[1,1]])
+                    ctx.fillRect(sx + q[0], sy + q[1], 1, 1)
+            }
+        }
     }
 
     function roamStep(R, m, f, W, on) {
@@ -459,9 +475,9 @@ done
 
     // Strict priority. One state wins even when several are true:
     // failure > notification > done > low battery > recording > high CPU >
-    // offline > music > focus > muted > sleepy > hello > charging pulse > idle.
-    // Charging is deliberately last: it is a 5s acknowledgement after plug-in,
-    // so music/focus/idle-time always beat it and it never owns the bot forever.
+    // offline > music > focus > muted > sleepy > hello > idle.
+    // Charging is not in this list on purpose: it is an overlay/status, so it
+    // is always visible while charging without ever replacing the mood.
     function resolve(i) {
         if (i.error) return ['error', 'build failed']
         if (i.ping) return ['alert', 'new notification']
@@ -475,7 +491,6 @@ done
         if (i.muted) return ['muted', 'volume is muted']
         if (i.afk) return ['sleepy', 'away from the keyboard']
         if (i.hello) return ['hello', 'just woke up']
-        if (i.chg) return ['charging', 'plugged in']
         return ['idle', 'nothing going on']
     }
 }

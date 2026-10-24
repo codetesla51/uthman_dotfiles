@@ -8,11 +8,10 @@ import Quickshell.Io
 // Clipboard Manager: history from cliphist plus 9 pinned notes.
 //   SUPER CTRL V   open the window
 //   SUPER CTRL P   pin whatever is on the clipboard right now
-//   SUPER ALT 1-9  copy a pinned note to the clipboard, no window
+// Click any pinned note to copy it. There are no global paste shortcuts.
 // In the window: type to filter, Up/Down move, Enter copies, CTRL P pins
 // the selected clip, Delete drops it, Esc clears the search then closes.
-// Drag a text clip onto a slot to pin it there. Drag a note onto another
-// slot to swap them. Slot number = the SUPER ALT key.
+// Drag a text clip or a note onto another note to pin/swap it there.
 FloatingWindow {
     id: root
     property var colors
@@ -63,7 +62,8 @@ FloatingWindow {
     }
     function moveCursor(step) {
         cursor = Math.max(0, Math.min(total - 1, cursor + step))
-        if (cursor >= pinnedCount) clipList.positionViewAtIndex(cursor - pinnedCount, ListView.Contain)
+        if (cursor < pinnedCount) pinList.positionViewAtIndex(cursor, ListView.Contain)
+        else clipList.positionViewAtIndex(cursor - pinnedCount, ListView.Contain)
     }
     function entryAtCursor() { return cursor >= pinnedCount ? filtered[cursor - pinnedCount] : null }
     function copyCursor() {
@@ -127,7 +127,13 @@ FloatingWindow {
     }
     function pinEntry(e) {
         if (e.isImage) notify("Images can't be pinned yet")
-        else pinText(e.preview, 0)
+        else pinEntryById(e.id, 0)
+    }
+    function pinEntryById(id, slot) {
+        if (pinDecodeProc.running) return
+        pinDecodeProc.targetSlot = slot
+        pinDecodeProc.command = ["sh", "-c", "cliphist decode " + id]
+        pinDecodeProc.running = true
     }
     function addStickyFromClipboard() { captureProc.running = true }
     function clearStickies() { db().transaction(function(tx) { tx.executeSql("DELETE FROM pins") }); loadPins() }
@@ -147,36 +153,51 @@ FloatingWindow {
     property bool dragging: false
     property string dragText: ""
     property int dragFromSlot: 0              // 0 = dragged from history
+    property string dragClipId: ""            // history drag: decode the full clip on drop
     property point dragPos: Qt.point(0, 0)    // in card coordinates
     property int hoverSlot: 0
 
     function slotAt(x, y) {
         if (!boardVisible) return 0
-        for (var i = 0; i < 9; i++) {
-            var cell = slotRepeater.itemAt(i)
+        for (var i = 0; i < root.pinnedList.length; i++) {
+            var cell = pinList.itemAtIndex(i)
+            if (!cell) continue
             var p = cell.mapFromItem(card, x, y)
-            if (p.x >= 0 && p.y >= 0 && p.x <= cell.width && p.y <= cell.height) return i + 1
+            if (p.x >= 0 && p.y >= 0 && p.x <= cell.width && p.y <= cell.height)
+                return root.pinnedList[i].slot
         }
         return 0
     }
-    function beginDrag(text, fromSlot) { dragText = text; dragFromSlot = fromSlot; dragging = true }
+    function beginDrag(text, fromSlot, clipId) {
+        dragText = text
+        dragFromSlot = fromSlot
+        dragClipId = clipId || ""
+        dragging = true
+    }
     function moveDrag(scenePos) {
         dragPos = card.mapFromItem(null, scenePos.x, scenePos.y)
         hoverSlot = slotAt(dragPos.x, dragPos.y)
     }
     function endDrag() {
         if (hoverSlot > 0) {
-            if (dragFromSlot > 0) { if (dragFromSlot !== hoverSlot) swapPins(dragFromSlot, hoverSlot) }
-            else pinText(dragText, hoverSlot)
+            if (dragFromSlot > 0) {
+                if (dragFromSlot !== hoverSlot) swapPins(dragFromSlot, hoverSlot)
+            } else if (dragClipId !== "") {
+                pinEntryById(dragClipId, hoverSlot)
+            } else {
+                pinText(dragText, hoverSlot)
+            }
         }
         dragging = false
+        dragClipId = ""
         hoverSlot = 0
     }
     component DragSource: DragHandler {
         required property string payload
         property int fromSlot: 0
+        property string clipId: ""
         target: null
-        onActiveChanged: active ? root.beginDrag(payload, fromSlot) : root.endDrag()
+        onActiveChanged: active ? root.beginDrag(payload, fromSlot, clipId) : root.endDrag()
         onCentroidChanged: if (active) root.moveDrag(centroid.scenePosition)
     }
 
@@ -216,13 +237,29 @@ FloatingWindow {
     // pin whatever is on the live clipboard (single process, no temp file)
     Process {
         id: captureProc
-        command: ["sh", "-c", "wl-paste --no-newline 2>/dev/null | head -c 2000"]
+        command: ["sh", "-c", "wl-paste --no-newline 2>/dev/null"]
         stdout: StdioCollector {
             waitForEnd: true
             onStreamFinished: {
                 var body = text.replace(/\s+$/, "")
                 if (body.trim()) root.pinText(body, 0)
                 else root.notify("Clipboard is empty")
+            }
+        }
+    }
+
+    // `cliphist list` only gives a preview. Pin the decoded clip so long text
+    // is stored and copied in full instead of being cut at the preview.
+    Process {
+        id: pinDecodeProc
+        property int targetSlot: 0
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: {
+                var body = text.replace(/\s+$/, "")
+                if (body.trim()) root.pinText(body, pinDecodeProc.targetSlot)
+                else root.notify("Clipboard is empty")
+                pinDecodeProc.targetSlot = 0
             }
         }
     }
@@ -288,76 +325,119 @@ FloatingWindow {
                 }
             }
 
-            // pinned notes: 3x3, slot number = SUPER ALT key
+            // pinned notes: one full-width row per note, wrapped so nothing
+            // is elided. The list scrolls when the notes are taller than the
+            // shelf. Clicking a row copies the complete note.
             ColumnLayout {
                 Layout.fillWidth: true
                 visible: root.boardVisible
                 spacing: 8
+                RowLayout {
+                    Layout.fillWidth: true
+                    Text {
+                        text: "Pinned, " + root.pinnedList.length + " of 9"
+                        color: colors.alpha(colors.foreground, 0.5)
+                        font.family: colors.fontSans; font.pixelSize: 10
+                        Layout.fillWidth: true
+                    }
+                    Text {
+                        visible: root.pinnedList.length > 0
+                        text: "click a note to copy"
+                        color: colors.alpha(colors.foreground, 0.32)
+                        font.family: colors.fontSans; font.pixelSize: 9
+                    }
+                }
                 Text {
-                    text: "Pinned, " + root.pinnedList.length + " of 9"
-                    color: colors.alpha(colors.foreground, 0.5)
+                    visible: root.pinnedList.length === 0
+                    text: "No pinned notes yet — use Pin or CTRL P on a clip."
+                    color: colors.alpha(colors.foreground, 0.42)
                     font.family: colors.fontSans; font.pixelSize: 10
                 }
-                Grid {
-                    id: pinGrid
+                ListView {
+                    id: pinList
                     Layout.fillWidth: true
-                    columns: 3
+                    Layout.preferredHeight: root.pinnedList.length === 0 ? 0 : Math.min(230, Math.max(96, pinList.contentHeight))
+                    visible: root.pinnedList.length > 0
+                    clip: true
                     spacing: 6
+                    model: root.pinnedList
+                    boundsBehavior: Flickable.StopAtBounds
+                    ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
 
-                    Repeater {
-                        id: slotRepeater
-                        model: 9
-                        delegate: Item {
-                            id: cell
-                            required property int index
-                            readonly property int slot: index + 1
-                            readonly property string value: root.pins[index]
-                            readonly property bool selected: value !== "" && root.pinnedIndex(slot) === root.cursor
-                            width: (pinGrid.width - 2 * pinGrid.spacing) / 3
-                            height: 38
+                    delegate: Rectangle {
+                        id: pinRow
+                        required property int index
+                        required property var modelData
+                        readonly property int slot: modelData.slot
+                        readonly property bool selected: root.pinnedIndex(slot) === root.cursor
 
-                            // the empty slot underneath, also the drop highlight
-                            Rectangle {
-                                anchors.fill: parent
-                                radius: 11
-                                color: root.hoverSlot === cell.slot ? colors.alpha(colors.primary, 0.4) : colors.alpha(colors.foreground, 0.04)
-                                Text {
-                                    anchors.centerIn: parent
-                                    visible: cell.value === ""
-                                    text: cell.slot
-                                    color: colors.alpha(colors.foreground, 0.25)
-                                    font.family: colors.fontSans; font.pixelSize: 10
-                                }
+                        width: pinList.width
+                        height: Math.max(44, pinBody.implicitHeight + 20)
+                        radius: 12
+                        color: root.noteColors[(slot - 1) % 5]
+                        border.width: root.hoverSlot === slot || selected ? 2 : 0
+                        border.color: selected ? colors.alpha(colors.foreground, 0.62) : colors.alpha(colors.foreground, 0.8)
+                        opacity: root.dragging && root.dragFromSlot === slot ? 0.3 : 1
+
+                        Text {
+                            id: pinSlot
+                            anchors.left: parent.left
+                            anchors.leftMargin: 12
+                            anchors.top: parent.top
+                            anchors.topMargin: 11
+                            text: pinRow.slot
+                            color: "#241f12"; opacity: 0.55
+                            font.family: colors.fontSans; font.pixelSize: 10; font.weight: Font.DemiBold
+                        }
+                        Text {
+                            id: pinBody
+                            anchors.left: pinSlot.right
+                            anchors.leftMargin: 10
+                            anchors.right: parent.right
+                            anchors.rightMargin: 68
+                            anchors.top: parent.top
+                            anchors.topMargin: 10
+                            text: pinRow.modelData.text
+                            color: "#241f12"
+                            wrapMode: Text.WrapAtWordBoundaryOrAnywhere
+                            font.family: colors.fontSans; font.pixelSize: 10; font.weight: Font.Medium
+                        }
+                        Rectangle {
+                            id: unpinBtn
+                            z: 2
+                            visible: pinRow.selected || pinMouse.containsMouse
+                            anchors.right: parent.right
+                            anchors.rightMargin: 8
+                            anchors.top: parent.top
+                            anchors.topMargin: 7
+                            implicitWidth: unpinLabel.implicitWidth + 16
+                            implicitHeight: 22
+                            radius: 11
+                            color: colors.alpha(colors.foreground, 0.14)
+                            Text {
+                                id: unpinLabel
+                                anchors.centerIn: parent
+                                text: "Unpin"
+                                color: "#241f12"; opacity: 0.68
+                                font.family: colors.fontSans; font.pixelSize: 9
                             }
-
-                            Rectangle {
-                                id: note
-                                visible: cell.value !== ""
+                            MouseArea {
                                 anchors.fill: parent
-                                anchors.topMargin: (cell.selected || noteMa.containsMouse) ? -2 : 0
-                                anchors.bottomMargin: (cell.selected || noteMa.containsMouse) ? 2 : 0
-                                radius: 11
-                                color: root.noteColors[cell.index % 5]
-                                opacity: root.dragging && root.dragFromSlot === cell.slot ? 0.3 : 1
-                                Behavior on anchors.topMargin { NumberAnimation { duration: 120 } }
-
-                                RowLayout {
-                                    anchors.fill: parent
-                                    anchors.leftMargin: 10; anchors.rightMargin: 10
-                                    spacing: 8
-                                    Text { text: cell.slot; color: "#241f12"; opacity: 0.55; font.family: colors.fontSans; font.pixelSize: 10; font.weight: Font.DemiBold }
-                                    Text { Layout.fillWidth: true; text: cell.value; color: "#241f12"; elide: Text.ElideRight; maximumLineCount: 1; font.family: colors.fontSans; font.pixelSize: 10; font.weight: Font.Medium }
-                                    Text {
-                                        id: unpinLabel
-                                        visible: noteMa.containsMouse || cell.selected
-                                        text: "Unpin"; color: "#241f12"; opacity: 0.6
-                                        font.family: colors.fontSans; font.pixelSize: 9
-                                        MouseArea { anchors.fill: parent; anchors.margins: -4; onClicked: root.setPin(cell.slot, "") }
-                                    }
-                                }
-                                MouseArea { id: noteMa; anchors.fill: parent; z: -1; hoverEnabled: true; onClicked: root.copyPin(cell.slot) }
-                                DragSource { payload: cell.value; fromSlot: cell.slot }
+                                hoverEnabled: true
+                                onClicked: root.setPin(pinRow.slot, "")
                             }
+                        }
+                        MouseArea {
+                            id: pinMouse
+                            anchors.fill: parent
+                            z: 1
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: root.copyPin(pinRow.slot)
+                        }
+                        DragSource {
+                            payload: pinRow.modelData.text
+                            fromSlot: pinRow.slot
                         }
                     }
                 }
@@ -404,8 +484,12 @@ FloatingWindow {
                         onPositionChanged: if (!root.allowHover) root.allowHover = true
                         onClicked: root.copyEntry(rowItem.modelData.id)
                     }
-                    // text clips can be dragged onto a slot
-                    DragSource { enabled: !rowItem.modelData.isImage; payload: rowItem.modelData.preview }
+                    // text clips can be dragged onto a pinned row; decode on drop
+                    DragSource {
+                        enabled: !rowItem.modelData.isImage
+                        payload: rowItem.modelData.preview
+                        clipId: rowItem.modelData.id
+                    }
 
                     RowLayout {
                         anchors.fill: parent
@@ -468,7 +552,7 @@ FloatingWindow {
 
             Text {
                 Layout.fillWidth: true
-                text: "↑↓ move    Enter copy    CTRL P pin    Del remove    Drag to a slot to pin    SUPER ALT 1-9 paste a note"
+                text: "Click a note to copy    ↑↓ move    Enter copy    CTRL P pin    Del remove    Drag notes to swap"
                 color: colors.alpha(colors.foreground, 0.4)
                 font.family: colors.fontSans; font.pixelSize: 9
                 elide: Text.ElideRight

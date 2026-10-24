@@ -79,13 +79,8 @@ hl.bind("SUPER + CTRL + E", hl.dsp.exec_cmd("uwsm-app -- ~/.config/rofi/emoji.sh
 hl.unbind("SUPER + CTRL + V")
 hl.bind("SUPER + CTRL + V", hl.dsp.exec_cmd(qs("clipboard toggle")))
 
--- Sticky shelf — fire a pinned snippet straight to the clipboard from any app,
--- no panel. Slot 1 is the oldest sticky.
-for i = 1, 9 do
-  hl.bind("SUPER + ALT + " .. i, hl.dsp.exec_cmd(qs("sticky copy " .. i)))
-end
-
--- Pin current clipboard to the sticky shelf, from any app, no window
+-- Pin current clipboard to the sticky shelf, from any app, no window.
+-- Copying a pinned note is done by clicking it in the clipboard panel.
 hl.bind("SUPER + CTRL + P", hl.dsp.exec_cmd(qs("sticky pin")))
 
 -- Personal keybindings browser: rofi

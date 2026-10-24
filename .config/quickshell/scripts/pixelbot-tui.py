@@ -116,9 +116,29 @@ SYNC_ON = "\x1b[?2026h"
 SYNC_OFF = "\x1b[?2026l"
 
 
+SPRITE_W = 16
+SPRITE_H = 18
+PIXEL_COLORS = {
+    "H": "#b9c3d8", "T": "#9aa6bf", "A2": "#aab4c8", "L": "#8793ad",
+    "cy": "#5ad1ff", "am": "#f9a15b", "rd": "#f38ba8", "gn": "#a6e3a1",
+    "dm": "#5b6478", "ye": "#f9e2af", "bl": "#89dceb", "pu": "#b4a1ff",
+}
+
+
 def hex_rgb(value):
     value = value.lstrip("#")
     return (int(value[0:2], 16), int(value[2:4], 16), int(value[4:6], 16))
+
+
+def mix_hex(color, factor):
+    factor = max(-0.6, min(0.6, factor))
+    n = int(color.lstrip("#"), 16)
+    target = 255 if factor > 0 else 0
+    amount = abs(factor)
+    r = round(((n >> 16) & 255) + (target - ((n >> 16) & 255)) * amount)
+    g = round(((n >> 8) & 255) + (target - ((n >> 8) & 255)) * amount)
+    b = round((n & 255) + (target - (n & 255)) * amount)
+    return f"#{r:02x}{g:02x}{b:02x}"
 
 
 def blend(fg, bg, alpha):
@@ -174,6 +194,10 @@ class Palette:
         r, g, b = self.rgb[role]
         return f"\x1b[48;2;{r};{g};{b}m"
 
+    def bg_hex(self, color):
+        r, g, b = hex_rgb(color)
+        return f"\x1b[48;2;{r};{g};{b}m"
+
     def fg(self, role, bold=False):
         r, g, b = self.rgb[role]
         return f"\x1b[{'1;' if bold else ''}38;2;{r};{g};{b}m"
@@ -189,174 +213,266 @@ class Palette:
 
 
 def draw_sprite(mood, frame, gaze=None):
-    """Return a 16x16 matrix of palette role keys (None = transparent)."""
-    px = [[None] * 16 for _ in range(16)]
+    """Return a 16x18 matrix of shaded hex colors (None = transparent).
 
-    def p(x, y, w, h, c):
-        for yy in range(max(0, y), min(16, y + h)):
-            for xx in range(max(0, x), min(16, x + w)):
-                px[yy][xx] = c
+    This is the terminal port of the Canvas sprite in PixelBot.qml: same
+    proportions, face plate, edge shading and mood animations.
+    """
+    pal = PIXEL_COLORS
 
-    def body(t):
-        p(7, 0, 2, 2, t)
-        p(7, 2, 2, 1, "B")
-        p(2, 3, 12, 9, "B")
-        p(1, 6, 1, 3, "B")
-        p(14, 6, 1, 3, "B")
-        p(3, 4, 10, 7, "S")
-        p(4, 12, 8, 2, "B")
-        p(5, 14, 2, 1, "B")
-        p(9, 14, 2, 1, "B")
+    def open_eyes(c, look):
+        return [(5 + look, 6, 2, 2, c), (9 + look, 6, 2, 2, c)]
 
-    def e_open(c, look):
-        p(5 + look, 6, 2, 2, c)
-        p(9 + look, 6, 2, 2, c)
+    def blink(c):
+        return [(5, 7, 2, 1, c), (9, 7, 2, 1, c)]
 
-    def e_blink(c):
-        p(5, 7, 2, 1, c)
-        p(9, 7, 2, 1, c)
+    def hap(c):
+        return [(5, 7, 1, 1, c), (6, 6, 1, 1, c), (7, 7, 1, 1, c),
+                (9, 7, 1, 1, c), (10, 6, 1, 1, c), (11, 7, 1, 1, c)]
 
-    def e_hap(c):
-        for x in (5, 9):
-            p(x, 7, 1, 1, c)
-            p(x + 1, 6, 1, 1, c)
-            p(x + 2, 7, 1, 1, c)
+    def wide(c):
+        return [(5, 5, 2, 3, c), (9, 5, 2, 3, c)]
 
-    def e_wide(c):
-        p(5, 5, 2, 3, c)
-        p(9, 5, 2, 3, c)
+    def low(c):
+        return [(5, 7, 2, 2, c), (9, 7, 2, 2, c)]
 
-    def e_low(c):
-        p(5, 7, 2, 2, c)
-        p(9, 7, 2, 2, c)
-
-    def e_x(c, shift):
+    def x_eyes(c):
+        out = []
         for x in (5, 9):
             for ax, ay in ((0, 0), (2, 0), (1, 1), (0, 2), (2, 2)):
-                p(x + ax + shift, 5 + ay, 1, 1, c)
+                out.append((x + ax, 5 + ay, 1, 1, c))
+        return out
 
-    def e_heart(c):
+    def heart(c):
+        out = []
         for x in (5, 9):
-            p(x, 5, 1, 1, c)
-            p(x + 2, 5, 1, 1, c)
-            p(x, 6, 3, 1, c)
-            p(x + 1, 7, 1, 1, c)
+            out.extend([(x, 5, 1, 1, c), (x + 2, 5, 1, 1, c),
+                        (x, 6, 3, 1, c), (x + 1, 7, 1, 1, c)])
+        return out
 
-    def m_flat(c):
-        p(7, 9, 2, 1, c)
+    flat = lambda c: [(7, 9, 2, 1, c)]
+    smile = lambda c: [(6, 8, 1, 1, c), (7, 9, 2, 1, c), (9, 8, 1, 1, c)]
+    mouth_o = lambda c: [(7, 8, 2, 2, c)]
+    frown = lambda c: [(6, 9, 1, 1, c), (7, 8, 2, 1, c), (9, 9, 1, 1, c)]
+    zig = lambda c: [(6, 9, 1, 1, c), (7, 8, 1, 1, c),
+                     (8, 9, 1, 1, c), (9, 8, 1, 1, c)]
 
-    def m_smile(c):
-        p(6, 9, 1, 1, c)
-        p(7, 10, 2, 1, c)
-        p(9, 9, 1, 1, c)
+    def qgaze(f):
+        k = f % 52
+        if (20 <= k < 22) or (40 <= k < 42):
+            return 'b'
+        if 28 <= k < 36:
+            return -1
+        return 1 if k >= 44 else 0
 
-    def m_o(c):
-        p(7, 9, 2, 2, c)
+    g = gaze if gaze is not None else qgaze(frame)
+    eyes = lambda c: blink(c) if g == 'b' else open_eyes(c, g)
+    k = frame & 7
+    m = 'dance' if mood == 'music' else mood
+    if m not in ('walk', 'dance', 'happy', 'hello', 'alert', 'busy',
+                 'recording', 'lowbat', 'charging', 'error', 'muted',
+                 'offline', 'focus', 'sleepy'):
+        m = 'idle'
 
-    def m_frown(c):
-        p(6, 10, 1, 1, c)
-        p(7, 9, 2, 1, c)
-        p(9, 10, 1, 1, c)
+    P = {'tip': pal['cy'], 'la': 0, 'ra': 0, 'll': 0, 'rl': 0,
+         'ox': 0, 'oy': 0, 'dim': False, 'hp': False, 'ov': [], 'ex': []}
 
-    kk = frame % 52
-    blink = (20 <= kk < 22) or (40 <= kk < 42)
-    if gaze is not None:
-        look = gaze
-    else:
-        look = -1 if 28 <= kk < 36 else (1 if kk >= 44 else 0)
-
-    def eyes(c):
-        if blink:
-            e_blink(c)
-        else:
-            e_open(c, look)
-
-    def zz():
+    if m == 'walk':
+        s = (frame >> 1) & 1
+        P['ll'] = s
+        P['rl'] = 1 - s
+        P['la'] = s
+        P['ra'] = 1 - s
+        P['ov'] = open_eyes(pal['cy'], 1) + flat(pal['cy'])
+    elif m == 'dance':
+        A = [(2, 2), (1, 1), (2, 0), (1, 1), (0, 2), (1, 1), (2, 2), (0, 0)][k]
+        P['la'], P['ra'] = A
+        P['ll'] = 1 if k in (2, 3) else 0
+        P['rl'] = 1 if k in (6, 7) else 0
+        P['ox'] = (0, -1, -1, 0, 0, 1, 1, 0)[k]
+        P['oy'] = -1 if (k & 1) else 0
+        P['tip'] = (pal['cy'], pal['pu'], pal['rd'], pal['ye'])[(frame >> 1) & 3]
+        P['ov'] = hap(pal['cy']) + smile(pal['cy'])
+        P['ex'] = ([(15, 0, 1, 3, pal['ye']), (14, 2, 1, 1, pal['ye'])]
+                   if frame % 6 < 3 else
+                   [(1, 0, 1, 3, pal['ye']), (0, 2, 1, 1, pal['ye'])])
+    elif m == 'happy':
+        J = (0, -1, -2, -2, -1, 0, 0, 0)[k]
+        cols = (pal['rd'], pal['ye'], pal['gn'], pal['cy'], pal['pu'], pal['am'])
+        P['oy'] = J
+        P['la'] = P['ra'] = 2 if J < 0 else 0
+        P['ll'] = P['rl'] = 1 if J < 0 else 0
+        P['tip'] = pal['ye']
+        P['ov'] = hap(pal['cy']) + smile(pal['cy'])
+        for i in range(6):
+            P['ex'].append(((i * 5 + frame * 3) % 16,
+                            (frame * 2 + i * 3) % 4, 1, 1, cols[i]))
+    elif m == 'hello':
+        P['ra'] = 2 if frame & 1 else 1
+        P['ov'] = hap(pal['cy']) + smile(pal['cy'])
+    elif m == 'alert':
+        P['ox'] = (0, 1, 0, -1)[frame & 3]
+        P['la'] = P['ra'] = 2
+        P['tip'] = pal['am']
+        P['ov'] = wide(pal['am']) + mouth_o(pal['am'])
+        if frame & 1:
+            P['ex'] = [(0, 2, 1, 1, pal['ye']), (15, 2, 1, 1, pal['ye']),
+                       (0, 4, 1, 1, pal['ye']), (15, 4, 1, 1, pal['ye'])]
+    elif m == 'busy':
+        P['tip'] = pal['am'] if (frame >> 1) & 1 else pal['cy']
+        P['la'] = frame & 1
+        P['ra'] = 1 - P['la']
+        P['ov'] = open_eyes(pal['cy'], -1 if (frame >> 2) & 1 else 1) + [
+            (4, 9, 8, 1, '#262b38'), (4 + frame % 6, 9, 3, 1, pal['cy'])]
+    elif m == 'recording':
+        P['tip'] = pal['rd']
+        P['ov'] = eyes(pal['cy']) + flat(pal['cy'])
+        if (frame >> 2) & 1:
+            P['ov'].append((11, 5, 2, 1, pal['rd']))
+    elif m == 'lowbat':
+        P['oy'] = 1
+        P['tip'] = pal['rd'] if (frame >> 3) & 1 else pal['dm']
+        P['ov'] = low(pal['am']) + frown(pal['am'])
+        if frame % 6 < 4:
+            P['ov'].append((5, 9, 1, 1, pal['bl']))
+    elif m == 'charging':
+        P['tip'] = pal['gn'] if (frame >> 1) & 1 else pal['cy']
+        P['ov'] = (hap(pal['gn']) if (frame >> 2) & 1 else heart(pal['rd']))             + smile(pal['gn'])
+        if (frame >> 1) & 1:
+            P['ov'].extend([(8, 11, 1, 1, pal['ye']),
+                            (7, 12, 2, 1, pal['ye']),
+                            (7, 13, 1, 1, pal['ye'])])
+    elif m == 'error':
+        P['tip'] = pal['rd']
+        P['ox'] = 1 if frame % 14 < 2 else 0
+        P['la'] = P['ra'] = 2
+        P['ov'] = x_eyes(pal['rd']) + zig(pal['rd'])
+    elif m == 'muted':
+        P['tip'] = pal['dm']
+        P['ov'] = eyes(pal['cy']) + [
+            (5, 9, 6, 1, pal['dm']), (7, 9, 1, 1, '#0e1015'),
+            (9, 9, 1, 1, '#0e1015')]
+    elif m == 'offline':
+        P['tip'] = pal['dm']
+        P['la'] = P['ra'] = 1
+        P['ov'] = open_eyes(pal['cy'], -1 if (frame >> 1) & 1 else 1)             + zig(pal['am'])
+        P['ex'] = ([(10, 1, 1, 1, pal['ye']), (6, 0, 1, 1, pal['ye'])]
+                   if frame & 1 else
+                   [(6, 1, 1, 1, pal['ye']), (10, 0, 1, 1, pal['ye'])])
+    elif m == 'focus':
+        P['tip'] = pal['pu']
+        P['hp'] = True
+        P['oy'] = (frame >> 3) & 1
+        P['ov'] = blink(pal['cy']) + flat(pal['cy'])
+    elif m == 'sleepy':
+        P['dim'] = True
+        P['oy'] = (frame >> 3) & 1
+        P['ov'] = blink(pal['dm'])
         z = (frame >> 3) % 3
         if z == 1:
-            p(13, 2, 1, 1, "B")
-        if z == 2:
-            p(12, 0, 3, 1, "B")
-            p(13, 1, 1, 1, "B")
-            p(12, 2, 3, 1, "B")
-
-    ox = 0
-    oy = 0
-    if mood in ("happy", "music"):
-        oy = (frame >> 1) & 1
-    elif mood == "alert":
-        ox = (0, 1, 0, -1)[frame & 3]
-    elif mood == "lowbat":
-        oy = 1
-    elif mood == "sleepy":
-        oy = (frame >> 3) & 1
-
-    # draw into the matrix, then offset every set pixel by ox/oy
-    if mood == "happy":
-        body("A"); e_hap("A"); m_smile("A")
-    elif mood == "hello":
-        body("A"); e_hap("A"); m_smile("A")
-        if frame & 1:
-            p(15, 3, 1, 3, "B")
-        else:
-            p(15, 5, 1, 3, "B")
-    elif mood == "music":
-        body("O" if (frame >> 2) & 1 else "A")
-        if (frame >> 1) & 1:
-            e_hap("A")
-        else:
-            e_open("A", 0)
-        m_smile("A")
-        if frame % 6 < 3:
-            p(15, 0, 1, 3, "Y"); p(14, 2, 1, 1, "Y")
-        else:
-            p(1, 0, 1, 3, "Y"); p(0, 2, 1, 1, "Y")
-    elif mood == "busy":
-        body("O" if (frame >> 1) & 1 else "A")
-        e_open("A", -1 if (frame >> 2) & 1 else 1)
-        p(4, 9, 8, 1, "V")
-        p(4 + frame % 6, 9, 3, 1, "A")
-    elif mood == "alert":
-        body("O"); e_wide("O"); m_o("O")
-        if frame & 1:
-            p(0, 2, 1, 1, "O"); p(15, 2, 1, 1, "O")
-    elif mood == "recording":
-        body("O"); eyes("A"); m_flat("A")
-        if (frame >> 2) & 1:
-            p(10, 4, 2, 2, "R")
-    elif mood == "lowbat":
-        body("R" if (frame >> 3) & 1 else "D")
-        e_low("O"); m_frown("O")
-        if frame % 6 < 4:
-            p(5, 9 + ((frame % 6) >> 1), 1, 1, "T")
-    elif mood == "charging":
-        body("G" if (frame >> 1) & 1 else "A")
-        if (frame >> 2) & 1:
-            e_hap("G")
-        else:
-            e_heart("O")
-        m_smile("G")
-    elif mood == "error":
-        body("R"); e_x("R", 1 if frame % 14 < 2 else 0)
-        p(6, 9, 1, 1, "R"); p(7, 10, 1, 1, "R")
-        p(8, 9, 1, 1, "R"); p(9, 10, 1, 1, "R")
-    elif mood == "muted":
-        body("D"); eyes("A")
-        p(5, 9, 6, 2, "D"); p(7, 9, 1, 2, "S"); p(9, 9, 1, 2, "S")
-    elif mood == "sleepy":
-        body("D"); e_blink("D"); zz()
+            P['ex'] = [(13, 2, 1, 1, pal['A2'])]
+        elif z == 2:
+            P['ex'] = [(12, 0, 3, 1, pal['A2']), (13, 1, 1, 1, pal['A2']),
+                       (12, 2, 3, 1, pal['A2'])]
     else:
-        body("A"); eyes("A"); m_flat("A")
+        P['tip'] = mix_hex(pal['cy'], 0.4) if (frame >> 3) & 1 else pal['cy']
+        P['ov'] = eyes(pal['cy']) + flat(pal['cy'])
 
-    if ox or oy:
-        shifted = [[None] * 16 for _ in range(16)]
-        for y in range(16):
-            for x in range(16):
-                sy, sx = y - oy, x - ox
-                if 0 <= sy < 16 and 0 <= sx < 16:
-                    shifted[y][x] = px[sy][sx]
-        px = shifted
-    return px
+    grid = [[None] * SPRITE_W for _ in range(SPRITE_H)]
+    ids = [[None] * SPRITE_W for _ in range(SPRITE_H)]
+
+    def put(x, y, w, h, c, ident=None):
+        for yy in range(max(0, y), min(SPRITE_H, y + h)):
+            for xx in range(max(0, x), min(SPRITE_W, x + w)):
+                grid[yy][xx] = c
+                ids[yy][xx] = ident
+
+    def arm(side, p):
+        if side < 0:
+            return ((1, 11), (0, 9), (0, 6))[p]
+        return ((13, 11), (14, 9), (14, 6))[p]
+
+    la = arm(-1, P['la'])
+    ra = arm(1, P['ra'])
+    ly = 13 if P['ll'] else 14
+    ry = 13 if P['rl'] else 14
+    parts = [
+        ('t', 7, 2, 2, 2, P['tip']),
+        ('h', 2, 4, 12, 7, pal['H']),
+        ('b', 4, 11, 8, 3, pal['T']),
+        ('a', la[0], la[1], 2, 3, pal['A2']),
+        ('a', ra[0], ra[1], 2, 3, pal['A2']),
+        ('l', 4, ly, 2, 3, pal['L']),
+        ('l', 10, ry, 2, 3, pal['L']),
+    ]
+    for ident, x, y, w, h, c in parts:
+        put(x, y, w, h, c, ident)
+
+    shaded = [[None] * SPRITE_W for _ in range(SPRITE_H)]
+    for y in range(SPRITE_H):
+        for x in range(SPRITE_W):
+            c = grid[y][x]
+            if not c:
+                continue
+            up = grid[y - 1][x] if y > 0 else None
+            left = grid[y][x - 1] if x > 0 else None
+            down = grid[y + 1][x] if y < SPRITE_H - 1 else None
+            right = grid[y][x + 1] if x < SPRITE_W - 1 else None
+            t = 0.14 - 0.32 * (y - 2) / 14
+            if not up:
+                t += 0.22
+            if not left:
+                t += 0.10
+            if not down:
+                t -= 0.22
+            if not right:
+                t -= 0.14
+            if up and ids[y - 1][x] == 'h' and ids[y][x] != 'h':
+                t -= 0.16
+            if P['dim']:
+                t -= 0.38
+            shaded[y][x] = mix_hex(c, t)
+
+    out = [[None] * SPRITE_W for _ in range(SPRITE_H)]
+
+    def put_out(x, y, w, h, c):
+        for yy in range(max(0, y), min(SPRITE_H, y + h)):
+            for xx in range(max(0, x), min(SPRITE_W, x + w)):
+                out[yy][xx] = c
+
+    ox, oy = P['ox'], P['oy']
+    for y in range(SPRITE_H):
+        for x in range(SPRITE_W):
+            if shaded[y][x]:
+                put_out(x + ox, y + oy, 1, 1, shaded[y][x])
+
+    put_out(ox + 3, oy + 5, 10, 5, '#07080b' if P['dim'] else '#0e1015')
+    put_out(ox + 3, oy + 5, 10, 1, '#05060a')
+    put_out(ox + 3, oy + 5, 1, 5, '#05060a')
+    put_out(ox + 3, oy + 9, 10, 1, '#1b2030')
+    put_out(ox + 12, oy + 5, 1, 5, '#1b2030')
+
+    highlight = mix_hex(pal['H'], 0.1 if P['dim'] else 0.55)
+    for x, y in ((3, 4), (4, 4), (2, 5)):
+        put_out(ox + x, oy + y, 1, 1, highlight)
+
+    if P['hp']:
+        a, b, d = '#7c6bd6', '#a496f0', '#574aa8'
+        for x, y, w, h in ((0, 6, 3, 4), (13, 6, 3, 4)):
+            put_out(ox + x, oy + y, w, h, a)
+            put_out(ox + x, oy + y, w, 1, b)
+            put_out(ox + x, oy + y + h - 1, w, 1, d)
+        put_out(ox + 3, oy + 3, 4, 1, a)
+        put_out(ox + 9, oy + 3, 4, 1, a)
+        put_out(ox + 2, oy + 4, 1, 2, a)
+        put_out(ox + 13, oy + 4, 1, 2, a)
+
+    for x, y, w, h, c in P['ov']:
+        put_out(ox + x, oy + y, w, h, c)
+    for x, y, w, h, c in P['ex']:
+        put_out(x, y, w, h, c)
+
+    return out
 
 
 class DahlBusy(RuntimeError):
@@ -878,16 +994,16 @@ class Screen:
         self.cols, self.rows = shutil.get_terminal_size(fallback=(80, 24))
 
     def scale(self, bot):
-        fit_w = max(1, (self.cols - 4) // 32)
-        fit_h = max(1, (self.rows - 6) // 16)
+        fit_w = max(1, (self.cols - 4) // (SPRITE_W * 2))
+        fit_h = max(1, (self.rows - 6) // SPRITE_H)
         if bot.scale_override is not None:
             return max(1, min(6, bot.scale_override, fit_w, fit_h))
         return max(1, min(4, fit_w, fit_h))
 
     def layout(self, bot):
         scale = self.scale(bot)
-        w = 32 * scale
-        h = 16 * scale
+        w = SPRITE_W * 2 * scale
+        h = SPRITE_H * scale
         if bot.origin is None:
             x = max(0, (self.cols - w) // 2)
             y = 3 + max(0, (self.rows - 3 - 3 - h) // 2)
@@ -909,14 +1025,18 @@ class Screen:
             lines.append(p.bg_seq + "\x1b[K")
 
         px = draw_sprite(bot.mood, bot.frame, bot.gaze)
-        for sy in range(16):
+        for sy in range(SPRITE_H):
             row = [p.bg_seq, " " * ox]
             current = None
-            for sx in range(16):
-                role = px[sy][sx] or "BG"
-                if role != current:
-                    row.append(p.bg(role))
-                    current = role
+            for sx in range(SPRITE_W):
+                color = px[sy][sx]
+                if color not in (None, "BG"):
+                    seq = p.bg_hex(color)
+                else:
+                    seq = p.bg("BG")
+                if seq != current:
+                    row.append(seq)
+                    current = seq
                 row.append(" " * (2 * scale))
             row.append(p.bg_seq)
             row.append("\x1b[K")
@@ -1103,7 +1223,7 @@ class App:
         if self.screen.cols < 36 or self.screen.rows < 22:
             raise RuntimeError(
                 f"terminal is {self.screen.cols}x{self.screen.rows}; "
-                "PixelBot needs at least 36x22"
+                "PixelBot needs at least 36x24"
             )
         sys.stdout.write(ALT_ON + CURSOR_OFF + MOUSE_ON + WRAP_OFF)
         sys.stdout.write("\x1b[2J")
@@ -1118,7 +1238,7 @@ class App:
                 termios.tcsetattr(0, termios.TCSADRAIN, self.old_term)
 
     def inside(self, x, y, scale, ox, oy):
-        return ox <= x < ox + 32 * scale and oy <= y < oy + 16 * scale
+        return ox <= x < ox + SPRITE_W * 2 * scale and oy <= y < oy + SPRITE_H * scale
 
     def on_mouse(self, b, x, y, final, now):
         self.bot.monitor.touch()

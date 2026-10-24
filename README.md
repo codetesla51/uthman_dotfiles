@@ -198,7 +198,7 @@ Overlays are `PanelWindow` layer-shell popups. Larger tools are regular Hyprland
 | `PhoneBridge` | ADB phone bridge: drag-send files, clipboard push, remote browser + pull, ring, screenshot | `SUPER ALT+K` |
 | `ThemePanel` | Wallpaper slideshow with preview, applies via `set-wallpaper` | `SUPER+E` |
 | `PowerMenu` | Lock, logout, suspend, reboot, shutdown | `SUPER+Escape` |
-| `ClipboardPanel` | Clipboard manager (Hyprland window): history with image previews (cliphist backend) plus a Sticky shelf of pinned snippets in LocalStorage, fired with `SUPER ALT 1-9` | `SUPER CTRL+V` (window), `SUPER CTRL+P` (pin current clipboard from anywhere) |
+| `ClipboardPanel` | Clipboard manager (Hyprland window): history with image previews (cliphist backend) plus a Sticky shelf of pinned snippets in LocalStorage; click a pinned note to copy it | `SUPER CTRL+V` (window), `SUPER CTRL+P` (pin current clipboard from anywhere) |
 | `KeybindsPanel` | Searchable, executable keybind cheatsheet | `SUPER+K` |
 | `FastFetchWindow` | System info card | `SUPER+N` |
 | `ScreenTime` | App-usage heatmap and top apps, Go daemon backend | `SUPER ALT+T`, launcher |

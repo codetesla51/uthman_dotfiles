@@ -54,9 +54,8 @@ PanelWindow {
     // card finishes its entrance). ~10MB to never see that again.
     BatteryPanel { id: batPanel; colors: palette }
 
-    // ClipboardPanel (577 lines) — `clipboard` bind. `sticky` too: the shelf
-    // binds (SUPER ALT 1-4) fire snippets with no window — always loaded
-    // now, so the actions run directly, never opening the panel.
+    // ClipboardPanel — `clipboard` bind, plus `sticky` IPC for pinning from
+    // anywhere. Pinned notes are copied by clicking them; no paste binds.
     ClipboardPanel { id: clipPanel; colors: palette }
     IpcHandler { target: "clipboard"; function toggle(): void { clipPanel.open = !clipPanel.open } function close(): void { clipPanel.open = false } }
     IpcHandler {

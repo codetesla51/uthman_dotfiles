@@ -5,6 +5,7 @@ PixelBot TUI — the same bot, in a terminal.
     pixelbot                 # or: ~/.config/quickshell/scripts/pixelbot-tui.py
     pixelbot --scale 2       # force a bigger bot if the terminal is tall
     pixelbot --no-sound
+    pixelbot ask "how is my machine doing?"
 
 The bot watches the same things the bar module does: CPU, battery/AC, music,
 muted audio, screen recording, and idle. When the bar is running it reads the
@@ -14,15 +15,20 @@ local probes and its own idle timer. Click it to wave, drag it around, or use
 the keys below. Sounds are only for alerts, errors, low battery, recording,
 happy/hello — ambient moods stay quiet.
 
+Press `i` in the TUI to ask the bot something. Dahl AI answers using the live
+machine context. The key is read from DAHL_API_KEY, DAHL_API_KEY_FILE, or
+~/.config/pixelbot/dahl.key (chmod 600). Override the model with DAHL_MODEL.
+
     space  wave            m  cycle moods       a  automatic
-    e      error demo      s  sound on/off     r  recenter
-    +/-    size            q  quit
+    i      ask AI          e  error demo        s  sound on/off
+    r      recenter        +/-  size            q  quit
 
 Mouse: click inside the bot to wave, drag it anywhere, wheel to resize.
 Sound files are shared with the bar module (assets/pixelbot/*.wav).
 """
 
 import glob
+import json
 import math
 import os
 import re
@@ -32,14 +38,36 @@ import signal
 import subprocess
 import sys
 import termios
+import textwrap
+import threading
 import time
 import tty
+import urllib.error
+import urllib.request
 
 HOME = os.path.expanduser("~")
 CONFIG = os.path.join(HOME, ".config/quickshell")
 COLORS_CSS = os.path.join(CONFIG, "colors.css")
 SOUND_DIR = os.path.join(CONFIG, "assets", "pixelbot")
 RECORDERS = "meetcap|wf-recorder|wl-screenrec|obs|gpu-screen-recorder"
+AI_KEY_FILE = os.environ.get(
+    "DAHL_API_KEY_FILE",
+    os.path.join(os.environ.get("XDG_CONFIG_HOME", os.path.join(HOME, ".config")),
+                 "pixelbot", "dahl.key"),
+)
+AI_URL = os.environ.get("DAHL_BASE_URL", "https://inference.dahl.global/v1").rstrip("/") \
+    + "/chat/completions"
+AI_MODEL = os.environ.get("DAHL_MODEL", "zai-org/GLM-5.3-Flash")
+AI_MODELS = [m.strip() for m in os.environ.get("DAHL_MODELS", "").split(",") if m.strip()]
+if not AI_MODELS:
+    AI_MODELS = [AI_MODEL, "deepseek-ai/DeepSeek-V4-Flash-0731", "MiniMaxAI/MiniMax-M2.7"]
+AI_SYSTEM = (
+    "You are a concise terminal assistant. Answer the user's question directly. "
+    "Use at most two short sentences. Do not roleplay, do not invent data, "
+    "do not repeat the question, and do not add a status report unless asked. "
+    "The only machine data you know is this live context: {context}"
+)
+
 
 MOODS = [
     "idle", "sleepy", "hello", "muted", "music", "charging",
@@ -331,6 +359,183 @@ def draw_sprite(mood, frame, gaze=None):
     return px
 
 
+class DahlBusy(RuntimeError):
+    pass
+
+
+class AI:
+    """Small async wrapper around Dahl's OpenAI-compatible chat endpoint."""
+
+    def __init__(self):
+        self.key = self._read_key()
+        self.busy = False
+        self.answer = ""
+        self.error = ""
+        self.question = ""
+        self.history = []              # last three question/answer pairs
+        self.lock = threading.Lock()
+
+    @staticmethod
+    def _read_key():
+        value = os.environ.get("DAHL_API_KEY", "").strip()
+        if value:
+            return value
+        paths = [AI_KEY_FILE, os.path.join(HOME, ".config", "pixelbot", "dahl.key")]
+        seen = set()
+        for path in paths:
+            if not path or path in seen:
+                continue
+            seen.add(path)
+            try:
+                with open(path, "r", encoding="utf-8") as fh:
+                    value = fh.read().strip()
+                if value:
+                    return value
+            except OSError:
+                continue
+        return ""
+
+    @property
+    def available(self):
+        return bool(self.key)
+
+    def clear(self):
+        with self.lock:
+            if self.busy:
+                return
+            self.answer = ""
+            self.error = ""
+            self.question = ""
+
+    def ask(self, question, context):
+        """Start an answer in a background thread; the TUI never blocks."""
+        question = " ".join(question.split())
+        if not question:
+            return
+        with self.lock:
+            if self.busy:
+                return
+            if not self.key:
+                self.error = "no Dahl key — set DAHL_API_KEY or " + AI_KEY_FILE
+                self.answer = ""
+                return
+            self.busy = True
+            self.answer = ""
+            self.error = ""
+            self.question = question
+        threading.Thread(
+            target=self._worker, args=(question, context),
+            name="pixelbot-ai", daemon=True,
+        ).start()
+
+    def ask_sync(self, question, context):
+        """For `pixelbot ask`; returns (answer, error)."""
+        question = " ".join(question.split())
+        if not question:
+            return "", "empty question"
+        if not self.key:
+            return "", "no Dahl key — set DAHL_API_KEY or " + AI_KEY_FILE
+        try:
+            return self._request(question, context), ""
+        except Exception as exc:  # network errors are shown, never crash the TUI
+            return "", str(exc)[:240]
+
+    def _worker(self, question, context):
+        try:
+            answer = self._request(question, context)
+        except Exception as exc:
+            with self.lock:
+                self.busy = False
+                self.error = str(exc)[:240]
+        else:
+            with self.lock:
+                self.busy = False
+                self.answer = answer
+
+    def _request(self, question, context):
+        with self.lock:
+            history = list(self.history[-6:])
+        messages = [{"role": "system", "content": AI_SYSTEM.format(context=context)}]
+        messages.extend(history)
+        messages.append({"role": "user", "content": question})
+
+        last_busy = None
+        for attempt in range(2):
+            for model in AI_MODELS:
+                try:
+                    content = self._request_once(messages, model)
+                except DahlBusy as exc:
+                    last_busy = exc
+                    time.sleep(0.7 + 0.4 * attempt)
+                    continue
+                with self.lock:
+                    self.history = (self.history + [
+                        {"role": "user", "content": question},
+                        {"role": "assistant", "content": content},
+                    ])[-6:]
+                return content
+        raise RuntimeError(str(last_busy) if last_busy else "Dahl is busy")
+
+    @staticmethod
+    def _clean(content):
+        content = content.strip()
+        if "</think>" in content:
+            content = content.split("</think>", 1)[-1].strip()
+        content = content.replace("**", "")
+        parts = [p.strip() for p in re.split(r"(?<=[.!?])\s*", content) if p.strip()]
+        if len(parts) > 2:
+            content = " ".join(parts[:2])
+        return content[:4000].rstrip()
+
+    def _request_once(self, messages, model):
+        payload = {
+            "model": model,
+            "messages": messages,
+            "temperature": 0.2,
+            "max_tokens": 180,
+            "stream": False,
+            "stop": ["\n\n"],
+        }
+        request = urllib.request.Request(
+            AI_URL,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={
+                "Authorization": "Bearer " + self.key,
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+                "User-Agent": "pixelbot-tui/1.0",
+            },
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=75) as response:
+                raw = response.read()
+        except urllib.error.HTTPError as exc:
+            try:
+                detail = exc.read().decode("utf-8", "replace")[:180]
+            except OSError:
+                detail = ""
+            if exc.code in (429, 500, 502, 503, 504):
+                raise DahlBusy(f"Dahl HTTP {exc.code}: {detail}") from None
+            raise RuntimeError(f"Dahl HTTP {exc.code}: {detail}") from None
+        except urllib.error.URLError as exc:
+            raise RuntimeError(f"Dahl unreachable: {exc.reason}") from None
+        except OSError as exc:
+            raise RuntimeError(f"Dahl request failed: {exc}") from None
+
+        try:
+            data = json.loads(raw.decode("utf-8", "replace"))
+        except json.JSONDecodeError:
+            raise RuntimeError("Dahl returned invalid JSON") from None
+        choices = data.get("choices") or []
+        if not choices:
+            raise RuntimeError("Dahl returned no choices")
+        content = ((choices[0].get("message") or {}).get("content") or "").strip()
+        if not content:
+            raise RuntimeError("Dahl returned an empty answer")
+        return self._clean(content)
+
+
 class Monitor:
     def __init__(self):
         self.cpu = 0
@@ -553,6 +758,9 @@ class Bot:
         self.pressed = False
         self.press_at = None
         self.grab = (0, 0)
+        self.ai = AI()
+        self.ask_mode = False
+        self.ask_buf = ""
 
     def current_mood(self, now):
         m = self.monitor
@@ -629,6 +837,38 @@ class Bot:
         line = MOOD_LINE.get(self.mood, "")
         return line.format(cpu=self.monitor.cpu, bat=self.monitor.battery)
 
+    def ai_context(self):
+        m = self.monitor
+        power = "charging" if m.charging else ("discharging" if m.discharging else "on AC")
+        return (
+            f"{time.strftime('%a %Y-%m-%d %H:%M')}; CPU {m.cpu}%; "
+            f"battery {m.battery}% {power}; music={'on' if m.music else 'off'}; "
+            f"muted={'yes' if m.muted else 'no'}; recording={'yes' if m.recording else 'no'}; "
+            f"user_away={'yes' if m.away(time.monotonic()) else 'no'}; mood={self.mood}."
+        )
+
+    def begin_ask(self):
+        if self.ai.busy:
+            self.ai.error = "still thinking — wait for the answer"
+            return
+        self.ask_mode = True
+        self.ask_buf = ""
+        self.ai.clear()
+        self.monitor.touch()
+
+    def submit_ask(self):
+        question = self.ask_buf.strip()
+        self.ask_mode = False
+        self.ask_buf = ""
+        self.monitor.touch()
+        if question:
+            self.ai.ask(question, self.ai_context())
+
+    def cancel_ask(self):
+        self.ask_mode = False
+        self.ask_buf = ""
+        self.monitor.touch()
+
 
 class Screen:
     def __init__(self):
@@ -689,15 +929,75 @@ class Screen:
             subtitle = "put me down gently"
         elif bot.hover:
             subtitle = "click me"
-        footer_count = 3
+        ai_lines = self._ai_lines(bot, max(0, self.rows - used - 3))
+        subtitle_color = p.fg(p.color_for_mood(bot.mood), True)
+        if not ai_lines:
+            plain = self._ai_plain(bot)
+            if plain and not bot.dragging and not bot.hover:
+                subtitle = plain
+                subtitle_color = p.fg("R" if bot.ai.error else "A", True)
+        footer_count = 3 + len(ai_lines)
         blank_below = self.rows - footer_count - used
         for _ in range(max(0, blank_below)):
             lines.append(p.bg_seq + "\x1b[K")
 
-        lines.append(self._center(p, subtitle, p.fg(p.color_for_mood(bot.mood), True)))
+        lines.append(self._center(p, subtitle, subtitle_color))
+        lines.extend(ai_lines)
         lines.append(self._stats(bot))
         lines.append(self._hints(bot))
         return SYNC_ON + "\x1b[H" + "\r\n".join(lines) + "\x1b[K\x1b[J" + SYNC_OFF
+
+    def _ai_plain(self, bot):
+        ai = bot.ai
+        if bot.ask_mode:
+            return "ask> " + (bot.ask_buf or "_")
+        if ai.busy:
+            return "thinking..."
+        if ai.error:
+            return "AI error: " + ai.error
+        if ai.answer:
+            return "PIXEL " + " ".join(ai.answer.split())
+        return ""
+
+    def _ai_lines(self, bot, capacity):
+        if capacity <= 0:
+            return []
+        p = bot.palette
+        ai = bot.ai
+        limit = max(8, self.cols - 2)
+
+        if bot.ask_mode:
+            text = "ask> " + (bot.ask_buf or "_") + "▌"
+            text = text[-limit:]
+            return [p.bg_seq + "  " + p.fg("A", True) + text + RESET + p.bg_seq + "\x1b[K"]
+
+        if ai.busy:
+            return [p.bg_seq + "  " + p.fg("A", True) + "thinking..." + RESET
+                    + p.bg_seq + "\x1b[K"]
+
+        if ai.error:
+            text = " ".join(("AI error: " + ai.error).split())
+            return [p.bg_seq + "  " + p.fg("R", True) + text[:limit] + RESET
+                    + p.bg_seq + "\x1b[K"]
+
+        if not ai.answer:
+            return []
+
+        body = " ".join(ai.answer.split())
+        width = max(20, self.cols - 8)
+        chunks = textwrap.wrap(body, width=width, break_long_words=True,
+                               break_on_hyphens=True)
+        shown = chunks[:capacity]
+        out = []
+        for index, chunk in enumerate(shown):
+            if index == len(shown) - 1 and len(chunks) > capacity:
+                chunk += "…"
+            prefix = "PIXEL " if index == 0 else "      "
+            role = "A" if index == 0 else "FG"
+            text = (prefix + chunk)[:limit]
+            out.append(p.bg_seq + "  " + p.fg(role, index == 0) + text + RESET
+                       + p.bg_seq + "\x1b[K")
+        return out
 
     def _center(self, p, text, color):
         text = text[: max(0, self.cols - 2)]
@@ -741,9 +1041,11 @@ class Screen:
 
     def _hints(self, bot):
         p = bot.palette
-        hint = "space wave · m mood · a auto · e error · s sound · r reset · +/- size · q quit   |   drag to move"
+        hint = "i ask AI · space wave · m mood · a auto · e error · s sound · r reset · +/- size · q quit   |   drag to move"
         if len(hint) > self.cols:
-            hint = "space wave · m mood · s sound · r reset · q quit"
+            hint = "i ask AI · space wave · m mood · s sound · r reset · q quit"
+        if len(hint) > self.cols:
+            hint = "i ask · space wave · m mood · q quit"
         return p.bg_seq + p.fg("MUTED") + hint[: self.cols] + RESET + p.bg_seq + "\x1b[K"
 
 
@@ -873,8 +1175,22 @@ class App:
 
     def on_key(self, ch, now):
         self.bot.monitor.touch()
+        if self.bot.ask_mode:
+            if ch == "\x03":
+                self.running = False
+            elif ch in ("\r", "\n"):
+                self.bot.submit_ask()
+            elif ch == "\x1b":
+                self.bot.cancel_ask()
+            elif ch in ("\x7f", "\b"):
+                self.bot.ask_buf = self.bot.ask_buf[:-1]
+            elif ch.isprintable() and len(self.bot.ask_buf) < 400:
+                self.bot.ask_buf += ch
+            return
         if ch in ("q", "\x03"):
             self.running = False
+        elif ch == "i":
+            self.bot.begin_ask()
         elif ch == " ":
             self.bot.wave(now)
         elif ch == "m":
@@ -967,12 +1283,36 @@ def sigterm(_sig, _frame):
 APP = None
 
 
+def ask_command(args):
+    question = " ".join(args).strip()
+    if not question:
+        if sys.stdin.isatty():
+            print("pixelbot: usage: pixelbot ask \"question\"")
+            return 2
+        question = sys.stdin.read().strip()
+    if not question:
+        print("pixelbot: empty question", file=sys.stderr)
+        return 2
+    bot = Bot(Palette())
+    now = time.monotonic()
+    bot.monitor.poll(now)
+    bot.mood = bot.current_mood(now)
+    answer, error = bot.ai.ask_sync(question, bot.ai_context())
+    if error:
+        print("pixelbot: " + error, file=sys.stderr)
+        return 1
+    print(answer)
+    return 0
+
+
 def main():
     global APP
     args = sys.argv[1:]
     if "-h" in args or "--help" in args:
         print(__doc__.strip())
         return 0
+    if args and args[0].lower() == "ask":
+        return ask_command(args[1:])
     if not sys.stdin.isatty() or not sys.stdout.isatty():
         print("pixelbot: run this in a terminal (it needs mouse + raw mode)")
         return 1

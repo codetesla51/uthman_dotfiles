@@ -766,17 +766,25 @@ FloatingWindow {
                                     id: ccBot
                                     active: root.open
                                     registerIpc: false
-                                    colors: root.colors
+                                    moodSounds: false
                                     pixelScale: 3
+                                    roamWidth: 16
                                     anchors.horizontalCenter: parent.horizontalCenter
                                     anchors.bottom: parent.bottom
                                     anchors.bottomMargin: 6
                                 }
                             }
                             ColumnLayout {
+                                Layout.fillWidth: true
                                 spacing: 0
                                 Text { text: "Pixel bot"; color: colors.foreground; font.family: root.uiFont; font.pixelSize: 15; font.weight: Font.Bold }
-                                Text { text: ccBot.mood; color: ccBot.mood === "error" ? colors.error : colors.primary; font.family: root.uiFont; font.pixelSize: 13 }
+                                Text {
+                                    Layout.fillWidth: true
+                                    elide: Text.ElideRight
+                                    text: ccBot.moodText.length > 0 ? ccBot.moodText.charAt(0).toUpperCase() + ccBot.moodText.slice(1) : ""
+                                    color: (ccBot.mood === "error" || ccBot.mood === "offline" || ccBot.mood === "lowbat") ? colors.error : colors.primary
+                                    font.family: root.uiFont; font.pixelSize: 13
+                                }
                             }
                         }
                     }

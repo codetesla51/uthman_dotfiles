@@ -310,13 +310,12 @@ PanelWindow {
                     color: colors.alpha(colors.outline, 0.28)
                     Layout.alignment: Qt.AlignVCenter
                 }
-                // bot small right — replaces the notification bell; it reacts
-                // to notifications, CPU, battery, recording, music and idle
+                // roaming bot right — replaces the notification bell; it reacts
+                // to notifications, CPU, battery, recording, music, focus and idle
                 PixelBot {
                     id: bot
-                    colors: bar.colors
                     pixelScale: 2
-                    cpuUsage: cpuPill.usage
+                    roamWidth: 16
                     helloOnWorkspace: true
                 }
             }
@@ -437,7 +436,7 @@ PanelWindow {
                 onToggleDndRequested: ntfy.toggleDnd()
             }
             Memory { colors: bar.colors; onOpenRequested: showSysMon() }
-            Cpu { id: cpuPill; colors: bar.colors; onOpenRequested: showSysMon() }
+            Cpu { colors: bar.colors; onOpenRequested: showSysMon() }
             WatchCat {
                 colors: bar.colors
                 onOpenRequested: toggleWatchCat()

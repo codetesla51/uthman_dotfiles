@@ -21,7 +21,7 @@ Item {
     readonly property var now: new Date()
     readonly property string extended: hh + ":" + mm + "  ·  " + Qt.formatDateTime(now, "dddd dd MMMM yyyy")
 
-    implicitWidth: timeRow.implicitWidth + 32
+    implicitWidth: timeRow.implicitWidth
     implicitHeight: 30
 
     // flat inside the trapezium — hover lives in the letter-spacing only

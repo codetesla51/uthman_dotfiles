@@ -194,9 +194,6 @@ hl.bind("SUPER + ALT + SPACE", hl.dsp.exec_cmd(qs("bar toggleIsland")), { descri
 hl.unbind("SUPER + I")
 hl.bind("SUPER + I", hl.dsp.exec_cmd(qs("pkgman toggle")))
 
--- ── Privacy screen — blur display without locking (SUPER+ALT+X) ─────────
-hl.bind("SUPER + ALT + X", hl.dsp.exec_cmd("privacy-screen"), { description = "Privacy screen" })
-
 -- ── Lock screen — hyprlock (SUPER+L) ─────────────────────────────────────
 hl.unbind("SUPER + L")
 hl.bind("SUPER + L", hl.dsp.exec_cmd("pidof hyprlock || hyprlock"), { description = "Lock screen" })

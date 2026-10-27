@@ -6,7 +6,7 @@ import Quickshell.Hyprland
 import Quickshell.Services.Mpris
 import Quickshell.Services.Pipewire
 
-// PixelBot — shaded 3D pixel bot. One instance owns the `bot` IPC target;
+// PixelBot — flat 2D pixel bot. One instance owns the `bot` IPC target;
 // the Control Center instance disables the handler and runs only while open.
 //
 // It wanders, dances with music and reacts to CPU, battery, recording,
@@ -23,6 +23,8 @@ import Quickshell.Services.Pipewire
 //     ipc call bot status
 Item {
     id: root
+
+    property var colors
 
     // ---------- settings ----------
     property int pixelScale: 2
@@ -50,7 +52,7 @@ Item {
     readonly property bool roam: roamWidth > 16
     readonly property int stageW: roam ? roamWidth : 16
     implicitWidth: stageW * pixelScale
-    implicitHeight: 18 * pixelScale
+    implicitHeight: 16 * pixelScale
 
     // ---------- state fed by events and the poller ----------
     property int cpu: 0
@@ -285,173 +287,137 @@ done
         }
     }
 
-    // ---------- sprite, shading, roaming, rules ----------
-    readonly property int gh: 18
-    readonly property var pal: ({H:'#b9c3d8',T:'#9aa6bf',A2:'#aab4c8',L:'#8793ad',cy:'#5ad1ff',am:'#f9a15b',rd:'#f38ba8',gn:'#a6e3a1',dm:'#5b6478',ye:'#f9e2af',bl:'#89dceb',pu:'#b4a1ff',D:'#1e1e2e'})
-    readonly property var faces: ({
-        open:(c,l)=>[[5+l,6,2,2,c],[9+l,6,2,2,c]],
-        blink:c=>[[5,7,2,1,c],[9,7,2,1,c]],
-        hap:c=>[[5,7,1,1,c],[6,6,1,1,c],[7,7,1,1,c],[9,7,1,1,c],[10,6,1,1,c],[11,7,1,1,c]],
-        wide:c=>[[5,5,2,3,c],[9,5,2,3,c]],
-        low:c=>[[5,7,2,2,c],[9,7,2,2,c]],
-        x:c=>{const o=[];for(const x of [5,9])for(const a of [[0,0],[2,0],[1,1],[0,2],[2,2]])o.push([x+a[0],5+a[1],1,1,c]);return o},
-        heart:c=>{const o=[];for(const x of [5,9])o.push([x,5,1,1,c],[x+2,5,1,1,c],[x,6,3,1,c],[x+1,7,1,1,c]);return o},
-        flat:c=>[[7,9,2,1,c]],
-        smile:c=>[[6,8,1,1,c],[7,9,2,1,c],[9,8,1,1,c]],
-        o:c=>[[7,8,2,2,c]],
-        frown:c=>[[6,9,1,1,c],[7,8,2,1,c],[9,9,1,1,c]],
-        zig:c=>[[6,9,1,1,c],[7,8,1,1,c],[8,9,1,1,c],[9,8,1,1,c]]
-    })
-
-    function mix(c, f) {
-        f = Math.max(-0.6, Math.min(0.6, f))
-        const n = parseInt(c.slice(1), 16), t = f > 0 ? 255 : 0, a = Math.abs(f)
-        const h = v => ('0' + Math.round(v + (t - v) * a).toString(16)).slice(-2)
-        return '#' + h((n >> 16) & 255) + h((n >> 8) & 255) + h(n & 255)
-    }
-
-    function gaze(f) {
-        const k = f % 52
-        return ((k >= 20 && k < 22) || (k >= 40 && k < 42)) ? 'b'
-             : (k >= 28 && k < 36) ? -1
-             : (k >= 44) ? 1 : 0
-    }
-
-    function build(m, f, o) {
-        const P = { tip: pal.cy, la: 0, ra: 0, ll: 0, rl: 0, ox: 0, oy: 0, dim: false, hp: false, ov: [], ex: [] }
-        const g = gaze(f), eyes = c => g === 'b' ? faces.blink(c) : faces.open(c, g), k = f & 7, s = (f >> 1) & 1
-        switch (m) {
-        case 'walk':
-            P.ll = s; P.rl = 1 - s; P.la = s; P.ra = 1 - s
-            P.ov = faces.open(pal.cy, o.dir > 0 ? 1 : -1).concat(faces.flat(pal.cy)); break
-        case 'dance': {
-            const A = [[2,2],[1,1],[2,0],[1,1],[0,2],[1,1],[2,2],[0,0]][k]
-            P.la = A[0]; P.ra = A[1]; P.ll = (k === 2 || k === 3) ? 1 : 0; P.rl = (k === 6 || k === 7) ? 1 : 0
-            P.ox = [0,-1,-1,0,0,1,1,0][k]; P.oy = (k & 1) ? -1 : 0
-            P.tip = [pal.cy, pal.pu, pal.rd, pal.ye][(f >> 1) & 3]
-            P.ov = faces.hap(pal.cy).concat(faces.smile(pal.cy))
-            P.ex = (f % 6 < 3) ? [[15,0,1,3,pal.ye],[14,2,1,1,pal.ye]] : [[1,0,1,3,pal.ye],[0,2,1,1,pal.ye]]
-            break
-        }
-        case 'happy': {
-            const J = [0,-1,-2,-2,-1,0,0,0][k], cols = [pal.rd, pal.ye, pal.gn, pal.cy, pal.pu, pal.am]
-            P.oy = J; P.la = P.ra = J < 0 ? 2 : 0; P.ll = P.rl = J < 0 ? 1 : 0; P.tip = pal.ye
-            P.ov = faces.hap(pal.cy).concat(faces.smile(pal.cy))
-            for (let i = 0; i < 6; i++) P.ex.push([(i * 5 + f * 3) % 16, (f * 2 + i * 3) % 4, 1, 1, cols[i]])
-            break
-        }
-        case 'hello':
-            P.ra = (f & 1) ? 2 : 1; P.ov = faces.hap(pal.cy).concat(faces.smile(pal.cy)); break
-        case 'alert':
-            P.ox = [0,1,0,-1][f & 3]; P.la = P.ra = 2; P.tip = pal.am
-            P.ov = faces.wide(pal.am).concat(faces.o(pal.am))
-            if (f & 1) P.ex = [[0,2,1,1,pal.ye],[15,2,1,1,pal.ye],[0,4,1,1,pal.ye],[15,4,1,1,pal.ye]]
-            break
-        case 'busy':
-            P.tip = ((f >> 1) & 1) ? pal.am : pal.cy; P.la = f & 1; P.ra = 1 - (f & 1)
-            P.ov = faces.open(pal.cy, ((f >> 2) & 1) ? -1 : 1).concat([[4,9,8,1,'#262b38'],[4+f%6,9,3,1,pal.cy]]); break
-        case 'recording':
-            P.tip = pal.rd; P.ov = eyes(pal.cy).concat(faces.flat(pal.cy))
-            if ((f >> 2) & 1) P.ov.push([11,5,2,1,pal.rd]); break
-        case 'lowbat':
-            P.oy = 1; P.tip = ((f >> 3) & 1) ? pal.rd : pal.dm
-            P.ov = faces.low(pal.am).concat(faces.frown(pal.am))
-            if (f % 6 < 4) P.ov.push([5,9,1,1,pal.bl]); break
-        case 'charging':
-            P.tip = ((f >> 1) & 1) ? pal.gn : pal.cy
-            P.ov = (((f >> 2) & 1) ? faces.hap(pal.gn) : faces.heart(pal.rd)).concat(faces.smile(pal.gn))
-            if ((f >> 1) & 1) P.ov.push([8,11,1,1,pal.ye],[7,12,2,1,pal.ye],[7,13,1,1,pal.ye]); break
-        case 'error':
-            P.tip = pal.rd; P.ox = (f % 14 < 2) ? 1 : 0; P.la = P.ra = 2
-            P.ov = faces.x(pal.rd).concat(faces.zig(pal.rd)); break
-        case 'muted':
-            P.tip = pal.dm; P.ov = eyes(pal.cy).concat([[5,9,6,1,pal.dm],[7,9,1,1,'#0e1015'],[9,9,1,1,'#0e1015']]); break
-        case 'offline':
-            P.tip = pal.dm; P.la = P.ra = 1
-            P.ov = faces.open(pal.cy, ((f >> 1) & 1) ? -1 : 1).concat(faces.zig(pal.am))
-            P.ex = (f & 1) ? [[10,1,1,1,pal.ye],[6,0,1,1,pal.ye]] : [[6,1,1,1,pal.ye],[10,0,1,1,pal.ye]]; break
-        case 'focus':
-            P.tip = pal.pu; P.hp = true; P.oy = (f >> 3) & 1
-            P.ov = faces.blink(pal.cy).concat(faces.flat(pal.cy)); break
-        case 'sleepy': {
-            P.dim = true; P.oy = (f >> 3) & 1; P.ov = faces.blink(pal.dm)
-            const z = (f >> 3) % 3, zc = '#aab4c8'
-            if (z === 1) P.ex = [[13,2,1,1,zc]]
-            if (z === 2) P.ex = [[12,0,3,1,zc],[13,1,1,1,zc],[12,2,3,1,zc]]
-            break
-        }
-        default:
-            P.tip = ((f >> 3) & 1) ? mix(pal.cy, 0.4) : pal.cy
-            P.ov = eyes(pal.cy).concat(faces.flat(pal.cy))
-        }
-        return P
-    }
-
+    // ---------- flat 2D sprite ----------
+    // The shell keeps the newer state engine; this renderer restores the
+    // original flat 2D bot with theme-derived colours.
     function render(ctx, m, f, o) {
-        const W = o.W, x0 = Math.round(o.x), P = build(m, f, o)
-        ctx.clearRect(0, 0, W, gh)
-        const lift = Math.max(0, -P.oy)
-        ctx.fillStyle = 'rgba(0,0,0,' + (0.4 - 0.08 * lift).toFixed(2) + ')'
-        ctx.fillRect(x0 + P.ox + 4 + lift, 17, 8 - 2 * lift, 1)
+        const C = {
+            B: colors.alpha(colors.foreground, 0.78),   // casing
+            S: colors.background,                       // screen
+            A: colors.primary,                          // accent
+            O: colors.secondary,                        // secondary accent
+            R: colors.error,                            // problem / rec dot
+            G: colors.tertiary,                         // third accent
+            D: colors.outline,                          // asleep / muted
+            Y: colors.secondary,                        // notes
+            T: colors.tertiary                          // data
+        }
+        const p = (x, y, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(x, y, w, h) }
 
-        const arm = (side, p) => side < 0 ? [[1,11],[0,9],[0,6]][p] : [[13,11],[14,9],[14,6]][p]
-        const la = arm(-1, P.la), ra = arm(1, P.ra), ly = P.ll ? 13 : 14, ry = P.rl ? 13 : 14
-        const parts = [['t',7,2,2,2,P.tip],['h',2,4,12,7,pal.H],['b',4,11,8,3,pal.T],['a',la[0],la[1],2,3,pal.A2],['a',ra[0],ra[1],2,3,pal.A2],['l',4,ly,2,3,pal.L],['l',10,ry,2,3,pal.L]]
-        const g = new Array(16 * gh)
-        for (const p of parts) for (let y = p[2]; y < p[2] + p[4]; y++) for (let x = p[1]; x < p[1] + p[3]; x++) if (x >= 0 && x < 16 && y >= 0 && y < gh) g[y * 16 + x] = { c: p[5], id: p[0] }
-
-        for (let y = 0; y < gh; y++) for (let x = 0; x < 16; x++) {
-            const c = g[y * 16 + x]
-            if (!c) continue
-            const up = y > 0 && g[(y - 1) * 16 + x], lf = x > 0 && g[y * 16 + x - 1]
-            const dn = y < gh - 1 && g[(y + 1) * 16 + x], rt = x < 15 && g[y * 16 + x + 1]
-            let t = 0.14 - 0.32 * (y - 2) / 14
-            if (!up) t += 0.22
-            if (!lf) t += 0.1
-            if (!dn) t -= 0.22
-            if (!rt) t -= 0.14
-            if (up && up.id === 'h' && c.id !== 'h') t -= 0.16
-            if (P.dim) t -= 0.38
-            ctx.fillStyle = mix(c.c, t)
-            ctx.fillRect(x0 + P.ox + x, P.oy + y, 1, 1)
+        const body = t => {
+            p(7, 0, 2, 2, t); p(7, 2, 2, 1, C.B)                        // antenna
+            p(2, 3, 12, 9, C.B); p(1, 6, 1, 3, C.B); p(14, 6, 1, 3, C.B) // head, ears
+            p(3, 4, 10, 7, C.S)                                         // screen
+            p(4, 12, 8, 2, C.B); p(5, 14, 2, 1, C.B); p(9, 14, 2, 1, C.B) // body, feet
+        }
+        const E = {
+            open: (c, l) => { p(5 + l, 6, 2, 2, c); p(9 + l, 6, 2, 2, c) },
+            blink: c => { p(5, 7, 2, 1, c); p(9, 7, 2, 1, c) },
+            hap: c => { for (const x of [5, 9]) { p(x, 7, 1, 1, c); p(x + 1, 6, 1, 1, c); p(x + 2, 7, 1, 1, c) } },
+            wide: c => { p(5, 5, 2, 3, c); p(9, 5, 2, 3, c) },
+            low: c => { p(5, 7, 2, 2, c); p(9, 7, 2, 2, c) },
+            x: (c, d) => { for (const x of [5, 9]) for (const a of [[0,0],[2,0],[1,1],[0,2],[2,2]]) p(x + a[0] + d, 5 + a[1], 1, 1, c) },
+            heart: c => { for (const x of [5, 9]) { p(x, 5, 1, 1, c); p(x + 2, 5, 1, 1, c); p(x, 6, 3, 1, c); p(x + 1, 7, 1, 1, c) } }
+        }
+        const M = {
+            flat: c => p(7, 9, 2, 1, c),
+            smile: c => { p(6, 9, 1, 1, c); p(7, 10, 2, 1, c); p(9, 9, 1, 1, c) },
+            o: c => p(7, 9, 2, 2, c),
+            frown: c => { p(6, 10, 1, 1, c); p(7, 9, 2, 1, c); p(9, 10, 1, 1, c) }
         }
 
-        const sx = x0 + P.ox, sy = P.oy
-        ctx.fillStyle = mix(pal.H, P.dim ? 0.1 : 0.55)
-        for (const q of [[3,4],[4,4],[2,5]]) ctx.fillRect(sx + q[0], sy + q[1], 1, 1)
-        ctx.fillStyle = P.dim ? '#07080b' : '#0e1015'
-        ctx.fillRect(sx + 3, sy + 5, 10, 5)
-        ctx.fillStyle = '#05060a'
-        ctx.fillRect(sx + 3, sy + 5, 10, 1)
-        ctx.fillRect(sx + 3, sy + 5, 1, 5)
-        ctx.fillStyle = '#1b2030'
-        ctx.fillRect(sx + 3, sy + 9, 10, 1)
-        ctx.fillRect(sx + 12, sy + 5, 1, 5)
-
-        if (P.hp) {
-            const a = '#7c6bd6', b = '#a496f0', d = '#574aa8'
-            for (const q of [[0,6,3,4],[13,6,3,4]]) {
-                ctx.fillStyle = a; ctx.fillRect(sx + q[0], sy + q[1], q[2], q[3])
-                ctx.fillStyle = b; ctx.fillRect(sx + q[0], sy + q[1], q[2], 1)
-                ctx.fillStyle = d; ctx.fillRect(sx + q[0], sy + q[1] + q[3] - 1, q[2], 1)
-            }
-            ctx.fillStyle = a
-            ctx.fillRect(sx + 3, sy + 3, 4, 1); ctx.fillRect(sx + 9, sy + 3, 4, 1)
-            ctx.fillRect(sx + 2, sy + 4, 1, 2); ctx.fillRect(sx + 13, sy + 4, 1, 2)
+        // idle gaze: blink twice, look left, look right
+        const kk = f % 52
+        const g = ((kk >= 20 && kk < 22) || (kk >= 40 && kk < 42)) ? "b" : (kk >= 28 && kk < 36) ? -1 : (kk >= 44) ? 1 : 0
+        const eyes = c => { if (g === "b") E.blink(c); else E.open(c, g) }
+        const zz = () => {
+            const z = (f >> 3) % 3
+            if (z === 1) p(13, 2, 1, 1, C.B)
+            if (z === 2) { p(12, 0, 3, 1, C.B); p(13, 1, 1, 1, C.B); p(12, 2, 3, 1, C.B) }
         }
-        for (const q of P.ov) { ctx.fillStyle = q[4]; ctx.fillRect(sx + q[0], sy + q[1], q[2], q[3]) }
-        for (const q of P.ex) { ctx.fillStyle = q[4]; ctx.fillRect(x0 + q[0], q[1], q[2], q[3]) }
 
-        // Charging is a badge, not a mood: the bolt stays while plugged in,
-        // and a brief one-shot spark fires on the plug-in transition.
+        // The newer state names map onto the old visual set.
+        let visual = m
+        if (visual === "dance") visual = "music"
+        else if (visual === "offline") visual = "muted"
+        else if (visual === "focus" || visual === "walk") visual = "idle"
+
+        // whole-sprite offsets per mood (bounce, shake, droop, breathe)
+        let ox = 0, oy = 0
+        switch (visual) {
+        case "happy": case "music": oy = (f >> 1) & 1; break
+        case "alert": ox = [0, 1, 0, -1][f & 3]; break
+        case "lowbat": oy = 1; break
+        case "sleepy": oy = (f >> 3) & 1; break
+        }
+
+        const x0 = Math.round(o.x)
+        ctx.clearRect(0, 0, o.W, 16)
+        ctx.save()
+        ctx.translate(x0 + ox, oy)
+
+        switch (visual) {
+        case "happy":
+            body(C.A); E.hap(C.A); M.smile(C.A); break
+        case "hello":
+            body(C.A); E.hap(C.A); M.smile(C.A)
+            if (f & 1) p(15, 3, 1, 3, C.B); else p(15, 5, 1, 3, C.B)
+            break
+        case "music":
+            body((f >> 2) & 1 ? C.O : C.A)
+            if ((f >> 1) & 1) E.hap(C.A); else E.open(C.A, 0)
+            M.smile(C.A)
+            if (f % 6 < 3) { p(15, 0, 1, 3, C.Y); p(14, 2, 1, 1, C.Y) }
+            else { p(1, 0, 1, 3, C.Y); p(0, 2, 1, 1, C.Y) }
+            break
+        case "busy":
+            body((f >> 1) & 1 ? C.O : C.A)
+            E.open(C.A, (f >> 2) & 1 ? -1 : 1)
+            p(4, 9, 8, 1, colors.alpha(colors.surfaceVariant, 0.55))
+            p(4 + f % 6, 9, 3, 1, C.A)
+            break
+        case "alert":
+            body(C.O); E.wide(C.O); M.o(C.O)
+            if (f & 1) { p(0, 2, 1, 1, C.O); p(15, 2, 1, 1, C.O) }
+            break
+        case "recording":
+            body(C.O); eyes(C.A); M.flat(C.A)
+            if ((f >> 2) & 1) p(10, 4, 2, 2, C.R)
+            break
+        case "lowbat":
+            body((f >> 3) & 1 ? C.R : C.D); E.low(C.O); M.frown(C.O)
+            if (f % 6 < 4) p(5, 9 + ((f % 6) >> 1), 1, 1, C.T)
+            break
+        case "charging":
+            body((f >> 1) & 1 ? C.G : C.A)
+            if ((f >> 2) & 1) E.hap(C.G); else E.heart(C.O)
+            M.smile(C.G)
+            break
+        case "error":
+            body(C.R); E.x(C.R, f % 14 < 2 ? 1 : 0)
+            p(6, 9, 1, 1, C.R); p(7, 10, 1, 1, C.R); p(8, 9, 1, 1, C.R); p(9, 10, 1, 1, C.R)
+            break
+        case "muted":
+            body(C.D); eyes(C.A)
+            p(5, 9, 6, 2, C.D); p(7, 9, 1, 2, C.S); p(9, 9, 1, 2, C.S)   // zipper mouth
+            break
+        case "sleepy":
+            body(C.D); E.blink(C.D); zz(); break
+        default:   // idle
+            body(C.A); eyes(C.A); M.flat(C.A)
+        }
+
+        ctx.restore()
+
+        // Charging stays a status badge, not a mood.
         if (root.charging) {
-            ctx.fillStyle = pal.gn
+            ctx.fillStyle = C.G
             for (const q of [[13,0],[12,1],[11,2],[12,2],[12,3]])
-                ctx.fillRect(sx + q[0], sy + q[1], 1, 1)
+                ctx.fillRect(x0 + ox + q[0], oy + q[1], 1, 1)
             if (root.now < root.chargeSparkUntil) {
-                ctx.fillStyle = (f & 3) < 2 ? pal.ye : pal.cy
+                ctx.fillStyle = (f & 3) < 2 ? C.Y : C.A
                 for (const q of [[10,0],[15,2],[14,4],[1,1]])
-                    ctx.fillRect(sx + q[0], sy + q[1], 1, 1)
+                    ctx.fillRect(x0 + ox + q[0], oy + q[1], 1, 1)
             }
         }
     }

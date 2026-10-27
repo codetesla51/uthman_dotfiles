@@ -767,6 +767,7 @@ FloatingWindow {
                                     active: root.open
                                     registerIpc: false
                                     moodSounds: false
+                                    colors: root.colors
                                     pixelScale: 3
                                     roamWidth: 16
                                     anchors.horizontalCenter: parent.horizontalCenter

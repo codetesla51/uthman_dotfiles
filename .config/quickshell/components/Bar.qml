@@ -313,6 +313,7 @@ PanelWindow {
                 // to notifications, CPU, battery, recording, music, focus and idle
                 PixelBot {
                     id: bot
+                    colors: palette
                     pixelScale: 2
                     roamWidth: 16
                     helloOnWorkspace: true

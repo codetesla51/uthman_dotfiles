@@ -139,50 +139,17 @@ PanelWindow {
 
     Item {
         id: content
-        // Qualified aliases avoid FlowBar's same-named properties shadowing
-        // the slot ids when the bindings are evaluated inside FlowBar.
-        property Item wsSlotItem: wsSlot
-        property Item statSlotItem: statSlot
-        property Item islandItem: island
         anchors.fill: parent
-
-        // Bar silhouette and beam sit under the rows/island. The ears follow
-        // the content widths, and the beam draws through the reserved slots.
-        BarShape {
-            anchors.fill: parent
-            earL: leftRow.implicitWidth + 34
-            earR: rightRow.implicitWidth + 28
-            edge: colors.alpha(colors.outline, 0.22)
-            colorA: colors.alpha(Qt.tint(colors.background, colors.alpha(colors.primary, 0.14)), 0.6)
-            colorB: colors.alpha(Qt.tint(colors.background, colors.alpha(colors.primary, 0.06)), 0.6)
-            colorC: colors.alpha(Qt.tint(colors.background, colors.alpha(colors.secondary, 0.08)), 0.6)
-            colorD: colors.alpha(Qt.tint(colors.background, colors.alpha(colors.tertiary, 0.12)), 0.6)
-            opacity: bar.barsVisible ? 1 : 0
-            Behavior on opacity { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
-        }
-        FlowBar {
-            id: flow
-            anchors.fill: parent
-            colors: bar.colors
-            wsSlot: content.wsSlotItem
-            statSlot: content.statSlotItem
-            island: content.islandItem
-            running: bar.barsVisible
-            opacity: bar.barsVisible ? 1 : 0
-            Behavior on opacity { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
-            onOpenSysMon: showSysMon()
-            onOpenBattery: batPanel.open = !batPanel.open
-        }
 
         RowLayout {
             id: leftRow
-            anchors { left: parent.left; top: parent.top; bottom: parent.bottom; topMargin: 10; bottomMargin: 10 }
+            anchors { left: parent.left; top: parent.top; bottom: parent.bottom; topMargin: 6; bottomMargin: 8 }
             spacing: 6
             opacity: bar.barsVisible ? 1 : 0
             Behavior on opacity { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
             transform: Translate { x: bar.barsVisible ? 0 : -40; Behavior on x { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } } }
             ArchLogo { colors: bar.colors }
-            Item { id: wsSlot; implicitWidth: flow.wsWidth; implicitHeight: 34; Layout.alignment: Qt.AlignVCenter }
+            Workspaces { colors: bar.colors }
         }
 
         // Trapezoid tab (\_____/) — soft 8px bottom corners, no border.
@@ -455,7 +422,7 @@ PanelWindow {
 
         RowLayout {
             id: rightRow
-            anchors { right: parent.right; top: parent.top; bottom: parent.bottom; topMargin: 10; bottomMargin: 10; rightMargin: 6 }
+            anchors { right: parent.right; top: parent.top; bottom: parent.bottom; topMargin: 6; bottomMargin: 8; rightMargin: 6 }
             spacing: 6
             opacity: bar.barsVisible ? 1 : 0
             Behavior on opacity { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
@@ -468,11 +435,13 @@ PanelWindow {
                 dnd: ntfy.dnd
                 onToggleDndRequested: ntfy.toggleDnd()
             }
+            Memory { colors: bar.colors; onOpenRequested: showSysMon() }
+            Cpu { colors: bar.colors; onOpenRequested: showSysMon() }
             WatchCat {
                 colors: bar.colors
                 onOpenRequested: toggleWatchCat()
             }
-            Item { id: statSlot; implicitWidth: flow.statWidth; implicitHeight: 34; Layout.alignment: Qt.AlignVCenter }
+            Battery { colors: bar.colors; onOpenRequested: batPanel.open = !batPanel.open }
         }
 
     }

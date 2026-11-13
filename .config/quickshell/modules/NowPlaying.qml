@@ -4,6 +4,7 @@ import Quickshell.Services.Mpris
 import QtQuick
 import QtQuick.Layouts
 import Qt5Compat.GraphicalEffects
+import "../components/Bloom.js" as Bloom
 
 // NowPlaying - flat cluster inside the center trapezium (separated by | in Bar.qml):
 // rounded art / two-line title+artist / live visualizer / circular transport buttons.
@@ -210,7 +211,7 @@ Item {
                 width: 20; height: 20; radius: 10
                 color: (prevMa.containsMouse && prevBtn.fresh) ? colors.alpha(colors.primary, 0.15) : "transparent"
                 scale: (prevMa.containsMouse && prevBtn.fresh) ? 1.12 : 1
-                Behavior on scale { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
+                Behavior on scale { NumberAnimation { duration: Bloom.fast; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.move } }
                 Text { anchors.centerIn: parent; text: "󰒮"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 10 }
                 MouseArea { id: prevMa; anchors.fill: parent; hoverEnabled: true; onContainsMouseChanged: if(!containsMouse) prevBtn.fresh = true; onClicked: { if(root.hasPlayer && root.player.canGoPrevious) root.player.previous(); prevBtn.fresh = false } }
             }
@@ -222,7 +223,7 @@ Item {
                 border.width: 1
                 border.color: (playMa.containsMouse && playBtn.fresh) ? colors.primary : colors.alpha(colors.primary, 0.35)
                 scale: (playMa.containsMouse && playBtn.fresh) ? 1.1 : 1
-                Behavior on scale { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
+                Behavior on scale { NumberAnimation { duration: Bloom.fast; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.move } }
                 Text { anchors.centerIn: parent; text: root.isPlaying ? "󰏤" : "󰐊"; color: (playMa.containsMouse && playBtn.fresh) ? colors.background : colors.primary; font.family: colors.fontSans; font.pixelSize: 10 }
                 MouseArea { id: playMa; anchors.fill: parent; hoverEnabled: true; onContainsMouseChanged: if(!containsMouse) playBtn.fresh = true; onClicked: { if(root.hasPlayer && root.player.canTogglePlaying) root.player.togglePlaying(); playBtn.fresh = false } }
             }
@@ -232,7 +233,7 @@ Item {
                 width: 20; height: 20; radius: 10
                 color: (nextMa.containsMouse && nextBtn.fresh) ? colors.alpha(colors.primary, 0.15) : "transparent"
                 scale: (nextMa.containsMouse && nextBtn.fresh) ? 1.12 : 1
-                Behavior on scale { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
+                Behavior on scale { NumberAnimation { duration: Bloom.fast; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.move } }
                 Text { anchors.centerIn: parent; text: "󰒭"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 10 }
                 MouseArea { id: nextMa; anchors.fill: parent; hoverEnabled: true; onContainsMouseChanged: if(!containsMouse) nextBtn.fresh = true; onClicked: { if(root.hasPlayer && root.player.canGoNext) root.player.next(); nextBtn.fresh = false } }
             }

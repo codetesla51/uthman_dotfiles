@@ -1,5 +1,6 @@
 import Quickshell
 import QtQuick
+import "../components/Bloom.js" as Bloom
 
 // Bell button — right edge of the center island. A quiet dot marks unread
 // notifications; the fixed footprint keeps the bar from shifting with counts.
@@ -13,7 +14,7 @@ Item {
 
     readonly property bool hovered: bellMouse.containsMouse
     scale: hovered ? 1.12 : 1
-    Behavior on scale { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
+    Behavior on scale { NumberAnimation { duration: Bloom.fast; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.move } }
 
     implicitWidth: label.implicitWidth + 32
     implicitHeight: 30

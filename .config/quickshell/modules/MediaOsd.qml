@@ -1,6 +1,7 @@
 import Quickshell
 import Quickshell.Io
 import QtQuick
+import "../components/Bloom.js" as Bloom
 
 // MediaOsd — quickshell replacement for omarchy's swayosd.
 // Glass pill at top-center showing volume / mic / brightness level.
@@ -22,7 +23,7 @@ PanelWindow {
     implicitHeight: 64
     exclusionMode: ExclusionMode.Ignore
     color: "transparent"
-    visible: root.show
+    visible: root.show || card.opacity > 0.01
 
     IpcHandler {
         target: "media"
@@ -90,8 +91,8 @@ PanelWindow {
         border.color: colors.alpha(colors.primary, 0.25)
         opacity: root.show ? 1 : 0
         scale: root.show ? 1 : 0.92
-        Behavior on opacity { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
-        Behavior on scale { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
+        Behavior on opacity { NumberAnimation { duration: 200; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.out } }
+        Behavior on scale { NumberAnimation { duration: Bloom.fast; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.move } }
 
         Row {
             anchors { left: parent.left; right: parent.right; verticalCenter: parent.verticalCenter }

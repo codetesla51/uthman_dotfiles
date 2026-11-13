@@ -1,6 +1,7 @@
 import Quickshell
 import Quickshell.Io
 import QtQuick
+import "../components/Bloom.js" as Bloom
 
 // WatchCat pill — hotspot data watchdog. Shows live down-rate (NetRate),
 // glass island with tertiary accent; error border while currently hot
@@ -12,6 +13,12 @@ Item {
     property var colors
     property bool hovered: wcMouse.containsMouse
     signal openRequested()
+
+    // Bloom lift: the whole pill moves, not just its colour.
+    scale: hovered ? 1.06 : 1
+    y: hovered ? -3 : 0
+    Behavior on scale { NumberAnimation { duration: Bloom.fast; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.move } }
+    Behavior on y { NumberAnimation { duration: Bloom.fast; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.move } }
 
     readonly property real hotKbs: 500
 

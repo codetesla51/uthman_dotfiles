@@ -4,15 +4,18 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
 import QtQuick.Effects
+import "../components/Bloom.js" as Bloom
 
 // System Monitor — POWER USER edition. Large, visible, kill anything.
 // Opens via CPU/RAM pill click or `quickshell -p ~/.config/quickshell ipc call sysmon toggle`
+// Floating window, but visually just text and graphs: no header, border, fill, blur, or shadow.
 FloatingWindow {
     id: root
     property var colors
     property bool open: false
     property string filter: ""
     property string sortBy: "mem"
+    property bool sortDesc: true
     property int topN: 20
 
 
@@ -73,15 +76,17 @@ FloatingWindow {
         if (root.roguesOnly) list = list.filter(function(p){ return root.isRogue(p.stat) })
         // sort
         list = list.slice()
-        if (sortBy === "cpu") list.sort(function(a,b){ return parseFloat(b.cpu)-parseFloat(a.cpu) })
-        else if (sortBy === "mem") list.sort(function(a,b){ return parseFloat(b.mem)-parseFloat(a.mem) })
-        else if (sortBy === "pid") list.sort(function(a,b){ return parseInt(a.pid)-parseInt(b.pid) })
+        var dir = root.sortDesc ? -1 : 1
+        if (sortBy === "cpu") list.sort(function(a,b){ return dir*(parseFloat(a.cpu)-parseFloat(b.cpu)) })
+        else if (sortBy === "mem") list.sort(function(a,b){ return dir*(parseFloat(a.mem)-parseFloat(b.mem)) })
+        else if (sortBy === "pid") list.sort(function(a,b){ return dir*(parseInt(a.pid)-parseInt(b.pid)) })
+        else if (sortBy === "name") list.sort(function(a,b){ return dir*a.name.localeCompare(b.name) })
         if (topN>0) list = list.slice(0, topN)
         return list
     }
     title: "System Monitor"
-    implicitWidth: 860
-    implicitHeight: 580
+    implicitWidth: 920
+    implicitHeight: 640
     minimumSize: Qt.size(700, 480)
     maximumSize: Qt.size(1000, 700)
     color: "transparent"
@@ -97,22 +102,23 @@ FloatingWindow {
     Rectangle {
         id: card
         anchors.fill: parent
-        radius: 20
-        color: colors.alpha(colors.surface, 0.52)
-        border.width: 1
-        border.color: colors.alpha(colors.outline, 0.15)
+        radius: 0
+        color: "transparent"
+        border.width: 0
         focus: root.open
         // bezier pair — open pops with overshoot bounce (fast), close hurries
         // out with none. Same curves as the notification drawer.
         ParallelAnimation {
             id: openAnim
-            NumberAnimation { target: card; property: "opacity"; from: 0; to: 1; duration: 220; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
-            NumberAnimation { target: card; property: "scale"; from: 0.94; to: 1; duration: 280; easing.type: Easing.Bezier; easing.bezierCurve: [0.34, 1.35, 0.64, 1] }
+            NumberAnimation { target: card; property: "rotation"; from: Bloom.panelRotate; to: 0; duration: Bloom.panel; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.spring }
+            NumberAnimation { target: card; property: "opacity"; from: 0; to: 1; duration: Bloom.normal; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.out }
+            NumberAnimation { target: card; property: "scale"; from: Bloom.panelScale; to: 1; duration: Bloom.panel; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.spring }
         }
         ParallelAnimation {
             id: closeAnim
-            NumberAnimation { target: card; property: "opacity"; to: 0; duration: 160; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
-            NumberAnimation { target: card; property: "scale"; to: 0.94; duration: 180; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
+            NumberAnimation { target: card; property: "rotation"; to: Bloom.panelRotate; duration: Bloom.close; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.out }
+            NumberAnimation { target: card; property: "opacity"; to: 0; duration: Bloom.close; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.out }
+            NumberAnimation { target: card; property: "scale"; to: Bloom.panelScale; duration: Bloom.close; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.out }
         }
         Keys.onEscapePressed: root.open = false
         Keys.onPressed: function(e){
@@ -123,55 +129,20 @@ FloatingWindow {
 
 
 
-        // click empty space refocuses the card so K / R work after using the filter box
-        MouseArea { anchors.fill: parent; onClicked: card.forceActiveFocus() }
+        // click empty space refocuses the card so K / R work after using the filter box;
+        // press-drag anywhere non-interactive moves the window (compositor-native)
+        MouseArea {
+            anchors.fill: parent
+            cursorShape: pressed ? Qt.ClosedHandCursor : Qt.OpenHandCursor
+            onPressed: { card.forceActiveFocus(); root.startSystemMove() }
+        }
 
         ColumnLayout {
             anchors.fill: parent
             anchors.margins: 18
             spacing: 14
 
-            // header — power-user, visible, not cramped
-            Rectangle {
-                Layout.fillWidth: true
-                height: 48
-                radius: 12
-                color: colors.alpha(colors.surface,0.6)
-                border.width: 1; border.color: colors.alpha(colors.outline,0.15)
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.leftMargin: 14; anchors.rightMargin: 14
-                    spacing: 12
-                    Rectangle {
-                        Layout.preferredWidth: 26; Layout.preferredHeight: 26; radius: 13
-                        color: colors.alpha(colors.primary, 0.15)
-                        border.width: 1; border.color: colors.alpha(colors.primary, 0.3)
-                        Text { anchors.centerIn: parent; text: "󰓅"; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 12 }
-                        Layout.alignment: Qt.AlignVCenter
-                    }
-                    Text { text: "SYSTEM MONITOR"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 13; font.weight: Font.ExtraBold; font.letterSpacing: 1.3; Layout.alignment: Qt.AlignVCenter }
-                    Item { Layout.fillWidth: true }
-                    ColumnLayout {
-                        spacing: 1
-                        Layout.alignment: Qt.AlignVCenter
-                        Text { text: "CPU  "+root.cpuUsage+"%"; color: colors.secondary; font.family: colors.fontSans; font.pixelSize: 10; font.weight: Font.Bold; horizontalAlignment: Text.AlignRight; Layout.alignment: Qt.AlignRight }
-                        Text { text: "RAM  "+Math.round(root.memPct)+"%"; color: colors.tertiary; font.family: colors.fontSans; font.pixelSize: 10; font.weight: Font.Bold; horizontalAlignment: Text.AlignRight; Layout.alignment: Qt.AlignRight }
-                    }
-                    Rectangle { width: 1; height: 28; color: colors.alpha(colors.outline,0.15) }
-                    Text { text: root.memUsed.toFixed(1)+"G / "+root.memTotal.toFixed(1)+"G"; color: colors.alpha(colors.outline,0.7); font.family: colors.fontSans; font.pixelSize: 9; Layout.alignment: Qt.AlignVCenter }
-                    Rectangle {
-                        width: 28; height: 28; radius: 14
-                        color: smCloseMa.containsMouse ? colors.alpha(colors.surfaceVariant, 0.6) : colors.alpha(colors.surface, 0.6)
-                        border.width: 1; border.color: colors.alpha(colors.outline, 0.15)
-                        Layout.alignment: Qt.AlignVCenter
-                        Text { anchors.centerIn: parent; text: "󰅖"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 12 }
-                        MouseArea { id: smCloseMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.open = false }
-                    }
-                }
-
-            }
-
-            // graphs row — visible, system colors, big
+            // graphs row — no panel, text and graphs sit directly on the wallpaper
             RowLayout {
                 Layout.fillWidth: true
                 spacing: 12
@@ -179,9 +150,9 @@ FloatingWindow {
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 150
-                    radius: 14
-                    color: colors.alpha(colors.surface,0.55)
-                    border.width:1; border.color: colors.alpha(colors.secondary,0.35)
+                    radius: 0
+                    color: "transparent"
+                    border.width: 0
                     ColumnLayout {
                         anchors.fill: parent
                         anchors.margins: 12
@@ -248,9 +219,9 @@ FloatingWindow {
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 150
-                    radius: 14
-                    color: colors.alpha(colors.surface,0.55)
-                    border.width:1; border.color: colors.alpha(colors.tertiary,0.35)
+                    radius: 0
+                    color: "transparent"
+                    border.width: 0
                     ColumnLayout {
                         anchors.fill: parent
                         anchors.margins: 12
@@ -288,9 +259,9 @@ FloatingWindow {
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 150
-                    radius: 14
-                    color: colors.alpha(colors.surface,0.55)
-                    border.width:1; border.color: colors.alpha(colors.primary,0.35)
+                    radius: 0
+                    color: "transparent"
+                    border.width: 0
                     ColumnLayout {
                         anchors.fill: parent
                         anchors.margins: 12
@@ -326,42 +297,68 @@ FloatingWindow {
                 TextField {
                     id: filterField
                     Layout.fillWidth: true
-                    implicitHeight: 38
-                    leftPadding: 14
-                    rightPadding: 14
-                    topPadding: 8
-                    bottomPadding: 8
+                    implicitHeight: 30
+                    leftPadding: 2
+                    rightPadding: 2
+                    topPadding: 2
+                    bottomPadding: 6
                     placeholderText: "Filter processes…"
-                    placeholderTextColor: colors.alpha(colors.outline,0.5)
+                    placeholderTextColor: colors.alpha(colors.outline,0.45)
                     color: colors.foreground
                     font.family: colors.fontSans
-                    font.pixelSize: 12
-                    background: Rectangle {
-                        radius: 12
-                        color: colors.alpha(colors.surface,0.8)
-                        border.width: 1
-                        border.color: filterField.activeFocus ? colors.alpha(colors.primary,0.5) : colors.alpha(colors.outline,0.2)
-                        Behavior on border.color { ColorAnimation { duration: 150 } }
+                    font.pixelSize: 11
+                    background: Item {
+                        Rectangle {
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.bottom: parent.bottom
+                            height: 1
+                            color: filterField.activeFocus
+                                ? colors.alpha(colors.primary,0.6)
+                                : colors.alpha(colors.outline,0.2)
+                            Behavior on color { ColorAnimation { duration: 150 } }
+                        }
                     }
                     onTextChanged: root.filter = text
                     Keys.onEscapePressed: card.forceActiveFocus()
                 }
                 Repeater {
-                    model: [{k:"cpu", l:"CPU"},{k:"mem", l:"MEM"},{k:"pid", l:"PID"}]
+                    model: [{k:"cpu", l:"CPU"},{k:"mem", l:"MEM"},{k:"pid", l:"PID"},{k:"name", l:"NAME"}]
                     delegate: Rectangle {
                         required property var modelData
-                        width: 52; height: 28; radius: 8
-                        color: root.sortBy===modelData.k ? colors.alpha(colors.primary,0.25) : colors.alpha(colors.surface,0.6)
-                        border.width:1; border.color: root.sortBy===modelData.k ? colors.alpha(colors.primary,0.4) : colors.alpha(colors.outline,0.12)
-                        Text { anchors.centerIn: parent; text: modelData.l; color: root.sortBy===modelData.k?colors.primary:colors.alpha(colors.outline,0.8); font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold }
-                        MouseArea { anchors.fill: parent; onClicked: root.sortBy = modelData.k }
+                        width: 52; height: 28; radius: 0
+                        color: "transparent"
+                        Text {
+                            anchors.centerIn: parent
+                            text: modelData.l + (root.sortBy===modelData.k ? (root.sortDesc ? " ↓" : " ↑") : "")
+                            color: root.sortBy===modelData.k
+                                ? colors.primary
+                                : sortMa.containsMouse ? colors.foreground : colors.alpha(colors.outline,0.65)
+                            font.family: colors.fontSans
+                            font.pixelSize: 9
+                            font.weight: Font.Bold
+                        }
+                        MouseArea {
+                            id: sortMa
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onClicked: {
+                                if (root.sortBy === modelData.k) root.sortDesc = !root.sortDesc
+                                else { root.sortBy = modelData.k; root.sortDesc = true }
+                            }
+                        }
                     }
                 }
                 Text { text: root.filteredProcesses.length+" / "+root.processes.length + (root.roguesOnly ? " · ROGUES" : ""); color: colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 9; Layout.preferredWidth: 118; elide: Text.ElideRight; horizontalAlignment: Text.AlignRight }
                 Rectangle {
-                    width: 28; height: 28; radius: 8
-                    color: refreshMa.containsMouse?colors.alpha(colors.primary,0.15):"transparent"
-                    Text { anchors.centerIn: parent; text: "↻"; color: colors.primary; font.pixelSize: 14 }
+                    width: 28; height: 28; radius: 0
+                    color: "transparent"
+                    Text {
+                        anchors.centerIn: parent
+                        text: "↻"
+                        color: refreshMa.containsMouse ? colors.primary : colors.alpha(colors.outline,0.7)
+                        font.pixelSize: 14
+                    }
                     MouseArea { id: refreshMa; anchors.fill: parent; hoverEnabled:true; onClicked: psProc.running=true }
                 }
             }
@@ -374,11 +371,19 @@ FloatingWindow {
                     model: [10,20,40,0]
                     delegate: Rectangle {
                         required property var modelData
-                        width: 44; height: 22; radius: 7
-                        color: root.topN===modelData ? colors.alpha(colors.primary,0.22) : colors.alpha(colors.surface,0.6)
-                        border.width:1; border.color: root.topN===modelData ? colors.alpha(colors.primary,0.4) : colors.alpha(colors.outline,0.12)
-                        Text { anchors.centerIn: parent; text: modelData===0?"All":modelData; color: root.topN===modelData?colors.primary:colors.alpha(colors.outline,0.8); font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold }
-                        MouseArea { anchors.fill: parent; onClicked: root.topN = modelData }
+                        width: 40; height: 22; radius: 0
+                        color: "transparent"
+                        Text {
+                            anchors.centerIn: parent
+                            text: modelData===0?"All":modelData
+                            color: root.topN===modelData
+                                ? colors.primary
+                                : topMa.containsMouse ? colors.foreground : colors.alpha(colors.outline,0.65)
+                            font.family: colors.fontSans
+                            font.pixelSize: 9
+                            font.weight: Font.Bold
+                        }
+                        MouseArea { id: topMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.topN = modelData }
                     }
                 }
                 Item { Layout.fillWidth: true }
@@ -387,10 +392,10 @@ FloatingWindow {
             // hogs strip — top eaters + rogue states, computed per poll
             Rectangle {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 38
-                radius: 10
-                color: colors.alpha(colors.surface, 0.45)
-                border.width: 1; border.color: colors.alpha(colors.outline, 0.12)
+                Layout.preferredHeight: 30
+                radius: 0
+                color: "transparent"
+                border.width: 0
                 RowLayout {
                     anchors.fill: parent
                     anchors.leftMargin: 12; anchors.rightMargin: 12
@@ -402,9 +407,8 @@ FloatingWindow {
                     Rectangle { width: 1; height: 18; color: colors.alpha(colors.outline, 0.12) }
                     Rectangle {
                         visible: root.rogueCount > 0
-                        Layout.preferredWidth: rogueTxt.implicitWidth + 18; Layout.preferredHeight: 22; radius: 11
-                        color: root.roguesOnly ? colors.alpha(colors.error, 0.25) : colors.alpha(colors.error, 0.10)
-                        border.width: 1; border.color: colors.alpha(colors.error, 0.4)
+                        Layout.preferredWidth: rogueTxt.implicitWidth + 8; Layout.preferredHeight: 22; radius: 0
+                        color: "transparent"
                         Layout.alignment: Qt.AlignVCenter
                         Text { id: rogueTxt; anchors.centerIn: parent; text: "● " + root.rogueCount + " rogue" + (root.roguesOnly ? " · all ×" : ""); color: colors.error; font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold }
                         MouseArea { anchors.fill: parent; hoverEnabled: true; onClicked: if(root.roguesOnly) root.roguesOnly = false }
@@ -443,18 +447,25 @@ FloatingWindow {
                     required property var modelData
                     required property int index
                     width: procList.width
-                    height: 32
-                    radius: 10
-                    color: maProc.containsMouse ? colors.alpha(colors.primary,0.08) : index%2===0 ? colors.alpha(colors.surface,0.35) : "transparent"
+                    height: 30
+                    radius: 0
+                    color: "transparent"
+                    Rectangle {
+                        width: 2
+                        height: parent.height
+                        color: colors.primary
+                        opacity: maProc.containsMouse ? 1 : 0
+                        Behavior on opacity { NumberAnimation { duration: 140 } }
+                    }
                     RowLayout {
                         anchors.fill: parent
                         anchors.leftMargin: 10; anchors.rightMargin: 8
                         spacing: 8
                         Rectangle { visible: root.isRogue(modelData.stat); width: 7; height: 7; radius: 3.5; color: colors.error; Layout.alignment: Qt.AlignVCenter }
-                        Text { text: modelData.pid; color: colors.alpha(colors.outline,0.7); font.family: colors.fontSans; font.pixelSize: 9; Layout.preferredWidth: 60 }
+                        Text { text: modelData.pid; color: colors.alpha(colors.outline,0.65); font.family: colors.fontSans; font.pixelSize: 9; Layout.preferredWidth: 60 }
                         Text { text: modelData.name; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 10; elide: Text.ElideRight; Layout.fillWidth: true }
-                        Rectangle { width: 48; height: 14; radius: 7; color: colors.alpha(colors.secondary, parseFloat(modelData.cpu)/100*0.35+0.08); Text { anchors.centerIn: parent; text: modelData.cpu+"%"; color: colors.secondary; font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold } }
-                        Rectangle { width: 48; height: 14; radius: 7; color: colors.alpha(colors.tertiary, parseFloat(modelData.mem)/100*0.35+0.08); Text { anchors.centerIn: parent; text: modelData.mem+"%"; color: colors.tertiary; font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold } }
+                        Text { text: modelData.cpu+"%"; color: colors.secondary; font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold; horizontalAlignment: Text.AlignRight; Layout.preferredWidth: 48 }
+                        Text { text: modelData.mem+"%"; color: colors.tertiary; font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold; horizontalAlignment: Text.AlignRight; Layout.preferredWidth: 48 }
                     }
                     MouseArea {
                         id: maProc
@@ -466,6 +477,13 @@ FloatingWindow {
                     }
                 }
             }
+        }
+        // invisible top-edge drag strip — the only "titlebar" left
+        MouseArea {
+            anchors { top: parent.top; left: parent.left; right: parent.right }
+            height: 16
+            cursorShape: pressed ? Qt.ClosedHandCursor : Qt.OpenHandCursor
+            onPressed: { card.forceActiveFocus(); root.startSystemMove() }
         }
     }
 

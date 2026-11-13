@@ -1,0 +1,5 @@
+import Quickshell
+
+ShellRoot {
+    HackedOverlay {}
+}

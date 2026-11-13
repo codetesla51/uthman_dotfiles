@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+# Watch for a newly inserted USB disk and open the Quickshell takeover overlay.
+# This is started by free-games-usb.service. It does not mount or read the
+# drive; it only watches kernel block-device metadata via lsblk.
+set -euo pipefail
+
+launcher="$HOME/.local/bin/hacked"
+[[ -x "$launcher" ]] || {
+  echo "Missing launcher: $launcher" >&2
+  exit 1
+}
+
+scan_disks() {
+  # Output: name<TAB>transport<TAB>removable
+  lsblk -P -o NAME,TYPE,TRAN,RM 2>/dev/null | while IFS= read -r line; do
+    name=""
+    type=""
+    tran=""
+    rm=""
+    for field in $line; do
+      case "$field" in
+        NAME=*) name=${field#NAME=}; name=${name//\"/} ;;
+        TYPE=*) type=${field#TYPE=}; type=${type//\"/} ;;
+        TRAN=*) tran=${field#TRAN=}; tran=${tran//\"/} ;;
+        RM=*)   rm=${field#RM=};     rm=${rm//\"/} ;;
+      esac
+    done
+    [[ "$type" == "disk" ]] || continue
+    printf '%s\t%s\t%s\n' "$name" "$tran" "$rm"
+  done
+}
+
+declare -A known=()
+while IFS=$'\t' read -r name tran rm; do
+  [[ -n "$name" ]] && known["$name"]=1
+done < <(scan_disks)
+
+echo "Free_Games USB watcher active. Waiting for a new USB disk..."
+
+while true; do
+  declare -A present=()
+  while IFS=$'\t' read -r name tran rm; do
+    [[ -n "$name" ]] || continue
+    present["$name"]=1
+    if [[ -z "${known[$name]:-}" ]]; then
+      if [[ "$tran" == "usb" || "$rm" == "1" || "$rm" == "true" ]]; then
+        echo "USB disk detected: $name"
+        # The launcher refuses to start a second overlay if one is already up.
+        setsid "$launcher" >/dev/null 2>&1 &
+      fi
+    fi
+  done < <(scan_disks)
+
+  for name in "${!known[@]}"; do
+    [[ -n "${present[$name]:-}" ]] || unset 'known[$name]'
+  done
+  for name in "${!present[@]}"; do
+    known["$name"]=1
+  done
+
+  sleep 1
+done

@@ -5,6 +5,7 @@ import QtQuick.Layouts
 import QtQuick.Controls
 import Qt5Compat.GraphicalEffects
 import QtMultimedia
+import "../components/Bloom.js" as Bloom
 
 // WhatsApp — single-pane sheet over the ~/whatsapp-bridge Go daemon (whatsmeow).
 // The list fills the window; opening a chat swaps the whole window to the conversation.
@@ -1010,8 +1011,8 @@ FloatingWindow {
         border.color: colors.alpha(colors.outline, 0.14)
         scale: root.open ? 1 : 0.97
         opacity: root.open ? 1 : 0
-        Behavior on scale { NumberAnimation { duration: 240; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] } }
-        Behavior on opacity { NumberAnimation { duration: 200; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] } }
+        Behavior on scale { NumberAnimation { duration: 240; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.out } }
+        Behavior on opacity { NumberAnimation { duration: 200; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.out } }
 
         ColumnLayout {
             anchors.fill: parent
@@ -1047,7 +1048,7 @@ FloatingWindow {
                         y: signHover.containsMouse ? -2 : 0
                         scale: signHover.pressed ? 0.9 : 1
                         Behavior on color { ColorAnimation { duration: 150 } }
-                        Behavior on y { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
+                        Behavior on y { NumberAnimation { duration: Bloom.fast; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.move } }
                         Behavior on scale { NumberAnimation { duration: 120 } }
                         Text {
                             anchors.centerIn: parent
@@ -1606,7 +1607,7 @@ FloatingWindow {
                             boundsBehavior: Flickable.StopAtBounds
                             ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
                             add: Transition {
-                                NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 220; easing.type: Easing.OutCubic }
+                                NumberAnimation { property: "opacity"; from: 0; to: 1; duration: Bloom.normal; easing.type: Easing.OutCubic }
                                 NumberAnimation { property: "y"; from: 14; to: 0; duration: 220; easing.type: Easing.OutCubic }
                             }
                             addDisplaced: Transition {

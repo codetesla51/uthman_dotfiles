@@ -133,6 +133,7 @@ plan.md
 .local/bin/meetcap
 .local/bin/railpack
 .local/bin/apktool.jar
+.local/bin/pandoc
 # LICENSE/README belonging to the above vendored downloads (railpack's MIT)
 .local/bin/LICENSE
 .local/bin/README.md

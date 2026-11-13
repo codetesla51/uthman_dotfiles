@@ -2,6 +2,7 @@ import Quickshell
 import Quickshell.Io
 import QtQuick
 import QtQuick.Layouts
+import "../components/Bloom.js" as Bloom
 
 // Meetcap recorder — Orb design port. Recording only: start/stop/status,
 // live mic+sys levels (cava feeds), last session row. Transcripts live
@@ -148,13 +149,15 @@ FloatingWindow {
         border.color: colors.alpha(colors.outline, 0.15)
         ParallelAnimation {
             id: openAnim
-            NumberAnimation { target: card; property: "opacity"; from: 0; to: 1; duration: 220; easing.type: Easing.BezierSpline; easing.bezierCurve: [0.32, 0.72, 0, 1, 1, 1] }
-            NumberAnimation { target: card; property: "scale"; from: 0.94; to: 1; duration: 280; easing.type: Easing.BezierSpline; easing.bezierCurve: [0.34, 1.35, 0.64, 1, 1, 1] }
+            NumberAnimation { target: card; property: "rotation"; from: Bloom.panelRotate; to: 0; duration: Bloom.panel; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.spring }
+            NumberAnimation { target: card; property: "opacity"; from: 0; to: 1; duration: Bloom.normal; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.out }
+            NumberAnimation { target: card; property: "scale"; from: Bloom.panelScale; to: 1; duration: Bloom.panel; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.spring }
         }
         ParallelAnimation {
             id: closeAnim
-            NumberAnimation { target: card; property: "opacity"; to: 0; duration: 160; easing.type: Easing.BezierSpline; easing.bezierCurve: [0.32, 0.72, 0, 1, 1, 1] }
-            NumberAnimation { target: card; property: "scale"; to: 0.94; duration: 180; easing.type: Easing.BezierSpline; easing.bezierCurve: [0.32, 0.72, 0, 1, 1, 1] }
+            NumberAnimation { target: card; property: "rotation"; to: Bloom.panelRotate; duration: Bloom.close; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.out }
+            NumberAnimation { target: card; property: "opacity"; to: 0; duration: Bloom.close; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.out }
+            NumberAnimation { target: card; property: "scale"; to: Bloom.panelScale; duration: Bloom.close; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.out }
         }
 
         ColumnLayout {
@@ -342,7 +345,7 @@ FloatingWindow {
                 radius: 12
                 color: colors.primary
                 property bool hovered: btnHover.containsMouse
-                transform: Translate { y: mainBtn.hovered ? -2 : 0; Behavior on y { NumberAnimation { duration: 140 } } }
+                transform: Translate { y: mainBtn.hovered ? -3 : 0; Behavior on y { NumberAnimation { duration: 140 } } }
                 RowLayout {
                     anchors.centerIn: parent
                     spacing: 8

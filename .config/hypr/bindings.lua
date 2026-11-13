@@ -197,3 +197,6 @@ hl.bind("SUPER + I", hl.dsp.exec_cmd(qs("pkgman toggle")))
 -- ── Lock screen — hyprlock (SUPER+L) ─────────────────────────────────────
 hl.unbind("SUPER + L")
 hl.bind("SUPER + L", hl.dsp.exec_cmd("pidof hyprlock || hyprlock"), { description = "Lock screen" })
+
+-- ── Release the free-games takeover overlay (SUPER+SHIFT+ESC) ────────────
+hl.bind("SUPER + SHIFT + Escape", hl.dsp.exec_cmd("hacked off"), { description = "Dismiss takeover overlay" })

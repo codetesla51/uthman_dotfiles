@@ -1,5 +1,6 @@
 import Quickshell
 import QtQuick
+import "../components/Bloom.js" as Bloom
 
 // Clock — center island (waybar parity): surface .7, radius 16, primary color,
 // weight 800, letter-spacing 1.2 → 2 on hover. Click toggles extended format.
@@ -10,6 +11,12 @@ Item {
     property bool altFormat: false
     property bool hovered: clockMouse.containsMouse
     signal pinRequested()
+
+    // Bloom lift inside the island: small, so the trapezoid still owns the motion.
+    scale: hovered ? 1.04 : 1
+    y: hovered ? -1 : 0
+    Behavior on scale { NumberAnimation { duration: Bloom.fast; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.move } }
+    Behavior on y { NumberAnimation { duration: Bloom.fast; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.move } }
 
     SystemClock {
         id: clock

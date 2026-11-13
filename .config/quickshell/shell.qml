@@ -5,6 +5,9 @@ import "components"
 import "modules"
 
 ShellRoot {
+    // full-screen wallpaper + clock + subject cutout, Background layer
+    DesktopClock { id: desktopClock; colors: barPalette }
+
     Bar { id: mainBar }
 
     NowPlayingCard { colors: barPalette; hovered: mainBar.musicHover }

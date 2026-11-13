@@ -5,6 +5,7 @@ import Quickshell.Wayland
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
+import "../components/Bloom.js" as Bloom
 
 // Wi-Fi panel — network selector + PassPrompt join + live throughput + speed test.
 // Opens from the Network pill (or `quickshell -p ~/.config/quickshell ipc call wifi toggle`).
@@ -240,6 +241,7 @@ PanelWindow {
     // ── the card ──
     Rectangle {
         id: card
+            transformOrigin: Item.TopRight
         anchors { top: parent.top; right: parent.right }
         anchors.topMargin: 52
         anchors.rightMargin: 8
@@ -270,23 +272,25 @@ PanelWindow {
             Translate { id: slide },
             Scale { id: cardScale; origin.x: card.width; origin.y: 0 }
         ]
-        Component.onCompleted: slide.x = width + 8
+        Component.onCompleted: slide.x = 20
         // bezier pair — open pops in with overshoot bounce (fast), close
         // hurries out the same path with no overshoot. Same curve family
         // as the notification drawer.
         ParallelAnimation {
             id: openAnim
-            NumberAnimation { target: slide; property: "x"; from: card.width + 8; to: 0; duration: 280; easing.type: Easing.Bezier; easing.bezierCurve: [0.34, 1.35, 0.64, 1] }
-            NumberAnimation { target: card; property: "opacity"; from: 0; to: 1; duration: 220; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
-            NumberAnimation { target: cardScale; property: "xScale"; from: 0.96; to: 1; duration: 280; easing.type: Easing.Bezier; easing.bezierCurve: [0.34, 1.35, 0.64, 1] }
-            NumberAnimation { target: cardScale; property: "yScale"; from: 0.96; to: 1; duration: 280; easing.type: Easing.Bezier; easing.bezierCurve: [0.34, 1.35, 0.64, 1] }
+            NumberAnimation { target: card; property: "rotation"; from: Bloom.anchorRotate; to: 0; duration: Bloom.anchor; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.spring }
+            NumberAnimation { target: slide; property: "x"; from: 20; to: 0; duration: Bloom.anchor; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.spring }
+            NumberAnimation { target: card; property: "opacity"; from: 0; to: 1; duration: Bloom.normal; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.out }
+            NumberAnimation { target: cardScale; property: "xScale"; from: Bloom.anchorScale; to: 1; duration: Bloom.anchor; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.spring }
+            NumberAnimation { target: cardScale; property: "yScale"; from: Bloom.anchorScale; to: 1; duration: Bloom.anchor; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.spring }
         }
         ParallelAnimation {
             id: closeAnim
-            NumberAnimation { target: slide; property: "x"; to: card.width + 8; duration: 220; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
-            NumberAnimation { target: card; property: "opacity"; to: 0; duration: 180; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
-            NumberAnimation { target: cardScale; property: "xScale"; to: 0.96; duration: 220; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
-            NumberAnimation { target: cardScale; property: "yScale"; to: 0.96; duration: 220; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
+            NumberAnimation { target: card; property: "rotation"; to: Bloom.anchorRotate; duration: Bloom.close; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.out }
+            NumberAnimation { target: slide; property: "x"; to: 20; duration: Bloom.close; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.out }
+            NumberAnimation { target: card; property: "opacity"; to: 0; duration: Bloom.close; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.out }
+            NumberAnimation { target: cardScale; property: "xScale"; to: Bloom.anchorScale; duration: Bloom.close; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.out }
+            NumberAnimation { target: cardScale; property: "yScale"; to: Bloom.anchorScale; duration: Bloom.close; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.out }
         }
 
         ColumnLayout {

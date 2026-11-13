@@ -5,6 +5,7 @@ import Quickshell.Wayland
 import QtQuick
 import QtQuick.Shapes
 import Qt5Compat.GraphicalEffects
+import "../components/Bloom.js" as Bloom
 
 // LyricsPane — "Safe Dial" design on the theme palette: lyric lines ride a
 // rotating drum (30deg per line, R = 40% of stage), active line centered in a
@@ -67,7 +68,7 @@ PanelWindow {
     implicitHeight: 560
     exclusionMode: ExclusionMode.Ignore
     color: "transparent"
-    visible: root.open
+    visible: root.open || stage.opacity > 0.01
     WlrLayershell.namespace: "qs-lyrics"
 
     onTrackKeyChanged: root.maybeFetch()
@@ -385,6 +386,10 @@ PanelWindow {
         id: stage
         visible: root.lines.length > 0
         anchors.fill: parent
+        opacity: root.open ? 1 : 0
+        scale: root.open ? 1 : 0.97
+        Behavior on opacity { NumberAnimation { duration: 240; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.out } }
+        Behavior on scale { NumberAnimation { duration: 340; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.move } }
         readonly property real midY: height / 2
         readonly property real midX: width / 2
         readonly property real rad: Math.min(width, height) / 2 - 8

@@ -5,15 +5,16 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Effects
 import Qt5Compat.GraphicalEffects
+import "../components/Bloom.js" as Bloom
 
 // Control Center — "Focus" layout. Regular floating window (SUPER ALT P).
 //
 //   header   clock | weather | feels / humidity / wind
-//   middle   now playing (artist art as background) | volume, brightness, network
+//   middle   now playing (artist art as background) | volume, brightness, clock, network
 //   bottom   week + pixel bot, then screen time showcase
 //
-// Height budget (720): 720 - 18 top - 18 bottom - 14 gap - 14 gap
-// = 684 content. Header 68 + middle 328 + bottom 260 = 684.
+// Height budget (732): 732 - 18 top - 18 bottom - 14 gap - 14 gap
+// = 668 content. Header 68 + middle 340 + bottom 260 = 668.
 //
 // Same integrations as before: Mpris, cava, wttr.in, wpctl/brightnessctl,
 // `screentime --export`, NetRate, PixelBot, WeatherIcon.
@@ -67,15 +68,11 @@ FloatingWindow {
         var m = Math.round(secs / 60)
         return Math.floor(m / 60) + "h " + (m % 60 < 10 ? "0" : "") + (m % 60) + "m"
     }
-
     // ── clock + week ─────────────────────────────────────────────────────
     property string clockText: "--:--"
     Timer {
         interval: 1000; running: root.open; repeat: true; triggeredOnStart: true
-        onTriggered: {
-            var n = new Date()
-            root.clockText = Qt.formatTime(n, "HH:mm")
-        }
+        onTriggered: root.clockText = Qt.formatTime(new Date(), "HH:mm")
     }
     property var weekDays: []
     property string monthLabel: ""
@@ -120,6 +117,7 @@ FloatingWindow {
     }
     property string npCur: (!hasPlayer || player.length <= 0) ? "0:00" : fmtClock(player.position)
     property string npTot: (!hasPlayer || player.length <= 0) ? "0:00" : fmtClock(player.length)
+
     // position only ticks when asked to
     Timer { interval: 1000; running: root.open && root.isPlaying; repeat: true; onTriggered: if (root.hasPlayer) root.player.positionChanged() }
 
@@ -246,9 +244,9 @@ FloatingWindow {
     // ── window ───────────────────────────────────────────────────────────
     title: "Control Center"
     implicitWidth: 980
-    implicitHeight: 720
-    minimumSize: Qt.size(980, 720)
-    maximumSize: Qt.size(980, 720)
+    implicitHeight: 732
+    minimumSize: Qt.size(980, 732)
+    maximumSize: Qt.size(980, 732)
     color: "transparent"
     visible: root.open || closeAnim.running
 
@@ -261,11 +259,44 @@ FloatingWindow {
     } else closeAnim.restart()
 
     // ── small building blocks ────────────────────────────────────────────
+    // Cards enter in reading order instead of all snapping in at once.
+    // The outer card still owns the window open/close; this is a second,
+    // delayed layer so the panel feels assembled rather than dumped.
     component Card: Rectangle {
+        id: cardRoot
+        property int order: 0
+        property bool entered: false
         radius: 16
         color: root.colors.alpha(root.colors.surface, 0.45)
         border.width: 1
         border.color: root.colors.alpha(root.colors.outline, 0.10)
+        opacity: entered ? 1 : 0
+        scale: entered ? 1 : 0.98
+        transform: Translate {
+            y: cardRoot.entered ? 0 : 8
+            Behavior on y { NumberAnimation { duration: Bloom.row; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.move } }
+        }
+        Behavior on opacity { NumberAnimation { duration: Bloom.normal; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.out } }
+        Behavior on scale { NumberAnimation { duration: Bloom.row; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.move } }
+        Timer {
+            id: enterTimer
+            interval: Bloom.rowDelay + cardRoot.order * Bloom.stagger
+            onTriggered: cardRoot.entered = true
+        }
+        Connections {
+            target: root
+            function onOpenChanged() {
+                if (root.open) {
+                    cardRoot.entered = false
+                    enterTimer.interval = Bloom.rowDelay + cardRoot.order * Bloom.stagger
+                    enterTimer.restart()
+                } else {
+                    enterTimer.stop()
+                    cardRoot.entered = false
+                }
+            }
+        }
+        Component.onCompleted: if (root.open) Qt.callLater(function(){ cardRoot.entered = true })
     }
 
     // 20-segment slider. Drag, click or scroll.
@@ -324,13 +355,15 @@ FloatingWindow {
 
         ParallelAnimation {
             id: openAnim
-            NumberAnimation { target: card; property: "opacity"; from: 0; to: 1; duration: 220; easing.type: Easing.BezierSpline; easing.bezierCurve: [0.2, 0.8, 0.2, 1, 1, 1] }
-            NumberAnimation { target: card; property: "scale"; from: 0.94; to: 1; duration: 280; easing.type: Easing.BezierSpline; easing.bezierCurve: [0.34, 1.35, 0.64, 1, 1, 1] }
+            NumberAnimation { target: card; property: "rotation"; from: Bloom.panelRotate; to: 0; duration: Bloom.panel; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.spring }
+            NumberAnimation { target: card; property: "opacity"; from: 0; to: 1; duration: Bloom.normal; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.out }
+            NumberAnimation { target: card; property: "scale"; from: Bloom.panelScale; to: 1; duration: Bloom.panel; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.spring }
         }
         ParallelAnimation {
             id: closeAnim
-            NumberAnimation { target: card; property: "opacity"; to: 0; duration: 160; easing.type: Easing.BezierSpline; easing.bezierCurve: [0.2, 0.8, 0.2, 1, 1, 1] }
-            NumberAnimation { target: card; property: "scale"; to: 0.94; duration: 180; easing.type: Easing.BezierSpline; easing.bezierCurve: [0.2, 0.8, 0.2, 1, 1, 1] }
+            NumberAnimation { target: card; property: "rotation"; to: Bloom.panelRotate; duration: Bloom.close; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.out }
+            NumberAnimation { target: card; property: "opacity"; to: 0; duration: Bloom.close; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.out }
+            NumberAnimation { target: card; property: "scale"; to: Bloom.panelScale; duration: Bloom.close; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.out }
         }
 
         ColumnLayout {
@@ -342,6 +375,7 @@ FloatingWindow {
             // ── HEADER ──
             Card {
                 id: headerCard
+                order: 0
                 Layout.fillWidth: true
                 Layout.minimumHeight: 68
                 Layout.preferredHeight: 68
@@ -395,14 +429,15 @@ FloatingWindow {
             RowLayout {
                 id: midRow
                 Layout.fillWidth: true
-                Layout.minimumHeight: 328
-                Layout.preferredHeight: 328
-                Layout.maximumHeight: 328
+                Layout.minimumHeight: 340
+                Layout.preferredHeight: 340
+                Layout.maximumHeight: 340
                 spacing: 14
 
                 // Now playing — artist picture is the card background
                 Card {
                     id: npCard
+                    order: 1
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     clip: true
@@ -464,7 +499,7 @@ FloatingWindow {
                                 color: prevMa.containsMouse ? colors.alpha(colors.background, 0.75) : colors.alpha(colors.background, 0.5)
                                 border.width: 1; border.color: colors.alpha(colors.foreground, 0.28)
                                 scale: prevMa.containsMouse ? 1.06 : 1
-                                Behavior on scale { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
+                                Behavior on scale { NumberAnimation { duration: Bloom.fast; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.move } }
                                 Glyph { anchors.centerIn: parent; text: "󰒮"; color: colors.foreground; font.pixelSize: 17 }
                                 MouseArea { id: prevMa; anchors.fill: parent; hoverEnabled: true; onClicked: if (root.hasPlayer && root.player.canGoPrevious) root.player.previous() }
                             }
@@ -473,7 +508,7 @@ FloatingWindow {
                                 color: colors.primary
                                 opacity: playMa.containsMouse ? 0.92 : 1
                                 scale: playMa.containsMouse ? 1.06 : 1
-                                Behavior on scale { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
+                                Behavior on scale { NumberAnimation { duration: Bloom.fast; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.move } }
                                 Glyph { anchors.centerIn: parent; text: root.isPlaying ? "󰏤" : "󰐊"; color: colors.background; font.pixelSize: 22 }
                                 MouseArea { id: playMa; anchors.fill: parent; hoverEnabled: true; onClicked: if (root.hasPlayer && root.player.canTogglePlaying) root.player.togglePlaying() }
                             }
@@ -482,7 +517,7 @@ FloatingWindow {
                                 color: nextMa.containsMouse ? colors.alpha(colors.background, 0.75) : colors.alpha(colors.background, 0.5)
                                 border.width: 1; border.color: colors.alpha(colors.foreground, 0.28)
                                 scale: nextMa.containsMouse ? 1.06 : 1
-                                Behavior on scale { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
+                                Behavior on scale { NumberAnimation { duration: Bloom.fast; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.move } }
                                 Glyph { anchors.centerIn: parent; text: "󰒭"; color: colors.foreground; font.pixelSize: 17 }
                                 MouseArea { id: nextMa; anchors.fill: parent; hoverEnabled: true; onClicked: if (root.hasPlayer && root.player.canGoNext) root.player.next() }
                             }
@@ -495,6 +530,10 @@ FloatingWindow {
                             id: vizBox
                             Layout.fillWidth: true
                             Layout.preferredHeight: 72
+                            function seekTo(x) {
+                                if (!root.hasPlayer || !root.player.length || !root.player.canSeek) return
+                                root.player.position = Math.max(0, Math.min(1, x / width)) * root.player.length
+                            }
                             Row {
                                 id: vizRow
                                 anchors.fill: parent
@@ -513,26 +552,15 @@ FloatingWindow {
                                     }
                                 }
                             }
-                        }
-
-                        // seek
-                        Item {
-                            id: seekBar
-                            Layout.fillWidth: true
-                            Layout.topMargin: 12
-                            Layout.preferredHeight: 14
-                            function seekTo(x) {
-                                if (!root.hasPlayer || !root.player.length || !root.player.canSeek) return
-                                root.player.position = Math.max(0, Math.min(1, x / width)) * root.player.length
-                            }
-                            Rectangle { anchors.verticalCenter: parent.verticalCenter; width: parent.width; height: 4; radius: 2; color: colors.alpha(colors.foreground, 0.25) }
-                            Rectangle { anchors.verticalCenter: parent.verticalCenter; width: parent.width * root.npPos; height: 4; radius: 2; color: colors.primary }
+                            // the bars are the scrubber: click or drag anywhere
                             MouseArea {
                                 anchors.fill: parent
-                                onPressed: function(mouse){ seekBar.seekTo(mouse.x) }
-                                onPositionChanged: function(mouse){ if (pressed) seekBar.seekTo(mouse.x) }
+                                cursorShape: Qt.PointingHandCursor
+                                onPressed: function(mouse){ vizBox.seekTo(mouse.x) }
+                                onPositionChanged: function(mouse){ if (pressed) vizBox.seekTo(mouse.x) }
                             }
                         }
+
                         RowLayout {
                             Layout.fillWidth: true
                             Layout.topMargin: 4
@@ -554,6 +582,7 @@ FloatingWindow {
 
                     // Volume
                     Card {
+                        order: 2
                         Layout.fillWidth: true
                         Layout.preferredHeight: 70
                         RowLayout {
@@ -588,6 +617,7 @@ FloatingWindow {
 
                     // Brightness
                     Card {
+                        order: 3
                         Layout.fillWidth: true
                         Layout.preferredHeight: 70
                         RowLayout {
@@ -621,8 +651,10 @@ FloatingWindow {
 
                     // Network
                     Card {
+                        order: 5
                         Layout.fillWidth: true
-                        Layout.fillHeight: true
+                        Layout.preferredHeight: 190
+                        Layout.maximumHeight: 190
                         ColumnLayout {
                             anchors.fill: parent
                             anchors.margins: 16
@@ -711,6 +743,7 @@ FloatingWindow {
 
                     // Week — square tiles
                     Card {
+                        order: 5
                         Layout.fillWidth: true
                         Layout.fillHeight: true
                         RowLayout {
@@ -750,6 +783,7 @@ FloatingWindow {
 
                     // Pixel bot
                     Card {
+                        order: 6
                         Layout.preferredWidth: 210
                         Layout.maximumWidth: 210
                         Layout.minimumWidth: 210
@@ -801,6 +835,7 @@ FloatingWindow {
 
                 // Screen time showcase
                 Card {
+                    order: 7
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     RowLayout {

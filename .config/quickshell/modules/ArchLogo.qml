@@ -1,4 +1,5 @@
 import QtQuick
+import "../components/Bloom.js" as Bloom
 
 // Arch logo pill — waybar #custom-arch parity:
 // 󰌽 glyph at 16px, primary color, glass island slightly brighter than others.
@@ -7,6 +8,12 @@ Item {
 
     property var colors
     property bool hovered: logoMouse.containsMouse
+
+    // Bloom lift: the whole pill moves, not just its colour.
+    scale: hovered ? 1.06 : 1
+    y: hovered ? -3 : 0
+    Behavior on scale { NumberAnimation { duration: Bloom.fast; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.move } }
+    Behavior on y { NumberAnimation { duration: Bloom.fast; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.move } }
 
     implicitWidth: label.implicitWidth + 26
     implicitHeight: 30

@@ -5,6 +5,7 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
 import QtQuick.LocalStorage 2.0
+import "../components/Bloom.js" as Bloom
 
 // Battery Panel — nice battery UI, change performance, calculate life & usage,
 // plus nbfc fan speeds (no sudo: the service runs as root),
@@ -18,6 +19,82 @@ PanelWindow {
     readonly property int pct: dev ? Math.round(dev.percentage*100) : 0
     readonly property bool charging: dev ? (dev.state===UPowerDeviceState.Charging||dev.state===UPowerDeviceState.PendingCharge) : false
     readonly property bool full: dev ? dev.state===UPowerDeviceState.FullyCharged : false
+    property string bmsHealth: "—"
+    property string batteryVoltage: "—"
+    property int batteryCycles: 0
+    property bool bmsNominal: false
+    readonly property string healthStr: !dev ? "—" : (bmsHealth !== "—" ? bmsHealth : (dev.healthSupported ? Math.round(dev.healthPercentage)+"%" : "not reported"))
+
+    // ── usage tracker ───────────────────────────────────────────
+    // Runs only while discharging, even when the panel is closed.
+    // Energy comes from UPower's Wh counter; activity comes from CPU.
+    property real cpuPct: 0
+    property bool cpuValid: false
+    property real _lastCpuTotal: 0
+    property real _lastCpuIdle: 0
+    property bool trackerStarted: false
+    property bool trackerFromFull: false
+    property real trackerStartPct: 0
+    property real trackerUsedWh: 0
+    property real trackerIdleWh: 0
+    property real trackerActiveWh: 0
+    property real trackerSeconds: 0
+    property real trackerIdleSec: 0
+    property real trackerActiveSec: 0
+    property real trackerLastEnergy: 0
+    property real trackerLastMs: 0
+    property real trackerEndPct: 0
+    property real trackerLastSaveMs: 0
+    property bool trackerReady: false
+    readonly property real oemDesignWh: 46.0
+    readonly property bool trackerOnBattery: dev ? dev.state===UPowerDeviceState.Discharging : false
+    // CPU alone misses hardware-decoded video; power alone misses light CPU work.
+    // Idle = low CPU and low draw. Active = either one is high.
+    readonly property bool trackerIdle: trackerOnBattery && (cpuValid
+        ? (cpuPct < 12 && Math.abs(dev.changeRate) < 13)
+        : (dev ? Math.abs(dev.changeRate) < 10 : false))
+    readonly property real trackerIdleAvgW: trackerIdleSec >= 30 ? trackerIdleWh / (trackerIdleSec/3600) : 0
+    readonly property real trackerActiveAvgW: trackerActiveSec >= 30 ? trackerActiveWh / (trackerActiveSec/3600) : 0
+    readonly property real trackerDropPct: {
+        if (trackerOnBattery) return Math.max(0, trackerStartPct - pct)
+        if (trackerEndPct > 0) return Math.max(0, trackerStartPct - trackerEndPct)
+        return Math.max(0, trackerStartPct - pct)
+    }
+    readonly property real trackerEstFullWh: (trackerUsedWh > 0.05 && trackerDropPct >= 3) ? trackerUsedWh / (trackerDropPct/100) : 0
+    readonly property real trackerHealthPct: trackerEstFullWh > 0 ? Math.max(0, Math.min(120, trackerEstFullWh/oemDesignWh*100)) : 0
+    readonly property string trackerHealthStr: trackerEstFullWh > 0 ? "~"+Math.round(trackerEstFullWh/oemDesignWh*100)+"%" : "—"
+    readonly property string trackerIdleStr: trackerIdleAvgW > 0 ? trackerIdleAvgW.toFixed(1)+" W" : "—"
+    readonly property string trackerActiveStr: trackerActiveAvgW > 0 ? trackerActiveAvgW.toFixed(1)+" W" : "—"
+    readonly property string trackerIdleLeftStr: (trackerIdleAvgW > 0 && dev && dev.energy > 0) ? fmtTime(dev.energy/trackerIdleAvgW*3600) : "—"
+    readonly property string trackerActiveLeftStr: (trackerActiveAvgW > 0 && dev && dev.energy > 0) ? fmtTime(dev.energy/trackerActiveAvgW*3600) : "—"
+    readonly property string trackerUsedStr: trackerUsedWh > 0.01 ? trackerUsedWh.toFixed(1)+" Wh" : "—"
+    readonly property string trackerTimeStr: trackerSeconds > 0 ? fmtTime(trackerSeconds) : "—"
+    readonly property string trackerBadge: {
+        if (!dev) return "NO BATTERY"
+        if (trackerOnBattery) return trackerSeconds < 20 ? "SAMPLING" : "ON BATTERY"
+        if (dev.state===UPowerDeviceState.FullyCharged) return "FULL"
+        if (charging) return "CHARGING"
+        return "IDLE"
+    }
+    readonly property string trackerStatus: {
+        if (!dev) return "no battery"
+        if (trackerOnBattery) return trackerStarted ? (trackerSeconds < 20 ? "sampling…" : "on battery") : "on battery"
+        if (dev.state===UPowerDeviceState.FullyCharged) return "full · unplug to measure"
+        if (charging) return "charging · starts on battery"
+        return "—"
+    }
+    readonly property string trackerDetail: {
+        if (!dev) return ""
+        if (trackerOnBattery) {
+            if (trackerUsedWh < 0.01) return "waiting for the first sample"
+            if (trackerEstFullWh > 0) return trackerUsedWh.toFixed(1)+" Wh used · est. full ~"+trackerEstFullWh.toFixed(1)+" Wh" + (trackerFromFull ? " · from full" : " · partial session")
+            return trackerUsedWh.toFixed(1)+" Wh used · need a few % more drop to estimate"
+        }
+        if (trackerUsedWh > 0.01) return "last session: "+trackerUsedWh.toFixed(1)+" Wh · "+fmtTime(trackerSeconds)
+        if (dev.state===UPowerDeviceState.FullyCharged) return "unplug to start a measured discharge"
+        if (charging) return "charging — tracker starts when you unplug"
+        return ""
+    }
     readonly property string stateStr: {
         if (!dev) return "No battery"
         if (dev.state===UPowerDeviceState.Charging) return "Charging"
@@ -45,20 +122,181 @@ PanelWindow {
         if(h>0) return h+"h "+m+"m"
         return m+"m"
     }
+    function trackerStart(){
+        if(!dev || !trackerReady) return
+        trackerStarted = true
+        trackerFromFull = (dev.percentage*100) >= 95
+        trackerStartPct = dev.percentage*100
+        trackerUsedWh = 0; trackerIdleWh = 0; trackerActiveWh = 0
+        trackerSeconds = 0; trackerIdleSec = 0; trackerActiveSec = 0
+        trackerEndPct = 0
+        trackerLastEnergy = dev.energy
+        trackerLastMs = Date.now()
+        trackerLastSaveMs = trackerLastMs
+        saveTracker()
+    }
+    function trackerEnd(){
+        if(!trackerStarted) return
+        if(trackerEndPct <= 0) trackerEndPct = pct
+        trackerStarted = false
+        saveTracker()
+    }
+    function trackerTick(){
+        if(!dev) return
+        if(dev.state !== UPowerDeviceState.Discharging){ trackerEnd(); return }
+        if(!trackerStarted){ trackerStart(); return }
+        var now = Date.now()
+        // A resume after a quickshell restart has no baseline; start timing
+        // from now instead of counting the downtime as usage.
+        if(trackerLastMs <= 0 || trackerLastEnergy <= 0){
+            trackerLastMs = now; trackerLastEnergy = dev.energy; return
+        }
+        var dt = (now - trackerLastMs) / 1000
+        // A suspend/hibernate gap is not usage; reseed instead of inventing a spike.
+        if(dt <= 0 || dt > 120){ trackerLastMs = now; trackerLastEnergy = dev.energy; return }
+        // Integrate instantaneous watts where the BMS exposes them. This is
+        // independent of the BMS's (often optimistic) charge counter; fall
+        // back to the energy counter only when the rate is missing.
+        var watts = dev.changeRate ? Math.abs(dev.changeRate) : 0
+        var used = watts > 0.05 ? watts * dt / 3600 : Math.max(0, trackerLastEnergy - dev.energy)
+        if(used > 0){
+            trackerUsedWh += used
+            trackerSeconds += dt
+            if(trackerIdle){ trackerIdleWh += used; trackerIdleSec += dt }
+            else { trackerActiveWh += used; trackerActiveSec += dt }
+        }
+        trackerEndPct = pct
+        trackerLastEnergy = dev.energy
+        trackerLastMs = now
+        // Battery stats are cheap, but don't hammer the disk every 10s.
+        if(now - trackerLastSaveMs > 60000){ trackerLastSaveMs = now; saveTracker() }
+    }
+    function loadTracker(){
+        try{
+            var db = LocalStorage.openDatabaseSync("qs_battery","1.0","battery",10000)
+            var raw = ""
+            db.transaction(function(tx){
+                tx.executeSql('CREATE TABLE IF NOT EXISTS prefs(k TEXT PRIMARY KEY, v TEXT)')
+                var rs = tx.executeSql("SELECT v FROM prefs WHERE k='tracker'")
+                if(rs.rows.length > 0) raw = rs.rows.item(0).v
+            })
+            if(!raw) return
+            var o = JSON.parse(raw)
+            if(!o) return
+            trackerFromFull = !!o.fromFull
+            trackerStartPct = Number(o.startPct) || 0
+            trackerEndPct = Number(o.endPct) || 0
+            trackerUsedWh = Number(o.usedWh) || 0
+            trackerIdleWh = Number(o.idleWh) || 0
+            trackerActiveWh = Number(o.activeWh) || 0
+            trackerSeconds = Number(o.seconds) || 0
+            trackerIdleSec = Number(o.idleSec) || 0
+            trackerActiveSec = Number(o.activeSec) || 0
+            trackerStarted = !!o.started
+            trackerLastMs = 0
+            trackerLastEnergy = 0
+            trackerLastSaveMs = 0
+            if(trackerStarted && dev && dev.state !== UPowerDeviceState.Discharging && dev.state !== UPowerDeviceState.Unknown) trackerEnd()
+        }catch(e){}
+    }
+    function saveTracker(){
+        try{
+            var db = LocalStorage.openDatabaseSync("qs_battery","1.0","battery",10000)
+            var o = {
+                started: trackerStarted, fromFull: trackerFromFull,
+                startPct: trackerStartPct, endPct: trackerEndPct,
+                usedWh: trackerUsedWh, idleWh: trackerIdleWh, activeWh: trackerActiveWh,
+                seconds: trackerSeconds, idleSec: trackerIdleSec, activeSec: trackerActiveSec
+            }
+            db.transaction(function(tx){
+                tx.executeSql('CREATE TABLE IF NOT EXISTS prefs(k TEXT PRIMARY KEY, v TEXT)')
+                tx.executeSql('INSERT OR REPLACE INTO prefs VALUES(?,?)', ['tracker', JSON.stringify(o)])
+            })
+        }catch(e){}
+    }
 
     property var pctHistory: []
     Timer {
         interval: 5000; running: root.open; repeat: true; triggeredOnStart: true
         onTriggered: {
             var h=pctHistory.slice(); h.push(pct); if(h.length>30) h.shift(); pctHistory=h
-            // also poll power profile + fan
+            // also poll power profile + fan + BMS details
             profileProc.running=true
             fanProc.running=true
+            batSysProc.running=true
+        }
+    }
+
+    // BMS truth: full/design charge is the controller's health claim. On many
+    // boards full == design just means "nominal", so the panel labels it BMS
+    // and warns instead of pretending it was measured.
+    Process {
+        id: batSysProc
+        command: ["sh","-c","for b in /sys/class/power_supply/BAT*; do [ -r \"$b/charge_full\" ] || continue; printf '%s %s %s %s\\n' \"$(cat \"$b/charge_full\")\" \"$(cat \"$b/charge_full_design\")\" \"$(cat \"$b/voltage_now\" 2>/dev/null || echo 0)\" \"$(cat \"$b/cycle_count\" 2>/dev/null || echo 0)\"; break; done"]
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: {
+                var p = String(text).trim().split(/\s+/)
+                if (p.length < 2) return
+                var full = parseFloat(p[0]), design = parseFloat(p[1])
+                var volt = parseFloat(p[2] || "0"), cycles = parseInt(p[3] || "0")
+                if (design > 0 && full > 0) {
+                    root.bmsHealth = Math.round(100 * full / design) + "%"
+                    root.bmsNominal = Math.abs(full - design) < design * 0.005
+                }
+                root.batteryVoltage = volt > 0 ? (volt / 1000000).toFixed(2) + " V" : "—"
+                root.batteryCycles = cycles
+            }
         }
     }
 
     property string curProfile: "unknown"
     property bool autoSwitch: true
+
+    // CPU activity is the idle/active classifier. Two /proc/stat samples are
+    // enough; the tracker only polls while discharging.
+    Process {
+        id: cpuLoadProc
+        command: ["sh","-c","grep '^cpu ' /proc/stat"]
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: {
+                var f = String(text).trim().split(/\s+/).slice(1).map(Number)
+                if (f.length < 4) return
+                var idle = f[3] + (f[4] || 0)
+                var total = 0
+                for (var i = 0; i < f.length; i++) total += f[i]
+                if (root._lastCpuTotal > 0 && total > root._lastCpuTotal) {
+                    var dT = total - root._lastCpuTotal
+                    var dI = idle - root._lastCpuIdle
+                    root.cpuPct = Math.max(0, Math.min(100, Math.round(100 * (1 - dI/dT))))
+                    root.cpuValid = true
+                }
+                root._lastCpuTotal = total
+                root._lastCpuIdle = idle
+            }
+        }
+    }
+    Connections {
+        target: root.dev
+        function onStateChanged() {
+            if (!root.dev) return
+            if (root.dev.state === UPowerDeviceState.Discharging) {
+                if (!root.trackerStarted) root.trackerStart()
+            } else if (root.dev.state !== UPowerDeviceState.Unknown) {
+                root.trackerEnd()
+            }
+        }
+    }
+    Timer {
+        id: trackerTimer
+        interval: 10000
+        repeat: true
+        running: root.trackerOnBattery && root.trackerReady
+        triggeredOnStart: true
+        onTriggered: { cpuLoadProc.running = true; root.trackerTick() }
+    }
+
     property int lastAutoSwitchMs: 0
     property string lastAutoProfile: ""
     Process {
@@ -99,7 +337,8 @@ PanelWindow {
     function saveAutoSwitch(){
         try{ var db=LocalStorage.openDatabaseSync("qs_battery","1.0","battery",10000); db.transaction(function(tx){ tx.executeSql('INSERT OR REPLACE INTO prefs VALUES(?,?)',['autoSwitch',autoSwitch?"1":"0"])}) }catch(e){}
     }
-    Component.onCompleted: loadAutoSwitch()
+    Component.onCompleted: { loadAutoSwitch(); loadTracker(); trackerReady = true }
+    onDevChanged: { if (dev && trackerStarted && dev.state !== UPowerDeviceState.Discharging && dev.state !== UPowerDeviceState.Unknown) trackerEnd() }
     onAutoSwitchChanged: saveAutoSwitch()
     // watch battery state
     Connections { target: root.dev; function onStateChanged(){ maybeAutoSwitch() } }
@@ -225,6 +464,7 @@ PanelWindow {
 
     Rectangle {
         id: card
+            transformOrigin: Item.TopRight
         anchors { top: parent.top; right: parent.right }
         anchors.topMargin: 52; anchors.rightMargin: 8
         width: 400
@@ -241,23 +481,25 @@ PanelWindow {
         // fade with the slide: first paint after a lazy load can be one
         // frame of garbage (unmapped surface, unsettled height) — opacity
         // hides it so the open reads as a single smooth motion
-        Component.onCompleted: slide.x=width+8
+        Component.onCompleted: slide.x=20
         // bezier pair — open pops in with overshoot bounce (fast), close
         // hurries out the same path with no overshoot. Same curve family
         // as the notification drawer.
         ParallelAnimation {
             id: openAnim
-            NumberAnimation { target: slide; property: "x"; from: card.width + 8; to: 0; duration: 280; easing.type: Easing.Bezier; easing.bezierCurve: [0.34, 1.35, 0.64, 1] }
-            NumberAnimation { target: card; property: "opacity"; from: 0; to: 1; duration: 220; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
-            NumberAnimation { target: cardScale; property: "xScale"; from: 0.96; to: 1; duration: 280; easing.type: Easing.Bezier; easing.bezierCurve: [0.34, 1.35, 0.64, 1] }
-            NumberAnimation { target: cardScale; property: "yScale"; from: 0.96; to: 1; duration: 280; easing.type: Easing.Bezier; easing.bezierCurve: [0.34, 1.35, 0.64, 1] }
+            NumberAnimation { target: card; property: "rotation"; from: Bloom.anchorRotate; to: 0; duration: Bloom.anchor; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.spring }
+            NumberAnimation { target: slide; property: "x"; from: 20; to: 0; duration: Bloom.anchor; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.spring }
+            NumberAnimation { target: card; property: "opacity"; from: 0; to: 1; duration: Bloom.normal; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.out }
+            NumberAnimation { target: cardScale; property: "xScale"; from: Bloom.anchorScale; to: 1; duration: Bloom.anchor; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.spring }
+            NumberAnimation { target: cardScale; property: "yScale"; from: Bloom.anchorScale; to: 1; duration: Bloom.anchor; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.spring }
         }
         ParallelAnimation {
             id: closeAnim
-            NumberAnimation { target: slide; property: "x"; to: card.width + 8; duration: 220; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
-            NumberAnimation { target: card; property: "opacity"; to: 0; duration: 180; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
-            NumberAnimation { target: cardScale; property: "xScale"; to: 0.96; duration: 220; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
-            NumberAnimation { target: cardScale; property: "yScale"; to: 0.96; duration: 220; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
+            NumberAnimation { target: card; property: "rotation"; to: Bloom.anchorRotate; duration: Bloom.close; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.out }
+            NumberAnimation { target: slide; property: "x"; to: 20; duration: Bloom.close; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.out }
+            NumberAnimation { target: card; property: "opacity"; to: 0; duration: Bloom.close; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.out }
+            NumberAnimation { target: cardScale; property: "xScale"; to: Bloom.anchorScale; duration: Bloom.close; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.out }
+            NumberAnimation { target: cardScale; property: "yScale"; to: Bloom.anchorScale; duration: Bloom.close; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.out }
         }
 
         ColumnLayout {
@@ -311,14 +553,25 @@ PanelWindow {
                         columns: 2
                         columnSpacing: 12; rowSpacing: 6
                         Layout.fillWidth: true
-                        Text { text: "Health"; color: colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 9 }
-                        Text { text: dev ? (dev.healthSupported ? Math.round(dev.healthPercentage)+"%" : "100%") : "—"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 10; font.weight: Font.DemiBold; Layout.fillWidth: true; horizontalAlignment: Text.AlignRight }
+                        Text { text: "Health (BMS)"; color: colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 9 }
+                        Text { text: root.healthStr; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 10; font.weight: Font.DemiBold; Layout.fillWidth: true; horizontalAlignment: Text.AlignRight }
                         Text { text: "Capacity"; color: colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 9 }
                         Text { text: dev ? (dev.energy.toFixed(1)+" / "+dev.energyCapacity.toFixed(1)+" Wh") : "—"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 10; Layout.fillWidth: true; horizontalAlignment: Text.AlignRight }
                         Text { text: "Rate"; color: colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 9 }
                         Text { text: dev ? (dev.changeRate.toFixed(1)+" W") : "—"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 10; Layout.fillWidth: true; horizontalAlignment: Text.AlignRight }
                         Text { text: "Voltage"; color: colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 9 }
-                        Text { text: dev ? (dev.energy>0 ? (dev.energy/dev.percentage*100).toFixed(1)+" V" : "—") : "—"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 10; Layout.fillWidth: true; horizontalAlignment: Text.AlignRight }
+                        Text { text: root.batteryVoltage; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 10; Layout.fillWidth: true; horizontalAlignment: Text.AlignRight }
+                        Text { text: "Cycles"; color: colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 9 }
+                        Text { text: root.batteryCycles > 0 ? root.batteryCycles : "not reported"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 10; Layout.fillWidth: true; horizontalAlignment: Text.AlignRight }
+                    }
+                    Text {
+                        visible: root.bmsNominal
+                        Layout.fillWidth: true
+                        text: "BMS reports nominal capacity. Real health needs a full discharge test."
+                        color: colors.alpha(colors.outline,0.55)
+                        font.family: colors.fontSans
+                        font.pixelSize: 8
+                        wrapMode: Text.WordWrap
                     }
                     RowLayout {
                         Layout.fillWidth: true
@@ -351,6 +604,178 @@ PanelWindow {
                 }
             }
 
+            // usage tracker — glass tile, not a text dump
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: root.trackerOnBattery ? 136 : 72
+                radius: 12
+                color: colors.alpha(colors.surface, 0.42)
+                border.width: 1
+                border.color: colors.alpha(colors.outline, 0.12)
+
+                ColumnLayout {
+                    anchors.fill: parent
+                    anchors.margins: 10
+                    spacing: 7
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 6
+                        Text { text: "USAGE TRACKER"; color: colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold; font.letterSpacing: 1.3 }
+                        Item { Layout.fillWidth: true }
+                        Rectangle { width: 5; height: 5; radius: 2.5; color: (root.trackerOnBattery || root.charging || root.full) ? colors.secondary : colors.alpha(colors.outline,0.45); Layout.alignment: Qt.AlignVCenter }
+                        Text { text: root.trackerBadge; color: (root.trackerOnBattery || root.charging || root.full) ? colors.secondary : colors.alpha(colors.outline,0.55); font.family: colors.fontSans; font.pixelSize: 7; font.weight: Font.Bold; font.letterSpacing: 1.0; Layout.alignment: Qt.AlignVCenter }
+                    }
+
+                    // on battery: idle / active split
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 7
+                        visible: root.trackerOnBattery
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 14
+
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                spacing: 1
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 4
+                                    Text { text: "IDLE"; color: colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold; font.letterSpacing: 1.0 }
+                                    Item { Layout.fillWidth: true }
+                                    Text { text: root.trackerIdleLeftStr; color: colors.alpha(colors.outline,0.55); font.family: colors.fontSans; font.pixelSize: 8 }
+                                }
+                                Text { text: root.trackerIdleStr; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 18; font.weight: Font.ExtraBold }
+                                Rectangle {
+                                    Layout.fillWidth: true
+                                    height: 3
+                                    radius: 1.5
+                                    color: colors.alpha(colors.outline, 0.12)
+                                    Rectangle {
+                                        width: parent.width * Math.min(1, root.trackerIdleAvgW / 25)
+                                        height: parent.height
+                                        radius: parent.radius
+                                        color: colors.tertiary
+                                        Behavior on width { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
+                                    }
+                                }
+                            }
+
+                            Rectangle { width: 1; Layout.preferredHeight: 42; color: colors.alpha(colors.outline, 0.12); Layout.alignment: Qt.AlignVCenter }
+
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                spacing: 1
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 4
+                                    Text { text: "ACTIVE"; color: colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold; font.letterSpacing: 1.0 }
+                                    Item { Layout.fillWidth: true }
+                                    Text { text: root.trackerActiveLeftStr; color: colors.alpha(colors.outline,0.55); font.family: colors.fontSans; font.pixelSize: 8 }
+                                }
+                                Text { text: root.trackerActiveStr; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 18; font.weight: Font.ExtraBold }
+                                Rectangle {
+                                    Layout.fillWidth: true
+                                    height: 3
+                                    radius: 1.5
+                                    color: colors.alpha(colors.outline, 0.12)
+                                    Rectangle {
+                                        width: parent.width * Math.min(1, root.trackerActiveAvgW / 25)
+                                        height: parent.height
+                                        radius: parent.radius
+                                        color: colors.secondary
+                                        Behavior on width { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
+                                    }
+                                }
+                            }
+                        }
+
+                        Rectangle { Layout.fillWidth: true; height: 1; color: colors.alpha(colors.outline, 0.1) }
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 8
+                            Text { text: "USED"; color: colors.alpha(colors.outline,0.55); font.family: colors.fontSans; font.pixelSize: 7; font.weight: Font.Bold; font.letterSpacing: 0.8 }
+                            Text { text: root.trackerUsedStr + " · " + root.trackerTimeStr; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.DemiBold }
+                            Item { Layout.fillWidth: true }
+                            Text { text: "EST. FULL"; color: colors.alpha(colors.outline,0.55); font.family: colors.fontSans; font.pixelSize: 7; font.weight: Font.Bold; font.letterSpacing: 0.8 }
+                            Text { text: root.trackerEstFullWh > 0 ? "~"+root.trackerEstFullWh.toFixed(1)+" Wh" : "—"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.DemiBold }
+                            Text { text: root.trackerHealthStr; color: root.trackerEstFullWh > 0 ? colors.primary : colors.alpha(colors.outline,0.5); font.family: colors.fontSans; font.pixelSize: 10; font.weight: Font.Bold }
+                        }
+
+                        Rectangle {
+                            Layout.fillWidth: true
+                            height: 3
+                            radius: 1.5
+                            color: colors.alpha(colors.outline, 0.12)
+                            visible: root.trackerEstFullWh > 0
+                            Rectangle {
+                                width: parent.width * Math.min(1, root.trackerHealthPct / 100)
+                                height: parent.height
+                                radius: parent.radius
+                                color: colors.primary
+                                Behavior on width { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
+                            }
+                        }
+                        Text {
+                            visible: root.trackerEstFullWh > 0 && !root.trackerFromFull
+                            text: "partial session — run it to 0% for the exact number"
+                            color: colors.alpha(colors.outline, 0.45)
+                            font.family: colors.fontSans
+                            font.pixelSize: 7
+                        }
+                    }
+
+                    // charging / full: show what happens next, or the last run
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 2
+                        visible: !root.trackerOnBattery
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 6
+                            Text { text: root.trackerUsedWh > 0.01 ? "Last discharge" : "Ready on battery"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 10; font.weight: Font.DemiBold }
+                            Item { Layout.fillWidth: true }
+                            RowLayout {
+                                spacing: 5
+                                Layout.alignment: Qt.AlignVCenter
+                                Item {
+                                    width: 24; height: 10
+                                    Rectangle {
+                                        width: 20; height: 10; radius: 2
+                                        color: "transparent"
+                                        border.width: 1
+                                        border.color: colors.alpha(colors.outline, 0.35)
+                                        Rectangle {
+                                            anchors.left: parent.left
+                                            anchors.leftMargin: 2
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            width: Math.max(1, (parent.width - 4) * root.pct / 100)
+                                            height: 4
+                                            radius: 1
+                                            color: root.charging ? colors.secondary : colors.primary
+                                        }
+                                    }
+                                    Rectangle { x: 21; y: 3; width: 2; height: 4; radius: 1; color: colors.alpha(colors.outline, 0.35) }
+                                }
+                                Text { text: root.pct+"%"; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 10; font.weight: Font.Bold }
+                            }
+                        }
+                        Text {
+                            Layout.fillWidth: true
+                            text: root.trackerUsedWh > 0.01
+                                ? root.trackerUsedStr+" · "+root.trackerTimeStr+(root.trackerHealthStr !== "—" ? " · "+root.trackerHealthStr : "")
+                                : "Unplug to start tracking"
+                            color: colors.alpha(colors.outline, 0.55)
+                            font.family: colors.fontSans
+                            font.pixelSize: 8
+                            elide: Text.ElideRight
+                        }
+                    }
+                }
+            }
+
             // performance profiles — current is highlighted + text above
             ColumnLayout {
                 Layout.fillWidth: true
@@ -369,7 +794,7 @@ PanelWindow {
                             border.width: 1
                             border.color: root.autoSwitch ? colors.primary : colors.alpha(colors.outline, 0.25)
                             scale: togMa.containsMouse ? 1.06 : 1.0
-                            Behavior on scale { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
+                            Behavior on scale { NumberAnimation { duration: Bloom.fast; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.move } }
                             Behavior on color { ColorAnimation { duration: 180 } }
                             Rectangle {
                                 width: 16; height: 16; radius: 8
@@ -451,7 +876,7 @@ PanelWindow {
                                 Text { text: modelData.label; color: sel ? colors.primary : colors.foreground; font.family: colors.fontSans; font.pixelSize: 13; font.weight: Font.ExtraBold; Layout.alignment: Qt.AlignHCenter }
                                 Text { text: modelData.sub; color: sel ? colors.primary : colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.DemiBold; Layout.alignment: Qt.AlignHCenter }
                             }
-                            transform: Translate { y: fanMa.containsMouse ? -2 : 0; Behavior on y { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } } }
+                            transform: Translate { y: fanMa.containsMouse ? -2 : 0; Behavior on y { NumberAnimation { duration: Bloom.fast; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.move } } }
                             MouseArea { id: fanMa; anchors.fill: parent; hoverEnabled: true; enabled: root.fanOk; onClicked: root.setFan(modelData.id) }
                         }
                     }

@@ -1,5 +1,6 @@
 import Quickshell.Io
 import QtQuick
+import "../components/Bloom.js" as Bloom
 
 // CPU pill — glass island, secondary accent (waybar parity).
 Item {
@@ -8,6 +9,12 @@ Item {
     property var colors
     property bool hovered: cpuMouse.containsMouse
     signal openRequested()
+
+    // Bloom lift: the whole pill moves, not just its colour.
+    scale: hovered ? 1.06 : 1
+    y: hovered ? -3 : 0
+    Behavior on scale { NumberAnimation { duration: Bloom.fast; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.move } }
+    Behavior on y { NumberAnimation { duration: Bloom.fast; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.move } }
 
     property int prevTotal: 0
     property int prevIdle: 0

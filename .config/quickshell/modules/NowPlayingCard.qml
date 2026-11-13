@@ -4,6 +4,7 @@ import Quickshell.Wayland
 import QtQuick
 import QtQuick.Layouts
 import Qt5Compat.GraphicalEffects
+import "../components/Bloom.js" as Bloom
 
 // NowPlaying hover card — the island expanded: track art as the background under
 // dark glass, title/artist/progress floating over it, DI-style rounded corners.
@@ -81,7 +82,7 @@ PanelWindow {
     implicitHeight: 128
     exclusionMode: ExclusionMode.Ignore
     color: "transparent"
-    visible: root.open
+    visible: root.open || card.opacity > 0.01
     WlrLayershell.namespace: "qs-nowplaying"
 
     Rectangle {
@@ -97,8 +98,8 @@ PanelWindow {
 
         opacity: root.open ? 1 : 0
         scale: root.open ? 1 : 0.94
-        Behavior on opacity { NumberAnimation { duration: 220; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] } }
-        Behavior on scale { NumberAnimation { duration: 240; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] } }
+        Behavior on opacity { NumberAnimation { duration: 240; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.out } }
+        Behavior on scale { NumberAnimation { duration: 340; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.move } }
 
         // track art fills the card, sunk into the glass so the frost owns it
         Image {

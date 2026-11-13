@@ -5,6 +5,7 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
 import QtQuick.LocalStorage 2.0
+import "../components/Bloom.js" as Bloom
 
 // App Launcher — Spotlight-style, replaces rofi.
 // SUPER+SPACE to toggle. Type to fuzzy-search, ↑↓ to navigate, Enter to launch, Esc to close.
@@ -163,18 +164,23 @@ PanelWindow {
         border.color: colors.alpha(colors.outline, 0.15)
         Keys.onEscapePressed: root.open = false
         focus: root.open
+        transform: Translate { id: bloomOrigin }
 
         // bezier pair — open pops with overshoot bounce (fast), close hurries
         // out with none. Same curves as the notification drawer.
         ParallelAnimation {
             id: openAnim
-            NumberAnimation { target: card; property: "opacity"; from: 0; to: 1; duration: 220; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
-            NumberAnimation { target: card; property: "scale"; from: 0.94; to: 1; duration: 280; easing.type: Easing.Bezier; easing.bezierCurve: [0.34, 1.35, 0.64, 1] }
+            NumberAnimation { target: bloomOrigin; property: "y"; from: -(root.height / 2 - 34); to: 0; duration: Bloom.panel; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.spring }
+            NumberAnimation { target: card; property: "rotation"; from: Bloom.panelRotate; to: 0; duration: Bloom.panel; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.spring }
+            NumberAnimation { target: card; property: "opacity"; from: 0; to: 1; duration: Bloom.normal; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.out }
+            NumberAnimation { target: card; property: "scale"; from: Bloom.panelScale; to: 1; duration: Bloom.panel; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.spring }
         }
         ParallelAnimation {
             id: closeAnim
-            NumberAnimation { target: card; property: "opacity"; to: 0; duration: 160; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
-            NumberAnimation { target: card; property: "scale"; to: 0.94; duration: 180; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
+            NumberAnimation { target: bloomOrigin; property: "y"; to: -(root.height / 2 - 34); duration: Bloom.close; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.out }
+            NumberAnimation { target: card; property: "rotation"; to: Bloom.panelRotate; duration: Bloom.close; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.out }
+            NumberAnimation { target: card; property: "opacity"; to: 0; duration: Bloom.close; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.out }
+            NumberAnimation { target: card; property: "scale"; to: Bloom.panelScale; duration: Bloom.close; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.out }
         }
 
         RowLayout {
@@ -208,7 +214,7 @@ PanelWindow {
                         opacity: root.open ? 1 : 0
                         scale: root.open ? 1 : 0.92
                         Behavior on opacity { NumberAnimation { duration: 350; easing.type: Easing.OutCubic } }
-                        Behavior on scale { NumberAnimation { duration: 380; easing.type: Easing.OutCubic } }
+                        Behavior on scale { NumberAnimation { duration: 380; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.move } }
                     }
                     Text {
                         // live caption: follows the highlighted app. Hidden
@@ -341,12 +347,22 @@ PanelWindow {
                     // cascade in on creation (also gently re-fades recycled rows)
                     property bool shown: false
                     opacity: shown ? 1 : 0
-                    Behavior on opacity { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
-                    transform: Translate { id: dip; y: shown ? 0 : 10; Behavior on y { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } } }
+                    Behavior on opacity { NumberAnimation { duration: Bloom.normal; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.out } }
+                    transform: Translate { id: dip; y: shown ? 0 : 14; Behavior on y { NumberAnimation { duration: Bloom.row; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.move } } }
                     Component.onCompleted: cascadeTimer.restart()
+                    Connections {
+                        target: root
+                        function onOpenChanged() {
+                            if (root.open) {
+                                rowRoot.shown = false
+                                cascadeTimer.interval = Bloom.rowDelay + Math.min(rowRoot.index, 11) * Bloom.rowStagger
+                                cascadeTimer.restart()
+                            }
+                        }
+                    }
                     Timer {
                         id: cascadeTimer
-                        interval: Math.min(rowRoot.index, 11) * 28
+                        interval: Bloom.rowDelay + Math.min(rowRoot.index, 11) * Bloom.rowStagger
                         onTriggered: rowRoot.shown = true
                     }
                     Rectangle {
@@ -376,7 +392,7 @@ PanelWindow {
                             border.width: 1
                             border.color: colors.alpha(colors.primary, 0.15)
                             scale: index === root.selected ? 1.14 : 1
-                            Behavior on scale { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
+                            Behavior on scale { NumberAnimation { duration: Bloom.fast; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.move } }
                             Image {
                                 id: appIcon
                                 anchors.fill: parent

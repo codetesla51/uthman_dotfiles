@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
+import "../components/Bloom.js" as Bloom
 
 // Toast — one-line bottom flash shared by panels (copied, saved, sent).
 // Owns its hold timer: call flash("Copied") and forget. Restarts cleanly
@@ -42,7 +43,7 @@ Rectangle {
     border.width: 1
     border.color: colors.alpha(colors.outline, 0.14)
     opacity: 0
-    Behavior on opacity { NumberAnimation { duration: 150 } }
+    Behavior on opacity { NumberAnimation { duration: 180; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.out } }
 
     Timer { id: holdLife; interval: root.hold; onTriggered: { root.opacity = 0; hideLife.restart() } }
     Timer { id: hideLife; interval: 170; onTriggered: root.visible = false }

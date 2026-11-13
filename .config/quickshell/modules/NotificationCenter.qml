@@ -5,6 +5,7 @@ import Quickshell.Wayland
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
+import "../components/Bloom.js" as Bloom
 
 // Notification daemon + toast stack + center drawer.
 // Owns org.freedesktop.Notifications (replaces swaync).
@@ -259,6 +260,7 @@ Item {
 
         Rectangle {
             id: drawer
+            transformOrigin: Item.TopRight
             focus: visible
             anchors { top: parent.top; right: parent.right }
             anchors.topMargin: 52
@@ -277,24 +279,26 @@ Item {
                 Translate { id: drawerSlide },
                 Scale { id: drawerScale; origin.x: drawer.width; origin.y: 0 }
             ]
-            Component.onCompleted: drawerSlide.x = width + 8
+            Component.onCompleted: drawerSlide.x = 20
 
             // bezier pair — open pops in with overshoot bounce (fast), close
             // hurries out the same path with no overshoot. Same curve family
-            // as the bar; [0.34, 1.35, 0.64, 1] is the bounce.
+            // as the bar; Bloom.spring is the bounce.
             ParallelAnimation {
                 id: openAnim
-                NumberAnimation { target: drawerSlide; property: "x"; from: drawer.width + 8; to: 0; duration: 280; easing.type: Easing.Bezier; easing.bezierCurve: [0.34, 1.35, 0.64, 1] }
-                NumberAnimation { target: drawer; property: "opacity"; from: 0; to: 1; duration: 220; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
-                NumberAnimation { target: drawerScale; property: "xScale"; from: 0.96; to: 1; duration: 280; easing.type: Easing.Bezier; easing.bezierCurve: [0.34, 1.35, 0.64, 1] }
-                NumberAnimation { target: drawerScale; property: "yScale"; from: 0.96; to: 1; duration: 280; easing.type: Easing.Bezier; easing.bezierCurve: [0.34, 1.35, 0.64, 1] }
+                NumberAnimation { target: drawer; property: "rotation"; from: Bloom.anchorRotate; to: 0; duration: Bloom.anchor; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.spring }
+                NumberAnimation { target: drawerSlide; property: "x"; from: 20; to: 0; duration: Bloom.anchor; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.spring }
+                NumberAnimation { target: drawer; property: "opacity"; from: 0; to: 1; duration: Bloom.normal; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.out }
+                NumberAnimation { target: drawerScale; property: "xScale"; from: Bloom.anchorScale; to: 1; duration: Bloom.anchor; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.spring }
+                NumberAnimation { target: drawerScale; property: "yScale"; from: Bloom.anchorScale; to: 1; duration: Bloom.anchor; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.spring }
             }
             ParallelAnimation {
                 id: closeAnim
-                NumberAnimation { target: drawerSlide; property: "x"; to: drawer.width + 8; duration: 220; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
-                NumberAnimation { target: drawer; property: "opacity"; to: 0; duration: 180; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
-                NumberAnimation { target: drawerScale; property: "xScale"; to: 0.96; duration: 220; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
-                NumberAnimation { target: drawerScale; property: "yScale"; to: 0.96; duration: 220; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] }
+                NumberAnimation { target: drawer; property: "rotation"; to: Bloom.anchorRotate; duration: Bloom.close; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.out }
+                NumberAnimation { target: drawerSlide; property: "x"; to: 20; duration: Bloom.close; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.out }
+                NumberAnimation { target: drawer; property: "opacity"; to: 0; duration: Bloom.close; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.out }
+                NumberAnimation { target: drawerScale; property: "xScale"; to: Bloom.anchorScale; duration: Bloom.close; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.out }
+                NumberAnimation { target: drawerScale; property: "yScale"; to: Bloom.anchorScale; duration: Bloom.close; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.out }
             }
 
             ColumnLayout {

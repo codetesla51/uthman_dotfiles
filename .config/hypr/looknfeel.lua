@@ -48,23 +48,28 @@ hl.config({
 -- ── Animations ────────────────────────────────────────────────────────────
 hl.config({ animations = { enabled = true } })
 
-hl.curve("overshot", { type = "bezier", points = { { 0.05, 0.9 }, { 0.1, 1.1 } } })
-hl.curve("smooth", { type = "bezier", points = { { 0.25, 1.0 }, { 0.5, 1.0 } } })
-hl.curve("snappy", { type = "bezier", points = { { 0.4, 0.0 }, { 0.2, 1.0 } } })
-hl.curve("bounce", { type = "bezier", points = { { 0.34, 1.56 }, { 0.64, 1.0 } } })
+-- Same motion language as the quickshell Bloom/Magnet preset: a gentle
+-- 1.12 overshoot on entrance, ease-out on exit, and no hard stops.
+hl.curve("magnet", { type = "bezier", points = { { 0.33, 1.12 }, { 0.58, 1.0 } } })
+hl.curve("magnetSoft", { type = "bezier", points = { { 0.34, 1.06 }, { 0.64, 1.0 } } })
+hl.curve("easeOut", { type = "bezier", points = { { 0.32, 0.72 }, { 0.0, 1.0 } } })
+hl.curve("apple", { type = "bezier", points = { { 0.22, 1.0 }, { 0.36, 1.0 } } })
 
-hl.animation({ leaf = "windowsIn", enabled = true, speed = 5, bezier = "overshot", style = "popin 90%" })
-hl.animation({ leaf = "windowsOut", enabled = true, speed = 2, bezier = "snappy", style = "popin 80%" })
-hl.animation({ leaf = "windowsMove", enabled = true, speed = 4, bezier = "snappy" })
-hl.animation({ leaf = "fadeIn", enabled = true, speed = 4, bezier = "smooth" })
-hl.animation({ leaf = "border", enabled = true, speed = 8, bezier = "smooth" })
-hl.animation({ leaf = "borderangle", enabled = true, speed = 12, bezier = "smooth", style = "once" })
-hl.animation({ leaf = "fade", enabled = true, speed = 5, bezier = "smooth" })
-hl.animation({ leaf = "fadeOut", enabled = true, speed = 4, bezier = "smooth" })
-hl.animation({ leaf = "workspaces", enabled = true, speed = 5, bezier = "overshot", style = "slidefadevert" })
-hl.animation({ leaf = "specialWorkspace", enabled = true, speed = 4, bezier = "smooth", style = "slidevert" })
-hl.animation({ leaf = "layers", enabled = true, speed = 4, bezier = "smooth", style = "slidefade" })
-hl.animation({ leaf = "fadeLayers", enabled = true, speed = 3, bezier = "smooth" })
+hl.animation({ leaf = "windows", enabled = true, speed = 2.6, bezier = "magnetSoft" })
+hl.animation({ leaf = "windowsIn", enabled = true, speed = 2.4, bezier = "apple" })
+hl.animation({ leaf = "windowsOut", enabled = true, speed = 1.4, bezier = "easeOut" })
+hl.animation({ leaf = "windowsMove", enabled = true, speed = 2.2, bezier = "magnetSoft" })
+hl.animation({ leaf = "fadeIn", enabled = true, speed = 2.0, bezier = "apple" })
+hl.animation({ leaf = "fadeOut", enabled = true, speed = 1.3, bezier = "easeOut" })
+hl.animation({ leaf = "fade", enabled = true, speed = 1.8, bezier = "magnetSoft" })
+hl.animation({ leaf = "border", enabled = true, speed = 3.0, bezier = "magnetSoft" })
+hl.animation({ leaf = "borderangle", enabled = true, speed = 5, bezier = "magnetSoft", style = "once" })
+hl.animation({ leaf = "workspaces", enabled = true, speed = 3.0, bezier = "magnet", style = "slidefadevert" })
+hl.animation({ leaf = "specialWorkspace", enabled = true, speed = 2.6, bezier = "magnetSoft", style = "slidevert" })
+hl.animation({ leaf = "layersIn", enabled = true, speed = 2.0, bezier = "magnetSoft", style = "fade" })
+hl.animation({ leaf = "layersOut", enabled = true, speed = 1.3, bezier = "easeOut", style = "fade" })
+hl.animation({ leaf = "fadeLayersIn", enabled = true, speed = 1.8, bezier = "magnetSoft" })
+hl.animation({ leaf = "fadeLayersOut", enabled = true, speed = 1.2, bezier = "easeOut" })
 
 -- ── Frosted glass for quickshell surfaces ─────────────────────────────────
 -- (island, panels, toasts). The old file spelled these as ~26 separate

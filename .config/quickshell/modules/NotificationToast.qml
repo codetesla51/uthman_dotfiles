@@ -3,6 +3,7 @@ import Quickshell.Services.Notifications
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
+import "../components/Bloom.js" as Bloom
 
 // One notification toast. Self-managing lifetime:
 // created via createObject(), plays entrance, auto-expires (unless Critical),
@@ -31,15 +32,10 @@ Rectangle {
                            : colors.alpha(colors.outline, 0.15)
 
     opacity: 0
-    // growT 0 = cinched dot, 1 = full card. Scaling (not animating width)
-    // keeps the wrapping text laid out once and stops the stacked toasts from
-    // reflowing mid-animation. Origin sits on the right edge because the toast
-    // is right-anchored — growing from there keeps it on screen.
-    property real growT: 1
     transform: Translate { id: slide }
     // Item.scale, not a Scale transform — anchored on the right edge so the
-    // grow pushes leftward and stays on screen
-    scale: 0.12 + 0.88 * growT
+    // bounce pushes leftward and stays on screen.
+    scale: 1
     transformOrigin: Item.Right
 
 
@@ -155,24 +151,18 @@ Rectangle {
         else
             expiryTimer.interval = 0
         if (expiryTimer.interval > 0) expiryTimer.restart()
-        content.opacity = 0
+        root.scale = 0.88
         enterAnim.start()
     }
 
     ParallelAnimation {
         id: enterAnim
-        NumberAnimation { target: root; property: "opacity"; from: 0; to: 1; duration: 120; easing.type: Easing.OutCubic }
-        NumberAnimation { target: slide; property: "x"; from: -24; to: 0; duration: 120; easing.type: Easing.OutCubic }
-        // the grow: dot -> card on the overshoot bezier
-        NumberAnimation {
-            target: root; property: "growT"
-            from: 0; to: 1; duration: 250
-            easing.type: Easing.Bezier; easing.bezierCurve: [0.2, 0.9, 0.3, 1.2]
-        }
-        // text stays laid out but invisible, then fades in a beat later
+        NumberAnimation { target: root; property: "opacity"; from: 0; to: 1; duration: Bloom.normal; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.out }
+        NumberAnimation { target: slide; property: "x"; from: -24; to: 0; duration: Bloom.row; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.spring }
+        // real bounce: pop past full size, then settle back — no tiny empty card
         SequentialAnimation {
-            PauseAnimation { duration: 110 }
-            NumberAnimation { target: content; property: "opacity"; to: 1; duration: 150 }
+            NumberAnimation { target: root; property: "scale"; from: 0.88; to: 1.04; duration: 240; easing.type: Easing.OutCubic }
+            NumberAnimation { target: root; property: "scale"; from: 1.04; to: 1; duration: 300; easing.type: Easing.OutBack }
         }
     }
 
@@ -194,7 +184,7 @@ Rectangle {
         id: content
         anchors { left: parent.left; right: parent.right; top: parent.top; margins: 13 }
         spacing: 6
-        opacity: 0
+        opacity: 1
 
         // ── row 1: tiny app icon · app name · close ──
         RowLayout {

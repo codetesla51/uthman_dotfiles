@@ -5,6 +5,7 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Shapes
 import "../modules"
+import "Bloom.js" as Bloom
 
 // Center trapezoid island tab (\_____/) hanging flush from the screen
 // top — 8px rounded bottom corners, no border.
@@ -29,7 +30,8 @@ PanelWindow {
     Connections {
         target: ntfy
         // the bot is the bell now: every non-DND notification makes it alert
-        function onNotificationArrived() { bot.ping() }
+        // and the island answers with a short cinch/pulse.
+        function onNotificationArrived() { bot.ping(); bar.pulseIsland() }
     }
 
     // ---- resident panels: every popup stays loaded, zero RAM saved but
@@ -127,9 +129,9 @@ PanelWindow {
     }
     // SUPER ALT SPACE cinches the island down to a 44px dot and springs it
     // back open, so swapping trapezoid <-> capsule reads as one continuous
-    // move instead of a hard swap. Notifications are the toast's job, not
-    // the bar's.
-    function pulseIsland() { growAnim.restart() }
+    // move instead of a hard swap. Notifications and the explicit island
+    // toggle use this gesture; ordinary panel opens leave the bar still.
+    function pulseIsland() { island.growT = 0; pulseTimer.restart() }
 
     IpcHandler {
         target: "bar"
@@ -146,8 +148,8 @@ PanelWindow {
             anchors { left: parent.left; top: parent.top; bottom: parent.bottom; topMargin: 6; bottomMargin: 8 }
             spacing: 6
             opacity: bar.barsVisible ? 1 : 0
-            Behavior on opacity { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
-            transform: Translate { x: bar.barsVisible ? 0 : -40; Behavior on x { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } } }
+            Behavior on opacity { NumberAnimation { duration: Bloom.fast; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.out } }
+            transform: Translate { x: bar.barsVisible ? 0 : -48; Behavior on x { NumberAnimation { duration: Bloom.fast; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.move } } }
             ArchLogo { colors: bar.colors }
             Workspaces { colors: bar.colors }
         }
@@ -162,21 +164,29 @@ PanelWindow {
             // growT 0 = cinched to a dot, 1 = natural. The grow animation
             // overshoots past 1 and settles, same as the reference easing.
             property real growT: 1
-            width: 44 + (naturalWidth - 44) * growT
+            // hoverT swells the island horizontally. Visual only — layout
+            // and hit targets stay stable.
+            property real hoverT: islandHover.hovered ? 1 : 0
+            width: 44 + (naturalWidth - 44) * growT + 12 * hoverT
             height: 54
-            // content-driven resizes stay smooth; the pulse owns growT
-            Behavior on naturalWidth { NumberAnimation { duration: 380; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] } }
+            scale: 1 + 0.010 * hoverT
+            transformOrigin: Item.Top
+            HoverHandler { id: islandHover }
+            Behavior on hoverT { NumberAnimation { duration: Bloom.fast; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.move } }
+            // Real damped spring, like the Bloom demo's island: the width
+            // has velocity, not a fixed bezier duration.
+            Behavior on growT { SpringAnimation { spring: Bloom.islandSpring; damping: Bloom.islandDamping; mass: Bloom.islandMass; epsilon: Bloom.islandEpsilon } }
+            Behavior on naturalWidth { SpringAnimation { spring: Bloom.islandSpring; damping: Bloom.islandDamping; mass: Bloom.islandMass; epsilon: 0.1 } }
             // trapezoid geometry — rounded bottom corners
             readonly property real inset: 18         // horizontal inset of bottom edge
             readonly property real r: 14
             readonly property real len: Math.sqrt(inset*inset + height*height)
             readonly property real sx: inset / len
             readonly property real sy: height / len
-            NumberAnimation {
-                id: growAnim
-                target: island; property: "growT"
-                from: 0; to: 1; duration: 420
-                easing.type: Easing.Bezier; easing.bezierCurve: [0.2, 0.9, 0.3, 1.2]
+            Timer {
+                id: pulseTimer
+                interval: 170
+                onTriggered: island.growT = 1
             }
             // glow follows the music: album-art dominant hue while playing,
             // theme primary when idle — the line reads as a play indicator.
@@ -215,7 +225,9 @@ PanelWindow {
             // Dynamic-Island capsule overlay (SUPER ALT SPACE minimal mode)
             Rectangle {
                 opacity: bar.dynamicIsland ? 1 : 0
-                Behavior on opacity { NumberAnimation { duration: 220; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] } }
+                scale: bar.dynamicIsland ? 1 : 0.82
+                Behavior on opacity { NumberAnimation { duration: Bloom.normal; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.out } }
+                Behavior on scale { NumberAnimation { duration: 340; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.move } }
                 anchors.centerIn: parent
                 width: island.width
                 height: 40
@@ -234,7 +246,7 @@ PanelWindow {
                 width: island.width + 2 * f
                 height: island.height
                 opacity: bar.dynamicIsland ? 0 : 1
-                Behavior on opacity { NumberAnimation { duration: 220; easing.type: Easing.Bezier; easing.bezierCurve: [0.32, 0.72, 0, 1] } }
+                Behavior on opacity { NumberAnimation { duration: Bloom.normal; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.out } }
                 antialiasing: true
                 layer.enabled: true
                 layer.samples: 4
@@ -278,20 +290,8 @@ PanelWindow {
                 anchors.centerIn: parent
                 anchors.verticalCenterOffset: -1
                 spacing: 10
-                // clock small left
-                Clock {
-                    id: clockItem
-                    colors: bar.colors
-                    // smaller clock when NowPlaying is focus — keep time but de-emphasized
-                    onPinRequested: toggleClockWin()
-                }
-                // hairline dividers — siblings, never children (§4);
-                // 1x14 outline @ 0.28 per the island spec
-                Rectangle {
-                    width: 1; height: 14
-                    color: colors.alpha(colors.outline, 0.28)
-                    Layout.alignment: Qt.AlignVCenter
-                }
+                scale: 1 + 0.010 * island.hoverT
+                Behavior on scale { NumberAnimation { duration: Bloom.fast; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.move } }
                 // NowPlaying focus — big centered, fills available width
                 NowPlaying {
                     id: nowPlaying
@@ -333,6 +333,8 @@ PanelWindow {
                 anchors.rightMargin: island.inset + 8
                 anchors.topMargin: 0
                 height: 11
+                opacity: 0.78 + 0.22 * island.hoverT
+                Behavior on opacity { NumberAnimation { duration: Bloom.fast; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.out } }
                 clip: true
 
                 Rectangle {
@@ -425,8 +427,8 @@ PanelWindow {
             anchors { right: parent.right; top: parent.top; bottom: parent.bottom; topMargin: 6; bottomMargin: 8; rightMargin: 6 }
             spacing: 6
             opacity: bar.barsVisible ? 1 : 0
-            Behavior on opacity { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
-            transform: Translate { x: bar.barsVisible ? 0 : 40; Behavior on x { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } } }
+            Behavior on opacity { NumberAnimation { duration: Bloom.fast; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.out } }
+            transform: Translate { x: bar.barsVisible ? 0 : 48; Behavior on x { NumberAnimation { duration: Bloom.fast; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.move } } }
 
             // unified transient pill: idle · DND · recording · tray (LocalSend/OBS/etc.)
             // was 4 separate popping pills — now one glass pill, hidden when empty

@@ -2,6 +2,7 @@ import Quickshell
 import Quickshell.Io
 import QtQuick
 import QtQuick.Layouts
+import "../components/Bloom.js" as Bloom
 
 // ThemeEditor — post-wallpaper theme tweaks (mode / scheme + live preview).
 // Port of ui-options/theme option A (control strip). Opens after an explicit
@@ -188,13 +189,15 @@ FloatingWindow {
     // ================= UI =================
     ParallelAnimation {
         id: openAnim
-        NumberAnimation { target: card; property: "opacity"; from: 0; to: 1; duration: 220; easing.type: Easing.BezierSpline; easing.bezierCurve: [0.32, 0.72, 0, 1, 1, 1] }
-        NumberAnimation { target: card; property: "scale"; from: 0.94; to: 1; duration: 280; easing.type: Easing.BezierSpline; easing.bezierCurve: [0.34, 1.35, 0.64, 1, 1, 1] }
+        NumberAnimation { target: card; property: "rotation"; from: Bloom.panelRotate; to: 0; duration: Bloom.panel; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.spring }
+        NumberAnimation { target: card; property: "opacity"; from: 0; to: 1; duration: Bloom.normal; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.out }
+        NumberAnimation { target: card; property: "scale"; from: Bloom.panelScale; to: 1; duration: Bloom.panel; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.spring }
     }
     ParallelAnimation {
         id: closeAnim
-        NumberAnimation { target: card; property: "opacity"; to: 0; duration: 160; easing.type: Easing.BezierSpline; easing.bezierCurve: [0.32, 0.72, 0, 1, 1, 1] }
-        NumberAnimation { target: card; property: "scale"; to: 0.94; duration: 180; easing.type: Easing.BezierSpline; easing.bezierCurve: [0.32, 0.72, 0, 1, 1, 1] }
+        NumberAnimation { target: card; property: "rotation"; to: Bloom.panelRotate; duration: Bloom.close; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.out }
+        NumberAnimation { target: card; property: "opacity"; to: 0; duration: Bloom.close; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.out }
+        NumberAnimation { target: card; property: "scale"; to: Bloom.panelScale; duration: Bloom.close; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.out }
     }
 
     component Cap: Text {
@@ -275,7 +278,7 @@ FloatingWindow {
                     color: chMa.containsMouse ? colors.alpha(colors.secondary, 0.16) : "transparent"
                     border.width: 1
                     border.color: colors.alpha(colors.secondary, 0.5)
-                    transform: Translate { y: chMa.containsMouse ? -2 : 0; Behavior on y { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } } }
+                    transform: Translate { y: chMa.containsMouse ? -2 : 0; Behavior on y { NumberAnimation { duration: Bloom.fast; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.move } } }
                     Text { anchors.centerIn: parent; text: "Change"; color: colors.secondary; font.family: root.fontUi; font.pixelSize: 11; font.weight: Font.DemiBold }
                     MouseArea { id: chMa; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.openTheme() }
                 }
@@ -298,7 +301,7 @@ FloatingWindow {
                             color: root.mode === modelData ? colors.alpha(colors.primary, 0.2) : "transparent"
                             border.width: 1
                             border.color: root.mode === modelData ? colors.alpha(colors.primary, 0.55) : colors.alpha(colors.outline, 0.2)
-                            transform: Translate { y: segMa.containsMouse && root.mode !== modelData ? -2 : 0; Behavior on y { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } } }
+                            transform: Translate { y: segMa.containsMouse && root.mode !== modelData ? -2 : 0; Behavior on y { NumberAnimation { duration: Bloom.fast; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.move } } }
                             Text { anchors.centerIn: parent; text: modelData === "dark" ? "Dark" : "Light"; color: root.mode === modelData ? colors.primary : colors.alpha(colors.outline, 0.8); font.family: root.fontUi; font.pixelSize: 12; font.weight: Font.DemiBold }
                             MouseArea { id: segMa; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.mode = modelData }
                         }
@@ -325,7 +328,7 @@ FloatingWindow {
                             color: root.scheme === modelData.k ? colors.alpha(colors.primary, 0.16) : colors.alpha(colors.surface, 0.5)
                             border.width: 1
                             border.color: root.scheme === modelData.k ? colors.alpha(colors.primary, 0.6) : colors.alpha(colors.outline, 0.2)
-                            transform: Translate { y: chipMa.containsMouse ? -2 : 0; Behavior on y { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } } }
+                            transform: Translate { y: chipMa.containsMouse ? -2 : 0; Behavior on y { NumberAnimation { duration: Bloom.fast; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.move } } }
                             Behavior on color { ColorAnimation { duration: 150 } }
                             RowLayout {
                                 anchors.fill: parent
@@ -404,7 +407,7 @@ FloatingWindow {
                     implicitHeight: 44; radius: 10
                     color: root.working ? colors.alpha(colors.primary, 0.4) : colors.primary
                     opacity: root.working ? 0.7 : 1
-                    transform: Translate { y: apMa.containsMouse && !root.working ? -2 : 0; Behavior on y { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } } }
+                    transform: Translate { y: apMa.containsMouse && !root.working ? -2 : 0; Behavior on y { NumberAnimation { duration: Bloom.fast; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.move } } }
                     Text { anchors.centerIn: parent; text: root.working ? "Working…" : "Apply theme"; color: colors.background; font.family: root.fontUi; font.pixelSize: 13; font.weight: Font.Bold }
                     Rectangle {
                         visible: root.working

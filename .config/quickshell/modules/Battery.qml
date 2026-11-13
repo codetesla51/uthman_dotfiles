@@ -1,6 +1,7 @@
 import Quickshell
 import Quickshell.Services.UPower
 import QtQuick
+import "../components/Bloom.js" as Bloom
 
 // Battery pill — glass island, foreground text; charging→secondary,
 // warning→tertiary, critical→error (waybar parity).
@@ -10,6 +11,12 @@ Item {
     property var colors
     property bool hovered: batMouse.containsMouse
     signal openRequested()
+
+    // Bloom lift: the whole pill moves, not just its colour.
+    scale: hovered ? 1.06 : 1
+    y: hovered ? -3 : 0
+    Behavior on scale { NumberAnimation { duration: Bloom.fast; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.move } }
+    Behavior on y { NumberAnimation { duration: Bloom.fast; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.move } }
 
     readonly property var dev: UPower.displayDevice
     readonly property int capacity: dev ? Math.round(dev.percentage * 100) : 0

@@ -2,6 +2,7 @@ import Quickshell
 import Quickshell.Hyprland
 import Quickshell.Io
 import QtQuick
+import "../components/Bloom.js" as Bloom
 
 // Workspaces — segmented control pill (waybar style.css parity).
 // Container: surface .65, radius 14 · buttons radius 11, min-width 18.
@@ -10,6 +11,12 @@ Item {
     id: root
 
     property var colors
+    property bool hovered: false
+    HoverHandler { id: wsHover; onHoveredChanged: root.hovered = hovered }
+    scale: hovered ? 1.03 : 1
+    y: hovered ? -1 : 0
+    Behavior on scale { NumberAnimation { duration: Bloom.fast; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.move } }
+    Behavior on y { NumberAnimation { duration: Bloom.fast; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.move } }
     readonly property var wsList: Hyprland.workspaces.values
     readonly property var focusedWsId: Hyprland.focusedMonitor
         ? Hyprland.focusedMonitor.activeWorkspace.id : -1

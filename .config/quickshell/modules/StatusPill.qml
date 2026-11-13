@@ -3,6 +3,7 @@ import Quickshell.Io
 import Quickshell.Services.SystemTray
 import QtQuick
 import QtQuick.Layouts
+import "../components/Bloom.js" as Bloom
 
 // StatusPill — single glass pill that consolidates all transient indicators:
 // idle inhibitor, DND, screen-recording, plus every SystemTray icon
@@ -19,6 +20,13 @@ Item {
     property var colors
     property bool dnd: false
     signal toggleDndRequested()
+
+    property bool hovered: false
+    HoverHandler { id: pillHover; onHoveredChanged: root.hovered = hovered }
+    scale: root.hovered && root.hasContent ? 1.04 : 1
+    y: root.hovered && root.hasContent ? -1 : 0
+    Behavior on scale { NumberAnimation { duration: Bloom.fast; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.move } }
+    Behavior on y { NumberAnimation { duration: Bloom.fast; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.move } }
 
     // --- tray filtering ---
     readonly property var hiddenApps: ["spotify"]

@@ -4,6 +4,7 @@ import Quickshell.Wayland
 import Quickshell.Hyprland
 import QtQuick
 import QtQuick.LocalStorage 2.0
+import "../../components/Bloom.js" as Bloom
 
 // Hornet Shimeji pet — smart, persistent, free-roaming.
 // - transparent PanelWindow overlay, click-through except sprite (mask)
@@ -563,7 +564,7 @@ PanelWindow {
         height: sprite.implicitHeight>0 ? sprite.implicitHeight : 128
         Behavior on x { enabled: !root.isDragging; NumberAnimation { id: xAnim; duration: 3200; easing.type: Easing.Linear } }
         Behavior on y { enabled: !root.isDragging; NumberAnimation { id: yAnim; duration: 3200; easing.type: Easing.Linear } }
-        Behavior on scale { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
+        Behavior on scale { NumberAnimation { duration: Bloom.fast; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.move } }
         Behavior on opacity { NumberAnimation { duration: 220 } }
         // quick pop on action change — more alive
         Connections { target: root; function onCurrentActionChanged() { petWrapper.scale = 1.08; petWrapper.opacity = 0.88; popBack.restart() } }

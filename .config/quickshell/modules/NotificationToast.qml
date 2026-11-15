@@ -123,7 +123,6 @@ Rectangle {
         if (n.indexOf("nvim") !== -1) return ""
         if (n.indexOf("neovim") !== -1) return ""
         if (n.indexOf("phone") !== -1) return ""
-        if (n.indexOf("hyprlock") !== -1) return ""
         if (n.indexOf("lock") !== -1) return ""
         if (n.indexOf("weather") !== -1) return ""
         if (n.indexOf("usb") !== -1) return ""

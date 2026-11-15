@@ -20,7 +20,8 @@ mkdir -p ~/.config/theme/current ~/.config/omarchy/current
 ln -sfn "$IMAGE" ~/.config/theme/current/background
 ln -sfn "$IMAGE" ~/.config/omarchy/current/background  # legacy compat
 
-# hyprlock can't animate: keep a flattened still beside the live background.
+# Lock surfaces and the battery panel can't animate: keep a flattened still
+# beside the live background.
 # GIFs donate their first frame; stills just get symlinked. Runs under wait.
 STATIC="$HOME/.config/theme/current/background-static.jpg"
 case "$IMAGE" in
@@ -45,8 +46,10 @@ if [[ -n "$WALL" ]]; then
         setsid "$DAEMON" >/dev/null 2>&1 &
         sleep 0.3
     fi
-    # Wavy wipe sweeping across the screen, 0.7s — fast with character.
-    "$WALL" img "$IMAGE" --transition-type wave --transition-angle 45 --transition-duration 0.7 --transition-fps 60 &
+    # DesktopClock owns the visible transition (it crossfades its own
+    # wallpaper surface). Keep awww current underneath without a second,
+    # competing full-screen animation.
+    "$WALL" img "$IMAGE" --transition-type none &
 else
     pkill -x swaybg 2>/dev/null
     sleep 0.2

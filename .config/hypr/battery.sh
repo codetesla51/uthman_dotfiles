@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Battery status script for hyprlock
+# Battery status helper script.
 
 battery_path="/sys/class/power_supply/BAT0"
 

@@ -1,3 +1,3 @@
 #!/bin/bash
-# lock — lock the session with hyprlock (standalone, no omarchy-system-lock)
-pidof hyprlock >/dev/null || hyprlock &
+# lock — lock the session with the Quickshell lock screen.
+exec quickshell -p "$HOME/.config/quickshell" ipc call lockscreen lock

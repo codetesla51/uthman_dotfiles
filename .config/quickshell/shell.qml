@@ -3,6 +3,7 @@ import Quickshell.Io
 import QtQuick
 import "components"
 import "modules"
+import "lockscreen" as LockUi
 
 ShellRoot {
     // full-screen wallpaper + clock + subject cutout, Background layer
@@ -19,10 +20,19 @@ ShellRoot {
     PowerMenu { colors: barPalette }
     PassPrompt { colors: barPalette }
     GitHubPoller {}
-    // LockScreen PARKED (2026-10-03): quickshell WlSessionLock stranded the
-    // session on first test (missing PAM respond + focus). hyprlock owns
-    // locking again; revisit only with a timed auto-rescue test harness.
+    // Old LockScreen PARKED (2026-10-03): first WlSessionLock attempt stranded
+    // the session (missing PAM respond + focus). The new lockscreen/ stack
+    // owns locking; keep this old module only as a reference.
     // LockScreen {}
+
+    // Quickshell lock (new folder, separate from the parked attempt above).
+    // Inert until `ipc call lockscreen lock`; reuses the bar's existing
+    // notification archive so no second NotificationServer exists.
+    LockUi.LockScreen {
+        id: quickLock
+        palette: barPalette
+        notifications: mainBar.notificationArchive
+    }
 
     // ---- lazy heavies: Loader + IPC proxy, zero RAM until first used ----
     // Each loader stays compiled after its first open (warm flag) so the

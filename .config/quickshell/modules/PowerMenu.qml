@@ -93,7 +93,7 @@ PanelWindow {
 
                 Repeater {
                     model: [
-                        { label: "Lock",        icon: "",  cmd: "pidof hyprlock || hyprlock" },
+                        { label: "Lock",        icon: "",  cmd: "quickshell -p ~/.config/quickshell ipc call lockscreen lock" },
                         { label: "Logout",      icon: "",  cmd: "hyprctl dispatch exit" },
                         { label: "Suspend",     icon: "",  cmd: "systemctl suspend" },
                         { label: "Reboot",      icon: "",  cmd: "systemctl reboot" },

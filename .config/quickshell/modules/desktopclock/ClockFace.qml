@@ -28,11 +28,21 @@ Item {
     property string layout: "row"        // "row" | "stack"
     property real shiftX: 0              // normalized offset from center
     property real shiftY: 0
+    property real tilt: 0                // small lean around the subject
+    property real tiltPivotX: 0
+    property real tiltPivotY: 0
     property string blurSource: ""
     property bool frost: false
+    // 0 = crisp, 1 = fully soft — used by the desktop-clock reveal
+    property real focusBlur: 0
 
-    readonly property real fs: height * 0.44
+    // Bigger row type; the stacked fallback stays inside the safe area.
+    readonly property real rowFs: height * 0.50
+    readonly property real stackFs: height * 0.46
+    readonly property real fs: layout === "stack" ? stackFs : rowFs
     readonly property rect glyphRect: maskGlyphs.textRect
+    readonly property size rowTextSize: Qt.size(rowMeasure.textRect.width, rowMeasure.textRect.height)
+    readonly property size stackTextSize: Qt.size(stackMeasure.textRect.width, stackMeasure.textRect.height)
     readonly property real rim: Math.max(2, height * 0.0024)
 
     // blend two theme colors, keeping the hue but borrowing luminance
@@ -78,10 +88,11 @@ Item {
             visible: g.stacked
             x: (g.width - width) / 2 + g.width * g.shiftX
             y: (g.height - height) / 2 + g.height * g.shiftY
-            spacing: -g.fs * 0.16
+            spacing: 0
 
             Text {
                 text: g.hh
+                height: g.fs * 0.88
                 font.family: "Iceberg"
                 font.pixelSize: g.fs
                 lineHeight: g.fs * 0.88
@@ -92,6 +103,7 @@ Item {
             }
             Text {
                 text: g.mm
+                height: g.fs * 0.88
                 font.family: "Iceberg"
                 font.pixelSize: g.fs
                 lineHeight: g.fs * 0.88
@@ -103,10 +115,43 @@ Item {
         }
     }
 
+    // Off-screen measurers: auto layout needs both boxes before choosing.
+    Glyphs {
+        id: rowMeasure
+        anchors.fill: parent
+        hh: root.hh
+        mm: root.mm
+        stacked: false
+        fs: root.rowFs
+        fill: "white"
+        visible: false
+    }
+    Glyphs {
+        id: stackMeasure
+        anchors.fill: parent
+        hh: root.hh
+        mm: root.mm
+        stacked: true
+        fs: root.stackFs
+        fill: "white"
+        visible: false
+    }
+
     // ---- the whole face in one layer, so the shadow sits under all of it ----
     Item {
         id: face
         anchors.fill: parent
+
+        // Lean the whole face around the point where the subject crosses it.
+        // The mask, frost, rim and shadow all ride this one transform.
+        transform: Rotation {
+            origin.x: root.tiltPivotX
+            origin.y: root.tiltPivotY
+            angle: root.tilt
+            Behavior on angle {
+                NumberAnimation { duration: 520; easing.type: Easing.OutCubic }
+            }
+        }
 
         // rim: offset copies give the stroke a width Qt's Text.Outline lacks
         Repeater {
@@ -218,8 +263,10 @@ Item {
 
         layer.enabled: true
         layer.effect: MultiEffect {
+            blurEnabled: root.focusBlur > 0.001
+            blurMax: 40
+            blur: root.focusBlur
             shadowEnabled: true
-            blurMax: 64
             shadowBlur: 0.8
             shadowVerticalOffset: root.height * 0.012
             shadowColor: Qt.rgba(root.background.r, root.background.g, root.background.b, 0.55)

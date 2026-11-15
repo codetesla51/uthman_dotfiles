@@ -27,7 +27,7 @@ Item {
 
     // Bar's PixelBot listens to this — the bot replaced the bell as the
     // ambient notification indicator.
-    signal notificationArrived()
+    signal notificationArrived(var notification)
 
     function togglePanel() { panelOpen = !panelOpen }
     function toggleDnd() { dnd = !dnd }
@@ -151,7 +151,6 @@ Item {
         if (n.indexOf("nvim") !== -1) return ""
         if (n.indexOf("neovim") !== -1) return ""
         if (n.indexOf("phone") !== -1) return ""
-        if (n.indexOf("hyprlock") !== -1) return ""
         if (n.indexOf("lock") !== -1) return ""
         if (n.indexOf("weather") !== -1) return ""
         if (n.indexOf("usb") !== -1) return ""
@@ -186,7 +185,7 @@ Item {
             root.addToArchive(notification)
             if (!root.dnd) {
                 root.popToast(notification)
-                root.notificationArrived()
+                root.notificationArrived(notification)
             }
         }
     }

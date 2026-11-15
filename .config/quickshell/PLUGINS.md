@@ -43,7 +43,7 @@ Rules of the house (from AGENTS.md / memory.md):
 
 | File | State | To activate |
 |---|---|---|
-| modules/LockScreen.qml | PAM API fixed (`onCompleted`), UI needs redo (no blur/animations, Esc bypasses auth) | wire into shell.qml + rebind `SUPER CTRL L`; user chose hyprlock for now |
+| modules/LockScreen.qml | Old parked attempt; superseded by `lockscreen/` (WlSessionLock, PAM, glass, live data) | remove once the old module is no longer useful |
 | modules/WhatsApp.qml + Toast.qml | PARKED 2026-09-17 (WhatsApp-ToS ban caution): code + session kept, unwired from Bar.qml, SUPER ALT W off, no daemon runs; WhatsApp pings via PhoneBridge shade polling | rewire `WhatsApp {}` in Bar.qml + restore bind + `SUPER HOME` |
 
 ## Roadmap (wanted, not started)

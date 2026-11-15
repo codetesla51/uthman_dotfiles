@@ -4,6 +4,7 @@ import Quickshell.Wayland
 import QtQuick
 import QtQuick.Effects
 import "desktopclock"
+import "../components/Bloom.js" as Bloom
 
 // DesktopClock — replaces the wallpaper daemon: one full-screen surface on the
 // background layer that draws the wallpaper, the clock, and the subject cutout
@@ -24,19 +25,24 @@ PanelWindow {
 
     // ---- wallpaper source: the same symlink the shell and set-wallpaper use ----
     property string wallpaperPath: ""
-    readonly property string wallName: {
-        var p = wallpaperPath
+
+    // Derive from the passed path, not from wallpaperPath, when reacting to a
+    // change: a handler can run before sibling bindings have re-evaluated, and
+    // reading metaPath there used to hand FileView the previous wallpaper.
+    function nameFor(p) {
         if (!p) return ""
         var slash = p.lastIndexOf("/")
         var base = slash >= 0 ? p.substring(slash + 1) : p
         var dot = base.lastIndexOf(".")
         return dot > 0 ? base.substring(0, dot) : base
     }
+    readonly property string wallName: nameFor(wallpaperPath)
 
     readonly property string cacheDir: Quickshell.env("HOME") + "/.cache/wallcut"
     readonly property string cutoutPath: cacheDir + "/" + wallName + ".png"
     readonly property string metaPath: cacheDir + "/" + wallName + ".json"
     readonly property string blurPath: cacheDir + "/" + wallName + "-blur.jpg"
+    function metaFor(p) { return cacheDir + "/" + nameFor(p) + ".json" }
 
     property bool cutoutExists: false
     property bool blurExists: false
@@ -49,6 +55,44 @@ PanelWindow {
     // the desktop never falls back to an empty surface.
     property bool showClock: true
 
+    // Reveal animation: the clock blooms in with a small upward drift and a
+    // damped overshoot, then folds away quickly. clockVisible keeps the items
+    // mapped until the exit finishes; reveal drives opacity, scale and motion.
+    property bool clockVisible: true
+    property real reveal: 1
+    function playClockReveal() {
+        if (showClock) {
+            clockVisible = true
+            revealOut.stop()
+            revealIn.start()
+        } else {
+            revealIn.stop()
+            revealOut.start()
+        }
+    }
+    onShowClockChanged: playClockReveal()
+
+    SpringAnimation {
+        id: revealIn
+        target: root
+        property: "reveal"
+        to: 1
+        spring: Bloom.islandSpring
+        damping: 0.62
+        mass: Bloom.islandMass
+        epsilon: Bloom.islandEpsilon
+    }
+    NumberAnimation {
+        id: revealOut
+        target: root
+        property: "reveal"
+        to: 0
+        duration: 280
+        easing.type: Easing.Bezier
+        easing.bezierCurve: Bloom.out
+        onFinished: if (!root.showClock) root.clockVisible = false
+    }
+
     // ---- palette: live Matugen theme, wallpaper fallback if the file is gone ----
     property bool themeMissing: false
     readonly property color primary: themeMissing ? extracted.primary : colors.primary
@@ -58,10 +102,13 @@ PanelWindow {
     readonly property color background: colors.background
     readonly property color outline: colors.outline
 
-    // ---- layout: row by default, stack per wallpaper or globally ----
-    property string cfgLayout: "row"
+    // ---- layout: auto picks row unless the subject would bury a digit pair ----
+    property string cfgLayout: "auto"       // auto | row | stack
     property var cfgOverrides: ({})
-    readonly property string layout: cfgOverrides[wallName] !== undefined ? cfgOverrides[wallName] : cfgLayout
+    property string autoLayout: "row"
+    readonly property string layout: cfgOverrides[wallName] !== undefined
+        ? cfgOverrides[wallName]
+        : (cfgLayout === "auto" ? autoLayout : cfgLayout)
 
     SystemClock {
         id: clock
@@ -120,27 +167,66 @@ PanelWindow {
     readonly property bool showCutout: cutoutExists && !forceHideCutout
         && (cutCoverage >= 0 ? cutCoverage <= 0.85 : overlapRatio() <= 0.85)
 
-    // ---- placement: move the clock to the emptiest band, not blindly to center ----
+    // ---- placement: keep both digit pairs readable, and keep some overlap ----
+    // The total area is not enough: a subject can cover 20% of the box and all
+    // of it on the minutes. Hours and minutes are scored separately so one
+    // pair cannot be buried while the other stays clean.
     property real shiftX: 0      // normalized, 0 = centered
     property real shiftY: 0
 
-    // Scan the whole screen, not just the top-right. The score is the cutout's
-    // true alpha coverage of the actual glyph box plus a small pull toward the
-    // center, so the clock only moves when that buys a real improvement.
-    function choosePlacement() {
-        if (!cutGrid || gridW <= 0) {
-            shiftX = 0
-            shiftY = 0
-            return
+    // Resting tilt: the face leans on the subject, pivoted at the point where
+    // the cutout actually crosses the digits (not the screen center).
+    property real clockTilt: 0
+    property real tiltPivotX: width * 0.5
+    property real tiltPivotY: height * 0.5
+
+    function coverageFraction(r, fx0, fy0, fx1, fy1) {
+        return coverageOf(Qt.rect(r.x + r.width * fx0, r.y + r.height * fy0,
+                                  r.width * (fx1 - fx0), r.height * (fy1 - fy0)))
+    }
+
+    // Alpha-weighted center of the subject inside the clock box. This is the
+    // physical contact mass the face can lean on.
+    function contactCentroid(r) {
+        var g = cutGrid
+        if (!g || gridW <= 0 || gridH <= 0) return null
+        var cw = width / gridW, ch = height / gridH
+        var sw = 0, sx = 0, sy = 0
+        for (var gy = 0; gy < gridH; gy++) {
+            var y0 = gy * ch, y1 = y0 + ch
+            var iy = Math.min(r.y + r.height, y1) - Math.max(r.y, y0)
+            if (iy <= 0) continue
+            for (var gx = 0; gx < gridW; gx++) {
+                var x0 = gx * cw, x1 = x0 + cw
+                var ix = Math.min(r.x + r.width, x1) - Math.max(r.x, x0)
+                if (ix <= 0) continue
+                var a = g[gy * gridW + gx]
+                if (a <= 0) continue
+                var k = ix * iy * a
+                sw += k
+                sx += k * (x0 + x1) * 0.5
+                sy += k * (y0 + y1) * 0.5
+            }
         }
+        return sw > 0 ? { x: sx / sw, y: sy / sw } : null
+    }
 
-        var gw = clock2.glyphRect.width
-        var gh = clock2.glyphRect.height
-        if (gw <= 0 || gh <= 0) return
+    // Peak alpha over the two readable zones. Row: HH | colon | MM.
+    // Stack: HH above, MM below.
+    function zonePeak(r, stacked) {
+        if (stacked)
+            return Math.max(coverageFraction(r, 0, 0, 1, 0.5),
+                            coverageFraction(r, 0, 0.5, 1, 1))
+        return Math.max(coverageFraction(r, 0, 0, 0.437, 1),
+                        coverageFraction(r, 0.563, 0, 1, 1))
+    }
 
+    // Score every legal position for one layout. The peak penalty is strong:
+    // moving the clock beats half-covering one digit pair.
+    function bestSpot(gw, gh, stacked) {
         var cx = (width - gw) / 2
         var cy = (height - gh) / 2
-        var mx = Math.max(16, width * 0.02)
+        var mx = Math.max(16, width * 0.06)
         var top = Math.max(64, height * 0.06)          // clear the bar
         var bottom = height * 0.085                    // leave the date line alone
 
@@ -151,47 +237,107 @@ PanelWindow {
         if (minSX > maxSX) { minSX = 0; maxSX = 0 }
         if (minSY > maxSY) { minSY = 0; maxSY = 0 }
 
-        var centerCov = coverageOf(Qt.rect(cx, cy, gw, gh))
-        // A few pixels of fur over a digit is fine; do not move for that.
-        if (centerCov <= 0.08) {
-            shiftX = 0
-            shiftY = 0
-            return
-        }
+        var centerRect = Qt.rect(cx, cy, gw, gh)
+        var centerCov = coverageOf(centerRect)
+        var centerPeak = zonePeak(centerRect, stacked)
+        // Nothing meaningful on the digits: stay exactly centered.
+        if (centerCov <= 0.08 && centerPeak <= 0.12)
+            return { x: 0, y: 0, cov: centerCov, peak: centerPeak, score: centerCov }
 
-        var xs = [-0.30, -0.20, -0.10, 0, 0.10, 0.20, 0.30]
-        var ys = [-0.24, -0.16, -0.08, 0, 0.08, 0.16, 0.24]
-        var bestX = 0, bestY = 0, bestScore = centerCov
+        var xs = [-0.34, -0.26, -0.18, -0.10, -0.04, 0,
+                  0.04, 0.10, 0.18, 0.26, 0.34]
+        var ys = [-0.22, -0.15, -0.08, 0, 0.08, 0.15, 0.22]
+        var best = null
 
         for (var iy = 0; iy < ys.length; iy++) {
             for (var ix = 0; ix < xs.length; ix++) {
                 var sx = Math.max(minSX, Math.min(maxSX, xs[ix]))
                 var sy = Math.max(minSY, Math.min(maxSY, ys[iy]))
-                var cov = coverageOf(Qt.rect(cx + sx * width, cy + sy * height, gw, gh))
-                // center pull + slight preference for the top half
-                var score = cov + 0.09 * (Math.abs(sx) + Math.abs(sy))
-                    + (sy > 0.08 ? 0.02 : 0)
-                if (score < bestScore) {
-                    bestScore = score
-                    bestX = sx
-                    bestY = sy
-                }
+                var r = Qt.rect(cx + sx * width, cy + sy * height, gw, gh)
+                var cov = coverageOf(r)
+                var peak = zonePeak(r, stacked)
+                // Aim for a visible overlap (~10% of the box) instead of zero:
+                // the character must actually cross the digits for depth. The
+                // peak penalty is deliberately harsh: a pair 18% covered is
+                // already hard to read when the cutout edge crosses strokes.
+                var score = Math.abs(cov - 0.10) * 2.0
+                    + 4.0 * Math.max(0, peak - 0.18)
+                    + 0.03 * (Math.abs(sx) + Math.abs(sy))
+                if (best === null || score < best.score)
+                    best = { x: sx, y: sy, cov: cov, peak: peak, score: score }
             }
         }
+        return best
+    }
 
-        // Only move if the winning spot clears at least 4 points of coverage.
-        if (bestScore >= centerCov - 0.04) {
+    function choosePlacement() {
+        if (!cutGrid || gridW <= 0) {
+            autoLayout = "row"
             shiftX = 0
             shiftY = 0
+            clockTilt = 0
+            return
+        }
+
+        var rowW = clock2.rowTextSize.width, rowH = clock2.rowTextSize.height
+        var stackW = clock2.stackTextSize.width, stackH = clock2.stackTextSize.height
+        if (rowW <= 0 || rowH <= 0 || stackW <= 0 || stackH <= 0) return
+
+        var forced = cfgOverrides[wallName] !== undefined
+            ? cfgOverrides[wallName]
+            : (cfgLayout !== "auto" ? cfgLayout : "")
+
+        var row = bestSpot(rowW, rowH, false)
+        var stack = null
+        var useStack = false
+
+        if (forced === "stack") {
+            useStack = true
+        } else if (forced === "") {
+            stack = bestSpot(stackW, stackH, true)
+            // Row stays the default. Stack only when the row cannot keep a
+            // digit pair readable, and only if stacking clearly improves it.
+            // 24% of a zone is already enough to make a pair squint-worthy.
+            useStack = row.peak > 0.24 && stack.peak < row.peak - 0.06
+        }
+
+        if (useStack && stack === null)
+            stack = bestSpot(stackW, stackH, true)
+        var pick = useStack ? stack : row
+        autoLayout = useStack ? "stack" : "row"
+        shiftX = pick.x
+        shiftY = pick.y
+
+        var gw = useStack ? stackW : rowW
+        var gh = useStack ? stackH : rowH
+        var box = Qt.rect((width - gw) / 2 + pick.x * width,
+                          (height - gh) / 2 + pick.y * height, gw, gh)
+        var contact = cutoutExists && showCutout ? contactCentroid(box) : null
+        if (contact && pick.cov >= 0.04) {
+            // Lift the side the subject stands on, pivoting on the actual
+            // contact mass so the digits read as resting against her.
+            var subjX = cutBBox ? (cutBBox[0] + cutBBox[2]) * 0.5 * width : width / 2
+            var dir = subjX > width / 2 + width * 0.04 ? -1
+                    : (subjX < width / 2 - width * 0.04 ? 1 : -1)
+            clockTilt = dir * 3.0
+            tiltPivotX = contact.x
+            tiltPivotY = contact.y
         } else {
-            shiftX = bestX
-            shiftY = bestY
+            clockTilt = 0
+            tiltPivotX = box.x + gw / 2
+            tiltPivotY = box.y + gh / 2
         }
     }
 
     onLayoutChanged: Qt.callLater(choosePlacement)
     onWidthChanged: Qt.callLater(choosePlacement)
     onHeightChanged: Qt.callLater(choosePlacement)
+
+    Connections {
+        target: clock2
+        function onRowTextSizeChanged() { Qt.callLater(root.choosePlacement) }
+        function onStackTextSizeChanged() { Qt.callLater(root.choosePlacement) }
+    }
 
     Wallpaper {
         id: wall
@@ -202,12 +348,20 @@ PanelWindow {
     ClockFace {
         id: clock2
         anchors.fill: parent
-        visible: root.showClock
+        visible: root.clockVisible
+        opacity: Math.max(0, Math.min(1, root.reveal * 1.8))
+        scale: 0.62 + 0.38 * root.reveal
+        rotation: -2.5 * (1 - root.reveal)
+        focusBlur: Math.max(0, Math.min(1, 1 - root.reveal))
+        transform: Translate { y: root.height * 0.06 * (1 - root.reveal) }
         hh: root.hh
         mm: root.mm
         layout: root.layout
         shiftX: root.shiftX
         shiftY: root.shiftY
+        tilt: root.showCutout ? root.clockTilt : 0
+        tiltPivotX: root.tiltPivotX
+        tiltPivotY: root.tiltPivotY
         primary: root.primary
         secondary: root.secondary
         tertiary: root.tertiary
@@ -221,15 +375,21 @@ PanelWindow {
     Subject {
         id: subject
         anchors.fill: parent
-        visible: root.showClock
+        visible: root.clockVisible
+        opacity: Math.max(0, Math.min(1, (root.reveal - 0.15) * 1.4))
         source: root.showCutout ? root.cutoutPath : ""
+        // Never let the previous cutout sit over a wallpaper it doesn't
+        // belong to: reveal only after the new backdrop has fully landed.
+        gate: wall.settled && wall.currentPath === root.wallpaperPath
     }
 
     // Date — above the subject, so a cutout reaching the bottom edge cannot
     // hide it. Pinned to the bottom edge, out of the clock's way.
     Row {
         id: dateRow
-        visible: root.showClock
+        visible: root.clockVisible
+        opacity: Math.max(0, Math.min(1, (root.reveal - 0.3) * 1.6))
+        transform: Translate { y: root.height * 0.025 * (1 - root.reveal) }
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom
         anchors.bottomMargin: root.height * 0.045
@@ -277,9 +437,9 @@ PanelWindow {
     }
 
     // ---- one watcher for wallpaper + assets + theme ----
-    // Prints a line only when something changes, so idle cost is one
-    // readlink + three stats every two seconds. Asset flags live here so a
-    // cutout generated while the shell runs appears within two seconds.
+    // Prints a line only when something changes. A short poll keeps the new
+    // wallpaper within ~0.3s of the symlink, while idle cost stays at one
+    // readlink per tick (the rest is shell builtins).
     Process {
         id: wallProc
         running: true
@@ -289,13 +449,13 @@ PanelWindow {
             "last=\"\"; " +
             "while :; do " +
             "  cur=$(readlink -f \"$p\" 2>/dev/null); " +
-            "  name=$(basename \"${cur%.*}\" 2>/dev/null); " +
+            "  name=${cur##*/}; name=${name%.*}; " +
             "  cut=0; [ -n \"$name\" ] && [ -f \"$HOME/.cache/wallcut/$name.png\" ] && cut=1; " +
             "  blur=0; [ -n \"$name\" ] && [ -f \"$HOME/.cache/wallcut/$name-blur.jpg\" ] && blur=1; " +
             "  th=0; [ -f \"$HOME/.config/quickshell/colors.css\" ] && th=1; " +
             "  line=\"$cur|$cut|$blur|$th\"; " +
-            "  if [ \"$line\" != \"$last\" ]; then echo \"$line\"; last=\"$line\"; fi; " +
-            "  sleep 2; " +
+            "  [ \"$line\" != \"$last\" ] && { echo \"$line\"; last=\"$line\"; }; " +
+            "  sleep 0.3; " +
             "done"]
         stdout: SplitParser {
             splitMarker: "\n"
@@ -310,7 +470,7 @@ PanelWindow {
                 // a cutout that appeared after startup needs its bbox read now
                 if (root.cutoutExists && !hadCutout) {
                     metaView.path = ""
-                    metaView.path = root.metaPath
+                    metaView.path = root.metaFor(root.wallpaperPath)
                 }
             }
         }
@@ -320,7 +480,19 @@ PanelWindow {
         id: metaView
         path: root.metaPath
         printErrors: false
+        onLoadFailed: {
+            if (metaView.path !== root.metaFor(root.wallpaperPath))
+                return
+            root.cutBBox = null
+            root.cutGrid = null
+            root.gridW = 0
+            root.gridH = 0
+            root.choosePlacement()
+        }
         onLoaded: {
+            // Drop a late load that belongs to the previous wallpaper.
+            if (metaView.path !== root.metaFor(root.wallpaperPath))
+                return
             try {
                 var o = JSON.parse(text())
                 root.cutBBox = (o && o.bbox && o.bbox.length === 4) ? o.bbox : null
@@ -333,6 +505,7 @@ PanelWindow {
                 root.cutGrid = null
                 root.gridW = 0
                 root.gridH = 0
+                root.choosePlacement()
             }
         }
     }
@@ -355,10 +528,10 @@ PanelWindow {
         cutGrid = null
         gridW = 0
         gridH = 0
-        shiftX = 0
-        shiftY = 0
+        // Keep the current shift/tilt until the new sidecar lands: resetting
+        // here made the clock flash through the centre on every switch.
         metaView.path = ""
-        metaView.path = metaPath
+        metaView.path = metaFor(wallpaperPath)
     }
 
     IpcHandler {
@@ -367,7 +540,7 @@ PanelWindow {
         // bbox sidecar and layout config to be re-read immediately.
         function reload(): void {
             metaView.path = ""
-            metaView.path = root.metaPath
+            metaView.path = root.metaFor(root.wallpaperPath)
             cfgView.path = ""
             cfgView.path = Quickshell.env("HOME") + "/.config/quickshell/desktopclock.json"
         }
@@ -380,18 +553,51 @@ PanelWindow {
             return JSON.stringify({
                 path: root.wallpaperPath,
                 name: root.wallName,
+                meta: metaView.path,
+                wallSettled: wall.settled,
+                wallFading: wall.fading,
+                wallCurrent: wall.currentPath,
+                wallPending: wall.pendingPath,
+                wallA: [wall.opacityA, wall.statusA],
+                wallB: [wall.opacityB, wall.statusB],
                 cutoutExists: root.cutoutExists,
                 blurExists: root.blurExists,
                 showClock: root.showClock,
                 showCutout: root.showCutout,
                 ratio: root.overlapRatio(),
                 coverage: root.cutCoverage,
+                peak: root.zonePeak(clock2.glyphRect, root.layout === "stack"),
+                zoneHH: root.layout === "stack"
+                    ? root.coverageFraction(clock2.glyphRect, 0, 0, 1, 0.5)
+                    : root.coverageFraction(clock2.glyphRect, 0, 0, 0.437, 1),
+                zoneMM: root.layout === "stack"
+                    ? root.coverageFraction(clock2.glyphRect, 0, 0.5, 1, 1)
+                    : root.coverageFraction(clock2.glyphRect, 0.563, 0, 1, 1),
                 bbox: root.cutBBox,
                 layout: root.layout,
                 shiftX: root.shiftX,
                 shiftY: root.shiftY,
+                tilt: root.clockTilt,
+                tiltPivot: [root.tiltPivotX, root.tiltPivotY],
+                autoLayout: root.autoLayout,
+                rowSize: [clock2.rowTextSize.width, clock2.rowTextSize.height],
+                stackSize: [clock2.stackTextSize.width, clock2.stackTextSize.height],
+                glyph: {
+                    x: clock2.glyphRect.x,
+                    y: clock2.glyphRect.y,
+                    w: clock2.glyphRect.width,
+                    h: clock2.glyphRect.height
+                },
                 subjectSource: subject.source,
-                subjectStatus: subject.imageStatus
+                subjectStatus: subject.imageStatus,
+                subject: {
+                    gate: subject.gate,
+                    want: subject.wantReveal,
+                    opacity: subject.cardOpacity,
+                    ready: subject.cardReady,
+                    cardUrl: subject.cardUrl,
+                    wantUrl: subject.wantUrl
+                }
             })
         }
     }

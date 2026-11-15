@@ -1,0 +1,8 @@
+# Quickshell lock — authentication only.
+#
+# Deliberately no pam_faillock and no "include system-auth": a mistyped
+# password in this lock must never increment a lockout tally.
+#
+# PamContext only runs the auth stack (it does not call pam_acct_mgmt),
+# so account/session/password lines are not needed here.
+auth required pam_unix.so

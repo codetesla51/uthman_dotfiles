@@ -9,8 +9,8 @@ import QtQuick.Controls
 // LockScreen — quickshell session lock. SUPER+L or hypridle calls
 // `ipc call lockscreen lock`: a 650ms overlay animation plays over the live
 // desktop (wallpaper zooms, screen falls to black), and the session locks at
-// peak black so the cut is invisible. Fonts match hyprlock: Iceland clock,
-// FiraCode quotes. Timers only run while locked.
+// peak black so the cut is invisible. Fonts: Iceland clock, FiraCode
+// quotes. Timers only run while locked.
 Item {
     id: root
 

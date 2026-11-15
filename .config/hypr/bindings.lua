@@ -170,6 +170,7 @@ hl.unbind("SUPER + ALT + P")
 hl.unbind("SUPER + ALT + T")
 hl.unbind("SUPER + ALT + K")
 hl.bind("SUPER + ALT + P", hl.dsp.exec_cmd(qs("controlcenter toggle")))
+hl.bind("SUPER + ALT + H", hl.dsp.exec_cmd(qs("desktopclock toggle")), { description = "Desktop clock" })
 hl.bind("SUPER + ALT + T", hl.dsp.exec_cmd(qs("screentime toggle")))
 hl.bind("SUPER + ALT + K", hl.dsp.exec_cmd(qs("phonebridge toggle")))
 hl.bind("SUPER + ALT + E", hl.dsp.exec_cmd(qs("earbuds toggle")))
@@ -194,9 +195,12 @@ hl.bind("SUPER + ALT + SPACE", hl.dsp.exec_cmd(qs("bar toggleIsland")), { descri
 hl.unbind("SUPER + I")
 hl.bind("SUPER + I", hl.dsp.exec_cmd(qs("pkgman toggle")))
 
--- ── Lock screen — hyprlock (SUPER+L) ─────────────────────────────────────
+-- ── Lock screen — Quickshell (SUPER+L) ──────────────────────────────────
 hl.unbind("SUPER + L")
-hl.bind("SUPER + L", hl.dsp.exec_cmd("pidof hyprlock || hyprlock"), { description = "Lock screen" })
+hl.bind("SUPER + L", hl.dsp.exec_cmd(qs("lockscreen lock")), { description = "Lock screen" })
+
+-- Old chord kept as an alias while the new stack settles.
+hl.bind("SUPER + ALT + SHIFT + L", hl.dsp.exec_cmd(qs("lockscreen lock")), { description = "Lock screen (alias)" })
 
 -- ── Release the free-games takeover overlay (SUPER+SHIFT+ESC) ────────────
 hl.bind("SUPER + SHIFT + Escape", hl.dsp.exec_cmd("hacked off"), { description = "Dismiss takeover overlay" })

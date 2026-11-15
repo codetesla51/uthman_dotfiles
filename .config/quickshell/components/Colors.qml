@@ -65,8 +65,10 @@ Item {
     // Matugen REPLACES colors.css (new inode) on every theme switch, which
     // silently breaks FileView's watcher. Poll + force a fresh read by
     // resetting path — cheap for a 300-byte file, bulletproof against replaces.
+    // 250ms: Matugen needs ~0.5s to write colors.css, and this keeps the
+    // palette within a quarter-second of that write instead of a whole one.
     Timer {
-        interval: 1000
+        interval: 250
         running: true
         repeat: true
         triggeredOnStart: true

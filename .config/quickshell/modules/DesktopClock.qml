@@ -41,11 +41,15 @@ PanelWindow {
     readonly property string cacheDir: Quickshell.env("HOME") + "/.cache/wallcut"
     readonly property string cutoutPath: cacheDir + "/" + wallName + ".png"
     readonly property string metaPath: cacheDir + "/" + wallName + ".json"
-    readonly property string blurPath: cacheDir + "/" + wallName + "-blur.jpg"
     function metaFor(p) { return cacheDir + "/" + nameFor(p) + ".json" }
 
     property bool cutoutExists: false
     property bool blurExists: false
+    // Single source of truth for the frost image. Keeping the path and the
+    // existence check in one property avoids a frame where blurSource points
+    // at the new wallpaper's not-yet-written file while blurExists is still
+    // true from the old one.
+    property string blurFile: ""
     property var cutBBox: null
     property var cutGrid: null
     property int gridW: 0
@@ -368,8 +372,8 @@ PanelWindow {
         foreground: root.foreground
         background: root.background
         outline: root.outline
-        blurSource: root.blurExists ? root.blurPath : ""
-        frost: root.blurExists
+        blurSource: root.blurFile
+        frost: root.blurFile !== ""
     }
 
     Subject {
@@ -463,6 +467,9 @@ PanelWindow {
                 var f = line.trim().split("|")
                 if (f.length < 4) return
                 var hadCutout = root.cutoutExists
+                root.blurFile = f[2] === "1"
+                    ? root.cacheDir + "/" + root.nameFor(f[0]) + "-blur.jpg"
+                    : ""
                 root.wallpaperPath = f[0]
                 root.cutoutExists = f[1] === "1"
                 root.blurExists = f[2] === "1"
@@ -562,6 +569,9 @@ PanelWindow {
                 wallB: [wall.opacityB, wall.statusB],
                 cutoutExists: root.cutoutExists,
                 blurExists: root.blurExists,
+                blurStatus: clock2.blurStatus,
+                blurUrl: clock2.blurUrl,
+                glassOn: clock2.glassOn,
                 showClock: root.showClock,
                 showCutout: root.showCutout,
                 ratio: root.overlapRatio(),

@@ -33,6 +33,9 @@ Item {
     property real tiltPivotY: 0
     property string blurSource: ""
     property bool frost: false
+    readonly property int blurStatus: blurImg.status
+    readonly property string blurUrl: blurImg.source.toString()
+    readonly property bool glassOn: frost && blurImg.status === Image.Ready
     // 0 = crisp, 1 = fully soft — used by the desktop-clock reveal
     property real focusBlur: 0
 
@@ -183,7 +186,11 @@ Item {
                 id: blurImg
                 anchors.fill: parent
                 fillMode: Image.PreserveAspectCrop
-                asynchronous: true
+                // Load synchronously: this image feeds a MultiEffect source
+                // texture. An async load can finish after the effect has
+                // captured the source, leaving the tint but no blur behind
+                // it until the shell is restarted.
+                asynchronous: false
                 cache: false
                 source: root.blurSource
             }

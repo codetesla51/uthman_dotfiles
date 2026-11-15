@@ -177,19 +177,21 @@ Item {
         }
 
         // ---- the glass itself: blur + theme tint + sheen, masked in one pass ----
+        // The glass is a visible layer, not an invisible MultiEffect source.
+        // A visible layer is re-rendered when the blur image changes, so a
+        // wallpaper switch can never leave the effect holding the old texture
+        // (or no texture) until the shell restarts.
         Item {
-            id: glassSrc
+            id: glass
             anchors.fill: parent
-            visible: false
+            visible: root.frost
 
             Image {
                 id: blurImg
                 anchors.fill: parent
                 fillMode: Image.PreserveAspectCrop
-                // Load synchronously: this image feeds a MultiEffect source
-                // texture. An async load can finish after the effect has
-                // captured the source, leaving the tint but no blur behind
-                // it until the shell is restarted.
+                // Synchronous: the glass layer is captured right after the
+                // source changes, so the blur must already be decoded.
                 asynchronous: false
                 cache: false
                 source: root.blurSource
@@ -226,17 +228,12 @@ Item {
                     }
                 }
             }
-        }
 
-        MultiEffect {
-            anchors.fill: parent
-            source: glassSrc
-            maskEnabled: true
-            maskSource: maskGlyphs
-            // Keep the frost layer up as soon as a blur asset exists. Hiding
-            // it while the image loads was what dropped the clock back to a
-            // flat fill on a wallpaper switch.
-            visible: root.frost
+            layer.enabled: true
+            layer.effect: MultiEffect {
+                maskEnabled: true
+                maskSource: maskGlyphs
+            }
         }
 
         // glyph alpha only — the mask, not something the eye sees

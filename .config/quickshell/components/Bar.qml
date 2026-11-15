@@ -28,22 +28,6 @@ PanelWindow {
     Colors { id: palette }
 
     NotificationCenter { id: ntfy; colors: palette }
-    Connections {
-        target: ntfy
-        // the bot is the bell now: every non-DND notification makes it alert
-        // and the island answers with a short cinch/pulse. Screenshot-saved
-        // notices are excluded: `shot` fires one per capture, and that pulse
-        // read as the bar reloading.
-        function onNotificationArrived(n) {
-            bot.ping()
-            if (!bar.isScreenshotNotice(n)) bar.pulseIsland()
-        }
-    }
-    function isScreenshotNotice(n) {
-        if (!n) return false
-        var t = (String(n.appName || "") + " " + String(n.summary || "")).toLowerCase()
-        return t.indexOf("screenshot") !== -1 || t.indexOf("shot") !== -1
-    }
 
     // ---- resident panels: every popup stays loaded, zero RAM saved but
     // zero first-paint white flash (the battery lesson — lazy Loaders

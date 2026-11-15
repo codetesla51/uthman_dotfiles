@@ -35,7 +35,7 @@ Item {
     property bool frost: false
     readonly property int blurStatus: blurImg.status
     readonly property string blurUrl: blurImg.source.toString()
-    readonly property bool glassOn: frost && blurImg.status === Image.Ready
+    readonly property bool glassOn: frost
     // 0 = crisp, 1 = fully soft — used by the desktop-clock reveal
     property real focusBlur: 0
 
@@ -233,7 +233,10 @@ Item {
             source: glassSrc
             maskEnabled: true
             maskSource: maskGlyphs
-            visible: root.frost && blurImg.status === Image.Ready
+            // Keep the frost layer up as soon as a blur asset exists. Hiding
+            // it while the image loads was what dropped the clock back to a
+            // flat fill on a wallpaper switch.
+            visible: root.frost
         }
 
         // glyph alpha only — the mask, not something the eye sees
@@ -251,7 +254,9 @@ Item {
             layer.enabled: true
         }
 
-        // fallback fill when there is no blur asset yet, plus the 1px inner edge
+        // 1px inner edge only — the frost layer owns the fill. No solid
+        // fallback: if the blur asset is missing the digits stay as an
+        // outline until the asset lands.
         Glyphs {
             id: visibleGlyphs
             anchors.fill: parent
@@ -261,9 +266,7 @@ Item {
             shiftX: root.shiftX
             shiftY: root.shiftY
             fs: root.fs
-            fill: (root.frost && blurImg.status === Image.Ready)
-                  ? "transparent"
-                  : Qt.rgba(root.primary.r, root.primary.g, root.primary.b, 0.22)
+            fill: "transparent"
             stroke: Qt.rgba(root.primary.r, root.primary.g, root.primary.b, 0.95)
             outlined: true
         }

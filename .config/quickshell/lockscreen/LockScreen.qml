@@ -20,6 +20,8 @@ Scope {
     property bool locked: false
     property bool unlocking: false
     property int secondsLeft: -1
+    // Set when a LockSurface confirms the plate is actually on screen.
+    property bool lockSurfaceReady: false
 
     property var auth: PamAuth {
         config: root.config
@@ -31,8 +33,15 @@ Scope {
         console.log("[lockscreen] lock")
         root.unlocking = false
         root.secondsLeft = -1
+        root.lockSurfaceReady = false
         root.auth.reset()
         root.locked = true
+        surfaceWatchdog.restart()
+    }
+
+    function markSurfaceReady() {
+        root.lockSurfaceReady = true
+        surfaceWatchdog.stop()
     }
 
     function lockTimed(seconds) {
@@ -59,9 +68,11 @@ Scope {
         console.log("[lockscreen] finish unlock")
         countdown.stop()
         unlockTimer.stop()
+        surfaceWatchdog.stop()
         root.secondsLeft = -1
         root.unlocking = false
         root.locked = false
+        root.lockSurfaceReady = false
         root.auth.reset()
     }
 
@@ -73,6 +84,8 @@ Scope {
         if (!root.locked) {
             countdown.stop()
             unlockTimer.stop()
+            surfaceWatchdog.stop()
+            root.lockSurfaceReady = false
             root.secondsLeft = -1
             root.unlocking = false
         }
@@ -83,6 +96,19 @@ Scope {
         interval: (root.theme ? root.theme.lockOutMs : 220) + 200
         repeat: false
         onTriggered: root.finishUnlock()
+    }
+
+    // Fail-open guard: a broken lock surface must never strand the session.
+    // If no LockSurface reports that it is visibly on screen, release it.
+    Timer {
+        id: surfaceWatchdog
+        interval: 8000
+        repeat: false
+        onTriggered: {
+            if (!root.locked || root.lockSurfaceReady) return
+            console.warn("[lockscreen] lock surface never became visible — unlocking")
+            root.finishUnlock()
+        }
     }
 
     Timer {
@@ -127,6 +153,7 @@ Scope {
                     onSubmitted: function (pw) { root.submit(pw) }
                     // The timer below is the ceiling; this is the normal path.
                     onUnlockAnimationFinished: root.finishUnlock()
+                    onReady: root.markSurfaceReady()
                 }
             }
         }

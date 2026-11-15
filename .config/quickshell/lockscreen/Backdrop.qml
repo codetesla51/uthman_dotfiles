@@ -18,6 +18,9 @@ Item {
     // Animated by the lock surface: 0 while the desktop is still visible,
     // theme.backdropDim once the lock has settled.
     property real dim: 0
+    // Slow push-in on the wallpaper. The plate moves against it, so the
+    // lock reads as depth rather than one flat card fading in.
+    property real zoom: 1
 
     readonly property string chosen: {
         if (!root.config) return ""
@@ -41,6 +44,8 @@ Item {
         asynchronous: true
         cache: true
         visible: source !== "" && status === Image.Ready
+        scale: root.zoom
+        transformOrigin: Item.Center
     }
 
     Rectangle {
@@ -62,6 +67,8 @@ Item {
             fillMode: Image.PreserveAspectCrop
             asynchronous: true
             cache: true
+            scale: root.zoom
+            transformOrigin: Item.Center
             onStatusChanged: if (status === Image.Ready) plateTexture.scheduleUpdate()
         }
     }

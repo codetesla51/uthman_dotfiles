@@ -114,14 +114,18 @@ QtObject {
     readonly property int columnWidth: 480
 
     // ── motion ───────────────────────────────────────────────────────────
-    // One entrance on lock, one exit on unlock, and the minute tick. No
-    // idle animation, so the lock costs nothing while it sits there.
-    readonly property int lockInMs: 620
-    readonly property int lockOutMs: 420
-    readonly property real lockInScale: 0.92
-    readonly property real lockOutScale: 0.97
-    readonly property real introShift: 32
-    readonly property real outroShift: 24
+    // Lock: the plate arrives over 720ms while the wallpaper pushes in and
+    // the content assembles in a 1150ms cascade. Unlock: everything lets go
+    // in 480ms on an accelerating curve. No idle motion after that, so the
+    // lock costs nothing while it sits there.
+    readonly property int lockInMs: 720
+    readonly property int lockOutMs: 480
+    readonly property int lockRevealMs: 1150
+    readonly property real lockInScale: 0.90
+    readonly property real lockOutScale: 1.022
+    readonly property real introShift: 44
+    readonly property real outroShift: 44
+    readonly property real backdropZoom: 1.035
     readonly property int refocusDelayMs: 80
     readonly property int minuteTickMs: 260
 

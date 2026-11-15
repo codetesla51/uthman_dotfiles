@@ -17,14 +17,41 @@ Rectangle {
     property int autoUnlockIn: -1
 
     signal submitted(string password)
+    signal introFinished()
+
+    // 0 → 1 while the plate assembles. Every region takes its own slice of
+    // this timeline, so the screen builds itself instead of fading in as one
+    // flat card: clock, then date, then the right column, then the bottom
+    // row, and the password last.
+    property real reveal: 0
+    readonly property int introMs: root.theme && root.theme.lockRevealMs > 0
+        ? root.theme.lockRevealMs : 1150
+
+    function phase(start, end) {
+        var span = Math.max(0.0001, end - start)
+        var t = (root.reveal - start) / span
+        if (t <= 0) return 0
+        if (t >= 1) return 1
+        return t * t * (3 - 2 * t)
+    }
+
+    function drift(start, end, distance) {
+        return (1 - root.phase(start, end)) * distance
+    }
 
     implicitWidth: root.theme ? root.theme.boxWidth : 1180
     implicitHeight: root.theme ? root.theme.boxHeight : 930
     radius: root.theme ? root.theme.boxRadius : 18
     color: root.theme ? root.theme.plate : "#85131313"
     border.width: 1
-    border.color: root.theme ? root.theme.plateBorder : "#383838"
-    Behavior on color { ColorAnimation { duration: 240 } }
+    // The edge catches the light on arrival and settles to its resting
+    // weight, which separates the plate from the wallpaper as it fades up.
+    border.color: root.theme
+        ? Qt.rgba(root.theme.plateBorder.r, root.theme.plateBorder.g,
+                  root.theme.plateBorder.b,
+                  Math.min(1, root.theme.plateBorder.a
+                      + 0.22 * (1 - root.phase(0.0, 0.55))))
+        : "#383838"
 
     // Top-half light catch — the difference between "dark card" and glass.
     Rectangle {
@@ -44,6 +71,47 @@ Rectangle {
         }
     }
 
+    // One soft light sweep crosses the glass while the plate is arriving.
+    // It is inset from the rounded edge and clipped, so it never paints the
+    // plate's square corners.
+    Item {
+        id: sweepClip
+        anchors.fill: parent
+        anchors.margins: root.radius
+        clip: true
+
+        Rectangle {
+            id: sweep
+            width: root.width * 0.46
+            height: root.height * 1.7
+            y: -root.height * 0.35
+            x: -sweep.width * 1.4
+            rotation: 12
+            opacity: 0
+            gradient: Gradient {
+                GradientStop {
+                    position: 0.0
+                    color: "transparent"
+                }
+                GradientStop {
+                    position: 0.47
+                    color: root.theme
+                        ? root.theme.alpha(root.theme.foreground, 0.11)
+                        : "#1cffffff"
+                }
+                GradientStop {
+                    position: 0.53
+                    color: root.theme
+                        ? root.theme.alpha(root.theme.foreground, 0.11)
+                        : "#1cffffff"
+                }
+                GradientStop {
+                    position: 1.0
+                    color: "transparent"
+                }
+            }
+        }
+    }
     readonly property int pad: root.theme ? root.theme.boxPadding : 52
     readonly property int bodyY: root.pad
     readonly property int bottomRuleY: root.height - (root.theme ? root.theme.bottomReserved : 112)
@@ -69,6 +137,8 @@ Rectangle {
         width: root.rightW
         theme: root.theme
         source: weatherSource
+        opacity: root.phase(0.14, 0.54)
+        transform: Translate { y: root.drift(0.14, 0.54, 18) }
     }
 
     // ── left top: clock, then the date and quote along its baseline ──────
@@ -82,6 +152,8 @@ Rectangle {
         Clock {
             id: clock
             theme: root.theme
+            opacity: root.phase(0.02, 0.44)
+            transform: Translate { y: root.drift(0.02, 0.44, 26) }
         }
 
         DateQuote {
@@ -91,6 +163,8 @@ Rectangle {
             anchors.topMargin: 34
             theme: root.theme
             config: root.config
+            opacity: root.phase(0.10, 0.50)
+            transform: Translate { y: root.drift(0.10, 0.50, 16) }
         }
     }
 
@@ -101,6 +175,8 @@ Rectangle {
         width: root.rightW
         height: root.theme ? root.theme.uptimeHeight : 220
         theme: root.theme
+        opacity: root.phase(0.18, 0.58)
+        transform: Translate { y: root.drift(0.18, 0.58, 24) }
     }
 
     SystemStats {
@@ -111,6 +187,8 @@ Rectangle {
         width: root.rightW
         height: root.theme ? root.theme.statsHeight : 232
         theme: root.theme
+        opacity: root.phase(0.30, 0.72)
+        transform: Translate { y: root.drift(0.30, 0.72, 22) }
     }
 
     // ── the rules that make the two-row grid read as a grid ──────────────
@@ -118,14 +196,14 @@ Rectangle {
         x: root.rightX - (root.theme ? root.theme.columnGap : 48) / 2
         y: root.bodyY
         width: 1
-        height: root.bodyH
+        height: root.bodyH * root.phase(0.22, 0.60)
         color: root.theme ? root.theme.hairlineSoft : "#111111"
     }
 
     Rectangle {
         x: root.pad
         y: root.sectionRuleY
-        width: root.width - root.pad * 2
+        width: (root.width - root.pad * 2) * root.phase(0.34, 0.70)
         height: 1
         color: root.theme ? root.theme.hairline : "#212121"
     }
@@ -138,6 +216,8 @@ Rectangle {
         height: root.bottomBlockH
         theme: root.theme
         config: root.config
+        opacity: root.phase(0.38, 0.80)
+        transform: Translate { y: root.drift(0.38, 0.80, 20) }
     }
 
     Notifications {
@@ -147,13 +227,15 @@ Rectangle {
         height: root.bottomBlockH
         theme: root.theme
         items: root.notifications
+        opacity: root.phase(0.44, 0.86)
+        transform: Translate { y: root.drift(0.44, 0.86, 20) }
     }
 
     // ── footer: one line, one input ──────────────────────────────────────
     Rectangle {
         x: root.pad
         y: root.bottomRuleY
-        width: root.width - root.pad * 2
+        width: (root.width - root.pad * 2) * root.phase(0.50, 0.78)
         height: 1
         color: root.theme ? root.theme.hairline : "#212121"
     }
@@ -169,6 +251,8 @@ Rectangle {
         message: root.authMessage
         headline: root.authState === "error" ? "Authentication error" : ""
         onSubmitted: function (pw) { root.submitted(pw) }
+        opacity: root.phase(0.56, 0.94)
+        transform: Translate { y: root.drift(0.56, 0.94, 14) }
     }
 
     // Footer: the message sits in the empty space on the input's left,
@@ -180,6 +264,8 @@ Rectangle {
         y: root.bottomRuleY + (root.theme ? root.theme.passwordTopGap : 28)
         width: root.width - root.pad * 2
         height: root.theme ? root.theme.passwordRowHeight : 52
+        opacity: root.phase(0.60, 0.98)
+        transform: Translate { y: root.drift(0.60, 0.98, 10) }
 
         Column {
             id: footerMessage
@@ -267,5 +353,60 @@ Rectangle {
 
     function focusPassword() {
         password.focusInput()
+    }
+
+    // The cascade driver. Linear on purpose: each region maps its own slice
+    // of `reveal` through `phase()`, so the easing lives with the region and
+    // the sections overlap instead of firing one after another.
+    NumberAnimation {
+        id: revealAnim
+        target: root
+        property: "reveal"
+        from: 0
+        to: 1
+        duration: root.introMs
+        easing.type: Easing.Linear
+        onFinished: root.introFinished()
+    }
+
+    // One crossing of light, timed to pass over the clock and land on the
+    // footer just as the password appears.
+    SequentialAnimation {
+        id: sweepAnim
+        PauseAnimation { duration: 140 }
+        ParallelAnimation {
+            NumberAnimation {
+                target: sweep
+                property: "x"
+                from: -sweep.width * 1.4
+                to: root.width + sweep.width * 0.4
+                duration: 1080
+                easing.type: Easing.Bezier
+                easing.bezierCurve: [0.4, 0, 0.25, 1]
+            }
+            SequentialAnimation {
+                NumberAnimation {
+                    target: sweep
+                    property: "opacity"
+                    from: 0
+                    to: 1
+                    duration: 220
+                    easing.type: Easing.OutCubic
+                }
+                PauseAnimation { duration: 560 }
+                NumberAnimation {
+                    target: sweep
+                    property: "opacity"
+                    to: 0
+                    duration: 300
+                    easing.type: Easing.InCubic
+                }
+            }
+        }
+    }
+
+    Component.onCompleted: {
+        revealAnim.start()
+        sweepAnim.start()
     }
 }

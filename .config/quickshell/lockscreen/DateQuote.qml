@@ -22,13 +22,14 @@ Column {
             theme: root.theme
             glyph: ""
             size: 13
-            tint: root.theme ? root.theme.quiet : "#565656"
+            tint: root.theme
+                ? root.theme.alpha(root.theme.tertiary, 0.7) : "#565656"
         }
 
         Text {
             anchors.verticalCenter: parent.verticalCenter
             text: Qt.formatDateTime(root.now, "dddd, d MMMM")
-            color: root.theme ? root.theme.secondary : "#c6c6c6"
+            color: root.theme ? root.theme.primary : "#ffffff"
             font.family: root.theme ? root.theme.uiFamily : "FiraCode Nerd Font"
             font.pixelSize: root.theme ? root.theme.dateSize : 15
             font.letterSpacing: 0.4

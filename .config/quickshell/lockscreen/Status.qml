@@ -68,7 +68,9 @@ Item {
                 text: root.batteryPercent + "%"
                 color: root.batteryPercent <= 15
                     ? (root.theme ? root.theme.error : "#ffb4ab")
-                    : (root.theme ? root.theme.muted : "#8c8c8c")
+                    : (root.charging
+                        ? (root.theme ? root.theme.primary : "#ffffff")
+                        : (root.theme ? root.theme.muted : "#8c8c8c"))
                 font.family: root.theme ? root.theme.uiFamily : "FiraCode Nerd Font"
                 font.pixelSize: root.theme ? root.theme.smallSize : 10
                 font.letterSpacing: 0.3
@@ -83,7 +85,9 @@ Item {
                 glyph: root.wifiUp ? "" : "󰖪"
                 size: 13
                 tint: root.wifiUp
-                    ? (root.theme ? root.theme.muted : "#8c8c8c")
+                    ? (root.theme
+                        ? root.theme.alpha(root.theme.tertiary, 0.9)
+                        : "#72d2fa")
                     : (root.theme ? root.theme.quiet : "#565656")
             }
 
@@ -93,7 +97,9 @@ Item {
                     ? (root.wifiName !== "" ? root.wifiName : "wifi")
                     : "off"
                 color: root.wifiUp
-                    ? (root.theme ? root.theme.muted : "#8c8c8c")
+                    ? (root.theme
+                        ? root.theme.alpha(root.theme.tertiary, 0.88)
+                        : "#72d2fa")
                     : (root.theme ? root.theme.quiet : "#565656")
                 font.family: root.theme ? root.theme.uiFamily : "FiraCode Nerd Font"
                 font.pixelSize: root.theme ? root.theme.smallSize : 10

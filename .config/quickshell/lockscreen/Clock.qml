@@ -13,6 +13,14 @@ Item {
     implicitWidth: clockText.implicitWidth
     implicitHeight: clockText.implicitHeight
 
+    // Hours keep the paper-white ink; the minutes take the live primary so
+    // the headline itself carries one system colour instead of reading as
+    // monochrome. Both lines share the same font and line height.
+    readonly property color hoursColor: root.theme
+        ? root.theme.foreground : "#fedad7"
+    readonly property color minutesColor: root.theme
+        ? root.theme.primary : "#ffffff"
+
     function update() {
         var d = new Date()
         root.hours = ("0" + d.getHours()).slice(-2)
@@ -22,8 +30,11 @@ Item {
     Text {
         id: clockText
         anchors.left: parent.left
-        text: root.hours + "\n" + root.minutes
-        color: root.theme ? root.theme.foreground : "#fedad7"
+        text: "<font color=\"" + root.hoursColor + "\">" + root.hours
+            + "</font><br><font color=\"" + root.minutesColor + "\">"
+            + root.minutes + "</font>"
+        textFormat: Text.StyledText
+        color: root.hoursColor
         font.family: root.theme ? root.theme.clockFamily : "Iceberg"
         font.pixelSize: root.theme ? root.theme.clockSize : 158
         font.weight: Font.Light

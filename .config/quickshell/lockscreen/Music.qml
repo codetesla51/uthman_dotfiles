@@ -65,7 +65,8 @@ Item {
             theme: root.theme
             glyph: ""
             size: 12
-            tint: root.theme ? root.theme.muted : "#8c8c8c"
+            tint: root.theme
+                ? root.theme.alpha(root.theme.primary, 0.8) : "#8c8c8c"
         }
 
         Text {

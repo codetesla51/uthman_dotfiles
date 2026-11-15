@@ -64,7 +64,7 @@ Item {
                 theme: root.theme
                 glyph: root.conditionGlyph
                 size: 16
-                tint: root.theme ? root.theme.secondary : "#c6c6c6"
+                tint: root.theme ? root.theme.tertiary : "#72d2fa"
             }
 
             Text {
@@ -81,7 +81,8 @@ Item {
                 height: 24
                 verticalAlignment: Text.AlignVCenter
                 text: root.source ? root.source.condition : ""
-                color: root.theme ? root.theme.secondary : "#c6c6c6"
+                color: root.theme
+                    ? root.theme.alpha(root.theme.tertiary, 0.92) : "#c6c6c6"
                 font.family: root.theme ? root.theme.uiFamily : "FiraCode Nerd Font"
                 font.pixelSize: root.theme ? root.theme.smallSize : 11
                 font.letterSpacing: 0.2

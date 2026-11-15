@@ -40,7 +40,8 @@ Item {
             theme: root.theme
             glyph: ""
             size: 12
-            tint: root.theme ? root.theme.muted : "#8c8c8c"
+            tint: root.theme
+                ? root.theme.alpha(root.theme.tertiary, 0.75) : "#8c8c8c"
         }
 
         Text {
@@ -61,7 +62,7 @@ Item {
         anchors.top: heading.bottom
         anchors.topMargin: 34
         text: root.value
-        color: root.theme ? root.theme.foreground : "#e2e2e2"
+        color: root.theme ? root.theme.tertiary : "#72d2fa"
         font.family: root.theme ? root.theme.clockFamily : "Iceberg"
         font.pixelSize: root.days >= 10
             ? (root.theme ? root.theme.uptimeValueSize * 0.82 : 75)

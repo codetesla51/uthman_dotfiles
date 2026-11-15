@@ -16,8 +16,17 @@ Item {
     property real glassOpacity: 1
     property bool glassLive: true
     // Animated by the lock surface: 0 while the desktop is still visible,
-    // theme.backdropDim once the lock has settled.
+    // theme.backdropDim once the lock has settled. `scrim` normalises that
+    // into 0..1 so every veil layer fades in together.
     property real dim: 0
+    readonly property real scrim: root.theme && root.theme.backdropDim > 0
+        ? Math.max(0, Math.min(1, root.dim / root.theme.backdropDim)) : 0
+    readonly property color veilColor: root.theme
+        ? root.theme.background : "#131313"
+
+    function shade(a) {
+        return Qt.rgba(root.veilColor.r, root.veilColor.g, root.veilColor.b, a)
+    }
     // Slow push-in on the wallpaper. The plate moves against it, so the
     // lock reads as depth rather than one flat card fading in.
     property real zoom: 1
@@ -48,10 +57,47 @@ Item {
         transformOrigin: Item.Center
     }
 
+    // SDDM veil, rebuilt in three layers: a thin flat wash so the corners
+    // never look untouched, a left-weighted horizontal darkening behind the
+    // clock, and a bottom vignette that sinks the lower edge of the art.
     Rectangle {
         anchors.fill: parent
-        color: root.theme ? root.theme.background : "#131313"
-        opacity: root.dim
+        color: root.veilColor
+        opacity: root.scrim * (root.theme ? root.theme.wallBaseWash : 0.10)
+    }
+
+    Rectangle {
+        anchors.fill: parent
+        opacity: root.scrim
+        gradient: Gradient {
+            orientation: Gradient.Horizontal
+            GradientStop {
+                position: 0.0
+                color: root.shade(root.theme ? root.theme.wallVeilLeft : 0.68)
+            }
+            GradientStop {
+                position: 0.58
+                color: root.shade(root.theme ? root.theme.wallVeilMiddle : 0.34)
+            }
+            GradientStop {
+                position: 1.0
+                color: root.shade(root.theme ? root.theme.wallVeilRight : 0.50)
+            }
+        }
+    }
+
+    Rectangle {
+        anchors.fill: parent
+        opacity: root.scrim
+        gradient: Gradient {
+            orientation: Gradient.Vertical
+            GradientStop { position: 0.0; color: root.shade(0.0) }
+            GradientStop { position: 0.38; color: root.shade(0.0) }
+            GradientStop {
+                position: 1.0
+                color: root.shade(root.theme ? root.theme.wallVignette : 0.62)
+            }
+        }
     }
 
     // The wallpaper again, offscreen, as the blur's source. hideSource keeps

@@ -67,8 +67,18 @@ Item {
             width: root.theme ? root.theme.lyricsRailWidth : 2
             height: 24
             radius: width / 2
-            color: root.theme ? root.theme.primary : "#ffffff"
-            opacity: 0.8
+            opacity: 0.85
+            gradient: Gradient {
+                orientation: Gradient.Vertical
+                GradientStop {
+                    position: 0.0
+                    color: root.theme ? root.theme.primary : "#ffffff"
+                }
+                GradientStop {
+                    position: 1.0
+                    color: root.theme ? root.theme.tertiary : "#c6c6c6"
+                }
+            }
         }
 
         Column {
@@ -97,7 +107,7 @@ Item {
                 height: 24
                 verticalAlignment: Text.AlignVCenter
                 text: root.activeText
-                color: root.theme ? root.theme.foreground : "#e2e2e2"
+                color: root.theme ? root.theme.primary : "#ffffff"
                 font.family: root.theme ? root.theme.uiFamily : "FiraCode Nerd Font"
                 font.pixelSize: root.theme ? root.theme.bodySize + 1 : 15
                 font.weight: Font.DemiBold

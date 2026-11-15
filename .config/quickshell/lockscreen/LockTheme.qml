@@ -23,7 +23,7 @@ QtObject {
     readonly property color secondary: root.palette ? root.palette.secondary : "#c6c6c6"
     readonly property color tertiary: root.palette ? root.palette.tertiary : "#e2e2e2"
     readonly property color error: root.palette ? root.palette.error : "#ffb4ab"
-    readonly property color success: root.palette ? root.palette.secondary : "#c6c6c6"
+    readonly property color success: root.palette ? root.palette.tertiary : "#c6c6c6"
     readonly property color outline: root.palette ? root.palette.outline : "#969696"
 
     readonly property color muted: root.alpha(root.foreground, 0.62)
@@ -53,8 +53,17 @@ QtObject {
     readonly property color hairlineSoft: root.alpha(root.foreground, 0.10)
     readonly property color fieldLine: root.alpha(root.foreground, 0.32)
     readonly property color fieldLineFocus: root.alpha(root.primary, 0.85)
-    readonly property color artBorder: root.alpha(root.foreground, 0.14)
+    readonly property color artBorder: root.alpha(root.primary, 0.22)
+    // The lock-in animation drives `dim` from 0 to backdropDim; Backdrop uses
+    // that ratio to fade the whole SDDM-style veil in as one layer.
     readonly property real backdropDim: 0.26
+    // Left-weighted wash + bottom vignette borrowed from the SDDM theme. Each
+    // number is the background colour's alpha at that gradient stop.
+    readonly property real wallBaseWash: 0.10
+    readonly property real wallVeilLeft: 0.68
+    readonly property real wallVeilMiddle: 0.34
+    readonly property real wallVeilRight: 0.50
+    readonly property real wallVignette: 0.62
 
     // Compatibility aliases kept for old preview paths.
     readonly property color surface: root.plate
@@ -102,10 +111,8 @@ QtObject {
     readonly property int uptimeHeight: 220
     readonly property int statsHeight: 232
     readonly property int statsBottomGap: 48
-    readonly property int meterHeight: 86
-    readonly property int meterTopMargin: 18
-    readonly property int meterGap: 20
-    readonly property int meterHeaderHeight: 16
+    readonly property int statsHeaderHeight: 24
+    readonly property int statsChartTopGap: 10
     readonly property int weatherHeight: 24
 
     // Kept because LockSurface derives its fit from the box.
@@ -114,19 +121,18 @@ QtObject {
     readonly property int columnWidth: 480
 
     // ── motion ───────────────────────────────────────────────────────────
-    // Lock: the plate arrives over 720ms while the wallpaper pushes in and
-    // the content assembles in a 1150ms cascade. Unlock: everything lets go
-    // in 480ms on an accelerating curve. No idle motion after that, so the
-    // lock costs nothing while it sits there.
-    readonly property int lockInMs: 720
-    readonly property int lockOutMs: 480
-    readonly property int lockRevealMs: 1150
-    readonly property real lockInScale: 0.90
-    readonly property real lockOutScale: 1.022
-    readonly property real introShift: 44
-    readonly property real outroShift: 44
-    readonly property real backdropZoom: 1.035
-    readonly property int refocusDelayMs: 80
+    // Lock: the plate lands in 520ms while the content assembles in an
+    // 860ms cascade. Unlock: everything lets go in 340ms. No idle motion
+    // after that, so the lock costs nothing while it sits there.
+    readonly property int lockInMs: 520
+    readonly property int lockOutMs: 340
+    readonly property int lockRevealMs: 860
+    readonly property real lockInScale: 0.94
+    readonly property real lockOutScale: 1.016
+    readonly property real introShift: 34
+    readonly property real outroShift: 34
+    readonly property real backdropZoom: 1.025
+    readonly property int refocusDelayMs: 60
     readonly property int minuteTickMs: 260
 
     readonly property string passwordIndicator: "echo"

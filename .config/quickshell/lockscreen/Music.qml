@@ -139,42 +139,6 @@ Item {
             source: root.art
         }
 
-        // Four live bars, sitting right beside the cover. Paused players
-        // leave a dim row of dots instead of a frozen spectrum.
-        Item {
-            id: artViz
-            width: 16
-            height: root.theme ? root.theme.artSize : 60
-            anchors.verticalCenter: parent.verticalCenter
-
-            Row {
-                anchors.horizontalCenter: parent.horizontalCenter
-                anchors.bottom: parent.bottom
-                spacing: 2
-
-                Repeater {
-                    model: root.vizBars
-
-                    delegate: Rectangle {
-                        required property int index
-                        width: 2.5
-                        radius: width / 2
-                        height: Math.max(3, artViz.height
-                            * (root.playing ? root.vizLevel(index) : 0.05))
-                        anchors.bottom: parent.bottom
-                        color: root.theme
-                            ? root.mix(root.theme.primary, root.theme.tertiary,
-                                index / Math.max(1, root.vizBars - 1))
-                            : "#ffffff"
-                        opacity: root.playing ? 0.95 : 0.32
-                        Behavior on height {
-                            NumberAnimation { duration: 60; easing.type: Easing.OutQuad }
-                        }
-                    }
-                }
-            }
-        }
-
         Column {
             width: Math.max(0, parent.width
                 - (root.theme ? root.theme.artSize : 60) - artViz.width - 28)
@@ -206,6 +170,42 @@ Item {
                 font.family: root.theme ? root.theme.uiFamily : "FiraCode Nerd Font"
                 font.pixelSize: root.theme ? root.theme.tinySize : 9
                 elide: Text.ElideRight
+            }
+        }
+
+        // Tiny equalizer pinned to the far right, after the track text.
+        // Paused players leave a dim row of dots instead of a frozen spectrum.
+        Item {
+            id: artViz
+            width: 13
+            height: 16
+            anchors.verticalCenter: parent.verticalCenter
+
+            Row {
+                anchors.horizontalCenter: parent.horizontalCenter
+                anchors.bottom: parent.bottom
+                spacing: 1.5
+
+                Repeater {
+                    model: root.vizBars
+
+                    delegate: Rectangle {
+                        required property int index
+                        width: 2
+                        radius: width / 2
+                        height: Math.max(2, artViz.height
+                            * (root.playing ? root.vizLevel(index) : 0.08))
+                        anchors.bottom: parent.bottom
+                        color: root.theme
+                            ? root.mix(root.theme.primary, root.theme.tertiary,
+                                index / Math.max(1, root.vizBars - 1))
+                            : "#ffffff"
+                        opacity: root.playing ? 0.95 : 0.32
+                        Behavior on height {
+                            NumberAnimation { duration: 60; easing.type: Easing.OutQuad }
+                        }
+                    }
+                }
             }
         }
     }

@@ -1,4 +1,5 @@
 import Quickshell
+import Quickshell.Io
 import Quickshell.Services.Mpris
 import QtQuick
 import "sources"
@@ -29,11 +30,41 @@ Item {
 
     property real position: 0
 
+    // Small equalizer beside the artwork. The lock only needs four bars, so
+    // cava runs a light 8-bar / 30fps config and the values are averaged into
+    // the four bars here.
+    readonly property int vizBars: 4
+    property var vizLevels: []
+
     implicitHeight: root.theme ? root.theme.musicHeight : 158
 
     function refreshPosition() {
         var p = root.player
         root.position = p ? (p.position || 0) : 0
+    }
+
+    function mix(a, b, t) {
+        return Qt.rgba(a.r + (b.r - a.r) * t,
+            a.g + (b.g - a.g) * t,
+            a.b + (b.b - a.b) * t, 1)
+    }
+
+    function vizApply(line) {
+        var parts = line.trim().split(";")
+        if (parts.length < 8) return
+        var out = []
+        for (var i = 0; i < root.vizBars; i++) {
+            var a = Math.floor(i * 8 / root.vizBars)
+            var b = Math.max(a + 1, Math.floor((i + 1) * 8 / root.vizBars))
+            var sum = 0
+            for (var j = a; j < b; j++) sum += parseInt(parts[j]) || 0
+            out.push(Math.max(0, Math.min(1, sum / (b - a) / 100)))
+        }
+        root.vizLevels = out
+    }
+
+    function vizLevel(i) {
+        return i >= 0 && i < root.vizLevels.length ? root.vizLevels[i] : 0
     }
 
     onPlayerChanged: refreshPosition()
@@ -43,6 +74,17 @@ Item {
         repeat: true
         running: root.playing
         onTriggered: root.refreshPosition()
+    }
+
+    Process {
+        id: vizProc
+        command: ["cava", "-p", Quickshell.env("HOME")
+            + "/.config/quickshell/scripts/cava-lock.conf"]
+        running: root.playing
+        stdout: SplitParser {
+            splitMarker: "\n"
+            onRead: function(line) { root.vizApply(line) }
+        }
     }
 
     LyricsSource {
@@ -97,8 +139,45 @@ Item {
             source: root.art
         }
 
+        // Four live bars, sitting right beside the cover. Paused players
+        // leave a dim row of dots instead of a frozen spectrum.
+        Item {
+            id: artViz
+            width: 16
+            height: root.theme ? root.theme.artSize : 60
+            anchors.verticalCenter: parent.verticalCenter
+
+            Row {
+                anchors.horizontalCenter: parent.horizontalCenter
+                anchors.bottom: parent.bottom
+                spacing: 2
+
+                Repeater {
+                    model: root.vizBars
+
+                    delegate: Rectangle {
+                        required property int index
+                        width: 2.5
+                        radius: width / 2
+                        height: Math.max(3, artViz.height
+                            * (root.playing ? root.vizLevel(index) : 0.05))
+                        anchors.bottom: parent.bottom
+                        color: root.theme
+                            ? root.mix(root.theme.primary, root.theme.tertiary,
+                                index / Math.max(1, root.vizBars - 1))
+                            : "#ffffff"
+                        opacity: root.playing ? 0.95 : 0.32
+                        Behavior on height {
+                            NumberAnimation { duration: 60; easing.type: Easing.OutQuad }
+                        }
+                    }
+                }
+            }
+        }
+
         Column {
-            width: parent.width - (root.theme ? root.theme.artSize : 52) - 14
+            width: Math.max(0, parent.width
+                - (root.theme ? root.theme.artSize : 60) - artViz.width - 28)
             anchors.verticalCenter: parent.verticalCenter
             spacing: 2
 

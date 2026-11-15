@@ -371,16 +371,19 @@ Rectangle {
 
     // One crossing of light, timed to pass over the clock and land on the
     // footer just as the password appears.
+    // The sweep is derived from the same reveal clock as the content, so
+    // shortening or lengthening the intro can never leave the light pass
+    // arriving after the password has already landed.
     SequentialAnimation {
         id: sweepAnim
-        PauseAnimation { duration: 140 }
+        PauseAnimation { duration: Math.round(root.introMs * 0.10) }
         ParallelAnimation {
             NumberAnimation {
                 target: sweep
                 property: "x"
                 from: -sweep.width * 1.4
                 to: root.width + sweep.width * 0.4
-                duration: 1080
+                duration: Math.round(root.introMs * 0.84)
                 easing.type: Easing.Bezier
                 easing.bezierCurve: [0.4, 0, 0.25, 1]
             }
@@ -390,15 +393,15 @@ Rectangle {
                     property: "opacity"
                     from: 0
                     to: 1
-                    duration: 220
+                    duration: Math.round(root.introMs * 0.16)
                     easing.type: Easing.OutCubic
                 }
-                PauseAnimation { duration: 560 }
+                PauseAnimation { duration: Math.round(root.introMs * 0.44) }
                 NumberAnimation {
                     target: sweep
                     property: "opacity"
                     to: 0
-                    duration: 300
+                    duration: Math.round(root.introMs * 0.20)
                     easing.type: Easing.InCubic
                 }
             }

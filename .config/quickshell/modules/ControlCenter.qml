@@ -728,9 +728,10 @@ FloatingWindow {
             ColumnLayout {
                 id: bottomColumn
                 Layout.fillWidth: true
-                Layout.minimumHeight: 260
-                Layout.preferredHeight: 260
-                Layout.maximumHeight: 260
+                Layout.topMargin: 10
+                Layout.minimumHeight: 250
+                Layout.preferredHeight: 250
+                Layout.maximumHeight: 250
                 spacing: 14
 
                 RowLayout {

@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# Cut the current wallpaper for the desktop clock: blur plus subject cutout.
+set -uo pipefail
+
+wall="$(readlink -f "$HOME/.config/theme/current/background" 2>/dev/null || true)"
+[[ -z "$wall" ]] && wall="$(readlink -f "$HOME/.config/omarchy/current/background" 2>/dev/null || true)"
+
+if [[ ! -f "$wall" ]]; then
+    notify-send "Wallcut" "No current wallpaper found"
+    exit 1
+fi
+
+name="$(basename "$wall")"
+notify-send "Wallcut" "Cutting $name…"
+
+if "$HOME/.config/quickshell/scripts/wallcut.sh" --force "$wall" >/tmp/wallcut-current.log 2>&1; then
+    notify-send "Wallcut" "Done: $name"
+else
+    notify-send "Wallcut" "Failed: $name — see /tmp/wallcut-current.log"
+    exit 1
+fi

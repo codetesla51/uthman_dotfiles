@@ -60,6 +60,9 @@ fi
 getTheme "$IMAGE" &
 wait
 
+# Desktop clock glass: cut the new wallpaper in the background (blur + subject).
+setsid "$HOME/.config/quickshell/scripts/wallcut.sh" "$IMAGE" >/dev/null 2>&1 &
+
 # Nudge filemanager (watches theme.name) to hot-reload its matugen colors.
 mkdir -p ~/.local/state/omarchy/current
 basename "$IMAGE" > ~/.local/state/omarchy/current/theme.name

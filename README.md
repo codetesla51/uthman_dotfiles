@@ -39,13 +39,14 @@ A wallpaper change is the clearest way to see the whole chain move:
 set-wallpaper ~/Pictures/new.jpg
 ```
 
-That one command does five things in order:
+That one command does six things in order:
 
 1. Symlinks the image to `~/.config/theme/current/background`, which is what everything else treats as "current wallpaper".
-2. Hands it to `awww` (or `swww`) for a 0.7s wave transition, so the change is visible before any color moves.
+2. Hands it to `awww` (or `swww`) with no transition; the desktop shell owns the visible crossfade.
 3. Calls `getTheme`, which runs `matugen image` to build a Material You palette.
 4. Regenerates the cursor theme through `matugen-cursor`, round-tripping it so Hyprland drops its cache and no logout is needed.
-5. Writes the basename to `~/.local/state/omarchy/current/theme.name` as a nudge for the file manager to hot-reload.
+5. Cuts the image for the desktop clock — blurred glass plus subject — in the background.
+6. Writes the basename to `~/.local/state/omarchy/current/theme.name` as a nudge for the file manager to hot-reload.
 
 Matugen then writes 37 output files from 19 templates, one file per app per destination. Nothing is copied or converted afterward. The shell notices on its own within a second.
 
@@ -162,6 +163,20 @@ quickshell -p ~/.config/quickshell ipc call notifications toggleDnd
 > [!NOTE]
 > Mismatched `-p` strings fail with `Target not found` even while a shell is clearly running. Autostart, binds, and manual calls must all use `~/.config/quickshell` verbatim.
 
+### Desktop clock
+
+The wallpaper is drawn by the shell itself, not `awww`: `DesktopClock.qml` is a full-screen background layer that stacks wallpaper → clock → subject cutout → date. The digits are not text with a color fill. `ClockFace.qml` masks a pre-blurred copy of the wallpaper through the glyph shapes, so the type reads as glass, and it never falls back to a flat fill when an asset is missing. `Subject.qml` draws a rembg cutout above the digits, so the subject in the wallpaper stands in front of the clock.
+
+Assets for every wallpaper live in `~/.cache/wallcut/`:
+
+| File | Purpose |
+|------|---------|
+| `<name>-blur.jpg` | pre-blurred wallpaper, the clock's frost texture |
+| `<name>.png` | transparent subject cutout |
+| `<name>.json` | bbox plus a 32×18 alpha grid, used to keep the digits clear of the subject |
+
+`set-wallpaper` regenerates them in the background on every change. `wallcut.sh -f <image>` cuts one image; `SUPER ALT+X` re-cuts the current wallpaper and notifies when it finishes. The blur always lands, even when rembg finds no subject or is not installed; only the cutout is optional. GIFs use their first frame.
+
 ### Bar pills
 
 Thin widgets. They display state and delegate detail to panels.
@@ -266,6 +281,7 @@ The daemon samples in 12s chunks, flags "hot" processes (over 500 KB/s for 10s+)
 | `SUPER CTRL+Space` | Wallpaper store |
 | `SUPER ALT+P` / `T` / `K` / `D` / `Y` | Control center / screen time / phone / drives / WatchCat |
 | `SUPER ALT+C` / `E` | Pomodoro / earbuds |
+| `SUPER ALT+X` | Re-cut the current wallpaper for the desktop clock |
 | `SUPER ALT+O` / `SUPER+,` | Workspace overview / notification center |
 | `SUPER+,` / `SUPER SHIFT+,` | Notifications / do-not-disturb |
 | `SUPER CTRL+V` / `SUPER CTRL+P` / `SUPER+N` | Clipboard window / pin clipboard to sticky shelf / system info |
@@ -274,11 +290,13 @@ The daemon samples in 12s chunks, flags "hot" processes (over 500 KB/s for 10s+)
 | `SUPER+arrows`, `SUPER+1-0` | Focus, workspaces |
 | Fn row | Volume/brightness/mic via the quickshell OSD |
 
-The full list lives in `.config/hypr/bindings.lua` (vendored defaults alongside in `.config/hypr/vendor/`). Every panel also closes on `Esc`.
+The full list lives in `.config/hypr/bindings.conf` (vendor defaults in `.config/hypr/vendor/`). Every panel also closes on `Esc`.
 
 ## Helper scripts
 
-`~/.local/bin/` (stowed from this repo) holds the CLI surface: `set-wallpaper`, `getTheme`, `shot`, `record`, `utpdf`, `vol`, `bright`, `nightlight`, `lock`, `phone-pair`, `qemu-launch`, and more. These are what binds, panels, and muscle memory call.
+`~/.local/bin/` (stowed from this repo) holds the CLI surface: `set-wallpaper`, `getTheme`, `wallcut-current`, `shot`, `record`, `utpdf`, `vol`, `bright`, `nightlight`, `lock`, `phone-pair`, `qemu-launch`, and more. These are what binds, panels, and muscle memory call.
+
+`set-wallpaper` already cuts new wallpapers automatically. `wallcut-current` is the manual path: it resolves the live background, re-cuts it, and sends a notification when the blur and cutout are ready.
 
 ## Tools
 
@@ -286,7 +304,7 @@ What runs the desktop day to day, and where each piece lives:
 
 | Tool | Job | Wiring |
 |------|-----|--------|
-| `awww` | Wallpaper daemon + transitions | `autostart.conf` launches the daemon; `set-wallpaper` switches with a 0.7s `wave` (instant `none` at login) |
+| `awww` | Wallpaper daemon underneath the shell | `autostart.conf` launches it and sets the current image; `set-wallpaper` updates it with `--transition-type none` because `DesktopClock` owns the visible crossfade |
 | `matugen` + `matugen-cursor` | Theme colors + matching cursor | `getTheme` regenerates on wallpaper switch; cursor round-trips through Bibata so Hyprland drops its cache — no logout needed |
 | `atuin` | Shell history (SQLite, per-directory smart) | `eval "$(atuin init zsh)"` last in `.zshrc`, owns `Ctrl+R`; fully offline, `atuin register` for sync |
 | `shell-splash` | 技 terminal greeting | `.zshrc` runs it for the outermost shell only; braille art dissolves in with a rice gradient re-read from `colors.conf` every launch |

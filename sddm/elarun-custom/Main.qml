@@ -228,18 +228,18 @@ Rectangle {
                 rightMargin: root.padH
                 topMargin: root.padTop
             }
-            height: root.px(52)
+            height: root.px(200)
 
             Row {
                 anchors.left: parent.left
                 anchors.verticalCenter: parent.verticalCenter
-                height: root.px(52)
+                height: root.px(200)
                 spacing: root.px(12)
 
                 Image {
                     source: "images/logo-white.png"
-                    width: root.px(52)
-                    height: root.px(52)
+                    width: root.px(200)
+                    height: root.px(200)
                     fillMode: Image.PreserveAspectFit
                     opacity: 1.0
                 }

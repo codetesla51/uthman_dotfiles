@@ -28,6 +28,15 @@ Item {
     readonly property var now: new Date()
     readonly property string extended: hh + ":" + mm + "  ·  " + Qt.formatDateTime(now, "dddd dd MMMM yyyy")
 
+    // Minute change gets a tiny hop instead of a silent digit swap.
+    property real tickT: 0
+    onMmChanged: tickAnim.restart()
+    SequentialAnimation {
+        id: tickAnim
+        NumberAnimation { target: root; property: "tickT"; to: 1; duration: 80; easing.type: Easing.OutQuad }
+        NumberAnimation { target: root; property: "tickT"; to: 0; duration: 230; easing.type: Easing.OutCubic }
+    }
+
     implicitWidth: timeRow.implicitWidth
     implicitHeight: 30
 
@@ -40,6 +49,9 @@ Item {
             id: timeRow
             anchors.centerIn: parent
             spacing: 0
+            scale: 1 + 0.055 * root.tickT
+            y: -root.tickT
+            transformOrigin: Item.Center
 
             Text {
                 visible: !root.altFormat

@@ -14,10 +14,11 @@ Item {
     property bool hovered: wcMouse.containsMouse
     signal openRequested()
 
-    // Bloom lift: the whole pill moves, not just its colour.
-    scale: hovered ? 1.06 : 1
-    y: hovered ? -3 : 0
-    Behavior on scale { NumberAnimation { duration: Bloom.fast; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.move } }
+    // Bloom lift: the whole pill moves, not just its colour. A press
+    // squashes it; the spring throws it back on release.
+    scale: wcMouse.pressed ? 0.93 : hovered ? 1.06 : 1
+    y: wcMouse.pressed ? -1 : hovered ? -3 : 0
+    Behavior on scale { SpringAnimation { spring: 3.6; damping: 0.42; mass: 0.9; epsilon: 0.005 } }
     Behavior on y { NumberAnimation { duration: Bloom.fast; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.move } }
 
     readonly property real hotKbs: 500

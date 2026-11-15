@@ -1,4 +1,5 @@
 import Quickshell
+import Quickshell.Hyprland
 import Quickshell.Io
 import Quickshell.Wayland
 import QtQuick
@@ -43,6 +44,13 @@ PanelWindow {
         if (!n) return false
         var t = (String(n.appName || "") + " " + String(n.summary || "")).toLowerCase()
         return t.indexOf("screenshot") !== -1 || t.indexOf("shot") !== -1
+    }
+
+    // Workspace switches get the island's little swing. Notifications keep
+    // the existing cinch/pulse, so the two gestures stay distinguishable.
+    Connections {
+        target: Hyprland
+        function onFocusedWorkspaceChanged() { island.giggle() }
     }
 
     // ---- resident panels: every popup stays loaded, zero RAM saved but
@@ -178,9 +186,14 @@ PanelWindow {
             // hoverT swells the island horizontally. Visual only — layout
             // and hit targets stay stable.
             property real hoverT: islandHover.hovered ? 1 : 0
+            // giggleTilt is a short damped swing around the top edge. Used
+            // when the focused workspace changes, so navigation feels like
+            // the tab physically reacted instead of silently redrawing.
+            property real giggleTilt: 0
             width: 44 + (naturalWidth - 44) * growT + 12 * hoverT
             height: 54
             scale: 1 + 0.010 * hoverT
+            rotation: giggleTilt
             transformOrigin: Item.Top
             HoverHandler { id: islandHover }
             Behavior on hoverT { NumberAnimation { duration: Bloom.fast; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.move } }
@@ -188,6 +201,14 @@ PanelWindow {
             // has velocity, not a fixed bezier duration.
             Behavior on growT { SpringAnimation { spring: Bloom.islandSpring; damping: Bloom.islandDamping; mass: Bloom.islandMass; epsilon: Bloom.islandEpsilon } }
             Behavior on naturalWidth { SpringAnimation { spring: Bloom.islandSpring; damping: Bloom.islandDamping; mass: Bloom.islandMass; epsilon: 0.1 } }
+            SequentialAnimation {
+                id: giggleAnim
+                NumberAnimation { target: island; property: "giggleTilt"; to: 1.1; duration: 90; easing.type: Easing.OutQuad }
+                NumberAnimation { target: island; property: "giggleTilt"; to: -0.75; duration: 115; easing.type: Easing.InOutQuad }
+                NumberAnimation { target: island; property: "giggleTilt"; to: 0.4; duration: 105; easing.type: Easing.InOutQuad }
+                NumberAnimation { target: island; property: "giggleTilt"; to: 0; duration: 160; easing.type: Easing.OutCubic }
+            }
+            function giggle() { giggleAnim.restart() }
             // trapezoid geometry — rounded bottom corners
             readonly property real inset: 18         // horizontal inset of bottom edge
             readonly property real r: 14

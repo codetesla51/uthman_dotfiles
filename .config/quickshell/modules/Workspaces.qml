@@ -78,6 +78,14 @@ Item {
                     width: Math.max(22, label.implicitWidth + 20)
                     height: 24
                     radius: 11
+                    // Active tab pops up; pressing any tab squashes it and
+                    // lets the spring throw it back. transformOrigin keeps
+                    // the label from drifting during the squash.
+                    transformOrigin: Item.Center
+                    scale: btnMouse.pressed ? 0.88 : isActive ? 1.08 : hovered ? 1.04 : 1
+                    Behavior on scale {
+                        SpringAnimation { spring: 3.6; damping: 0.42; mass: 0.9; epsilon: 0.005 }
+                    }
                     color: isActive ? "transparent"
                          : isUrgent ? colors.error
                          : hovered ? colors.alpha(colors.surfaceVariant, 0.4)
@@ -92,6 +100,8 @@ Item {
                         radius: 11
                         y: 1
                         color: colors.alpha(colors.primary, 0.35)
+                        opacity: btn.isActive ? 1 : 0
+                        Behavior on opacity { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
                     }
 
                     // active gradient fill

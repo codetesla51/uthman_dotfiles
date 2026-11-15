@@ -78,13 +78,13 @@ Item {
                     width: Math.max(22, label.implicitWidth + 20)
                     height: 24
                     radius: 11
-                    // Active tab pops up; pressing any tab squashes it and
-                    // lets the spring throw it back. transformOrigin keeps
-                    // the label from drifting during the squash.
+                    // Press and hover only. The active tab must not scale
+                    // when the workspace changes: that pop was the switch
+                    // animation, and it read as the bar flinching.
                     transformOrigin: Item.Center
-                    scale: btnMouse.pressed ? 0.88 : isActive ? 1.08 : hovered ? 1.04 : 1
+                    scale: btnMouse.pressed ? 0.92 : hovered ? 1.04 : 1
                     Behavior on scale {
-                        SpringAnimation { spring: 3.6; damping: 0.42; mass: 0.9; epsilon: 0.005 }
+                        NumberAnimation { duration: 140; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.move }
                     }
                     color: isActive ? "transparent"
                          : isUrgent ? colors.error

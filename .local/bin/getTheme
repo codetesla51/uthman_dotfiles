@@ -66,6 +66,10 @@ if [[ $? -ne 0 ]]; then
     exit 1
 fi
 
+# SDDM runs as its own user and cannot read $HOME. Keep a world-readable copy
+# of the current wallpaper in the greeter theme, next to the generated palette.
+install -m 644 "$WALLPAPER" /usr/share/sddm/themes/elarun-custom/wallpaper.jpg 2>/dev/null || true
+
 # Keep the pointer palette synchronized with Matugen before apps reload.
 "$HOME/.local/bin/matugen-cursor" || echo "Warning: cursor theme update failed" >&2
 

@@ -8,4 +8,6 @@ QtObject {
     property color text: "{{colors.on_background.default.hex}}"
     property color primary: "{{colors.primary.default.hex}}"
     property color error: "{{colors.error.default.hex}}"
+    property color tertiary: "{{colors.tertiary.default.hex}}"
+    property color surfaceContainerLow: "{{colors.surface_container_low.default.hex}}"
 }

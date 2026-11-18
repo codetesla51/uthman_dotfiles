@@ -19,7 +19,7 @@ FloatingWindow {
     property string resOverride: ""
     property string detectedRes: "1920x1080"
     property int fallbackMin: 3
-    property bool useFallback: true
+    property bool keyReady: false
     readonly property string cfgPath: Quickshell.env("HOME") + "/.config/quickshell/wallshelf.json"
     readonly property string resolution: resOverride !== "" ? resOverride : detectedRes
 
@@ -32,12 +32,14 @@ FloatingWindow {
     property bool purSketchy: false
     property bool purNsfw: false
     property string sorting: "toplist"
+    property string sizeMode: "screen"  // screen | exact | any
     property var tags: []              // active search tags (AND-matched with free query)
     property int page: 1
     property int lastPage: 1
     property bool loading: false
     property string errorMsg: ""
     ListModel { id: resultModel }
+    readonly property int resultCount: resultModel.count
     function wAt(i){
         if(i < 0 || i >= resultModel.count) return null
         var m = resultModel.get(i)
@@ -78,25 +80,37 @@ FloatingWindow {
     readonly property string sortParam: sorting === "latest" ? "date_added" : sorting
     readonly property string catParam: (catGeneral ? "1" : "0") + (catAnime ? "1" : "0") + (catPeople ? "1" : "0")
     readonly property string purParam: "1" + (purSketchy ? "1" : "0") + (purNsfw ? "1" : "0")
+    // Screen shape as a Wallhaven ratio (1920x1080 -> 16x9). "screen" mode
+    // asks for at-least-native walls in the same shape, so 4K fits and
+    // 16:10 or portrait walls never sneak in as "dumb resolutions".
+    readonly property string ratioParam: {
+        var m = /^([0-9]+)x([0-9]+)$/.exec(root.resolution)
+        if(!m) return ""
+        var a = parseInt(m[1]), b = parseInt(m[2])
+        function g(x, y){ return y === 0 ? x : g(y, x % y) }
+        var d = g(a, b)
+        if(d <= 0) return ""
+        return (a / d) + "x" + (b / d)
+    }
 
     // ── rate limit ──
     property double lastCall: 0
-    property int backoffMs: 0
+    property int retryCount: 0
     property var respCache: ({})
     property string pendingUrl: ""
+    property string fetchUrl: ""
     property bool searchQueued: false
     property bool resetQueued: false
 
     title: "Wallshelf"
-    implicitWidth: 980
-    implicitHeight: 700
-    minimumSize: Qt.size(980, 620)
-    maximumSize: Qt.size(1100, 720)
+    implicitWidth: 1360
+    implicitHeight: 880
+    minimumSize: Qt.size(1100, 700)
+    maximumSize: Qt.size(1500, 960)
     color: "transparent"
     visible: root.open || closeAnim.running
-    IpcHandler { target: "wallshelf"; function toggle(): void { root.open = !root.open } }
 
-    onOpenChanged: { if(open){ Qt.callLater(function(){ card.forceActiveFocus() }); if(resultModel.count === 0) search(true); root.resolveCurrent(); if(root.tab === "downloaded") root.refreshLocalMaybe(); openAnim.restart() } else closeAnim.restart() }
+    onOpenChanged: { if(open){ Qt.callLater(function(){ if(root.tab === "browse") qField.forceActiveFocus(); else card.forceActiveFocus() }); if(resultModel.count === 0) search(true); root.resolveCurrent(); if(root.tab === "downloaded") root.refreshLocalMaybe(); openAnim.restart() } else closeAnim.restart() }
     onPreviewIdxChanged: if(root.previewIdx !== -1 && root.tab === "browse") root.fetchPvTags()
 
     // ── config ──
@@ -107,8 +121,10 @@ FloatingWindow {
         printErrors: false
         onLoaded: {
             var m = text().match(/^\s*api_key\s*=\s*(\S+)/m)
-            if(m) root.apiKey = m[1]
+            if(m) root.apiKey = m[1].trim()
+            root.keyReady = true
         }
+        onLoadFailed: root.keyReady = true
     }
     FileView {
         id: cfgView
@@ -124,13 +140,14 @@ FloatingWindow {
                 if(d.cacheDir && d.cacheDir.startsWith(Quickshell.env("HOME"))) root.cacheDir = d.cacheDir
                 if(d.linkDir && d.linkDir.startsWith(Quickshell.env("HOME"))) root.linkDir = d.linkDir
                 if(d.resOverride) root.resOverride = d.resOverride
+                if(d.sizeMode) root.sizeMode = d.sizeMode
                 if(d.fallbackMin) root.fallbackMin = d.fallbackMin
                 if(d.resolution && !root.resOverride) root.detectedRes = d.resolution
             } catch(e) {}
         }
     }
     function cfgSave(){
-        saveProc.command = ["sh","-c","mkdir -p '"+Quickshell.env("HOME")+"/.config/quickshell' '"+root.cacheDir+"' && echo '"+Qt.btoa(JSON.stringify({cacheDir: root.cacheDir, linkDir: root.linkDir, resOverride: root.resOverride, fallbackMin: root.fallbackMin, resolution: root.resolution}))+"' | base64 -d > '"+root.cfgPath+"'"]
+        saveProc.command = ["sh","-c","mkdir -p '"+Quickshell.env("HOME")+"/.config/quickshell' '"+root.cacheDir+"' && echo '"+Qt.btoa(JSON.stringify({cacheDir: root.cacheDir, linkDir: root.linkDir, resOverride: root.resOverride, fallbackMin: root.fallbackMin, resolution: root.resolution, sizeMode: root.sizeMode}))+"' | base64 -d > '"+root.cfgPath+"'"]
         saveProc.running = true
     }
     Process { id: saveProc }
@@ -170,7 +187,7 @@ FloatingWindow {
                 var set = {}
                 var lines = text.split("\n")
                 for(var i=0;i<lines.length;i++){
-                    var m = lines[i].trim().match(/wallhaven-([a-z0-9]+)\.[a-z]+$/i)
+                    var m = lines[i].trim().match(/wallhaven-([a-z0-9]+)(?:_[^/]*)?\.[a-z]+$/i)
                     if(m) set[m[1]] = true
                 }
                 root.downloaded = set
@@ -240,37 +257,54 @@ FloatingWindow {
     }
 
     // ── search ──
-    function apiUrl(pg, fallback){
-        var terms = root.tags.slice()
+    // Tag names with spaces must be quoted or Wallhaven treats them as two
+    // AND-ed words. Free text stays raw so -, @, id:, like: still work.
+    function tagTerm(t){
+        var s = String(t).trim()
+        if(s === "") return ""
+        if(s.indexOf(" ") !== -1) return "\"" + s.replace(/"/g, "") + "\""
+        return s
+    }
+    function apiUrl(pg){
+        var terms = []
+        for(var i = 0; i < root.tags.length; i++){
+            var t = root.tagTerm(root.tags[i])
+            if(t !== "") terms.push(t)
+        }
         if(root.query.trim() !== "") terms.push(root.query.trim())
         var u = "https://wallhaven.cc/api/v1/search?q=" + encodeURIComponent(terms.join(" "))
         u += "&categories=" + root.catParam + "&purity=" + root.purParam
         u += "&sorting=" + root.sortParam + "&order=desc&page=" + pg
-        if(!fallback) u += "&resolutions=" + root.resolution
-        else u += "&atleast=" + root.resolution
+        if(root.sizeMode === "exact") u += "&resolutions=" + root.resolution
+        else if(root.sizeMode === "screen"){
+            if(root.ratioParam !== "") u += "&ratios=" + root.ratioParam
+            u += "&atleast=" + root.resolution
+        }
         if(root.apiKey !== "") u += "&apikey=" + root.apiKey
         return u
     }
     function search(reset){
         if(root.loading){ if(reset) root.resetQueued = true; root.searchQueued = true; return }
-        if(reset){ root.page = 1; resultModel.clear(); root.selected = {}; root.selCount = 0; root.previewIdx = -1; root.useFallback = true }
-        var now = Date.now()
-        var wait = Math.max(0, 1500 - (now - root.lastCall)) + root.backoffMs
-        root.pendingUrl = apiUrl(root.page, false)
+        if(reset){ root.page = 1; resultModel.clear(); root.selected = {}; root.selCount = 0; root.previewIdx = -1 }
+        root.pendingUrl = root.apiUrl(root.page)
+        var wait = Math.max(0, 1500 - (Date.now() - root.lastCall))
         if(wait > 0){ rateTimer.interval = wait; rateTimer.restart() }
-        else doFetch(root.pendingUrl)
+        else root.doFetch(root.pendingUrl)
     }
     Timer { id: rateTimer; onTriggered: root.doFetch(root.pendingUrl) }
-    Timer { id: searchDebounce; interval: 350; onTriggered: { var r = root.debounceReset; root.debounceReset = false; root.search(r) } }
+    Timer { id: searchDebounce; interval: 450; onTriggered: { var r = root.debounceReset; root.debounceReset = false; root.search(r) } }
+    Timer { id: queryDebounce; interval: 550; onTriggered: root.search(true) }
+    Timer { id: retryTimer; onTriggered: { if(!root.loading && root.errorMsg !== "") root.doFetch(root.pendingUrl) } }
     function debouncedSearch(reset){ if(reset) root.debounceReset = true; searchDebounce.restart() }
     function doFetch(url){
+        root.fetchUrl = url
         if(respCache[url] && (Date.now() - respCache[url].at < 60000)){
-            root.applyResults(respCache[url].body)
+            root.applyJson(respCache[url].body)
             return
         }
         root.loading = true
         root.errorMsg = ""
-        fetchProc.command = ["sh","-c","curl -sS -m 25 -H 'User-Agent: wallshelf/1.0' '"+url.replace(/'/g,"'\\''")+"' 2>&1"]
+        fetchProc.command = ["sh","-c","curl -sS -m 25 -H 'User-Agent: wallshelf/1.0' '"+url.replace(/'/g,"'\\''")+"' -w '\\n__HTTP__%{http_code}' 2>&1"]
         root.lastCall = Date.now()
         fetchProc.running = true
     }
@@ -303,46 +337,68 @@ FloatingWindow {
             }
         }
     }
-    function applyResults(text){
+    function runQueued(){
+        if(root.searchQueued){
+            root.searchQueued = false
+            var rq = root.resetQueued
+            root.resetQueued = false
+            root.search(rq)
+        }
+    }
+    function applyResults(raw){
         root.loading = false
+        var marker = "__HTTP__"
+        var i = raw.lastIndexOf(marker)
+        var code = i >= 0 ? raw.substring(i + marker.length).trim() : "000"
+        var body = i >= 0 ? raw.substring(0, i) : raw
+        if(code !== "200"){
+            if(code === "429"){
+                root.retryCount += 1
+                if(root.retryCount <= 2){
+                    var wait = Math.min(30, 4 * root.retryCount)
+                    root.errorMsg = "Rate limited — retrying in " + wait + "s"
+                    retryTimer.interval = wait * 1000
+                    retryTimer.restart()
+                } else root.errorMsg = "Rate limited by Wallhaven — try again in a minute"
+            } else if(code === "401"){
+                root.errorMsg = "Wallhaven rejected the API key — check wallshelf.ini"
+            } else if(code === "000"){
+                root.errorMsg = "Can't reach Wallhaven — check your connection"
+            } else {
+                root.errorMsg = "Wallhaven error " + code
+            }
+            root.runQueued()
+            return
+        }
+        root.retryCount = 0
+        root.applyJson(body)
+    }
+    function applyJson(text){
         var d = null
         try { d = JSON.parse(text) } catch(e) {}
         if(!d || !d.data){
-            if(text.indexOf("429") !== -1 || text.toLowerCase().indexOf("rate") !== -1){
-                root.backoffMs = Math.min(30000, (root.backoffMs || 2000) * 2)
-                root.errorMsg = "Rate limited — backing off, scroll to retry"
-            } else root.errorMsg = "Search failed — check connection"
-            if(root.searchQueued){ root.searchQueued = false; var rq = root.resetQueued; root.resetQueued = false; root.search(rq) }
+            root.errorMsg = "Wallhaven sent an unreadable reply"
+            root.runQueued()
             return
         }
-        root.backoffMs = 0
-        respCache[root.pendingUrl] = {at: Date.now(), body: text}
+        respCache[root.fetchUrl] = {at: Date.now(), body: text}
+        var keys = Object.keys(respCache)
+        if(keys.length > 40) delete respCache[keys[0]]
         root.lastPage = (d.meta && d.meta.last_page) || 1
-        var rows = d.data.map(function(w){
-            return {id: w.id, page: "https://wallhaven.cc/w/" + w.id,
-                    full: w.path, thumb: (w.thumbs && w.thumbs.large) || "",
-                    res: w.resolution || "", cat: w.category || "", purity: w.purity || "",
-                    views: (w.views || 0), favs: (w.favorites || 0)}
-        })
-        if(root.useFallback && root.page === 1 && rows.length < root.fallbackMin){
-            root.useFallback = false
-            root.pendingUrl = apiUrl(1, true)
-            root.doFetch(root.pendingUrl)
-            return
+        for(var k=0;k<d.data.length;k++){
+            var w = d.data[k]
+            resultModel.append({wid: w.id, wpage: "https://wallhaven.cc/w/" + w.id,
+                wfull: w.path, wthumb: (w.thumbs && (w.thumbs.large || w.thumbs.original)) || "",
+                wres: w.resolution || "", wcat: w.category || "", wpurity: w.purity || "",
+                wviews: (w.views || 0), wfavs: (w.favorites || 0)})
         }
-        root.useFallback = false
-        for(var k=0;k<rows.length;k++){
-            var r = rows[k]
-            resultModel.append({wid: r.id, wpage: r.page, wfull: r.full, wthumb: r.thumb, wres: r.res, wcat: r.cat, wpurity: r.purity, wviews: r.views, wfavs: r.favs})
-        }
-        if(root.searchQueued){ root.searchQueued = false; var rq2 = root.resetQueued; root.resetQueued = false; root.search(rq2) }
+        root.runQueued()
     }
     function loadMore(){
         if(root.loading || root.page >= root.lastPage) return
         root.page += 1
-        root.pendingUrl = apiUrl(root.page, false)
-        var now = Date.now()
-        var wait = Math.max(0, 1500 - (now - root.lastCall)) + root.backoffMs
+        root.pendingUrl = root.apiUrl(root.page)
+        var wait = Math.max(0, 1500 - (Date.now() - root.lastCall))
         if(wait > 0){ rateTimer.interval = wait; rateTimer.restart() }
         else root.doFetch(root.pendingUrl)
     }
@@ -367,6 +423,19 @@ FloatingWindow {
         var m = w.full.match(/\.([a-z0-9]+)(\?|$)/i)
         if(m) ext = m[1].toLowerCase()
         return "wallhaven-" + w.id + "." + ext
+    }
+    // Card badge: compact, height-based tier — the grid never prints raw
+    // "5120x2880" under every thumbnail. Full size lives in the preview.
+    function resLabel(r){
+        var m = /^([0-9]+)x([0-9]+)$/.exec(String(r || ""))
+        if(!m) return r || ""
+        var h = parseInt(m[2])
+        if(h >= 2800) return "5K"
+        if(h >= 2000) return "4K"
+        if(h >= 1400) return "1440p"
+        if(h >= 900) return "1080p"
+        if(h >= 700) return "720p"
+        return h + "p"
     }
     function enqueue(w){
         if(!w || root.downloaded[w.id]) return
@@ -550,7 +619,11 @@ FloatingWindow {
 
     Component.onCompleted: { detectResolution(); refreshDownloaded() }
 
-    // storefront card
+    // ── storefront card — Option A: contact sheet ──
+    // The grid is the product: one glass strip on top, tags and filters in
+    // two thin rails, one action bar at the bottom. Height budget at 700:
+    // 32 margins + 34 top + 10 + 28 filters + 10 + 24 tags + 8 + 22 pairs
+    // + 10 + 32 footer + 10 = 220 fixed; the grid gets the remaining ~480.
     Rectangle {
         id: card
         anchors.fill: parent
@@ -572,15 +645,15 @@ FloatingWindow {
                 else if(e.key === Qt.Key_D){ var p = root.wAt(root.previewIdx); if(p) root.downloadOne(p); e.accepted = true }
                 return
             }
-            if(e.key === Qt.Key_D){ root.downloadBulk(); e.accepted = true }
+            if(e.key === Qt.Key_Slash){ qField.forceActiveFocus(); e.accepted = true }
+            else if(e.key === Qt.Key_D){ root.downloadBulk(); e.accepted = true }
             else if(e.key === Qt.Key_T){ var t = root.wAt(grid.currentIndex); if(t) root.removeWall(t); e.accepted = true }
             else if(e.key === Qt.Key_V || e.key === Qt.Key_S){ var v = root.wAt(grid.currentIndex); if(v) root.toggleSelect(v); e.accepted = true }
             else if(e.key === Qt.Key_Return || e.key === Qt.Key_Enter){ root.openPreview(grid.currentIndex); e.accepted = true }
             else if(root.gridKey(grid, resultModel.count, e.key)) e.accepted = true
         }
 
-        // bezier pair — open pops with overshoot bounce (fast), close hurries
-        // out with none. Same curves as the notification drawer.
+        // Same bounce pair as every other panel in the shell.
         ParallelAnimation {
             id: openAnim
             NumberAnimation { target: card; property: "rotation"; from: Bloom.panelRotate; to: 0; duration: Bloom.panel; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.spring }
@@ -598,7 +671,7 @@ FloatingWindow {
             id: kbd
             property string t: ""
             implicitWidth: kbdTxt.implicitWidth + 14
-            implicitHeight: 20
+            implicitHeight: 21
             radius: 6
             color: colors.alpha(colors.surfaceVariant, 0.4)
             border.width: 1
@@ -610,147 +683,280 @@ FloatingWindow {
                 color: colors.foreground
                 font.family: colors.fontSans
                 font.pixelSize: 11
+                font.weight: Font.Bold
             }
         }
 
         ColumnLayout {
             anchors.fill: parent
-            anchors.margins: 16
-            spacing: 10
+            anchors.margins: 20
+            spacing: 12
 
-            // header row 1: brand + loader + close
+            // ── row 1: brand · search · mode tabs · spinner ──
             RowLayout {
-                Layout.fillWidth: true; spacing: 10
+                Layout.fillWidth: true
+                spacing: 12
                 Rectangle {
-                    Layout.preferredWidth: 34; Layout.preferredHeight: 34; radius: 12
+                    Layout.preferredWidth: 42; Layout.preferredHeight: 42; radius: 14
                     color: colors.primary
-                    Text { anchors.centerIn: parent; text: ""; color: colors.background; font.family: colors.fontSans; font.pixelSize: 16 }
-                    Layout.alignment: Qt.AlignVCenter
+                    Text { anchors.centerIn: parent; text: "W"; color: colors.background; font.family: colors.fontSans; font.pixelSize: 16; font.weight: Font.Bold }
                 }
-                Text { text: "Wallshelf"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 20; font.weight: Font.Bold; Layout.alignment: Qt.AlignVCenter }
-                Item { Layout.fillWidth: true }
-                // loader (font-independent spinning bar)
-                Rectangle {
-                    width: 34; height: 34; radius: 17
-                    visible: root.loading || root.scanningLocal
-                    color: colors.alpha(colors.primary, 0.15)
-                    Text {
-                        anchors.centerIn: parent
-                        text: ""; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 14
-                        RotationAnimation on rotation { running: root.loading || root.scanningLocal; loops: Animation.Infinite; from: 0; to: 360; duration: 800 }
-                    }
+                ColumnLayout {
+                    spacing: 0
+                    Text { text: "Wallshelf"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 15; font.weight: Font.Bold }
+                    Text { text: "wallhaven"; color: colors.alpha(colors.outline, 0.62); font.family: colors.fontSans; font.pixelSize: 11 }
                 }
                 Rectangle {
-                    width: 28; height: 28; radius: 14
-                    color: wsCloseMa.containsMouse ? colors.alpha(colors.surfaceVariant, 0.6) : colors.alpha(colors.surface, 0.6)
-                    border.width: 1; border.color: colors.alpha(colors.outline, 0.15)
-                    Text { anchors.centerIn: parent; text: "󰅖"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 12 }
-                    MouseArea { id: wsCloseMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.open = false }
-                    Layout.alignment: Qt.AlignVCenter
-                }
-            }
-
-            // header row 2: tabs + search + bulk (search gets the whole row now)
-            RowLayout {
-                Layout.fillWidth: true; spacing: 10
-                Repeater { model: [{k:"browse",t:"Browse"},{k:"downloaded",t:"Downloaded"}]
-                    Rectangle { width: 104; height: 30; radius: 15
-                        color: root.tab === modelData.k ? colors.alpha(colors.primary, 0.2) : colors.alpha(colors.surface, 0.5)
-                        border.width: 1; border.color: root.tab === modelData.k ? colors.alpha(colors.primary, 0.45) : colors.alpha(colors.outline, 0.12)
-                        Text { anchors.centerIn: parent; text: modelData.t; color: root.tab === modelData.k ? colors.primary : colors.foreground; font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold; font.letterSpacing: 0.5 }
-                        MouseArea { anchors.fill: parent; hoverEnabled: true; onClicked: { root.tab = modelData.k; if(root.tab === "downloaded"){ root.refreshLocalMaybe(); root.syncCurrentToLocal() } } }
-                    }
-                }
-                Rectangle {
-                    visible: root.tab === "browse";
-                    Layout.fillWidth: true; Layout.minimumWidth: 220; height: 44; radius: 14
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 260
+                    implicitHeight: 42
+                    visible: root.tab === "browse"
+                    radius: 12
                     color: colors.alpha(colors.surface, 0.85)
-                    border.width: 1; border.color: qField.activeFocus ? colors.alpha(colors.primary, 0.5) : colors.alpha(colors.outline, 0.14)
-                    RowLayout { anchors.fill: parent; anchors.leftMargin: 7; anchors.rightMargin: 10; spacing: 10
-                        Rectangle { width: 30; height: 30; radius: 9; color: colors.primary; Layout.alignment: Qt.AlignVCenter
-                            Text { anchors.centerIn: parent; text: "󰍉"; color: colors.background; font.family: colors.fontSans; font.pixelSize: 14 } }
-                        TextField { id: qField; Layout.fillWidth: true; placeholderText: "Search Wallhaven…"; placeholderTextColor: colors.alpha(colors.outline, 0.45); color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 13; background: null; selectByMouse: true; onAccepted: { root.query = text.trim(); root.search(true); card.forceActiveFocus() } }
+                    border.width: 1
+                    border.color: qField.activeFocus ? colors.alpha(colors.primary, 0.5) : colors.alpha(colors.outline, 0.14)
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: 13
+                        anchors.rightMargin: 11
+                        spacing: 10
+                        Rectangle { width: 6; height: 6; radius: 3; color: qField.activeFocus ? colors.primary : colors.alpha(colors.outline, 0.7); Layout.alignment: Qt.AlignVCenter }
+                        TextField {
+                            id: qField
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            verticalAlignment: TextInput.AlignVCenter
+                            placeholderText: "Search Wallhaven…"
+                            placeholderTextColor: colors.alpha(colors.outline, 0.45)
+                            color: colors.foreground
+                            font.family: colors.fontSans
+                            font.pixelSize: 13
+                            background: null
+                            selectByMouse: true
+                            onTextChanged: { var t = text.trim(); if(t !== root.query){ root.query = t; queryDebounce.restart() } }
+                            onAccepted: { queryDebounce.stop(); root.query = text.trim(); root.search(true) }
+                            Keys.onDownPressed: function(event){ card.forceActiveFocus(); root.gridGo(grid, grid.currentIndex < 0 ? 0 : grid.currentIndex, resultModel.count); event.accepted = true }
                             Keys.onEscapePressed: function(event){ card.forceActiveFocus(); event.accepted = true }
+                        }
+                        Text {
+                            text: "×"
+                            visible: qField.text !== ""
+                            color: clearMa.containsMouse ? colors.foreground : colors.alpha(colors.outline, 0.7)
+                            font.family: colors.fontSans
+                            font.pixelSize: 16
+                            Layout.alignment: Qt.AlignVCenter
+                            MouseArea { id: clearMa; anchors.fill: parent; anchors.margins: -6; hoverEnabled: true; onClicked: { qField.text = ""; queryDebounce.stop(); root.query = ""; root.search(true); qField.forceActiveFocus() } }
+                        }
                     }
                 }
-                // selected counter + bulk button
-                Rectangle {
-                    visible: root.selCount > 0; width: 150; height: 34; radius: 9
-                    color: bulkMa.containsMouse ? colors.alpha(colors.primary, 0.3) : colors.alpha(colors.primary, 0.18)
-                    border.width: 1; border.color: colors.alpha(colors.primary, 0.4)
-                    Text { anchors.centerIn: parent; text: "↓ " + root.selCount + " selected"; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.ExtraBold }
-                    MouseArea { id: bulkMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.downloadBulk() }
+                Item { visible: root.tab === "downloaded"; Layout.fillWidth: true }
+                Repeater {
+                    model: [{k:"browse",t:"Browse"},{k:"downloaded",t:"Downloaded"}]
+                    Rectangle {
+                        implicitWidth: 108; implicitHeight: 36; radius: 13
+                        property bool on: root.tab === modelData.k
+                        property bool hov: tabMa.containsMouse
+                        color: on ? colors.alpha(colors.primary, 0.18) : (hov ? colors.alpha(colors.primary, 0.1) : colors.alpha(colors.surface, 0.5))
+                        border.width: 1
+                        border.color: on ? colors.alpha(colors.primary, 0.4) : colors.alpha(colors.outline, 0.12)
+                        Text { anchors.centerIn: parent; text: modelData.t; color: on ? colors.primary : colors.foreground; font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.Bold; font.letterSpacing: 0.4 }
+                        MouseArea {
+                            id: tabMa
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onClicked: {
+                                root.tab = modelData.k
+                                if(root.tab === "downloaded"){ root.refreshLocalMaybe(); root.syncCurrentToLocal(); card.forceActiveFocus() }
+                                else Qt.callLater(function(){ qField.forceActiveFocus() })
+                            }
+                        }
+                    }
+                }
+                // Fixed slot: the search field never jumps when the spinner appears.
+                Item {
+                    Layout.preferredWidth: 30; Layout.preferredHeight: 30
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: 15
+                        visible: root.loading || root.scanningLocal
+                        color: colors.alpha(colors.primary, 0.15)
+                        Text {
+                            anchors.centerIn: parent
+                            text: "↻"
+                            color: colors.primary
+                            font.family: colors.fontSans
+                            font.pixelSize: 16
+                            RotationAnimation on rotation { running: root.loading || root.scanningLocal; loops: Animation.Infinite; from: 0; to: 360; duration: 800 }
+                        }
+                    }
                 }
             }
 
-            // applied-query echo (tags visibly applied) + counts
-            Text {
-                visible: root.tab === "browse"
-                text: (root.tags.length ? "TAGS: " + root.tags.join(" + ") + "  •  " : "") + (root.query !== "" ? "q: \"" + root.query + "\"  •  " : "") + resultModel.count + " walls" + (root.page > 1 || root.lastPage > 1 ? "  •  page " + root.page + "/" + root.lastPage : "") + "  •  " + root.resolution
-                color: colors.alpha(colors.outline, 0.65); font.family: colors.fontSans; font.pixelSize: 8
-            }
-
-            // filter row
+            // ── row 2: filter rail — category · purity · size · sort ──
             RowLayout {
                 visible: root.tab === "browse"
-                Layout.fillWidth: true; spacing: 6
-                Repeater { model: [{k:"g",t:"General"},{k:"a",t:"Anime"},{k:"p",t:"People"}]
-                    Rectangle { width: 74; height: 26; radius: 13
+                Layout.fillWidth: true
+                spacing: 6
+                Text { text: "FILTER"; color: colors.alpha(colors.outline, 0.55); font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.Bold; font.letterSpacing: 1.2; Layout.alignment: Qt.AlignVCenter }
+                Repeater {
+                    model: [{k:"g",t:"General"},{k:"a",t:"Anime"},{k:"p",t:"People"}]
+                    Rectangle {
+                        implicitWidth: 74; implicitHeight: 28; radius: 14
                         property bool on: modelData.k === "g" ? root.catGeneral : (modelData.k === "a" ? root.catAnime : root.catPeople)
-                        color: on ? colors.alpha(colors.primary, 0.2) : colors.alpha(colors.surface, 0.5)
-                        border.width: 1; border.color: on ? colors.alpha(colors.primary, 0.45) : colors.alpha(colors.outline, 0.12)
-                        Text { anchors.centerIn: parent; text: modelData.t; color: on ? colors.primary : colors.foreground; font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold; font.letterSpacing: 0.5 }
-                        MouseArea { anchors.fill: parent; hoverEnabled: true; onClicked: { if(modelData.k === "g") root.catGeneral = !root.catGeneral; else if(modelData.k === "a") root.catAnime = !root.catAnime; else root.catPeople = !root.catPeople; root.debouncedSearch(true) } }
+                        property bool hov: catMa.containsMouse
+                        color: on ? colors.alpha(colors.primary, 0.18) : (hov ? colors.alpha(colors.primary, 0.1) : colors.alpha(colors.surface, 0.5))
+                        border.width: 1
+                        border.color: on ? colors.alpha(colors.primary, 0.4) : colors.alpha(colors.outline, 0.12)
+                        Text { anchors.centerIn: parent; text: modelData.t; color: on ? colors.primary : colors.foreground; font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.Bold }
+                        MouseArea {
+                            id: catMa
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onClicked: {
+                                if(modelData.k === "g") root.catGeneral = !root.catGeneral
+                                else if(modelData.k === "a") root.catAnime = !root.catAnime
+                                else root.catPeople = !root.catPeople
+                                root.debouncedSearch(true)
+                                card.forceActiveFocus()
+                            }
+                        }
                     }
                 }
-                Repeater { model: [{k:"s",t:"SFW"},{k:"k",t:"Sketchy"},{k:"n",t:"NSFW"}]
-                    Rectangle { width: 64; height: 26; radius: 13
+                Rectangle { implicitWidth: 1; implicitHeight: 16; color: colors.alpha(colors.outline, 0.15); Layout.alignment: Qt.AlignVCenter }
+                Repeater {
+                    model: [{k:"s",t:"SFW"},{k:"k",t:"Sketchy"},{k:"n",t:"NSFW"}]
+                    Rectangle {
+                        implicitWidth: 64; implicitHeight: 28; radius: 14
                         property bool on: modelData.k === "s" ? true : (modelData.k === "k" ? root.purSketchy : root.purNsfw)
-                        color: on ? colors.alpha(colors.tertiary, 0.2) : colors.alpha(colors.surface, 0.5)
-                        border.width: 1; border.color: on ? colors.alpha(colors.tertiary, 0.45) : colors.alpha(colors.outline, 0.12)
-                        Text { anchors.centerIn: parent; text: modelData.t; color: (modelData.k !== "s" && root.apiKey === "") ? colors.alpha(colors.outline, 0.45) : (on ? colors.tertiary : colors.foreground); font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold; font.letterSpacing: 0.5 }
-                        MouseArea { anchors.fill: parent; hoverEnabled: true; onClicked: {
-                            if(modelData.k === "s") return
-                            if(root.apiKey === ""){ root.errorMsg = "Sketchy/NSFW need an API key (see wallshelf.json)"; return }
-                            if(modelData.k === "k") root.purSketchy = !root.purSketchy; else root.purNsfw = !root.purNsfw
-                            root.debouncedSearch(true)
-                        } }
+                        property bool hov: purMa.containsMouse
+                        color: on ? colors.alpha(colors.tertiary, 0.18) : (hov ? colors.alpha(colors.tertiary, 0.1) : colors.alpha(colors.surface, 0.5))
+                        border.width: 1
+                        border.color: on ? colors.alpha(colors.tertiary, 0.4) : colors.alpha(colors.outline, 0.12)
+                        Text { anchors.centerIn: parent; text: modelData.t; color: (modelData.k !== "s" && root.apiKey === "") ? colors.alpha(colors.outline, 0.45) : (on ? colors.tertiary : colors.foreground); font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.Bold }
+                        MouseArea {
+                            id: purMa
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onClicked: {
+                                if(modelData.k === "s") return
+                                if(root.apiKey === ""){ root.errorMsg = "Sketchy/NSFW need an API key (wallshelf.ini)"; return }
+                                if(modelData.k === "k") root.purSketchy = !root.purSketchy
+                                else root.purNsfw = !root.purNsfw
+                                root.debouncedSearch(true)
+                                card.forceActiveFocus()
+                            }
+                        }
                     }
                 }
-                Repeater { model: [{k:"toplist",t:"Top"},{k:"latest",t:"New"},{k:"random",t:"Random"},{k:"views",t:"Views"}]
-                    Rectangle { width: 62; height: 26; radius: 13
-                        color: root.sorting === modelData.k ? colors.alpha(colors.primary, 0.2) : colors.alpha(colors.surface, 0.5)
-                        border.width: 1; border.color: root.sorting === modelData.k ? colors.alpha(colors.primary, 0.45) : colors.alpha(colors.outline, 0.12)
-                        Text { anchors.centerIn: parent; text: modelData.t; color: root.sorting === modelData.k ? colors.primary : colors.foreground; font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold; font.letterSpacing: 0.5 }
-                        MouseArea { anchors.fill: parent; hoverEnabled: true; onClicked: { root.sorting = modelData.k; root.debouncedSearch(true) } }
+                Rectangle { implicitWidth: 1; implicitHeight: 16; color: colors.alpha(colors.outline, 0.15); Layout.alignment: Qt.AlignVCenter }
+                Repeater {
+                    model: [{k:"screen",t:"Fit"},{k:"exact",t:"Exact"},{k:"any",t:"Any"}]
+                    Rectangle {
+                        implicitWidth: 58; implicitHeight: 28; radius: 14
+                        property bool on: root.sizeMode === modelData.k
+                        property bool hov: sizeMa.containsMouse
+                        color: on ? colors.alpha(colors.primary, 0.18) : (hov ? colors.alpha(colors.primary, 0.1) : colors.alpha(colors.surface, 0.5))
+                        border.width: 1
+                        border.color: on ? colors.alpha(colors.primary, 0.4) : colors.alpha(colors.outline, 0.12)
+                        Text { anchors.centerIn: parent; text: modelData.t; color: on ? colors.primary : colors.foreground; font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.Bold }
+                        MouseArea {
+                            id: sizeMa
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onClicked: { root.sizeMode = modelData.k; root.cfgSave(); root.debouncedSearch(true); card.forceActiveFocus() }
+                        }
                     }
+                }
+                Rectangle { implicitWidth: 1; implicitHeight: 16; color: colors.alpha(colors.outline, 0.15); Layout.alignment: Qt.AlignVCenter }
+                Repeater {
+                    model: [{k:"toplist",t:"Top"},{k:"latest",t:"New"},{k:"random",t:"Random"},{k:"views",t:"Views"}]
+                    Rectangle {
+                        implicitWidth: 58; implicitHeight: 28; radius: 14
+                        property bool on: root.sorting === modelData.k
+                        property bool hov: sortMa.containsMouse
+                        color: on ? colors.alpha(colors.primary, 0.18) : (hov ? colors.alpha(colors.primary, 0.1) : colors.alpha(colors.surface, 0.5))
+                        border.width: 1
+                        border.color: on ? colors.alpha(colors.primary, 0.4) : colors.alpha(colors.outline, 0.12)
+                        Text { anchors.centerIn: parent; text: modelData.t; color: on ? colors.primary : colors.foreground; font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.Bold }
+                        MouseArea {
+                            id: sortMa
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onClicked: { root.sorting = modelData.k; root.debouncedSearch(true); card.forceActiveFocus() }
+                        }
+                    }
+                }
+                Item { Layout.fillWidth: true }
+                Text {
+                    text: resultModel.count + " walls" + (root.page > 1 || root.lastPage > 1 ? " · p" + root.page + "/" + root.lastPage : "")
+                    color: colors.alpha(colors.outline, 0.6)
+                    font.family: colors.fontSans
+                    font.pixelSize: 11
+                    font.weight: Font.Bold
+                    Layout.alignment: Qt.AlignVCenter
                 }
             }
 
-            // ── tags: first-class chips + input (AND-matched with free query) ──
+            // ── row 3: active tags + add input ──
             RowLayout {
                 visible: root.tab === "browse"
-                Layout.fillWidth: true; spacing: 6
-                Text { text: "TAGS"; color: colors.alpha(colors.outline, 0.55); font.family: colors.fontSans; font.pixelSize: 7; font.weight: Font.Bold; font.letterSpacing: 1.3; Layout.alignment: Qt.AlignVCenter }
+                Layout.fillWidth: true
+                spacing: 6
+                Text { text: "TAGS"; color: colors.alpha(colors.outline, 0.55); font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.Bold; font.letterSpacing: 1.2; Layout.alignment: Qt.AlignVCenter }
                 RowLayout {
-                    Layout.fillWidth: true; spacing: 6; clip: true
-                    Repeater { model: root.tags
-                        Rectangle { height: 22; radius: 11; color: colors.alpha(colors.tertiary, 0.15); border.width: 1; border.color: colors.alpha(colors.tertiary, 0.35)
-                            RowLayout { anchors.fill: parent; anchors.leftMargin: 8; anchors.rightMargin: 5; spacing: 5
-                                Text { text: "#" + modelData; color: colors.tertiary; font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold }
-                                Text { text: "󰅖"; color: colors.alpha(colors.tertiary, 0.8); font.family: colors.fontSans; font.pixelSize: 9; font.weight: Font.Bold
-                                    MouseArea { anchors.fill: parent; hoverEnabled: true; onClicked: { var t = root.tags.slice(); t.splice(index, 1); root.tags = t; root.debouncedSearch(true) } } }
+                    Layout.fillWidth: true
+                    spacing: 6
+                    clip: true
+                    Repeater {
+                        model: root.tags
+                        Rectangle {
+                            implicitHeight: 28; radius: 14
+                            implicitWidth: tagRow.implicitWidth + 16
+                            color: colors.alpha(colors.tertiary, 0.15)
+                            border.width: 1
+                            border.color: colors.alpha(colors.tertiary, 0.35)
+                            RowLayout {
+                                id: tagRow
+                                anchors.centerIn: parent
+                                spacing: 5
+                                Text { text: "#" + modelData; color: colors.tertiary; font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.Bold }
+                                Text {
+                                    text: "×"
+                                    color: tagXMa.containsMouse ? colors.foreground : colors.alpha(colors.tertiary, 0.8)
+                                    font.family: colors.fontSans
+                                    font.pixelSize: 13
+                                    font.weight: Font.Bold
+                                    MouseArea { id: tagXMa; anchors.fill: parent; anchors.margins: -4; hoverEnabled: true; onClicked: { var t = root.tags.slice(); t.splice(index, 1); root.tags = t; root.debouncedSearch(true); card.forceActiveFocus() } }
+                                }
                             }
                         }
                     }
                 }
                 Rectangle {
-                    Layout.preferredWidth: 160; height: 26; radius: 13
+                    Layout.preferredWidth: 190
+                    implicitHeight: 30
+                    radius: 15
                     color: colors.alpha(colors.surface, 0.85)
-                    border.width: 1; border.color: tagField.activeFocus ? colors.alpha(colors.tertiary, 0.5) : colors.alpha(colors.outline, 0.14)
-                    RowLayout { anchors.fill: parent; anchors.leftMargin: 10; anchors.rightMargin: 6; spacing: 6
-                        Text { text: "󰍉"; color: colors.alpha(colors.tertiary, 0.7); font.family: colors.fontSans; font.pixelSize: 10 }
-                        TextField { id: tagField; Layout.fillWidth: true; placeholderText: "add tags (comma sep)"; placeholderTextColor: colors.alpha(colors.outline, 0.45); color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 9; background: null; selectByMouse: true
+                    border.width: 1
+                    border.color: tagField.activeFocus ? colors.alpha(colors.tertiary, 0.5) : colors.alpha(colors.outline, 0.14)
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: 11
+                        anchors.rightMargin: 9
+                        spacing: 7
+                        Text { text: "+"; color: colors.alpha(colors.tertiary, 0.8); font.family: colors.fontSans; font.pixelSize: 13; font.weight: Font.Bold; Layout.alignment: Qt.AlignVCenter }
+                        TextField {
+                            id: tagField
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            verticalAlignment: TextInput.AlignVCenter
+                            placeholderText: "add tags"
+                            placeholderTextColor: colors.alpha(colors.outline, 0.45)
+                            color: colors.foreground
+                            font.family: colors.fontSans
+                            font.pixelSize: 11
+                            background: null
+                            selectByMouse: true
                             onAccepted: { root.addTags(text); text = ""; card.forceActiveFocus() }
                             Keys.onEscapePressed: function(event){ card.forceActiveFocus(); event.accepted = true }
                         }
@@ -758,219 +964,716 @@ FloatingWindow {
                 }
             }
 
+            // ── row 4: co-occurring tags from the session cache ──
             RowLayout {
-                visible: root.tab === "browse" && root.relatedTags.length > 0
-                Layout.fillWidth: true; spacing: 6
-                Text { text: "PAIRS WITH"; color: colors.alpha(colors.outline, 0.55); font.family: colors.fontSans; font.pixelSize: 7; font.weight: Font.Bold; font.letterSpacing: 1.3; Layout.alignment: Qt.AlignVCenter }
-                Repeater { model: root.relatedTags
-                    Rectangle { height: 22; radius: 11
-                        width: relT.implicitWidth + 16
-                        color: relMa.containsMouse ? colors.alpha(colors.secondary, 0.28) : colors.alpha(colors.secondary, 0.13)
-                        border.width: 1; border.color: colors.alpha(colors.secondary, 0.35)
-                        Text { id: relT; anchors.centerIn: parent; text: "#" + modelData; color: colors.secondary; font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold }
-                        MouseArea { id: relMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.addTags(modelData) }
-                    }
-                }
-            }
-
-            Text { visible: root.errorMsg !== ""; text: root.errorMsg; color: colors.error; font.family: colors.fontSans; font.pixelSize: 9; Layout.alignment: Qt.AlignHCenter }
-
-            // ── browse grid ──
-            GridView {
-                id: grid
                 visible: root.tab === "browse"
-                Layout.fillWidth: true; Layout.fillHeight: true
-                Layout.preferredHeight: 420
-                clip: true
-                cacheBuffer: 260
-                cellWidth: Math.max(150, Math.floor(grid.width / Math.max(2, Math.floor(grid.width / 178)))); cellHeight: 130
-                model: resultModel
-                keyNavigationWraps: true
-                onContentYChanged: { if(!root.loading && contentY + height > contentHeight - 300) root.loadMore() }
-                delegate: Rectangle {
-                    width: GridView.view.cellWidth - 8; height: 122; radius: 12
-                    color: colors.alpha(colors.background, 0.55)
-                    border.width: grid.currentIndex === index ? 2 : 1
-                    border.color: grid.currentIndex === index ? colors.alpha(colors.primary, 0.6) : colors.alpha(colors.outline, 0.12)
-                    scale: thumbMa.containsMouse ? 1.05 : 1.0
-                    Behavior on scale { NumberAnimation { duration: Bloom.fast; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.move } }
-                    Image {
-                        anchors.fill: parent; anchors.margins: 3
-                        source: wthumb
-                        fillMode: Image.PreserveAspectCrop
-                        asynchronous: true
-                        cache: true
-                        sourceSize: Qt.size(360, 260)
-                    }
-                    // selected tint
+                Layout.fillWidth: true
+                spacing: 6
+                Text { text: "PAIRS"; color: colors.alpha(colors.outline, 0.55); font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.Bold; font.letterSpacing: 1.2; Layout.alignment: Qt.AlignVCenter }
+                Text {
+                    visible: root.relatedTags.length === 0
+                    text: "add a tag or open a preview to see what pairs with it"
+                    color: colors.alpha(colors.outline, 0.45)
+                    font.family: colors.fontSans
+                    font.pixelSize: 11
+                    Layout.alignment: Qt.AlignVCenter
+                }
+                Repeater {
+                    model: root.relatedTags
                     Rectangle {
-                        anchors.fill: parent; radius: 12
-                        visible: !!root.selected[wid]
-                        color: colors.alpha(colors.primary, 0.22)
-                        border.width: 2; border.color: colors.alpha(colors.primary, 0.7)
-                    }
-                    Rectangle {
-                        anchors.left: parent.left; anchors.bottom: parent.bottom; anchors.margins: 7
-                        width: resText.implicitWidth + 12; height: 18; radius: 9
-                        color: colors.alpha(colors.background, 0.78)
-                        Text { id: resText; anchors.centerIn: parent; text: wres; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 7; font.weight: Font.Bold }
-                    }
-                    Rectangle {
-                        anchors.right: parent.right; anchors.top: parent.top; anchors.margins: 7
-                        width: 22; height: 22; radius: 11
-                        visible: !!root.downloaded[wid]
-                        color: colors.alpha(colors.primary, 0.9)
-                        Text { anchors.centerIn: parent; text: ""; color: colors.alpha(colors.background, 1); font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.ExtraBold }
-                    }
-                    // selected checkbox (top-left) + progress overlay
-                    Rectangle {
-                        anchors.left: parent.left; anchors.top: parent.top; anchors.margins: 7
-                        width: 22; height: 22; radius: 6
-                        color: root.selected[wid] ? colors.alpha(colors.primary, 0.9) : colors.alpha(colors.background, 0.6)
-                        border.width: 1; border.color: colors.alpha(colors.primary, 0.6)
-                        visible: root.selected[wid] || thumbMa.containsMouse
-                        Text { anchors.centerIn: parent; text: ""; visible: !!root.selected[wid]; color: colors.alpha(colors.background, 1); font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.ExtraBold }
-                        MouseArea { anchors.fill: parent; onClicked: root.toggleSelect({id: wid}) }
-                    }
-                    Rectangle {
-                        anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
-                        height: 26
-                        visible: !!root.dlState[wid]
-                        color: colors.alpha(colors.background, 0.8)
-                        Rectangle {
-                            anchors.left: parent.left; anchors.top: parent.top; anchors.bottom: parent.bottom
-                            anchors.margins: 3; radius: 6
-                            width: Math.max(0, (parent.width - 6) * ((root.dlState[wid] || {}).pct || 0) / 100)
-                            color: colors.alpha(colors.primary, 0.7)
-                        }
-                        Text { anchors.centerIn: parent; text: ((root.dlState[wid] || {}).status === "queued") ? "queued" : (Math.round(((root.dlState[wid] || {}).pct || 0)) + "%  ↓"); color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold }
-                    }
-                    MouseArea {
-                        id: thumbMa; anchors.fill: parent; hoverEnabled: true
-                        onClicked: { grid.currentIndex = index; var st = root.dlState[wid]; if(st && st.status === "failed") root.enqueue(root.wAt(index)) }
-                        onDoubleClicked: root.downloadOne(root.wAt(index))
+                        implicitHeight: 28; radius: 14
+                        implicitWidth: relT.implicitWidth + 16
+                        property bool hov: relMa.containsMouse
+                        color: hov ? colors.alpha(colors.secondary, 0.28) : colors.alpha(colors.secondary, 0.13)
+                        border.width: 1
+                        border.color: colors.alpha(colors.secondary, 0.35)
+                        Text { id: relT; anchors.centerIn: parent; text: "#" + modelData; color: colors.secondary; font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.Bold }
+                        MouseArea { id: relMa; anchors.fill: parent; hoverEnabled: true; onClicked: { root.addTags(modelData); card.forceActiveFocus() } }
                     }
                 }
+                Item { Layout.fillWidth: true }
             }
 
-            // ── downloaded manager ──
-            GridView {
-                id: localGrid
+            // ── downloaded sub-header (browse rails collapse) ──
+            RowLayout {
                 visible: root.tab === "downloaded"
-                Layout.fillWidth: true; Layout.fillHeight: true
-                Layout.preferredHeight: 420
-                clip: true
-                cacheBuffer: 260
-                cellWidth: Math.max(150, Math.floor(localGrid.width / Math.max(2, Math.floor(localGrid.width / 178)))); cellHeight: 130
-                model: root.localFiles
-                delegate: Rectangle {
-                    width: GridView.view.cellWidth - 8; height: 122; radius: 12
-                    property bool thumbFailed: false
-                    color: colors.alpha(colors.background, 0.55)
+                Layout.fillWidth: true
+                spacing: 8
+                Text { text: "DOWNLOADS"; color: colors.alpha(colors.outline, 0.55); font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.Bold; font.letterSpacing: 1.2; Layout.alignment: Qt.AlignVCenter }
+                Text { text: root.scanningLocal ? "scanning…" : root.localFiles.length + " files"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 13; Layout.alignment: Qt.AlignVCenter }
+                Item { Layout.fillWidth: true }
+                Rectangle {
+                    implicitWidth: 86; implicitHeight: 30; radius: 15
+                    property bool hov: rescanMa.containsMouse
+                    color: hov ? colors.alpha(colors.primary, 0.1) : colors.alpha(colors.surface, 0.5)
                     border.width: 1; border.color: colors.alpha(colors.outline, 0.12)
-                    scale: localMa.containsMouse ? 1.05 : 1.0
-                    Behavior on scale { NumberAnimation { duration: Bloom.fast; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.move } }
-                    Image {
-                        anchors.fill: parent; anchors.margins: 3
-                        source: thumbFailed ? ("file://" + modelData.path) : ("file://" + modelData.thumb)
-                        onStatusChanged: if (status === Image.Error && !thumbFailed) thumbFailed = true
-                        fillMode: Image.PreserveAspectCrop
-                        asynchronous: true
-                        cache: true
-                        sourceSize: Qt.size(360, 260)
+                    Text { anchors.centerIn: parent; text: "Rescan"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.Bold }
+                    MouseArea { id: rescanMa; anchors.fill: parent; hoverEnabled: true; onClicked: { root.refreshLocal(); card.forceActiveFocus() } }
+                }
+                Rectangle {
+                    implicitWidth: 110; implicitHeight: 30; radius: 15
+                    property bool hov: openDirMa.containsMouse
+                    color: hov ? colors.alpha(colors.primary, 0.1) : colors.alpha(colors.surface, 0.5)
+                    border.width: 1; border.color: colors.alpha(colors.outline, 0.12)
+                    Text { anchors.centerIn: parent; text: "Open folder"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.Bold }
+                    MouseArea { id: openDirMa; anchors.fill: parent; hoverEnabled: true; onClicked: Quickshell.execDetached(["xdg-open", root.linkDir]) }
+                }
+            }
+
+            // ── main area: grid + loading / empty / error states ──
+            Item {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                Layout.minimumHeight: 300
+
+                GridView {
+                    id: grid
+                    anchors.fill: parent
+                    visible: root.tab === "browse" && resultModel.count > 0
+                    clip: true
+                    cacheBuffer: 320
+                    cellWidth: Math.max(240, Math.floor(width / 4))
+                    cellHeight: Math.round(cellWidth * 0.60) + 10
+                    model: resultModel
+                    keyNavigationWraps: true
+                    boundsBehavior: Flickable.StopAtBounds
+                    onContentYChanged: { if(root.tab === "browse" && !root.loading && contentY + height > contentHeight - 320) root.loadMore() }
+                    delegate: Rectangle {
+                        width: GridView.view.cellWidth - 10
+                        height: GridView.view.cellHeight - 10
+                        radius: 12
+                        color: colors.alpha(colors.background, 0.55)
+                        border.width: grid.currentIndex === index ? 2 : 1
+                        border.color: grid.currentIndex === index ? colors.alpha(colors.primary, 0.6) : colors.alpha(colors.outline, 0.12)
+                        scale: (thumbMa.containsMouse || selCheck.containsMouse) ? 1.025 : 1.0
+                        Behavior on scale { NumberAnimation { duration: Bloom.fast; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.move } }
+
+                        Image {
+                            anchors.fill: parent
+                            anchors.margins: 3
+                            source: wthumb
+                            fillMode: Image.PreserveAspectCrop
+                            asynchronous: true
+                            cache: true
+                            sourceSize: Qt.size(480, 320)
+                        }
+
+                        // darkening for hover, focus and selection, so badges read
+                        Rectangle {
+                            anchors.fill: parent
+                            anchors.margins: 3
+                            radius: 10
+                            visible: thumbMa.containsMouse || selCheck.containsMouse || grid.currentIndex === index || !!root.selected[wid]
+                            gradient: Gradient {
+                                GradientStop { position: 0.45; color: colors.alpha(colors.background, 0) }
+                                GradientStop { position: 1.0; color: colors.alpha(colors.background, 0.85) }
+                            }
+                        }
+
+                        // selected tint
+                        Rectangle {
+                            anchors.fill: parent
+                            radius: 12
+                            visible: !!root.selected[wid]
+                            color: colors.alpha(colors.primary, 0.2)
+                            border.width: 2
+                            border.color: colors.alpha(colors.primary, 0.7)
+                        }
+
+                        // compact resolution — hover/focus only, never a wall of text
+                        Rectangle {
+                            anchors.left: parent.left
+                            anchors.bottom: parent.bottom
+                            anchors.margins: 7
+                            width: resText.implicitWidth + 16
+                            height: 22
+                            radius: 11
+                            visible: !root.dlState[wid] && (thumbMa.containsMouse || selCheck.containsMouse || grid.currentIndex === index || !!root.selected[wid])
+                            color: colors.alpha(colors.background, 0.78)
+                            Text { id: resText; anchors.centerIn: parent; text: root.resLabel(wres); color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.Bold }
+                        }
+
+                        // downloaded check
+                        Rectangle {
+                            anchors.right: parent.right
+                            anchors.top: parent.top
+                            anchors.margins: 7
+                            width: 27; height: 27; radius: 14
+                            visible: !!root.downloaded[wid]
+                            color: colors.alpha(colors.primary, 0.9)
+                            Text { anchors.centerIn: parent; text: ""; color: colors.alpha(colors.background, 1); font.family: colors.fontSans; font.pixelSize: 15; font.weight: Font.Bold }
+                        }
+
+                        // selection checkbox
+                        Rectangle {
+                            anchors.left: parent.left
+                            anchors.top: parent.top
+                            anchors.margins: 7
+                            width: 27; height: 27; radius: 8
+                            color: root.selected[wid] ? colors.alpha(colors.primary, 0.9) : colors.alpha(colors.background, 0.62)
+                            border.width: 1
+                            border.color: colors.alpha(colors.primary, 0.6)
+                            visible: root.selected[wid] || thumbMa.containsMouse || selCheck.containsMouse
+                            Text { anchors.centerIn: parent; text: ""; visible: !!root.selected[wid]; color: colors.alpha(colors.background, 1); font.family: colors.fontSans; font.pixelSize: 15; font.weight: Font.Bold }
+                        }
+
+                        // download progress
+                        Rectangle {
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.bottom: parent.bottom
+                            anchors.margins: 3
+                            height: 22
+                            radius: 6
+                            visible: !!root.dlState[wid]
+                            color: colors.alpha(colors.background, 0.82)
+                            Rectangle {
+                                anchors.left: parent.left
+                                anchors.top: parent.top
+                                anchors.bottom: parent.bottom
+                                anchors.margins: 2
+                                radius: 4
+                                width: Math.max(0, (parent.width - 4) * ((root.dlState[wid] || {}).pct || 0) / 100)
+                                color: colors.alpha(colors.primary, 0.7)
+                            }
+                            Text {
+                                anchors.centerIn: parent
+                                text: ((root.dlState[wid] || {}).status === "queued") ? "queued" : (Math.round(((root.dlState[wid] || {}).pct || 0)) + "%  ↓")
+                                color: colors.foreground
+                                font.family: colors.fontSans
+                                font.pixelSize: 11
+                                font.weight: Font.Bold
+                            }
+                        }
+
+                        MouseArea {
+                            id: thumbMa
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onClicked: { card.forceActiveFocus(); grid.currentIndex = index; var st = root.dlState[wid]; if(st && st.status === "failed") root.enqueue(root.wAt(index)) }
+                            onDoubleClicked: root.downloadOne(root.wAt(index))
+                        }
+                        MouseArea {
+                            id: selCheck
+                            anchors.left: parent.left
+                            anchors.top: parent.top
+                            anchors.margins: 7
+                            width: 22; height: 22
+                            hoverEnabled: true
+                            visible: root.selected[wid] || thumbMa.containsMouse || selCheck.containsMouse
+                            onClicked: { card.forceActiveFocus(); root.toggleSelect({id: wid}) }
+                        }
                     }
+                }
+
+                // downloaded manager
+                GridView {
+                    id: localGrid
+                    anchors.fill: parent
+                    visible: root.tab === "downloaded" && root.localFiles.length > 0
+                    clip: true
+                    cacheBuffer: 320
+                    cellWidth: Math.max(240, Math.floor(width / 4))
+                    cellHeight: Math.round(cellWidth * 0.60) + 10
+                    model: root.localFiles
+                    boundsBehavior: Flickable.StopAtBounds
+                    delegate: Rectangle {
+                        width: GridView.view.cellWidth - 10
+                        height: GridView.view.cellHeight - 10
+                        radius: 12
+                        property bool thumbFailed: false
+                        property bool isCurrent: modelData.path === root.currentWallpaper
+                        color: colors.alpha(colors.background, 0.55)
+                        border.width: localGrid.currentIndex === index ? 2 : 1
+                        border.color: localGrid.currentIndex === index ? colors.alpha(colors.primary, 0.6) : colors.alpha(colors.outline, 0.12)
+                        scale: (localMa.containsMouse || setMa.containsMouse) ? 1.025 : 1.0
+                        Behavior on scale { NumberAnimation { duration: Bloom.fast; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.move } }
+
+                        Image {
+                            anchors.fill: parent
+                            anchors.margins: 3
+                            source: thumbFailed ? ("file://" + modelData.path) : ("file://" + modelData.thumb)
+                            onStatusChanged: if (status === Image.Error && !thumbFailed) thumbFailed = true
+                            fillMode: Image.PreserveAspectCrop
+                            asynchronous: true
+                            cache: true
+                            sourceSize: Qt.size(480, 320)
+                        }
+
+                        Rectangle {
+                            anchors.fill: parent
+                            anchors.margins: 3
+                            radius: 10
+                            visible: localMa.containsMouse || setMa.containsMouse || localGrid.currentIndex === index
+                            gradient: Gradient {
+                                GradientStop { position: 0.45; color: colors.alpha(colors.background, 0) }
+                                GradientStop { position: 1.0; color: colors.alpha(colors.background, 0.85) }
+                            }
+                        }
+
+                        // current wallpaper marker
+                        Rectangle {
+                            anchors.right: parent.right
+                            anchors.top: parent.top
+                            anchors.margins: 7
+                            width: 44; height: 22; radius: 11
+                            visible: isCurrent
+                            color: colors.alpha(colors.primary, 0.9)
+                            Text { anchors.centerIn: parent; text: "NOW"; color: colors.background; font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.Bold; font.letterSpacing: 0.6 }
+                        }
+
+                        // filename + size, hover only
+                        Rectangle {
+                            anchors.left: parent.left
+                            anchors.bottom: parent.bottom
+                            anchors.margins: 7
+                            width: Math.min(sizeText.implicitWidth + 16, parent.width - 84)
+                            height: 22
+                            radius: 11
+                            visible: localMa.containsMouse || setMa.containsMouse || localGrid.currentIndex === index
+                            color: colors.alpha(colors.background, 0.78)
+                            Text { id: sizeText; anchors.centerIn: parent; text: modelData.name + " · " + modelData.size + "K"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 11; elide: Text.ElideRight; width: parent.width - 12; horizontalAlignment: Text.AlignHCenter }
+                        }
+
+                        // Set — topmost so the card MouseArea can't swallow it
+                        Rectangle {
+                            id: setBtn
+                            anchors.right: parent.right
+                            anchors.bottom: parent.bottom
+                            anchors.margins: 7
+                            width: 62; height: 27; radius: 13
+                            visible: localMa.containsMouse || setMa.containsMouse
+                            color: setMa.containsMouse ? colors.alpha(colors.primary, 0.82) : colors.alpha(colors.primary, 0.92)
+                            Text { anchors.centerIn: parent; text: "Set"; color: colors.background; font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.Bold }
+                            MouseArea { id: setMa; anchors.fill: parent; hoverEnabled: true; onClicked: { card.forceActiveFocus(); root.setAsWallpaper(modelData.path) } }
+                        }
+
+                        MouseArea {
+                            id: localMa
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onClicked: { card.forceActiveFocus(); localGrid.currentIndex = index; Quickshell.execDetached(["xdg-open", modelData.path]) }
+                        }
+                    }
+                }
+
+                // loading — skeleton sheet, same 4-column rhythm as the real grid
+                Item {
+                    anchors.fill: parent
+                    visible: root.tab === "browse" && resultModel.count === 0 && (root.loading || root.lastCall === 0)
+                    ColumnLayout {
+                        anchors.centerIn: parent
+                        spacing: 12
+                        Text { text: "CONTACTING WALLHAVEN"; color: colors.alpha(colors.outline, 0.7); font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.Bold; font.letterSpacing: 1.3; Layout.alignment: Qt.AlignHCenter }
+                        Grid {
+                            columns: 4
+                            spacing: 8
+                            Repeater {
+                                model: 8
+                                Rectangle {
+                                    width: (card.width - 40) / 4 - 10
+                                    height: Math.round(width * 0.60)
+                                    radius: 12
+                                    color: colors.alpha(colors.surfaceVariant, 0.22)
+                                    SequentialAnimation on opacity {
+                                        loops: Animation.Infinite
+                                        NumberAnimation { to: 0.45; duration: 700; easing.type: Easing.InOutQuad }
+                                        NumberAnimation { to: 1.0; duration: 700; easing.type: Easing.InOutQuad }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // empty
+                Item {
+                    anchors.fill: parent
+                    visible: root.tab === "browse" && resultModel.count === 0 && !root.loading && root.lastCall > 0 && root.errorMsg === ""
+                    ColumnLayout {
+                        anchors.centerIn: parent
+                        spacing: 10
+                        Text { text: "No walls match this filter."; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 15; font.weight: Font.Bold; Layout.alignment: Qt.AlignHCenter }
+                        Text {
+                            text: "Fit screen widens the pool to every 16:9 wall at or above " + root.resolution.replace("x", "×") + "."
+                            color: colors.alpha(colors.outline, 0.65)
+                            font.family: colors.fontSans
+                            font.pixelSize: 13
+                            Layout.alignment: Qt.AlignHCenter
+                        }
+                        RowLayout {
+                            Layout.alignment: Qt.AlignHCenter
+                            spacing: 8
+                            Rectangle {
+                                implicitWidth: fitEmpty.implicitWidth + 28; implicitHeight: 32; radius: 10
+                                property bool hov: fitEmptyMa.containsMouse
+                                color: hov ? colors.alpha(colors.primary, 0.25) : colors.alpha(colors.primary, 0.15)
+                                border.width: 1; border.color: colors.alpha(colors.primary, 0.35)
+                                Text { id: fitEmpty; anchors.centerIn: parent; text: "Use fit screen"; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.Bold }
+                                MouseArea { id: fitEmptyMa; anchors.fill: parent; hoverEnabled: true; onClicked: { root.sizeMode = "screen"; root.cfgSave(); root.search(true); card.forceActiveFocus() } }
+                            }
+                            Rectangle {
+                                visible: root.tags.length > 0 || root.query !== ""
+                                implicitWidth: clearAll.implicitWidth + 28; implicitHeight: 32; radius: 10
+                                property bool hov: clearAllMa.containsMouse
+                                color: hov ? colors.alpha(colors.surfaceVariant, 0.5) : colors.alpha(colors.surface, 0.5)
+                                border.width: 1; border.color: colors.alpha(colors.outline, 0.15)
+                                Text { id: clearAll; anchors.centerIn: parent; text: "Clear tags & search"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.Bold }
+                                MouseArea { id: clearAllMa; anchors.fill: parent; hoverEnabled: true; onClicked: { root.tags = []; qField.text = ""; queryDebounce.stop(); root.query = ""; root.search(true); card.forceActiveFocus() } }
+                            }
+                        }
+                    }
+                }
+
+                // error / rate limited
+                Item {
+                    id: errState
+                    anchors.fill: parent
+                    visible: root.tab === "browse" && resultModel.count === 0 && !root.loading && root.errorMsg !== ""
+                    property bool retrying: root.errorMsg.indexOf("retrying in") !== -1
                     Rectangle {
-                        anchors.left: parent.left; anchors.bottom: parent.bottom; anchors.margins: 7
-                        width: Math.min(sizeText.implicitWidth + 12, parent.width - 14); height: 18; radius: 9
-                        color: colors.alpha(colors.background, 0.78)
-                        Text { id: sizeText; anchors.centerIn: parent; text: modelData.name + "  •  " + modelData.size + "K"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 7; elide: Text.ElideRight; width: parent.width - 12; horizontalAlignment: Text.AlignHCenter }
+                        anchors.centerIn: parent
+                        width: Math.min(500, parent.width - 60)
+                        height: errCol.implicitHeight + 36
+                        radius: 14
+                        color: colors.alpha(colors.error, 0.12)
+                        border.width: 1
+                        border.color: colors.alpha(colors.error, 0.35)
+                        ColumnLayout {
+                            id: errCol
+                            anchors.centerIn: parent
+                            width: parent.width - 40
+                            spacing: 8
+                            Text {
+                                Layout.fillWidth: true
+                                text: root.errorMsg
+                                color: colors.error
+                                font.family: colors.fontSans
+                                font.pixelSize: 15
+                                font.weight: Font.Bold
+                                wrapMode: Text.WordWrap
+                                horizontalAlignment: Text.AlignHCenter
+                            }
+                            Text {
+                                Layout.fillWidth: true
+                                text: "The key is loaded. Retry runs the same search again."
+                                color: colors.alpha(colors.outline, 0.7)
+                                font.family: colors.fontSans
+                                font.pixelSize: 13
+                                wrapMode: Text.WordWrap
+                                horizontalAlignment: Text.AlignHCenter
+                                visible: !errState.retrying
+                            }
+                            RowLayout {
+                                Layout.alignment: Qt.AlignHCenter
+                                spacing: 8
+                                Rectangle {
+                                    visible: !errState.retrying
+                                    implicitWidth: 80; implicitHeight: 32; radius: 10
+                                    property bool hov: retryMa.containsMouse
+                                    color: hov ? colors.alpha(colors.error, 0.28) : colors.alpha(colors.error, 0.18)
+                                    border.width: 1; border.color: colors.alpha(colors.error, 0.4)
+                                    Text { anchors.centerIn: parent; text: "Retry"; color: colors.error; font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.Bold }
+                                    MouseArea { id: retryMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.search(true) }
+                                }
+                                RowLayout {
+                                    visible: errState.retrying
+                                    spacing: 6
+                                    Kbd { t: "Auto" }
+                                    Text { text: "retry on"; color: colors.alpha(colors.outline, 0.7); font.family: colors.fontSans; font.pixelSize: 11 }
+                                }
+                            }
+                        }
                     }
+                }
+
+                // downloaded empty
+                ColumnLayout {
+                    anchors.centerIn: parent
+                    visible: root.tab === "downloaded" && root.localFiles.length === 0 && !root.scanningLocal
+                    spacing: 10
+                    Text { text: "Nothing downloaded yet."; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 15; font.weight: Font.Bold; Layout.alignment: Qt.AlignHCenter }
+                    Text { text: "Pick a wall in Browse and press D, or double-click it."; color: colors.alpha(colors.outline, 0.65); font.family: colors.fontSans; font.pixelSize: 13; Layout.alignment: Qt.AlignHCenter }
                     Rectangle {
-                        anchors.right: parent.right; anchors.bottom: parent.bottom; anchors.margins: 7
-                        width: 52; height: 22; radius: 11
-                        visible: localMa.containsMouse
-                        color: colors.alpha(colors.primary, 0.92)
-                        Text { anchors.centerIn: parent; text: "Set"; color: colors.background; font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.ExtraBold }
-                        MouseArea { anchors.fill: parent; hoverEnabled: true; onClicked: root.setAsWallpaper(modelData.path) }
+                        Layout.alignment: Qt.AlignHCenter
+                        implicitWidth: 130; implicitHeight: 28; radius: 9
+                        property bool hov: browseEmptyMa.containsMouse
+                        color: hov ? colors.alpha(colors.primary, 0.25) : colors.alpha(colors.primary, 0.15)
+                        border.width: 1; border.color: colors.alpha(colors.primary, 0.35)
+                        Text { anchors.centerIn: parent; text: "Browse Wallhaven"; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.Bold }
+                        MouseArea { id: browseEmptyMa; anchors.fill: parent; hoverEnabled: true; onClicked: { root.tab = "browse"; Qt.callLater(function(){ qField.forceActiveFocus() }) } }
                     }
-                    MouseArea {
-                        id: localMa; anchors.fill: parent; hoverEnabled: true
-                        onClicked: { localGrid.currentIndex = index; Quickshell.execDetached(["xdg-open", modelData.path]) }
+                }
+
+                // transient status toast (download failures, queued, API retry with results on screen)
+                Rectangle {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    anchors.bottom: parent.bottom
+                    anchors.bottomMargin: 8
+                    width: Math.min(640, statusRow.implicitWidth + 28)
+                    height: 32
+                    radius: 9
+                    visible: root.errorMsg !== "" && (resultModel.count > 0 || root.tab === "downloaded") && !(root.tab === "browse" && resultModel.count === 0)
+                    property bool isInfo: root.errorMsg.indexOf("Queued") === 0
+                    color: isInfo ? colors.alpha(colors.primary, 0.15) : colors.alpha(colors.error, 0.15)
+                    border.width: 1
+                    border.color: isInfo ? colors.alpha(colors.primary, 0.3) : colors.alpha(colors.error, 0.35)
+                    RowLayout {
+                        id: statusRow
+                        anchors.centerIn: parent
+                        spacing: 10
+                        Text {
+                            text: root.errorMsg
+                            color: parent.parent.isInfo ? colors.primary : colors.error
+                            font.family: colors.fontSans
+                            font.pixelSize: 11
+                            font.weight: Font.Bold
+                            elide: Text.ElideRight
+                            Layout.maximumWidth: 560
+                        }
+                        Text {
+                            text: "dismiss"
+                            color: colors.alpha(colors.outline, 0.75)
+                            font.family: colors.fontSans
+                            font.pixelSize: 11
+                            MouseArea { anchors.fill: parent; anchors.margins: -4; onClicked: root.errorMsg = "" }
+                        }
                     }
                 }
             }
-            Text {
-                visible: root.tab === "downloaded"
-                text: root.scanningLocal ? "Scanning…" : (root.localFiles.length + " files  •  t deletes hovered (via keyboard: focus + t)")
-                color: colors.alpha(colors.outline, 0.55); font.family: colors.fontSans; font.pixelSize: 8; Layout.alignment: Qt.AlignHCenter
-            }
 
-            RowLayout { visible: root.tab === "browse"; Layout.fillWidth: true; spacing: 12
+            // ── footer: keys left, size hint + download right ──
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 8
+                RowLayout {
+                    visible: root.tab === "browse"
+                    spacing: 6
+                    Kbd { t: "/" }
+                    Text { text: "search"; color: colors.alpha(colors.outline, 0.6); font.family: colors.fontSans; font.pixelSize: 11 }
+                    Kbd { t: "↑↓" }
+                    Text { text: "move"; color: colors.alpha(colors.outline, 0.6); font.family: colors.fontSans; font.pixelSize: 11 }
+                    Kbd { t: "↵" }
+                    Text { text: "preview"; color: colors.alpha(colors.outline, 0.6); font.family: colors.fontSans; font.pixelSize: 11 }
+                    Kbd { t: "V" }
+                    Text { text: "select"; color: colors.alpha(colors.outline, 0.6); font.family: colors.fontSans; font.pixelSize: 11 }
+                    Kbd { t: "D" }
+                    Text { text: "download"; color: colors.alpha(colors.outline, 0.6); font.family: colors.fontSans; font.pixelSize: 11 }
+                    Kbd { t: "Esc" }
+                    Text { text: "close"; color: colors.alpha(colors.outline, 0.6); font.family: colors.fontSans; font.pixelSize: 11 }
+                }
+                RowLayout {
+                    visible: root.tab === "downloaded"
+                    spacing: 6
+                    Kbd { t: "↵" }
+                    Text { text: "open"; color: colors.alpha(colors.outline, 0.6); font.family: colors.fontSans; font.pixelSize: 11 }
+                    Kbd { t: "T" }
+                    Text { text: "delete"; color: colors.alpha(colors.outline, 0.6); font.family: colors.fontSans; font.pixelSize: 11 }
+                    Kbd { t: "Esc" }
+                    Text { text: "close"; color: colors.alpha(colors.outline, 0.6); font.family: colors.fontSans; font.pixelSize: 11 }
+                }
                 Item { Layout.fillWidth: true }
-                Kbd { t: "↑↓" } Text { text: "move"; color: colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 11 }
-                Kbd { t: "Enter" } Text { text: "preview"; color: colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 11 }
-                Kbd { t: "V" } Text { text: "select"; color: colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 11 }
-                Kbd { t: "D" } Text { text: "download"; color: colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 11 }
-                Kbd { t: "T" } Text { text: "delete"; color: colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 11 }
-                Kbd { t: "Esc" } Text { text: "close"; color: colors.alpha(colors.outline,0.6); font.family: colors.fontSans; font.pixelSize: 11 }
-                Item { Layout.fillWidth: true }
+                Text {
+                    visible: root.tab === "browse"
+                    text: root.sizeMode === "screen" ? "Fit " + root.ratioParam.replace("x", ":") + " · ≥ " + root.resolution.replace("x", "×") : (root.sizeMode === "exact" ? "Exact " + root.resolution.replace("x", "×") : "Any size")
+                    color: colors.alpha(colors.outline, 0.6)
+                    font.family: colors.fontSans
+                    font.pixelSize: 11
+                    Layout.alignment: Qt.AlignVCenter
+                }
+                RowLayout {
+                    visible: root.tab === "browse" && root.dlCurrent !== ""
+                    spacing: 6
+                    Text { text: Math.round(((root.dlState[root.dlCurrent] || {}).pct || 0)) + "%"; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.Bold }
+                    Rectangle {
+                        implicitWidth: 80; implicitHeight: 4; radius: 2
+                        color: colors.alpha(colors.surfaceVariant, 0.6)
+                        Rectangle {
+                            width: parent.width * Math.round(((root.dlState[root.dlCurrent] || {}).pct || 0)) / 100
+                            height: 4; radius: 2
+                            color: colors.primary
+                        }
+                    }
+                    Text { text: root.dlActive > 0 ? root.dlActive + " queued" : "1 left"; color: colors.alpha(colors.outline, 0.6); font.family: colors.fontSans; font.pixelSize: 11 }
+                }
+                Rectangle {
+                    visible: root.tab === "browse"
+                    implicitWidth: dlBtnTxt.implicitWidth + 32
+                    implicitHeight: 34
+                    radius: 9
+                    property bool hov: dlBtnMa.containsMouse
+                    color: hov ? colors.alpha(colors.primary, 0.88) : colors.primary
+                    Text {
+                        id: dlBtnTxt
+                        anchors.centerIn: parent
+                        text: root.selCount > 0 ? "↓  Download " + root.selCount : "↓  Download"
+                        color: colors.background
+                        font.family: colors.fontSans
+                        font.pixelSize: 11
+                        font.weight: Font.Bold
+                    }
+                    MouseArea { id: dlBtnMa; anchors.fill: parent; hoverEnabled: true; onClicked: { root.downloadBulk(); card.forceActiveFocus() } }
+                }
+                Text {
+                    visible: root.tab === "downloaded"
+                    text: root.localFiles.length + " files · T deletes the selected wall"
+                    color: colors.alpha(colors.outline, 0.6)
+                    font.family: colors.fontSans
+                    font.pixelSize: 11
+                    Layout.alignment: Qt.AlignVCenter
+                }
             }
         }
 
-        // ── preview overlay ──
+        // ── preview overlay — full image, no X icon, Esc closes ──
         Rectangle {
             visible: root.previewIdx !== -1 && root.tab === "browse"
-            anchors.fill: parent; radius: 16
-            color: colors.alpha(colors.background, 0.88)
+            anchors.fill: parent
+            radius: 16
+            color: colors.alpha(colors.background, 0.92)
+
             ColumnLayout {
-                anchors.fill: parent; anchors.margins: 18; spacing: 10
+                anchors.fill: parent
+                anchors.margins: 20
+                spacing: 12
+
                 RowLayout {
-                    Layout.fillWidth: true; spacing: 10
-                    Text { text: (root.previewIdx + 1) + " / " + resultModel.count; color: colors.alpha(colors.outline, 0.7); font.family: colors.fontSans; font.pixelSize: 9 }
-                    Text { Layout.fillWidth: true; horizontalAlignment: Text.AlignCenter; elide: Text.ElideMiddle; text: root.previewIdx !== -1 && root.wAt(root.previewIdx) ? (root.wAt(root.previewIdx).res + "  •  " + root.wAt(root.previewIdx).views + " views  •  " + root.wAt(root.previewIdx).favs + " favs") : ""; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 10; font.weight: Font.Bold }
-                    Rectangle { width: 30; height: 30; radius: 15; color: pvCloseMa.containsMouse ? colors.alpha(colors.error, 0.18) : colors.alpha(colors.surface, 0.6); border.width: 1; border.color: colors.alpha(colors.outline, 0.15)
-                        Text { anchors.centerIn: parent; text: "󰅖"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 12; font.weight: Font.Bold }
-                        MouseArea { id: pvCloseMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.previewIdx = -1 } }
+                    Layout.fillWidth: true
+                    spacing: 12
+                    Text {
+                        text: (root.previewIdx + 1) + " / " + resultModel.count
+                        color: colors.alpha(colors.outline, 0.7)
+                        font.family: colors.fontSans
+                        font.pixelSize: 11
+                        font.weight: Font.Bold
+                    }
+                    Text {
+                        Layout.fillWidth: true
+                        horizontalAlignment: Text.AlignCenter
+                        elide: Text.ElideMiddle
+                        text: root.previewIdx !== -1 && root.wAt(root.previewIdx) ? (root.wAt(root.previewIdx).res + "  ·  " + root.wAt(root.previewIdx).views + " views  ·  " + root.wAt(root.previewIdx).favs + " favs") : ""
+                        color: colors.foreground
+                        font.family: colors.fontSans
+                        font.pixelSize: 13
+                        font.weight: Font.Bold
+                    }
+                    Rectangle {
+                        implicitWidth: 70; implicitHeight: 30; radius: 9
+                        property bool hov: pvCloseMa.containsMouse
+                        color: hov ? colors.alpha(colors.surfaceVariant, 0.6) : colors.alpha(colors.surface, 0.6)
+                        border.width: 1
+                        border.color: colors.alpha(colors.outline, 0.15)
+                        RowLayout {
+                            anchors.centerIn: parent
+                            spacing: 5
+                            Kbd { t: "Esc" }
+                            Text { text: "close"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 11 }
+                        }
+                        MouseArea { id: pvCloseMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.previewIdx = -1 }
+                    }
                 }
-                Image {
-                    Layout.fillWidth: true; Layout.fillHeight: true
-                    source: (root.previewIdx !== -1 && root.wAt(root.previewIdx)) ? root.wAt(root.previewIdx).full : ""
-                    fillMode: Image.PreserveAspectFit
-                    asynchronous: true
-                    cache: false
-                    sourceSize: Qt.size(1920, 1080)
+
+                Item {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    Image {
+                        anchors.fill: parent
+                        source: (root.previewIdx !== -1 && root.wAt(root.previewIdx)) ? root.wAt(root.previewIdx).full : ""
+                        fillMode: Image.PreserveAspectFit
+                        asynchronous: true
+                        cache: false
+                        sourceSize: Qt.size(1920, 1080)
+                    }
+                    Rectangle {
+                        anchors.left: parent.left
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: 42; height: 42; radius: 21
+                        visible: root.previewIdx > 0
+                        color: pvPrevMa.containsMouse ? colors.alpha(colors.primary, 0.3) : colors.alpha(colors.background, 0.65)
+                        border.width: 1
+                        border.color: colors.alpha(colors.outline, 0.2)
+                        Text { anchors.centerIn: parent; text: "‹"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 22; font.weight: Font.Bold }
+                        MouseArea { id: pvPrevMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.previewIdx = Math.max(0, root.previewIdx - 1) }
+                    }
+                    Rectangle {
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: 42; height: 42; radius: 21
+                        visible: root.previewIdx < resultModel.count - 1
+                        color: pvNextMa.containsMouse ? colors.alpha(colors.primary, 0.3) : colors.alpha(colors.background, 0.65)
+                        border.width: 1
+                        border.color: colors.alpha(colors.outline, 0.2)
+                        Text { anchors.centerIn: parent; text: "›"; color: colors.foreground; font.family: colors.fontSans; font.pixelSize: 22; font.weight: Font.Bold }
+                        MouseArea { id: pvNextMa; anchors.fill: parent; hoverEnabled: true; onClicked: root.previewIdx = Math.min(resultModel.count - 1, root.previewIdx + 1) }
+                    }
                 }
+
                 RowLayout {
                     visible: root.pvTags.length > 0
-                    Layout.fillWidth: true; spacing: 6; Layout.preferredHeight: 22
-                    Text { text: "TAGS:"; color: colors.alpha(colors.outline, 0.6); font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold; font.letterSpacing: 1; Layout.alignment: Qt.AlignVCenter }
+                    Layout.fillWidth: true
+                    spacing: 6
+                    Layout.preferredHeight: 22
+                    Text { text: "TAGS"; color: colors.alpha(colors.outline, 0.6); font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.Bold; font.letterSpacing: 1.2; Layout.alignment: Qt.AlignVCenter }
                     ListView {
-                        Layout.fillWidth: true; Layout.preferredHeight: 22; spacing: 6; orientation: ListView.Horizontal; clip: true
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 22
+                        spacing: 6
+                        orientation: ListView.Horizontal
+                        clip: true
                         model: root.pvTags
-                        delegate: Rectangle { implicitWidth: tagText.implicitWidth + 16; height: 22; radius: 11
+                        delegate: Rectangle {
+                            implicitWidth: tagText.implicitWidth + 16
+                            height: 22
+                            radius: 11
                             color: pvTagMa.containsMouse ? colors.alpha(colors.tertiary, 0.28) : colors.alpha(colors.tertiary, 0.15)
-                            border.width: 1; border.color: colors.alpha(colors.tertiary, 0.35)
-                            Text { id: tagText; anchors.centerIn: parent; text: "#" + modelData; color: colors.tertiary; font.family: colors.fontSans; font.pixelSize: 8; font.weight: Font.Bold }
-                            MouseArea { id: pvTagMa; anchors.fill: parent; hoverEnabled: true; onClicked: {
-                                var n = String(modelData).replace(/^#/, "").toLowerCase()
-                                var t = root.tags.slice()
-                                if(n && t.indexOf(n) === -1){ t.push(n); root.tags = t; root.debouncedSearch(true) }
-                                root.previewIdx = -1
-                            } }
+                            border.width: 1
+                            border.color: colors.alpha(colors.tertiary, 0.35)
+                            Text { id: tagText; anchors.centerIn: parent; text: "#" + modelData; color: colors.tertiary; font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.Bold }
+                            MouseArea {
+                                id: pvTagMa
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                onClicked: {
+                                    var n = String(modelData).replace(/^#/, "").toLowerCase()
+                                    var t = root.tags.slice()
+                                    if(n && t.indexOf(n) === -1){ t.push(n); root.tags = t; root.debouncedSearch(true) }
+                                    root.previewIdx = -1
+                                }
+                            }
                         }
                     }
                 }
+
                 RowLayout {
-                    Layout.fillWidth: true; spacing: 10; Layout.alignment: Qt.AlignHCenter
-                    Rectangle { visible: root.previewIdx !== -1 && root.wAt(root.previewIdx) && !!root.downloaded[root.wAt(root.previewIdx).id]; width: 170; height: 42; radius: 12; color: colors.primary; border.width: 1; border.color: colors.primary
-                        Text { anchors.centerIn: parent; text: "Set wallpaper"; color: colors.background; font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.Bold }
-                        MouseArea { id: pvSetMa; anchors.fill: parent; hoverEnabled: true; onClicked: { var w = root.wAt(root.previewIdx); if(w) root.setAsWallpaper(root.linkDir + "/" + root.fnameFor(w)) } } }
-                    Rectangle { width: 150; height: 42; radius: 12; color: "transparent"; border.width: 1; border.color: colors.alpha(colors.primary, 0.5)
-                        Text { anchors.centerIn: parent; text: "↓ Download"; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.Bold }
-                        MouseArea { id: pvDlMa; anchors.fill: parent; hoverEnabled: true; onClicked: { var w = root.wAt(root.previewIdx); if(w) root.downloadOne(w) } } }
-                    Rectangle { visible: root.previewIdx !== -1 && root.wAt(root.previewIdx) && !!root.downloaded[root.wAt(root.previewIdx).id]; width: 130; height: 42; radius: 12; color: "transparent"; border.width: 1; border.color: colors.alpha(colors.outline, 0.15)
-                        Text { anchors.centerIn: parent; text: "Delete"; color: colors.error; font.family: colors.fontSans; font.pixelSize: 11; font.weight: Font.Bold }
-                        MouseArea { id: pvDelMa; anchors.fill: parent; hoverEnabled: true; onClicked: { var w = root.wAt(root.previewIdx); if(w){ root.removeWall(w); root.previewIdx = -1 } } } }
+                    Layout.fillWidth: true
+                    spacing: 10
+                    Layout.alignment: Qt.AlignHCenter
+                    Rectangle {
+                        visible: root.previewIdx !== -1 && root.wAt(root.previewIdx) && !!root.downloaded[root.wAt(root.previewIdx).id]
+                        implicitWidth: 158; implicitHeight: 38; radius: 11
+                        property bool hov: pvSetMa.containsMouse
+                        color: hov ? colors.alpha(colors.primary, 0.88) : colors.primary
+                        border.width: 1; border.color: colors.primary
+                        Text { anchors.centerIn: parent; text: "Set wallpaper"; color: colors.background; font.family: colors.fontSans; font.pixelSize: 13; font.weight: Font.Bold }
+                        MouseArea { id: pvSetMa; anchors.fill: parent; hoverEnabled: true; onClicked: { var w = root.wAt(root.previewIdx); if(w) root.setAsWallpaper(root.linkDir + "/" + root.fnameFor(w)) } }
+                    }
+                    Rectangle {
+                        implicitWidth: 138; implicitHeight: 38; radius: 11
+                        property bool hov: pvDlMa.containsMouse
+                        color: hov ? colors.alpha(colors.primary, 0.15) : "transparent"
+                        border.width: 1; border.color: colors.alpha(colors.primary, 0.5)
+                        Text { anchors.centerIn: parent; text: "↓ Download"; color: colors.primary; font.family: colors.fontSans; font.pixelSize: 13; font.weight: Font.Bold }
+                        MouseArea { id: pvDlMa; anchors.fill: parent; hoverEnabled: true; onClicked: { var w = root.wAt(root.previewIdx); if(w) root.downloadOne(w) } }
+                    }
+                    Rectangle {
+                        visible: root.previewIdx !== -1 && root.wAt(root.previewIdx) && !!root.downloaded[root.wAt(root.previewIdx).id]
+                        implicitWidth: 112; implicitHeight: 38; radius: 11
+                        property bool hov: pvDelMa.containsMouse
+                        color: hov ? colors.alpha(colors.error, 0.14) : "transparent"
+                        border.width: 1; border.color: colors.alpha(colors.outline, 0.15)
+                        Text { anchors.centerIn: parent; text: "Delete"; color: colors.error; font.family: colors.fontSans; font.pixelSize: 13; font.weight: Font.Bold }
+                        MouseArea { id: pvDelMa; anchors.fill: parent; hoverEnabled: true; onClicked: { var w = root.wAt(root.previewIdx); if(w){ root.removeWall(w); root.previewIdx = -1 } } }
+                    }
                 }
             }
         }

@@ -19,7 +19,7 @@ local panels = {
   { "WatchCat", 920, 440 },
   { "Control Center", 980, 720 },
   { "PDF Library", 960, 640 },
-  { "Wallshelf", 980, 700 },
+  { "Wallshelf", 1360, 880 },
   { "Pomodoro", 400, 540 },
   { "GitHubDash", 760, 560 },
   { "QuickNotes", 460, 600 },

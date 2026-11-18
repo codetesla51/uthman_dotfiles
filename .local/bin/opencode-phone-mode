@@ -1,0 +1,102 @@
+#!/usr/bin/env bash
+# Switch the laptop between the desktop and a headless phone-piloting mode:
+# only the OpenCode server and the Telegram bot keep running.
+set -euo pipefail
+
+STATE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/opencode-phone-mode"
+BRIGHTNESS_SAVE="$STATE_DIR/brightness"
+LID_CONF="/etc/systemd/logind.conf.d/99-opencode-phone-mode.conf"
+UNITS=(opencode-serve.service opencode-telegram.service)
+
+usage() {
+  cat <<'EOF'
+Usage: opencode-phone-mode [on|off|status]
+
+  on      headless: only OpenCode server + Telegram bot, lid switch ignored
+  off     back to the desktop (SDDM + Hyprland)
+  status  show mode, units, battery
+  (no argument toggles)
+EOF
+}
+
+require_sudo() {
+  sudo -v
+}
+
+phone_on() {
+  require_sudo
+  mkdir -p "$STATE_DIR"
+  : >"$STATE_DIR/active"
+
+  loginctl enable-linger "$USER"
+  systemctl --user daemon-reload
+  systemctl --user enable "${UNITS[@]}" >/dev/null
+
+  # The session owns the current server; replace it with the unit-owned one.
+  systemctl --user stop opencode-telegram.service 2>/dev/null || true
+  pkill -f 'opencode serve --service' 2>/dev/null || true
+  sleep 1
+  systemctl --user restart opencode-serve.service
+  systemctl --user restart opencode-telegram.service
+
+  # Keep running with the lid closed.
+  sudo mkdir -p "$(dirname "$LID_CONF")"
+  printf '[Login]\nHandleLidSwitch=ignore\nHandleLidSwitchExternalPower=ignore\nHandleLidSwitchDocked=ignore\n' |
+    sudo tee "$LID_CONF" >/dev/null
+  sudo systemctl restart systemd-logind
+
+  # Trim the radios that are not needed for phone piloting.
+  sudo systemctl stop bluetooth.service 2>/dev/null || true
+  sudo rfkill block bluetooth 2>/dev/null || true
+
+  # Screen off, remembered for `off`.
+  brightnessctl get >"$BRIGHTNESS_SAVE" 2>/dev/null || true
+  sudo brightnessctl set 1% >/dev/null 2>&1 || true
+
+  echo "Phone mode: OpenCode + Telegram only. Switching to multi-user in 2s."
+  sudo systemd-run --collect --unit=opencode-phone-mode-switch --on-active=2 \
+    systemctl isolate multi-user.target >/dev/null
+}
+
+phone_off() {
+  require_sudo
+  rm -f "$STATE_DIR/active"
+  if [ -s "$BRIGHTNESS_SAVE" ]; then
+    sudo brightnessctl set "$(cat "$BRIGHTNESS_SAVE")" >/dev/null 2>&1 || true
+  fi
+  sudo rfkill unblock bluetooth 2>/dev/null || true
+  sudo systemctl start bluetooth.service 2>/dev/null || true
+  sudo rm -f "$LID_CONF"
+  sudo systemctl restart systemd-logind
+  sudo systemctl isolate graphical.target
+  echo "Desktop mode restored."
+}
+
+phone_status() {
+  local mode="desktop"
+  systemctl is-active --quiet graphical.target || mode="phone (headless)"
+  echo "mode: $mode"
+  for u in "${UNITS[@]}"; do
+    printf '%-32s %s\n' "$u" "$(systemctl --user is-active "$u" 2>/dev/null || echo unknown)"
+  done
+  if [ -r /sys/class/power_supply/BAT0/capacity ]; then
+    echo "battery: $(cat /sys/class/power_supply/BAT0/capacity)% $(cat /sys/class/power_supply/BAT0/status 2>/dev/null)"
+  fi
+  echo "governor: $(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor 2>/dev/null || echo unknown)"
+  if [ -e "$STATE_DIR/active" ] && ! systemctl is-active --quiet graphical.target; then
+    echo "battery mode: on (agents asked to stay light)"
+  else
+    echo "battery mode: off"
+  fi
+}
+
+case "${1:-toggle}" in
+  on) phone_on ;;
+  off) phone_off ;;
+  status) phone_status ;;
+  toggle)
+    if systemctl is-active --quiet graphical.target; then phone_on; else phone_off; fi
+    ;;
+  -h|--help|help) usage ;;
+  *) usage; exit 2 ;;
+esac

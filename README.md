@@ -177,6 +177,8 @@ Assets for every wallpaper live in `~/.cache/wallcut/`:
 
 `set-wallpaper` regenerates them in the background on every change. `wallcut.sh -f <image>` cuts one image; `SUPER ALT+X` re-cuts the current wallpaper and notifies when it finishes. The blur always lands, even when rembg finds no subject or is not installed; only the cutout is optional. GIFs use their first frame.
 
+Placement is geometry, not guesswork: the alpha grid scores where the subject actually sits, the clock stays centred and level unless she buries a digit pair, and a placement that has to move is written to `~/.config/quickshell/desktopclock.json` so that wallpaper never re-decides. `quickshell -p ~/.config/quickshell ipc call desktopclock layout center` (or `row`, `stack`, `auto`) forces a mode; `unpin` clears the stored placement.
+
 ### Bar pills
 
 Thin widgets. They display state and delegate detail to panels.

@@ -46,7 +46,7 @@ Item {
     readonly property rect glyphRect: maskGlyphs.textRect
     readonly property size rowTextSize: Qt.size(rowMeasure.textRect.width, rowMeasure.textRect.height)
     readonly property size stackTextSize: Qt.size(stackMeasure.textRect.width, stackMeasure.textRect.height)
-    readonly property real rim: Math.max(2, height * 0.0024)
+    readonly property real rim: Math.max(2.5, height * 0.0032)
 
     // blend two theme colors, keeping the hue but borrowing luminance
     function mixColor(a, b, t, alpha) {
@@ -201,9 +201,9 @@ Item {
             Rectangle {
                 anchors.fill: parent
                 gradient: Gradient {
-                    GradientStop { position: 0.00; color: root.mixColor(root.primary, root.foreground, 0.55, 0.74) }
-                    GradientStop { position: 0.55; color: root.mixColor(root.secondary, root.foreground, 0.30, 0.30) }
-                    GradientStop { position: 1.00; color: root.mixColor(root.primary, root.foreground, 0.10, 0.52) }
+                    GradientStop { position: 0.00; color: root.mixColor(root.primary, root.foreground, 0.55, 0.32) }
+                    GradientStop { position: 0.55; color: root.mixColor(root.secondary, root.foreground, 0.30, 0.16) }
+                    GradientStop { position: 1.00; color: root.mixColor(root.primary, root.foreground, 0.10, 0.24) }
                 }
             }
 

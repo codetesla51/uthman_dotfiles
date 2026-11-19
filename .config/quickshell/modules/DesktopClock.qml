@@ -107,12 +107,15 @@ PanelWindow {
     readonly property color outline: colors.outline
 
     // ---- layout: auto picks row unless the subject would bury a digit pair ----
-    property string cfgLayout: "auto"       // auto | row | stack
+    property string cfgLayout: "auto"       // auto | center | row | stack
     property var cfgOverrides: ({})
     property string autoLayout: "row"
-    readonly property string layout: cfgOverrides[wallName] !== undefined
-        ? cfgOverrides[wallName]
-        : (cfgLayout === "auto" ? autoLayout : cfgLayout)
+    readonly property string layout: {
+        var ov = overrideFor(wallName)
+        var mode = ov ? (ov.layout || "auto") : cfgLayout
+        if (mode === "auto") return autoLayout
+        return mode === "center" ? "row" : mode
+    }
 
     SystemClock {
         id: clock
@@ -274,52 +277,29 @@ PanelWindow {
         return best
     }
 
-    function choosePlacement() {
-        if (!cutGrid || gridW <= 0) {
-            autoLayout = "row"
-            shiftX = 0
-            shiftY = 0
-            clockTilt = 0
-            return
-        }
+    // Overrides accept either a bare mode ("center", "row", "stack") or a
+    // pinned object ({ layout, x, y }). A pin is written the first time auto
+    // has to move the clock off centre, so a wallpaper keeps the placement it
+    // was composed with instead of drifting between loads.
+    function overrideFor(name) {
+        var o = cfgOverrides ? cfgOverrides[name] : undefined
+        if (o === undefined || o === null) return null
+        if (typeof o === "string") return { layout: o }
+        if (typeof o === "object") return o
+        return null
+    }
 
-        var rowW = clock2.rowTextSize.width, rowH = clock2.rowTextSize.height
-        var stackW = clock2.stackTextSize.width, stackH = clock2.stackTextSize.height
-        if (rowW <= 0 || rowH <= 0 || stackW <= 0 || stackH <= 0) return
-
-        var forced = cfgOverrides[wallName] !== undefined
-            ? cfgOverrides[wallName]
-            : (cfgLayout !== "auto" ? cfgLayout : "")
-
-        var row = bestSpot(rowW, rowH, false)
-        var stack = null
-        var useStack = false
-
-        if (forced === "stack") {
-            useStack = true
-        } else if (forced === "") {
-            stack = bestSpot(stackW, stackH, true)
-            // Row stays the default. Stack only when the row cannot keep a
-            // digit pair readable, and only if stacking clearly improves it.
-            // 24% of a zone is already enough to make a pair squint-worthy.
-            useStack = row.peak > 0.24 && stack.peak < row.peak - 0.06
-        }
-
-        if (useStack && stack === null)
-            stack = bestSpot(stackW, stackH, true)
-        var pick = useStack ? stack : row
-        autoLayout = useStack ? "stack" : "row"
-        shiftX = pick.x
-        shiftY = pick.y
-
-        var gw = useStack ? stackW : rowW
-        var gh = useStack ? stackH : rowH
-        var box = Qt.rect((width - gw) / 2 + pick.x * width,
-                          (height - gh) / 2 + pick.y * height, gw, gh)
+    function setBox(gw, gh, sx, sy) {
+        shiftX = sx
+        shiftY = sy
+        var box = Qt.rect((width - gw) / 2 + sx * width,
+                          (height - gh) / 2 + sy * height, gw, gh)
         var contact = cutoutExists && showCutout ? contactCentroid(box) : null
-        if (contact && pick.cov >= 0.04) {
-            // Lift the side the subject stands on, pivoting on the actual
-            // contact mass so the digits read as resting against her.
+        // Only a shifted clock leans. A centred one stays level: a tilt there
+        // reads as a mistake, not as the type resting against her.
+        if (contact && coverageOf(box) >= 0.04 && Math.abs(sx) > 0.02) {
+            // Lean only when the subject actually crosses the digits, pivoting
+            // on the contact mass so the type reads as resting against her.
             var subjX = cutBBox ? (cutBBox[0] + cutBBox[2]) * 0.5 * width : width / 2
             var dir = subjX > width / 2 + width * 0.04 ? -1
                     : (subjX < width / 2 - width * 0.04 ? 1 : -1)
@@ -333,9 +313,110 @@ PanelWindow {
         }
     }
 
+    // Write the resolved placement into desktopclock.json so this wallpaper
+    // never re-decides. Centre placements are deterministic and stay out of
+    // the file; only a real shift is worth remembering.
+    property string pinnedFor: ""
+    function pinPlacement(gw, gh, sx, sy) {
+        if (pinnedFor === wallName || wallName === "") return
+        if (Math.abs(sx) < 0.001 && Math.abs(sy) < 0.001) return
+        if (overrideFor(wallName) !== null) return
+        pinnedFor = wallName
+        var o = {}
+        for (var k in cfgOverrides) o[k] = cfgOverrides[k]
+        o[wallName] = { layout: autoLayout, x: Math.round(sx * 1000) / 1000,
+                        y: Math.round(sy * 1000) / 1000 }
+        writeCfg(o)
+    }
+
+    function writeCfg(overrides) {
+        var payload = { layout: cfgLayout, overrides: overrides }
+        var b64 = Qt.btoa(JSON.stringify(payload))
+        cfgProc.command = ["sh", "-c",
+            "mkdir -p '" + Quickshell.env("HOME") + "/.config/quickshell' && " +
+            "echo '" + b64 + "' | base64 -d > '" +
+            Quickshell.env("HOME") + "/.config/quickshell/desktopclock.json'"]
+        cfgProc.running = true
+    }
+
+    // Switching mode always clears the pin for this wallpaper: a stored
+    // placement would otherwise outvote the mode the user just asked for.
+    function setMode(mode) {
+        cfgLayout = (mode === "" || mode === "auto") ? "auto" : mode
+        if (overrideFor(wallName) !== null) {
+            var o = {}
+            for (var k in cfgOverrides)
+                if (k !== wallName) o[k] = cfgOverrides[k]
+            cfgOverrides = o
+            writeCfg(o)
+        }
+        pinnedFor = ""
+        Qt.callLater(choosePlacement)
+    }
+    function unpin() { setMode("auto") }
+
+    function choosePlacement() {
+        if (!cutGrid || gridW <= 0) {
+            autoLayout = "row"
+            shiftX = 0
+            shiftY = 0
+            clockTilt = 0
+            return
+        }
+
+        var rowW = clock2.rowTextSize.width, rowH = clock2.rowTextSize.height
+        var stackW = clock2.stackTextSize.width, stackH = clock2.stackTextSize.height
+        if (rowW <= 0 || rowH <= 0 || stackW <= 0 || stackH <= 0) return
+
+        var ov = overrideFor(wallName)
+        var mode = ov ? (ov.layout || "auto") : cfgLayout
+
+        // A pin wins outright: the placement that was chosen once stays put.
+        if (ov && (ov.x !== undefined || ov.y !== undefined)) {
+            autoLayout = ov.layout === "stack" ? "stack" : "row"
+            var pgw = autoLayout === "stack" ? stackW : rowW
+            var pgh = autoLayout === "stack" ? stackH : rowH
+            setBox(pgw, pgh, Number(ov.x) || 0, Number(ov.y) || 0)
+            return
+        }
+
+        if (mode === "stack") {
+            var sp = bestSpot(stackW, stackH, true)
+            autoLayout = "stack"
+            setBox(stackW, stackH, sp.x, sp.y)
+            pinPlacement(stackW, stackH, sp.x, sp.y)
+            return
+        }
+
+        // row, center and auto all use the single row: stacking moved the
+        // clock into a corner more often than it bought readability.
+        autoLayout = "row"
+
+        if (mode === "center") {
+            setBox(rowW, rowH, 0, 0)
+            return
+        }
+
+        var rowCenter = Qt.rect((width - rowW) / 2, (height - rowH) / 2, rowW, rowH)
+        var peak = zonePeak(rowCenter, false)
+        if (mode === "row" || peak <= 0.30) {
+            // Nothing is really buried: stay exactly centred.
+            setBox(rowW, rowH, 0, 0)
+            return
+        }
+
+        var row = bestSpot(rowW, rowH, false)
+        setBox(rowW, rowH, row.x, row.y)
+        pinPlacement(rowW, rowH, row.x, row.y)
+    }
+
     onLayoutChanged: Qt.callLater(choosePlacement)
     onWidthChanged: Qt.callLater(choosePlacement)
     onHeightChanged: Qt.callLater(choosePlacement)
+    // A pin or mode loaded after the sidecar already placed the clock has to
+    // win, otherwise the stored position only applies from the next reload.
+    onCfgOverridesChanged: Qt.callLater(choosePlacement)
+    onCfgLayoutChanged: Qt.callLater(choosePlacement)
 
     Connections {
         target: clock2
@@ -517,16 +598,18 @@ PanelWindow {
         }
     }
 
+    Process { id: cfgProc }
+
     FileView {
         id: cfgView
         path: Quickshell.env("HOME") + "/.config/quickshell/desktopclock.json"
         printErrors: false
         onLoaded: {
-            try {
-                var o = JSON.parse(text())
-                if (o && typeof o.layout === "string") root.cfgLayout = o.layout
-                if (o && o.overrides) root.cfgOverrides = o.overrides
-            } catch (e) {}
+            var o = null
+            try { o = JSON.parse(text()) } catch (e) { o = null }
+            if (o === null) return
+            root.cfgLayout = typeof o.layout === "string" ? o.layout : "auto"
+            root.cfgOverrides = (o.overrides && typeof o.overrides === "object") ? o.overrides : ({})
         }
     }
 
@@ -535,6 +618,7 @@ PanelWindow {
         cutGrid = null
         gridW = 0
         gridH = 0
+        pinnedFor = ""
         // Keep the current shift/tilt until the new sidecar lands: resetting
         // here made the clock flash through the centre on every switch.
         metaView.path = ""
@@ -554,7 +638,8 @@ PanelWindow {
         function toggleCutout(): void { root.forceHideCutout = !root.forceHideCutout }
         function toggle(): void { root.showClock = !root.showClock }
         function show(on: bool): void { root.showClock = on }
-        function layout(mode: string): void { root.cfgLayout = mode }
+        function layout(mode: string): void { root.setMode(mode) }
+        function unpin(): void { root.unpin() }
         // diagnostic: what the layer actually thinks it has
         function state(): string {
             return JSON.stringify({

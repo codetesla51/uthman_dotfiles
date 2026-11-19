@@ -330,9 +330,6 @@ PanelWindow {
     }
 
     function writeCfg(overrides) {
-        // Keep the in-memory map in step with the file: the next pin merges
-        // from here, and without this the previous pin is overwritten.
-        cfgOverrides = overrides
         var payload = { layout: cfgLayout, overrides: overrides }
         var b64 = Qt.btoa(JSON.stringify(payload))
         cfgProc.command = ["sh", "-c",
@@ -401,77 +398,16 @@ PanelWindow {
         }
 
         var rowCenter = Qt.rect((width - rowW) / 2, (height - rowH) / 2, rowW, rowH)
-        var centerPeak = zonePeak(rowCenter, false)
-        if (mode === "row") {
+        var peak = zonePeak(rowCenter, false)
+        if (mode === "row" || peak <= 0.30) {
+            // Nothing is really buried: stay exactly centred.
             setBox(rowW, rowH, 0, 0)
             return
         }
 
-        // Visibility first: the centred row is only kept when she barely
-        // touches it. Otherwise scan for the spot where the digits are least
-        // covered, with centre as the tiebreak and distance as a cost.
-        if (centerPeak <= 0.08) {
-            setBox(rowW, rowH, 0, 0)
-            return
-        }
-
-        var rowSpot = bestVisible(rowW, rowH, false)
-        var stackSpot = bestVisible(stackW, stackH, true)
-
-        // A centred subject leaves no room for a 1218px row, but the 490px
-        // stacked column fits beside her. Take the column when it is clearly
-        // cleaner, otherwise the best row, otherwise stay centred.
-        var pick = null
-        var pickLayout = "row"
-        if (stackSpot !== null && stackSpot.peak < Math.min(rowSpot.peak, centerPeak) - 0.05) {
-            pick = stackSpot
-            pickLayout = "stack"
-        } else if (rowSpot !== null && rowSpot.peak <= centerPeak - 0.08) {
-            pick = rowSpot
-        }
-        if (pick === null) {
-            setBox(rowW, rowH, 0, 0)
-            return
-        }
-
-        autoLayout = pickLayout
-        var pw = pickLayout === "stack" ? stackW : rowW
-        var ph = pickLayout === "stack" ? stackH : rowH
-        setBox(pw, ph, pick.x, pick.y)
-        pinPlacement(pw, ph, pick.x, pick.y)
-    }
-
-    // Lowest occlusion wins, not lowest distance from centre. A move has to
-    // buy at least 8% of a digit pair to be worth leaving centre for.
-    function bestVisible(gw, gh, stacked) {
-        var cx = (width - gw) / 2
-        var cy = (height - gh) / 2
-        var mx = Math.max(16, width * 0.05)
-        var top = Math.max(64, height * 0.06)
-        var bottom = height * 0.085
-        var minSX = (mx - cx) / width
-        var maxSX = (width - mx - gw - cx) / width
-        var minSY = (top - cy) / height
-        var maxSY = (height - bottom - gh - cy) / height
-        if (minSX > maxSX) { minSX = 0; maxSX = 0 }
-        if (minSY > maxSY) { minSY = 0; maxSY = 0 }
-
-        var xs = [0, -0.07, 0.07, -0.14, 0.14, -0.21, 0.21, -0.28, 0.28, -0.34, 0.34]
-        var ys = [0, -0.07, 0.07, -0.14, 0.14]
-        var best = null
-        for (var iy = 0; iy < ys.length; iy++) {
-            for (var ix = 0; ix < xs.length; ix++) {
-                var sx = Math.max(minSX, Math.min(maxSX, xs[ix]))
-                var sy = Math.max(minSY, Math.min(maxSY, ys[iy]))
-                var r = Qt.rect(cx + sx * width, cy + sy * height, gw, gh)
-                var peak = zonePeak(r, stacked)
-                var cov = coverageOf(r)
-                var score = peak * 6 + cov * 0.5 + 0.15 * (Math.abs(sx) + Math.abs(sy))
-                if (best === null || score < best.score)
-                    best = { x: sx, y: sy, peak: peak, cov: cov, score: score }
-            }
-        }
-        return best
+        var row = bestSpot(rowW, rowH, false)
+        setBox(rowW, rowH, row.x, row.y)
+        pinPlacement(rowW, rowH, row.x, row.y)
     }
 
     onLayoutChanged: Qt.callLater(choosePlacement)

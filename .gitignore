@@ -2,6 +2,8 @@
 .env
 # wallhaven api key for wallshelf — local secret
 .config/quickshell/wallshelf.ini
+# per-machine clock pins: positions chosen on this screen
+.config/quickshell/desktopclock.json
 *.secret
 *.key
 *.pem

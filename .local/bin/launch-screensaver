@@ -8,7 +8,7 @@ focused=$(hyprctl monitors -j 2>/dev/null | jq -r '.[] | select(.focused==true) 
 EFFECT_ARGS=""
 [[ "$*" == *"decrypt"* ]] && EFFECT_ARGS="--effect decrypt"
 for m in $(hyprctl monitors -j 2>/dev/null | jq -r '.[] | .name' 2>/dev/null); do
-  hyprctl dispatch focusmonitor "$m" >/dev/null 2>&1
-  hyprctl dispatch exec -- kitty --class=org.screensaver -o font_size=10 -o tab_bar_min_tabs=2 -e screensaver $EFFECT_ARGS >/dev/null 2>&1 &
+  hyprctl dispatch "hl.dsp.focus({ monitor = \"$m\" })" >/dev/null 2>&1
+  hyprctl dispatch "hl.dsp.exec_cmd(\"kitty --class=org.screensaver -o font_size=10 -o tab_bar_min_tabs=2 -e screensaver $EFFECT_ARGS\")" >/dev/null 2>&1 &
 done
-[ -n "$focused" ] && hyprctl dispatch focusmonitor "$focused" >/dev/null 2>&1
+[ -n "$focused" ] && hyprctl dispatch "hl.dsp.focus({ monitor = \"$focused\" })" >/dev/null 2>&1

@@ -17,7 +17,7 @@ exit_screensaver() {
 trap exit_screensaver SIGINT SIGTERM SIGHUP SIGQUIT
 printf '\033]11;rgb:00/00/00\007'
 hyprctl keyword cursor:invisible true &>/dev/null || true
-hyprctl dispatch focuswindow 'class:org.screensaver' &>/dev/null || true
+hyprctl dispatch 'hl.dsp.focus({ window = "class:org.screensaver" })' &>/dev/null || true
 tty=$(tty 2>/dev/null)
 BRAND_FILE="$HOME/.config/branding"
 [ -f "$BRAND_FILE" ] || BRAND_FILE="$HOME/.config/branding/screensaver.txt"

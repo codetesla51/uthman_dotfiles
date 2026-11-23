@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# raminfo — print the DIMM layout and cache it for fastfetch.
+# fastfetch can't read SMBIOS without root, so this dumps it once and
+# fastfetch reads the two-line cache instead.
+set -euo pipefail
+
+cache="${XDG_CACHE_HOME:-$HOME/.cache}/raminfo"
+tmp="$(mktemp)"
+trap 'rm -f "$tmp"' EXIT
+
+sudo dmidecode -t memory | awk -F': ' '
+  function flush() {
+    if (slot == "") return
+    if (size ~ /No Module/) print "empty · " chan
+    else print size " · " speed " · " chan
+    slot = ""; size = ""; speed = ""; chan = ""
+  }
+  /^Handle/ { flush(); next }
+  {
+    key = $1
+    sub(/^[ \t]+/, "", key)
+    val = $2
+    if (key == "Locator") slot = val
+    else if (key == "Bank Locator") chan = val
+    else if (key == "Size") size = val
+    else if (key == "Speed") speed = val
+  }
+  END { flush() }
+' | sed 's/ MT\/s//; s/Channel/Ch/' > "$tmp"
+
+mv "$tmp" "$cache"
+cat "$cache"

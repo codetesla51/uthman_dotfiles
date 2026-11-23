@@ -80,12 +80,10 @@ def cursor_color(palette: dict[str, str]) -> tuple[int, int, int]:
     return base
 
 
-def recolor_xcursor(path: Path, target: tuple[int, int, int]) -> None:
-    """Recolor grayscale BGRA-premultiplied pixels in an XCursor file."""
-    data = bytearray(path.read_bytes())
+def xcursor_chunks(data: bytearray):
+    """Yield (pixel_start, pixel_end, width, height) for each image chunk."""
     if data[:4] != b"Xcur":
         return
-
     try:
         toc_count = int.from_bytes(data[12:16], "little")
         positions = [
@@ -99,34 +97,98 @@ def recolor_xcursor(path: Path, target: tuple[int, int, int]) -> None:
         end = positions[index + 1] if index + 1 < len(positions) else len(data)
         if start + 40 > end:
             continue
-
-        image_type = int.from_bytes(data[start + 4 : start + 8], "little")
-        if image_type != 0xFFFD0002:
+        if int.from_bytes(data[start + 4 : start + 8], "little") != 0xFFFD0002:
             continue
 
         header_size = int.from_bytes(data[start : start + 4], "little")
         width = int.from_bytes(data[start + 16 : start + 20], "little")
         height = int.from_bytes(data[start + 20 : start + 24], "little")
-        pixel_start = start + 4 + header_size
+        # The chunk starts with its header; pixel data follows immediately.
+        pixel_start = start + header_size
         pixel_end = min(end, pixel_start + width * height * 4)
-        if width <= 0 or height <= 0 or pixel_start >= pixel_end:
-            continue
+        if width > 0 and height > 0 and pixel_start < pixel_end:
+            yield pixel_start, pixel_end, width, height
 
-        for offset in range(pixel_start, pixel_end - 3, 4):
-            blue, green, red, alpha = data[offset : offset + 4]
-            if alpha == 0:
-                continue
-            # Bibata Ice is grayscale. Preserve any unexpected non-gray pixels.
-            if max(blue, green, red) - min(blue, green, red) > 6:
-                continue
-            intensity = max(blue, green, red)
-            data[offset : offset + 3] = bytes(
-                (
-                    round(target[2] * intensity / 255),
-                    round(target[1] * intensity / 255),
-                    round(target[0] * intensity / 255),
-                )
+
+def tint_pixels(data: bytearray, target: tuple[int, int, int]) -> None:
+    """Tint one packed BGRA pixel buffer in place (grayscale, opaque pixels only)."""
+    for offset in range(0, len(data) - 3, 4):
+        blue, green, red, alpha = data[offset : offset + 4]
+        if alpha == 0:
+            continue
+        # Bibata Ice is grayscale. Preserve any unexpected non-gray pixels.
+        if max(blue, green, red) - min(blue, green, red) > 6:
+            continue
+        intensity = max(blue, green, red)
+        data[offset : offset + 3] = bytes(
+            (
+                round(target[2] * intensity / 255),
+                round(target[1] * intensity / 255),
+                round(target[0] * intensity / 255),
             )
+        )
+
+
+try:
+    from PIL import Image, ImageChops
+except ImportError:  # Pillow is optional; the pure-Python path still works.
+    Image = None
+
+
+def recolor_xcursor(path: Path, target: tuple[int, int, int]) -> None:
+    """Recolor grayscale BGRA pixels in an XCursor file.
+
+    Animated cursors hold hundreds of frames. Pillow applies the tint to all
+    frames of the same size in one C-level pass; the per-pixel Python loop is
+    only a fallback and is ~30x slower.
+    """
+    data = bytearray(path.read_bytes())
+    chunks = list(xcursor_chunks(data))
+    if not chunks:
+        return
+
+    if Image is None:
+        for pixel_start, pixel_end, _, _ in chunks:
+            pixels = bytearray(data[pixel_start:pixel_end])
+            tint_pixels(pixels, target)
+            data[pixel_start:pixel_end] = pixels
+        path.write_bytes(data)
+        return
+
+    lookups = []
+    for channel in (target[0], target[1], target[2]):
+        lookups.append([min(255, round(channel * value / 255)) for value in range(256)])
+    red_lut, green_lut, blue_lut = lookups
+
+    grouped: dict[tuple[int, int], list[tuple[int, int]]] = {}
+    for pixel_start, pixel_end, width, height in chunks:
+        if pixel_end - pixel_start == width * height * 4:
+            grouped.setdefault((width, height), []).append((pixel_start, pixel_end))
+
+    for (width, height), regions in grouped.items():
+        buffer = b"".join(bytes(data[start:end]) for start, end in regions)
+        image = Image.frombytes("RGBA", (width, height * len(regions)), buffer, "raw", "BGRA")
+        red, green, blue, alpha = image.split()
+        brightest = ImageChops.lighter(ImageChops.lighter(red, green), blue)
+        darkest = ImageChops.darker(ImageChops.darker(red, green), blue)
+        near_gray = ImageChops.subtract(brightest, darkest).point(
+            lambda value: 255 if value <= 6 else 0
+        )
+        visible = alpha.point(lambda value: 255 if value else 0)
+        mask = ImageChops.multiply(near_gray, visible)
+        tinted = Image.merge(
+            "RGBA",
+            (
+                brightest.point(red_lut),
+                brightest.point(green_lut),
+                brightest.point(blue_lut),
+                alpha,
+            ),
+        )
+        recolored = Image.composite(tinted, image, mask).tobytes("raw", "BGRA")
+        stride = width * height * 4
+        for index, (start, end) in enumerate(regions):
+            data[start:end] = recolored[index * stride : (index + 1) * stride]
 
     path.write_bytes(data)
 

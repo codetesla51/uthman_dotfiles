@@ -4,7 +4,6 @@ import Quickshell.Wayland
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
-import QtQuick.Effects
 import QtQuick.LocalStorage 2.0
 import "../components/Bloom.js" as Bloom
 
@@ -214,16 +213,6 @@ PanelWindow {
             scale: 0.92 + 0.08 * shell.barP
             transform: Translate { id: barShift; y: -6 * (1 - shell.barP) }
 
-            // soft drop shadow, same idea as the mock's box-shadow
-            layer.enabled: true
-            layer.effect: MultiEffect {
-                shadowEnabled: true
-                shadowBlur: 0.85
-                blurMax: 40
-                shadowVerticalOffset: 16
-                shadowColor: Qt.rgba(0, 0, 0, 0.55)
-            }
-
             RowLayout {
                 anchors.fill: parent
                 anchors.leftMargin: 18
@@ -304,15 +293,6 @@ PanelWindow {
             scale: 0.3 + 0.7 * shell.cardP
             transformOrigin: Item.Top
             transform: Translate { id: resultShift; y: -10 * (1 - shell.cardP) }
-
-            layer.enabled: true
-            layer.effect: MultiEffect {
-                shadowEnabled: true
-                shadowBlur: 0.9
-                blurMax: 48
-                shadowVerticalOffset: 22
-                shadowColor: Qt.rgba(0, 0, 0, 0.55)
-            }
 
             Item {
                 id: listArea

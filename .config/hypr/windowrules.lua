@@ -50,11 +50,15 @@ hl.window_rule({ match = { class = "org.screensaver" }, float = true, fullscreen
 -- would otherwise win).
 hl.window_rule({
   match = { class = "^(org.pwmt.zathura)$" },
+  -- vendor/windows.lua tags every window default-opacity and then applies a
+  -- 0.985 opacity to that tag. Opt out so the glass opacity below wins.
+  tag = "-default-opacity",
   float = true,
   center = true,
   size = { 1100, 750 },
   border_size = 0,
-  opacity = "0.78 0.70 0.78",
+  opaque = false,
+  opacity = "1.0 1.0 1.0",
 })
 
 -- mpv — centered floating popup.

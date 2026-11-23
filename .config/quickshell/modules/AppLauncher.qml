@@ -4,6 +4,7 @@ import Quickshell.Wayland
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
+import QtQuick.Effects
 import QtQuick.LocalStorage 2.0
 import "../components/Bloom.js" as Bloom
 
@@ -28,8 +29,8 @@ PanelWindow {
     property bool allowHover: false
     Component.onCompleted: loadStores()
     onOpenChanged: {
-        if (open) { search.text = ""; selected = filtered.length > 0 ? 0 : -1; allowHover = false; Qt.callLater(function(){ search.forceActiveFocus() }); openAnim.restart() }
-        else closeAnim.restart()
+        if (open) { closeAnim.stop(); flashAnim.restart(); search.text = ""; selected = filtered.length > 0 ? 0 : -1; allowHover = false; Qt.callLater(function(){ search.forceActiveFocus() }); openAnim.restart() }
+        else { openAnim.stop(); flashAnim.stop(); closeAnim.restart() }
     }
     // no timer — hover enables on first mouse move only, so open doesn't auto-highlight
 
@@ -146,311 +147,327 @@ PanelWindow {
         })
     }
 
-    // click-outside catcher (invisible — no dim backdrop, card floats over desktop)
+    // click-outside catcher (invisible — no dim backdrop, glass floats over desktop)
     Rectangle {
         anchors.fill: parent
         color: "transparent"
         MouseArea { anchors.fill: parent; onClicked: root.open = false }
     }
 
-    Rectangle {
-        id: card
+    // Design C — two stacked glass surfaces. No rails, no hairlines, no borders:
+    // the bar and the card are separated by tone and 10px of space only.
+    Item {
+        id: shell
         anchors.centerIn: parent
-        width: 750
-        height: Math.min(520, col.implicitHeight + 28)
-        radius: 18
-        color: colors.alpha(colors.surface, 0.52)
-        border.width: 1
-        border.color: colors.alpha(colors.outline, 0.15)
-        Keys.onEscapePressed: root.open = false
+        width: 600
+        height: barItem.height + gap + resultsCard.height
         focus: root.open
-        transform: Translate { id: bloomOrigin }
+        Keys.onEscapePressed: root.open = false
 
-        // bezier pair — open pops with overshoot bounce (fast), close hurries
-        // out with none. Same curves as the notification drawer.
-        ParallelAnimation {
+        readonly property int gap: 10
+        readonly property int rowH: 52
+        readonly property int rowGap: 3
+        readonly property int footerH: 40
+        // Fixed viewport: typing only swaps rows inside it. If this tracked
+        // filtered.length, the card resized on every keystroke and the whole
+        // center-anchored shell jumped — that was the "reload" while searching.
+        readonly property int listH: 7 * (rowH + rowGap) - rowGap
+
+        // Direction C — "Unfold / Lens", but on ONE continuous timeline. The
+        // previous version gave the bar its own POP bounce, paused 100ms, then
+        // unrolled the card on a different curve; the seam read as a clunk.
+        // A single eased reveal drives both surfaces and every sub-property,
+        // so bar → card is one uninterrupted move. The sub-ranges overlap so
+        // the card is already moving while the bar settles.
+        property real reveal: 0
+        readonly property real barP: Math.min(1, reveal / 0.40)
+        readonly property real cardP: Math.min(1, Math.max(0, (reveal - 0.10) / 0.90))
+        readonly property var outCurve: [0.2, 0.8, 0.2, 1]
+
+        NumberAnimation {
             id: openAnim
-            NumberAnimation { target: bloomOrigin; property: "y"; from: -(root.height / 2 - 34); to: 0; duration: Bloom.panel; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.spring }
-            NumberAnimation { target: card; property: "rotation"; from: Bloom.panelRotate; to: 0; duration: Bloom.panel; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.spring }
-            NumberAnimation { target: card; property: "opacity"; from: 0; to: 1; duration: Bloom.normal; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.out }
-            NumberAnimation { target: card; property: "scale"; from: Bloom.panelScale; to: 1; duration: Bloom.panel; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.spring }
+            target: shell; property: "reveal"; to: 1
+            duration: 460; easing.type: Easing.Bezier; easing.bezierCurve: shell.outCurve
         }
-        ParallelAnimation {
+        NumberAnimation {
             id: closeAnim
-            NumberAnimation { target: bloomOrigin; property: "y"; to: -(root.height / 2 - 34); duration: Bloom.close; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.out }
-            NumberAnimation { target: card; property: "rotation"; to: Bloom.panelRotate; duration: Bloom.close; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.out }
-            NumberAnimation { target: card; property: "opacity"; to: 0; duration: Bloom.close; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.out }
-            NumberAnimation { target: card; property: "scale"; to: Bloom.panelScale; duration: Bloom.close; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.out }
+            target: shell; property: "reveal"; to: 0
+            duration: 300; easing.type: Easing.Bezier; easing.bezierCurve: shell.outCurve
+        }
+        SequentialAnimation {
+            id: flashAnim
+            ColorAnimation { target: barItem; property: "border.color"; from: colors.alpha(colors.outline, 0); to: colors.alpha(colors.primary, 0.9); duration: 110; easing.type: Easing.Bezier; easing.bezierCurve: shell.outCurve }
+            ColorAnimation { target: barItem; property: "border.color"; to: colors.alpha(colors.outline, 0.18); duration: 110; easing.type: Easing.Bezier; easing.bezierCurve: shell.outCurve }
         }
 
-        RowLayout {
-            id: col
-            anchors { left: parent.left; right: parent.right; top: parent.top; margins: 14 }
-            spacing: 12
+        // ── search bar ──────────────────────────────────────────────
+        Rectangle {
+            id: barItem
+            z: 2
+            width: parent.width
+            height: 58
+            radius: 18
+            color: colors.alpha(colors.surface, 0.78)
+            border.width: 1
+            border.color: colors.alpha(colors.outline, 0.18)
+            opacity: shell.barP
+            scale: 0.92 + 0.08 * shell.barP
+            transform: Translate { id: barShift; y: -6 * (1 - shell.barP) }
 
-            // brand rail — Hollow Knight mask, live caption under it
+            // soft drop shadow, same idea as the mock's box-shadow
+            layer.enabled: true
+            layer.effect: MultiEffect {
+                shadowEnabled: true
+                shadowBlur: 0.85
+                blurMax: 40
+                shadowVerticalOffset: 16
+                shadowColor: Qt.rgba(0, 0, 0, 0.55)
+            }
+
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 18
+                anchors.rightMargin: 18
+                spacing: 12
+
+                Image {
+                    // Hollow Knight mark, carried over from the brand rail.
+                    // Crop the transparent padding (art bbox 131,56 237x388)
+                    // so the mark fills the box instead of shrinking inside it.
+                    source: Quickshell.env("HOME") + "/.config/quickshell/assets/hk-mask-white.png"
+                    sourceClipRect: Qt.rect(131, 56, 237, 388)
+                    Layout.preferredWidth: 44
+                    Layout.preferredHeight: 44
+                    fillMode: Image.PreserveAspectFit
+                    mipmap: true
+                    asynchronous: true
+                    opacity: 0.95
+                }
+
+                TextField {
+                    id: search
+                    Layout.fillWidth: true
+                    placeholderText: "Search apps…"
+                    placeholderTextColor: colors.alpha(colors.outline, 0.5)
+                    color: colors.foreground
+                    font.family: colors.fontSans
+                    font.pixelSize: 17
+                    background: null
+                    selectByMouse: true
+                    Keys.onPressed: function(event) {
+                        if (event.key === Qt.Key_Down) { root.selected = Math.min(root.selected+1, root.filtered.length-1); resultList.positionViewAtIndex(root.selected, ListView.Contain); event.accepted = true }
+                        else if (event.key === Qt.Key_Up) { root.selected = Math.max(root.selected-1, 0); resultList.positionViewAtIndex(root.selected, ListView.Contain); event.accepted = true }
+                        else if (event.key === Qt.Key_Escape) { root.open = false; event.accepted = true }
+                        else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+                            var e = root.filtered[root.selected]
+                            if (e) root.launch(e)
+                            event.accepted = true
+                        }
+                    }
+                    onTextChanged: root.selected = 0
+                }
+
+                Text {
+                    visible: search.text !== ""
+                    text: "󰅖"
+                    color: clearMouse.containsMouse ? colors.foreground : colors.alpha(colors.outline, 0.6)
+                    font.family: colors.fontSans
+                    font.pixelSize: 13
+                    MouseArea { id: clearMouse; anchors.fill: parent; hoverEnabled: true; onClicked: search.text = "" }
+                }
+
+                Rectangle {
+                    Layout.preferredWidth: 32
+                    Layout.preferredHeight: 22
+                    radius: 6
+                    color: colors.alpha(colors.foreground, 0.06)
+                    Text {
+                        anchors.centerIn: parent
+                        text: "esc"
+                        color: colors.alpha(colors.outline, 0.7)
+                        font.family: colors.fontSans
+                        font.pixelSize: 10
+                    }
+                }
+            }
+        }
+
+        // ── results card ────────────────────────────────────────────
+        Rectangle {
+            id: resultsCard
+            y: barItem.height + shell.gap
+            width: parent.width
+            height: 7 + shell.listH + shell.footerH
+            radius: 18
+            color: colors.alpha(colors.surface, 0.78)
+            opacity: shell.cardP
+            scale: 0.3 + 0.7 * shell.cardP
+            transformOrigin: Item.Top
+            transform: Translate { id: resultShift; y: -10 * (1 - shell.cardP) }
+
+            layer.enabled: true
+            layer.effect: MultiEffect {
+                shadowEnabled: true
+                shadowBlur: 0.9
+                blurMax: 48
+                shadowVerticalOffset: 22
+                shadowColor: Qt.rgba(0, 0, 0, 0.55)
+            }
+
             Item {
-                Layout.preferredWidth: 168
-                Layout.fillHeight: true
-                clip: true
-                ColumnLayout {
-                    anchors.centerIn: parent
-                    spacing: 10
-                    Image {
-                        // solid-white bake: the source PNG is faint low-alpha
-                        // line art that reads black on the card — this one is
-                        // opaque white wherever the art is.
-                        // Flex sizing: the card shrinks on empty results, so
-                        // the art scales down with it instead of breaking.
-                        source: Quickshell.env("HOME") + "/.config/quickshell/assets/hk-mask-white.png"
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        Layout.maximumWidth: 130
-                        Layout.maximumHeight: root.filtered.length > 1 ? 210 : 84
-                        Layout.minimumHeight: 30
-                        fillMode: Image.PreserveAspectFit
-                        asynchronous: true
-                        Layout.alignment: Qt.AlignHCenter
-                        opacity: root.open ? 1 : 0
-                        scale: root.open ? 1 : 0.92
-                        Behavior on opacity { NumberAnimation { duration: 350; easing.type: Easing.OutCubic } }
-                        Behavior on scale { NumberAnimation { duration: 380; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.move } }
-                    }
-                    Text {
-                        // live caption: follows the highlighted app. Hidden
-                        // on empty results — nothing to follow, saves rail.
-                        visible: root.filtered.length > 0
-                        text: (root.selected >= 0 && root.selected < root.filtered.length && root.filtered[root.selected])
-                            ? root.filtered[root.selected].name : "技"
-                        color: colors.primary
-                        font.family: colors.fontSans
-                        font.pixelSize: 11
-                        font.weight: Font.Bold
-                        elide: Text.ElideRight
-                        Layout.maximumWidth: 160
-                        Layout.alignment: Qt.AlignHCenter
-                    }
-                    Text {
-                        text: "HOLLOW"
-                        color: colors.alpha(colors.outline, 0.55)
-                        font.family: colors.fontSans
-                        font.pixelSize: 8
-                        font.weight: Font.Bold
-                        font.letterSpacing: 3
-                        Layout.alignment: Qt.AlignHCenter
-                    }
+                id: listArea
+                anchors {
+                    top: parent.top
+                    left: parent.left
+                    right: parent.right
+                    topMargin: 7
+                    leftMargin: 7
+                    rightMargin: 7
                 }
-            }
+                height: shell.listH
+                clip: true
 
-            // hairline between brand and search
-            Rectangle {
-                Layout.preferredWidth: 1
-                Layout.fillHeight: true
-                Layout.topMargin: 8
-                Layout.bottomMargin: 8
-                color: colors.alpha(colors.outline, 0.15)
-            }
-
-            ColumnLayout {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                spacing: 10
-
-            // search bar
-            Rectangle {
-                Layout.fillWidth: true
-                height: 48
-                radius: 12
-                color: colors.alpha(colors.surface, 0.42)
-                border.width: 1
-                border.color: search.activeFocus ? colors.alpha(colors.primary, 0.5) : colors.alpha(colors.outline, 0.15)
-                Behavior on border.color { ColorAnimation { duration: 150 } }
-
-                RowLayout {
+                ListView {
+                    id: resultList
                     anchors.fill: parent
-                    anchors.leftMargin: 14
-                    anchors.rightMargin: 14
-                    spacing: 10
-
-                    Text {
-                        text: ""
-                        color: colors.alpha(colors.outline, 0.8)
-                        font.family: colors.fontSans
-                        font.pixelSize: 14
-                    }
-
-                    TextField {
-                        id: search
-                        Layout.fillWidth: true
-                        placeholderText: "Search apps…"
-                        placeholderTextColor: colors.alpha(colors.outline, 0.5)
-                        color: colors.foreground
-                        font.family: colors.fontSans
-                        font.pixelSize: 13
-                        background: null
-                        selectByMouse: true
-                        Keys.onPressed: function(event) {
-                            if (event.key === Qt.Key_Down) { root.selected = Math.min(root.selected+1, root.filtered.length-1); resultList.positionViewAtIndex(root.selected, ListView.Contain); event.accepted = true }
-                            else if (event.key === Qt.Key_Up) { root.selected = Math.max(root.selected-1, 0); resultList.positionViewAtIndex(root.selected, ListView.Contain); event.accepted = true }
-                            else if (event.key === Qt.Key_Escape) { root.open = false; event.accepted = true }
-                            else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
-                                var e = root.filtered[root.selected]
-                                if (e) root.launch(e)
-                                event.accepted = true
-                            }
+                    visible: root.filtered.length > 0
+                    clip: true
+                    model: root.filtered
+                    currentIndex: root.selected
+                    onCurrentIndexChanged: root.selected = currentIndex
+                    spacing: shell.rowGap
+                    interactive: true
+                    boundsBehavior: Flickable.StopAtBounds
+                    ScrollBar.vertical: ScrollBar {
+                        policy: ScrollBar.AsNeeded
+                        width: 3
+                        padding: 0
+                        background: Item {}
+                        contentItem: Rectangle {
+                            implicitWidth: 3
+                            radius: 1.5
+                            color: colors.alpha(colors.outline, 0.32)
                         }
-                        onTextChanged: root.selected = 0
                     }
-
-                    Text {
-                        visible: search.text !== ""
-                        text: "󰅖"
-                        color: clearMouse.containsMouse ? colors.foreground : colors.alpha(colors.outline, 0.6)
-                        font.family: colors.fontSans
-                        font.pixelSize: 13
-                        MouseArea { id: clearMouse; anchors.fill: parent; hoverEnabled: true; onClicked: search.text = "" }
-                    }
-                }
-            }
-
-            Text {
-                visible: search.text.trim() === "" && Object.keys(usageMap).length > 0
-                text: "RECENT"
-                color: colors.alpha(colors.outline, 0.55)
-                font.family: colors.fontSans
-                font.pixelSize: 8
-                font.letterSpacing: 1.5
-                font.weight: Font.Bold
-                Layout.leftMargin: 4
-            }
-
-            // results
-            ListView {
-                id: resultList
-                Layout.fillWidth: true
-                Layout.preferredHeight: Math.min(7*50, root.filtered.length*50)
-                visible: root.filtered.length > 0
-                clip: true
-                model: root.filtered
-                currentIndex: root.selected
-                onCurrentIndexChanged: root.selected = currentIndex
-                spacing: 4
-                interactive: true
-                boundsBehavior: Flickable.StopAtBounds
-                ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
-                delegate: Item {
-                    id: rowRoot
-                    required property var modelData
-                    required property int index
-                    width: resultList.width
-                    height: 50
-                    // cascade in on creation (also gently re-fades recycled rows)
-                    property bool shown: false
-                    opacity: shown ? 1 : 0
-                    Behavior on opacity { NumberAnimation { duration: Bloom.normal; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.out } }
-                    transform: Translate { id: dip; y: shown ? 0 : 14; Behavior on y { NumberAnimation { duration: Bloom.row; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.move } } }
-                    Component.onCompleted: cascadeTimer.restart()
-                    Connections {
-                        target: root
-                        function onOpenChanged() {
-                            if (root.open) {
+                    delegate: Item {
+                        id: rowRoot
+                        required property var modelData
+                        required property int index
+                        width: resultList.width
+                        height: shell.rowH
+                        // Cascade only on open. Rows created while typing (the
+                        // model swaps them out) appear instantly — replaying
+                        // the stagger on every keystroke read as a reload.
+                        property bool shown: false
+                        // C's rows rise 8px into place on open, fade out in
+                        // place on close (no dip — the card does the rolling).
+                        opacity: shown ? 1 : 0
+                        Behavior on opacity { NumberAnimation { duration: root.open ? 200 : 100; easing.type: Easing.Bezier; easing.bezierCurve: shell.outCurve } }
+                        transform: Translate { id: dip; y: (shown || !root.open) ? 0 : 8; Behavior on y { NumberAnimation { duration: 200; easing.type: Easing.Bezier; easing.bezierCurve: shell.outCurve } } }
+                        Component.onCompleted: { if (root.open) rowRoot.shown = true; else cascadeTimer.restart() }
+                        Connections {
+                            target: root
+                            function onOpenChanged() {
                                 rowRoot.shown = false
-                                cascadeTimer.interval = Bloom.rowDelay + Math.min(rowRoot.index, 11) * Bloom.rowStagger
-                                cascadeTimer.restart()
+                                if (root.open) {
+                                    cascadeTimer.interval = 240 + Math.min(rowRoot.index, 11) * 20
+                                    cascadeTimer.restart()
+                                }
                             }
                         }
-                    }
-                    Timer {
-                        id: cascadeTimer
-                        interval: Bloom.rowDelay + Math.min(rowRoot.index, 11) * Bloom.rowStagger
-                        onTriggered: rowRoot.shown = true
-                    }
-                    Rectangle {
-                        anchors.fill: parent
-                        anchors.leftMargin: 2
-                        anchors.rightMargin: 2
-                        radius: 10
-                        // NOTE: no scale here on purpose — 1.02 overflowed the
-                        // highlight past the list width on hover. Feedback is
-                        // color + border + the left accent bar below.
-                        color: index === root.selected ? colors.alpha(colors.primary, 0.15) : ma.containsMouse ? colors.alpha(colors.primary, 0.08) : "transparent"
-                        border.width: index === root.selected ? 1 : 0
-                        border.color: colors.alpha(colors.primary, 0.4)
-                        Behavior on color { ColorAnimation { duration: 120 } }
+                        Timer {
+                            id: cascadeTimer
+                            interval: 240 + Math.min(rowRoot.index, 11) * 20
+                            onTriggered: rowRoot.shown = true
+                        }
+
+                        // same no-scale rule as before: the fill never overflows
+                        // the list. Selected is tone; hover is a lighter tone.
+                        Rectangle {
+                            anchors.fill: parent
+                            radius: 12
+                            color: index === root.selected
+                                ? colors.alpha(colors.primary, 0.17)
+                                : ma.containsMouse ? colors.alpha(colors.foreground, 0.045) : "transparent"
+                            Behavior on color { ColorAnimation { duration: 120 } }
+                        }
 
                         RowLayout {
-                        anchors.fill: parent
-                        anchors.leftMargin: 10
-                        anchors.rightMargin: 10
-                        spacing: 12
+                            anchors.fill: parent
+                            anchors.leftMargin: 12
+                            anchors.rightMargin: 12
+                            spacing: 12
 
-                        Rectangle {
-                            Layout.preferredWidth: 36
-                            Layout.preferredHeight: 36
-                            radius: 9
-                            color: colors.alpha(colors.primary, 0.10)
-                            border.width: 1
-                            border.color: colors.alpha(colors.primary, 0.15)
-                            scale: index === root.selected ? 1.14 : 1
-                            Behavior on scale { NumberAnimation { duration: Bloom.fast; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.move } }
-                            Image {
-                                id: appIcon
-                                anchors.fill: parent
-                                anchors.margins: 5
-                                source: {
-                                    if (modelData.glyph) return ""
-                                    if (!modelData.icon) return Quickshell.iconPath("folder")
-                                    var ic = modelData.icon
-                                    if (ic === "org.gnome.Nautilus") ic = "system-file-manager"
-                                    if (ic === "org.gnome.DiskUtility") ic = "drive-harddisk"
-                                    if (ic.startsWith("/") || ic.startsWith("file://")) return ic.startsWith("file://") ? ic : "file://" + ic
-                                    return Quickshell.iconPath(ic)
-                                }
-                                fillMode: Image.PreserveAspectFit
-                                asynchronous: true
-                                visible: status === Image.Ready
-                                onStatusChanged: {
-                                    if (status === Image.Error) {
-                                        var fb = Quickshell.iconPath("folder")
-                                        if (source !== fb) source = fb
+                            // plain 24px mark, no tile behind it
+                            Item {
+                                Layout.preferredWidth: 24
+                                Layout.preferredHeight: 24
+                                scale: index === root.selected ? 1.08 : 1
+                                Behavior on scale { NumberAnimation { duration: Bloom.fast; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.move } }
+                                Image {
+                                    id: appIcon
+                                    anchors.fill: parent
+                                    source: {
+                                        if (modelData.glyph) return ""
+                                        if (!modelData.icon) return Quickshell.iconPath("folder")
+                                        var ic = modelData.icon
+                                        if (ic === "org.gnome.Nautilus") ic = "system-file-manager"
+                                        if (ic === "org.gnome.DiskUtility") ic = "drive-harddisk"
+                                        if (ic.startsWith("/") || ic.startsWith("file://")) return ic.startsWith("file://") ? ic : "file://" + ic
+                                        return Quickshell.iconPath(ic)
+                                    }
+                                    fillMode: Image.PreserveAspectFit
+                                    asynchronous: true
+                                    visible: status === Image.Ready
+                                    onStatusChanged: {
+                                        if (status === Image.Error) {
+                                            var fb = Quickshell.iconPath("folder")
+                                            if (source !== fb) source = fb
+                                        }
                                     }
                                 }
+                                Text {
+                                    anchors.centerIn: parent
+                                    visible: appIcon.status !== Image.Ready
+                                    text: modelData.glyph ? modelData.glyph : (modelData.name ? modelData.name.charAt(0).toUpperCase() : "?")
+                                    color: colors.primary
+                                    font.family: modelData.glyph ? "Phosphor" : colors.fontSans
+                                    font.pixelSize: modelData.glyph ? 17 : 13
+                                    font.weight: Font.ExtraBold
+                                }
                             }
+
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                spacing: 1
+                                Text {
+                                    text: modelData.name
+                                    color: colors.foreground
+                                    font.family: colors.fontSans
+                                    font.pixelSize: 13
+                                    font.weight: Font.DemiBold
+                                    elide: Text.ElideRight
+                                    Layout.fillWidth: true
+                                }
+                                Text {
+                                    text: modelData.genericName || modelData.comment || modelData.id
+                                    color: colors.alpha(colors.outline, 0.85)
+                                    font.family: colors.fontSans
+                                    font.pixelSize: 10
+                                    elide: Text.ElideRight
+                                    Layout.fillWidth: true
+                                }
+                            }
+
                             Text {
-                                anchors.centerIn: parent
-                                visible: appIcon.status !== Image.Ready
-                                text: modelData.glyph ? modelData.glyph : (modelData.name ? modelData.name.charAt(0).toUpperCase() : "?")
-                                color: colors.primary
-                                font.family: modelData.glyph ? "Phosphor" : colors.fontSans
-                                font.pixelSize: modelData.glyph ? 15 : 13
-                                font.weight: Font.ExtraBold
+                                text: "↵"
+                                color: index === root.selected ? colors.alpha(colors.primary, 0.9) : colors.alpha(colors.outline, 0.5)
+                                font.family: colors.fontSans
+                                font.pixelSize: 10
                             }
                         }
 
-                        ColumnLayout {
-                            Layout.fillWidth: true
-                            spacing: 1
-                            Text {
-                                text: modelData.name
-                                color: colors.foreground
-                                font.family: colors.fontSans
-                                font.pixelSize: 12
-                                font.weight: Font.DemiBold
-                                elide: Text.ElideRight
-                                Layout.fillWidth: true
-                            }
-                            Text {
-                                text: modelData.genericName || modelData.comment || modelData.id
-                                color: colors.alpha(colors.outline, 0.7)
-                                font.family: colors.fontSans
-                                font.pixelSize: 9
-                                elide: Text.ElideRight
-                                Layout.fillWidth: true
-                            }
-                        }
-                    }
-
-                    MouseArea {
+                        MouseArea {
                             id: ma
                             anchors.fill: parent
                             hoverEnabled: true
@@ -460,40 +477,54 @@ PanelWindow {
                         }
                     }
                 }
-            }
 
-            Text {
-                visible: root.filtered.length === 0
-                text: "No results"
-                color: colors.alpha(colors.outline, 0.6)
-                font.family: colors.fontSans
-                font.pixelSize: 11
-                Layout.alignment: Qt.AlignHCenter
-                Layout.topMargin: 16
-                Layout.bottomMargin: 16
+                Text {
+                    anchors.centerIn: parent
+                    visible: root.filtered.length === 0
+                    text: "No results"
+                    color: colors.alpha(colors.outline, 0.6)
+                    font.family: colors.fontSans
+                    font.pixelSize: 11
+                }
             }
 
             // footer hint + live count
-            RowLayout {
-                Layout.fillWidth: true
-                Layout.topMargin: 2
-                Text {
-                    text: "↑↓ navigate  •  ↵ launch  •  esc close"
-                    color: colors.alpha(colors.outline, 0.45)
-                    font.family: colors.fontSans
-                    font.pixelSize: 8
-                }
-                Item { Layout.fillWidth: true }
-                Text {
-                    visible: root.filtered.length > 0
-                    text: root.filtered.length + (root.filtered.length === 1 ? " app" : " apps")
-                    color: colors.alpha(colors.outline, 0.45)
-                    font.family: colors.fontSans
-                    font.pixelSize: 8
-                    font.weight: Font.Bold
+            Item {
+                anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
+                height: shell.footerH
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: 16
+                    anchors.rightMargin: 16
+                    spacing: 14
+                    Text {
+                        text: "↑↓ move"
+                        color: colors.alpha(colors.outline, 0.6)
+                        font.family: colors.fontSans
+                        font.pixelSize: 10
+                    }
+                    Text {
+                        text: "↵ open"
+                        color: colors.alpha(colors.outline, 0.6)
+                        font.family: colors.fontSans
+                        font.pixelSize: 10
+                    }
+                    Text {
+                        text: "esc close"
+                        color: colors.alpha(colors.outline, 0.6)
+                        font.family: colors.fontSans
+                        font.pixelSize: 10
+                    }
+                    Item { Layout.fillWidth: true }
+                    Text {
+                        visible: root.filtered.length > 0
+                        text: root.filtered.length + (root.filtered.length === 1 ? " app" : " apps")
+                        color: colors.alpha(colors.outline, 0.6)
+                        font.family: colors.fontSans
+                        font.pixelSize: 10
+                    }
                 }
             }
-            } // mainCol, then col RowLayout
         }
     }
 }

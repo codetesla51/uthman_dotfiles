@@ -149,25 +149,42 @@ PanelWindow {
         return (iw * ih) / Math.max(1, r.width * r.height)
     }
 
-    // true opaque coverage of the clock box, from the sidecar's alpha grid.
-    // Returns -1 when the sidecar has no grid (old file).
-    function coverageOf(r) {
+    // summed-area table of the sidecar alpha grid: coverage of any candidate
+    // box is then four array reads instead of a full grid walk. Searching a
+    // fine grid of positions is only affordable because of this.
+    property var sat: null
+    function rebuildSat() {
         var g = cutGrid
-        if (!g || gridW <= 0 || gridH <= 0) return -1
-        var cw = width / gridW, ch = height / gridH
-        var total = 0
-        for (var gy = 0; gy < gridH; gy++) {
-            var y0 = gy * ch, y1 = y0 + ch
-            var iy = Math.min(r.y + r.height, y1) - Math.max(r.y, y0)
-            if (iy <= 0) continue
-            for (var gx = 0; gx < gridW; gx++) {
-                var x0 = gx * cw, x1 = x0 + cw
-                var ix = Math.min(r.x + r.width, x1) - Math.max(r.x, x0)
-                if (ix <= 0) continue
-                total += ix * iy * g[gy * gridW + gx]
+        if (!g || gridW <= 0 || gridH <= 0) { sat = null; return }
+        var stride = gridW + 1
+        var s = []
+        for (var x = 0; x <= gridW; x++) s[x] = 0
+        for (var y = 0; y <= gridH; y++) s[y * stride] = 0
+        for (var gy = 1; gy <= gridH; gy++) {
+            for (var gx = 1; gx <= gridW; gx++) {
+                s[gy * stride + gx] = g[(gy - 1) * gridW + (gx - 1)]
+                    + s[(gy - 1) * stride + gx] + s[gy * stride + gx - 1]
+                    - s[(gy - 1) * stride + gx - 1]
             }
         }
-        return total / Math.max(1, r.width * r.height)
+        sat = s
+    }
+
+    // true opaque coverage of the clock box, from the sidecar's alpha grid.
+    // Returns -1 when the sidecar has no grid (old file). Cell rounding keeps
+    // this cheap; the grid cells are ~60px, well below a glyph's stroke width.
+    function coverageOf(r) {
+        if (!sat) return -1
+        var cw = width / gridW, ch = height / gridH
+        var x0 = Math.max(0, Math.min(gridW, Math.round(r.x / cw)))
+        var x1 = Math.max(0, Math.min(gridW, Math.round((r.x + r.width) / cw)))
+        var y0 = Math.max(0, Math.min(gridH, Math.round(r.y / ch)))
+        var y1 = Math.max(0, Math.min(gridH, Math.round((r.y + r.height) / ch)))
+        if (x1 <= x0 || y1 <= y0) return 0
+        var stride = gridW + 1
+        var total = sat[y1 * stride + x1] - sat[y0 * stride + x1]
+            - sat[y1 * stride + x0] + sat[y0 * stride + x0]
+        return total / ((x1 - x0) * (y1 - y0))
     }
 
     readonly property real cutCoverage: coverageOf(clock2.glyphRect)
@@ -186,6 +203,78 @@ PanelWindow {
     property real clockTilt: 0
     property real tiltPivotX: width * 0.5
     property real tiltPivotY: height * 0.5
+
+    // Modal manual placement. Nothing moves unless the user enters move mode;
+    // Enter commits the spot as a manual pin, Esc puts the auto placement back.
+    property bool moveMode: false
+    property real manualX: 0
+    property real manualY: 0
+    property real moveStartX: 0
+    property real moveStartY: 0
+    property string manualPinnedFor: ""
+    property real manualTilt: 0
+    property real moveStartTilt: 0
+    property bool showDigits: true
+
+    function shiftLimits(gw, gh) {
+        var cx = (width - gw) / 2
+        var cy = (height - gh) / 2
+        var mx = Math.max(16, width * 0.008)
+        var top = Math.max(64, height * 0.06)
+        var bottom = height * 0.055
+        var minX = (mx - cx) / width, maxX = (width - mx - gw - cx) / width
+        var minY = (top - cy) / height, maxY = (height - bottom - gh - cy) / height
+        if (minX > maxX) { minX = 0; maxX = 0 }
+        if (minY > maxY) { minY = 0; maxY = 0 }
+        return { minX: minX, maxX: maxX, minY: minY, maxY: maxY }
+    }
+
+    function startMove() {
+        if (moveMode) return
+        showClock = true
+        moveStartX = shiftX
+        moveStartY = shiftY
+        moveStartTilt = clockTilt
+        manualTilt = clockTilt
+        manualX = shiftX
+        manualY = shiftY
+        moveMode = true
+    }
+
+    function nudgeClock(dx, dy) {
+        if (!moveMode) return
+        manualX += dx / width
+        manualY += dy / height
+        var gw = autoLayout === "stack" ? clock2.stackTextSize.width : clock2.rowTextSize.width
+        var gh = autoLayout === "stack" ? clock2.stackTextSize.height : clock2.rowTextSize.height
+        var lim = shiftLimits(gw, gh)
+        manualX = Math.max(lim.minX, Math.min(lim.maxX, manualX))
+        manualY = Math.max(lim.minY, Math.min(lim.maxY, manualY))
+        setBox(gw, gh, manualX, manualY)
+        clockTilt = manualTilt
+    }
+
+    // Rotate by small steps while moving; the lean is separate from the auto
+    // tilt so nudging never snaps a chosen angle back.
+    function rotateClock(deg) {
+        if (!moveMode) return
+        manualTilt = Math.max(-18, Math.min(18, manualTilt + deg))
+        clockTilt = manualTilt
+    }
+
+    function endMove(save) {
+        if (!moveMode) return
+        moveMode = false
+        if (save) {
+            manualPinnedFor = wallName
+            savePlacement(autoLayout, manualX, manualY, manualTilt)
+        } else {
+            manualX = moveStartX
+            manualY = moveStartY
+            choosePlacement()
+            clockTilt = moveStartTilt
+        }
+    }
 
     function coverageFraction(r, fx0, fy0, fx1, fy1) {
         return coverageOf(Qt.rect(r.x + r.width * fx0, r.y + r.height * fy0,
@@ -218,62 +307,59 @@ PanelWindow {
         return sw > 0 ? { x: sx / sw, y: sy / sw } : null
     }
 
-    // Peak alpha over the two readable zones. Row: HH | colon | MM.
-    // Stack: HH above, MM below.
+    // Peak alpha over the two readable zones, including each digit's half.
+    // Row: HH | colon | MM. Stack: HH above, MM below. A subject crossing one
+    // digit only is caught here even when the whole pair looks mostly clear.
     function zonePeak(r, stacked) {
         if (stacked)
             return Math.max(coverageFraction(r, 0, 0, 1, 0.5),
                             coverageFraction(r, 0, 0.5, 1, 1))
-        return Math.max(coverageFraction(r, 0, 0, 0.437, 1),
-                        coverageFraction(r, 0.563, 0, 1, 1))
+        var hh = Math.max(coverageFraction(r, 0, 0, 0.437, 1),
+                          coverageFraction(r, 0, 0, 0.2185, 0.5),
+                          coverageFraction(r, 0, 0.5, 0.2185, 1))
+        var mm = Math.max(coverageFraction(r, 0.563, 0, 1, 1),
+                          coverageFraction(r, 0.563, 0, 0.7815, 0.5),
+                          coverageFraction(r, 0.563, 0.5, 0.7815, 1))
+        return Math.max(hh, mm)
     }
 
-    // Score every legal position for one layout. The peak penalty is strong:
-    // moving the clock beats half-covering one digit pair.
+    // Score every legal position for one layout. A position with a digit pair
+    // more than ~12% covered is effectively unreadable, so that penalty comes
+    // first; then aim for a little overlap (~9% of the box) so the subject
+    // still crosses the type, then prefer the smallest move.
     function bestSpot(gw, gh, stacked) {
         var cx = (width - gw) / 2
         var cy = (height - gh) / 2
-        var mx = Math.max(16, width * 0.06)
-        var top = Math.max(64, height * 0.06)          // clear the bar
-        var bottom = height * 0.085                    // leave the date line alone
-
-        var minSX = (mx - cx) / width
-        var maxSX = (width - mx - gw - cx) / width
-        var minSY = (top - cy) / height
-        var maxSY = (height - bottom - gh - cy) / height
-        if (minSX > maxSX) { minSX = 0; maxSX = 0 }
-        if (minSY > maxSY) { minSY = 0; maxSY = 0 }
+        var lim = shiftLimits(gw, gh)
+        var minSX = lim.minX, maxSX = lim.maxX
+        var minSY = lim.minY, maxSY = lim.maxY
 
         var centerRect = Qt.rect(cx, cy, gw, gh)
         var centerCov = coverageOf(centerRect)
         var centerPeak = zonePeak(centerRect, stacked)
         // Nothing meaningful on the digits: stay exactly centered.
-        if (centerCov <= 0.08 && centerPeak <= 0.12)
+        if (centerCov <= 0.05 && centerPeak <= 0.12)
             return { x: 0, y: 0, cov: centerCov, peak: centerPeak, score: centerCov }
 
-        var xs = [-0.34, -0.26, -0.18, -0.10, -0.04, 0,
-                  0.04, 0.10, 0.18, 0.26, 0.34]
-        var ys = [-0.22, -0.15, -0.08, 0, 0.08, 0.15, 0.22]
         var best = null
-
-        for (var iy = 0; iy < ys.length; iy++) {
-            for (var ix = 0; ix < xs.length; ix++) {
-                var sx = Math.max(minSX, Math.min(maxSX, xs[ix]))
-                var sy = Math.max(minSY, Math.min(maxSY, ys[iy]))
+        for (var sy = minSY; sy <= maxSY + 0.0001; sy += 0.02) {
+            for (var sx = minSX; sx <= maxSX + 0.0001; sx += 0.02) {
                 var r = Qt.rect(cx + sx * width, cy + sy * height, gw, gh)
                 var cov = coverageOf(r)
                 var peak = zonePeak(r, stacked)
-                // Aim for a visible overlap (~10% of the box) instead of zero:
-                // the character must actually cross the digits for depth. The
-                // peak penalty is deliberately harsh: a pair 18% covered is
-                // already hard to read when the cutout edge crosses strokes.
-                var score = Math.abs(cov - 0.10) * 2.0
-                    + 4.0 * Math.max(0, peak - 0.18)
-                    + 0.03 * (Math.abs(sx) + Math.abs(sy))
+                var score = 100 * Math.max(0, peak - 0.12)
+                    + Math.abs(cov - 0.09) * 2.0
+                    + 0.01 * (Math.abs(sx) + Math.abs(sy))
                 if (best === null || score < best.score)
                     best = { x: sx, y: sy, cov: cov, peak: peak, score: score }
             }
         }
+        // Zero can fall between the 0.02 steps; always give it a chance.
+        var zr = Qt.rect(cx, cy, gw, gh)
+        var zc = coverageOf(zr), zp = zonePeak(zr, stacked)
+        var zs = 100 * Math.max(0, zp - 0.12) + Math.abs(zc - 0.09) * 2.0
+        if (best === null || zs < best.score)
+            best = { x: 0, y: 0, cov: zc, peak: zp, score: zs }
         return best
     }
 
@@ -317,16 +403,24 @@ PanelWindow {
     // never re-decides. Centre placements are deterministic and stay out of
     // the file; only a real shift is worth remembering.
     property string pinnedFor: ""
+    function savePlacement(layout, sx, sy, tilt) {
+        if (wallName === "") return
+        var o = {}
+        for (var k in cfgOverrides) o[k] = cfgOverrides[k]
+        var entry = { layout: layout, x: Math.round(sx * 1000) / 1000,
+                      y: Math.round(sy * 1000) / 1000 }
+        if (tilt !== undefined && Math.abs(tilt) > 0.01)
+            entry.tilt = Math.round(tilt * 10) / 10
+        o[wallName] = entry
+        pinnedFor = wallName
+        cfgOverrides = o
+        writeCfg(o)
+    }
     function pinPlacement(gw, gh, sx, sy) {
         if (pinnedFor === wallName || wallName === "") return
         if (Math.abs(sx) < 0.001 && Math.abs(sy) < 0.001) return
         if (overrideFor(wallName) !== null) return
-        pinnedFor = wallName
-        var o = {}
-        for (var k in cfgOverrides) o[k] = cfgOverrides[k]
-        o[wallName] = { layout: autoLayout, x: Math.round(sx * 1000) / 1000,
-                        y: Math.round(sy * 1000) / 1000 }
-        writeCfg(o)
+        savePlacement(autoLayout, sx, sy)
     }
 
     function writeCfg(overrides) {
@@ -351,12 +445,13 @@ PanelWindow {
             writeCfg(o)
         }
         pinnedFor = ""
+        manualPinnedFor = ""
         Qt.callLater(choosePlacement)
     }
     function unpin() { setMode("auto") }
 
     function choosePlacement() {
-        if (!cutGrid || gridW <= 0) {
+        if (!cutGrid || gridW <= 0 || !sat) {
             autoLayout = "row"
             shiftX = 0
             shiftY = 0
@@ -368,15 +463,42 @@ PanelWindow {
         var stackW = clock2.stackTextSize.width, stackH = clock2.stackTextSize.height
         if (rowW <= 0 || rowH <= 0 || stackW <= 0 || stackH <= 0) return
 
+        // While the user is nudging the clock, no auto rule or pin gets a vote.
+        if (moveMode) {
+            var mgw = autoLayout === "stack" ? stackW : rowW
+            var mgh = autoLayout === "stack" ? stackH : rowH
+            setBox(mgw, mgh, manualX, manualY)
+            return
+        }
+
         var ov = overrideFor(wallName)
         var mode = ov ? (ov.layout || "auto") : cfgLayout
+        var replacePin = false
 
-        // A pin wins outright: the placement that was chosen once stays put.
+        // A pin is trusted only while it still keeps both digit pairs
+        // readable. Pins written by the old, coarse search buried minutes on
+        // several wallpapers and then outvoted every later improvement.
         if (ov && (ov.x !== undefined || ov.y !== undefined)) {
-            autoLayout = ov.layout === "stack" ? "stack" : "row"
-            var pgw = autoLayout === "stack" ? stackW : rowW
-            var pgh = autoLayout === "stack" ? stackH : rowH
-            setBox(pgw, pgh, Number(ov.x) || 0, Number(ov.y) || 0)
+            var pl = ov.layout === "stack" ? "stack" : "row"
+            var pgw = pl === "stack" ? stackW : rowW
+            var pgh = pl === "stack" ? stackH : rowH
+            var psx = Number(ov.x) || 0, psy = Number(ov.y) || 0
+            var pr = Qt.rect((width - pgw) / 2 + psx * width,
+                             (height - pgh) / 2 + psy * height, pgw, pgh)
+            // A pin the user placed by hand is never second-guessed.
+            if (manualPinnedFor === wallName || zonePeak(pr, pl === "stack") <= 0.18) {
+                autoLayout = pl
+                setBox(pgw, pgh, psx, psy)
+                if (ov.tilt !== undefined) clockTilt = Number(ov.tilt) || 0
+                return
+            }
+            replacePin = true
+        }
+
+        if (mode === "center") {
+            autoLayout = "row"
+            setBox(rowW, rowH, 0, 0)
+            if (replacePin) savePlacement("row", 0, 0)
             return
         }
 
@@ -384,30 +506,34 @@ PanelWindow {
             var sp = bestSpot(stackW, stackH, true)
             autoLayout = "stack"
             setBox(stackW, stackH, sp.x, sp.y)
-            pinPlacement(stackW, stackH, sp.x, sp.y)
-            return
-        }
-
-        // row, center and auto all use the single row: stacking moved the
-        // clock into a corner more often than it bought readability.
-        autoLayout = "row"
-
-        if (mode === "center") {
-            setBox(rowW, rowH, 0, 0)
-            return
-        }
-
-        var rowCenter = Qt.rect((width - rowW) / 2, (height - rowH) / 2, rowW, rowH)
-        var peak = zonePeak(rowCenter, false)
-        if (mode === "row" || peak <= 0.30) {
-            // Nothing is really buried: stay exactly centred.
-            setBox(rowW, rowH, 0, 0)
+            if (replacePin) savePlacement("stack", sp.x, sp.y)
+            else if (!ov) pinPlacement(stackW, stackH, sp.x, sp.y)
             return
         }
 
         var row = bestSpot(rowW, rowH, false)
+        if (mode === "row") {
+            autoLayout = "row"
+            setBox(rowW, rowH, row.x, row.y)
+            if (replacePin) savePlacement("row", row.x, row.y)
+            else if (!ov) pinPlacement(rowW, rowH, row.x, row.y)
+            return
+        }
+
+        // Auto: stay wide when the row is readable, otherwise the narrow
+        // stack has far more room to dodge a large subject.
+        var stack = bestSpot(stackW, stackH, true)
+        if (stack.peak + 0.03 < row.peak) {
+            autoLayout = "stack"
+            setBox(stackW, stackH, stack.x, stack.y)
+            if (replacePin) savePlacement("stack", stack.x, stack.y)
+            else if (!ov) pinPlacement(stackW, stackH, stack.x, stack.y)
+            return
+        }
+        autoLayout = "row"
         setBox(rowW, rowH, row.x, row.y)
-        pinPlacement(rowW, rowH, row.x, row.y)
+        if (replacePin) savePlacement("row", row.x, row.y)
+        else if (!ov) pinPlacement(rowW, rowH, row.x, row.y)
     }
 
     onLayoutChanged: Qt.callLater(choosePlacement)
@@ -433,7 +559,7 @@ PanelWindow {
     ClockFace {
         id: clock2
         anchors.fill: parent
-        visible: root.clockVisible
+        visible: root.clockVisible && root.showDigits
         opacity: Math.max(0, Math.min(1, root.reveal * 1.8))
         scale: 0.62 + 0.38 * root.reveal
         rotation: -2.5 * (1 - root.reveal)
@@ -575,6 +701,7 @@ PanelWindow {
             root.cutGrid = null
             root.gridW = 0
             root.gridH = 0
+            root.sat = null
             root.choosePlacement()
         }
         onLoaded: {
@@ -587,12 +714,14 @@ PanelWindow {
                 root.cutGrid = (o && o.grid && o.gw > 0 && o.gh > 0) ? o.grid : null
                 root.gridW = root.cutGrid ? o.gw : 0
                 root.gridH = root.cutGrid ? o.gh : 0
+                root.rebuildSat()
                 root.choosePlacement()
             } catch (e) {
                 root.cutBBox = null
                 root.cutGrid = null
                 root.gridW = 0
                 root.gridH = 0
+                root.sat = null
                 root.choosePlacement()
             }
         }
@@ -618,7 +747,9 @@ PanelWindow {
         cutGrid = null
         gridW = 0
         gridH = 0
+        sat = null
         pinnedFor = ""
+        manualPinnedFor = ""
         // Keep the current shift/tilt until the new sidecar lands: resetting
         // here made the clock flash through the centre on every switch.
         metaView.path = ""
@@ -638,6 +769,13 @@ PanelWindow {
         function toggleCutout(): void { root.forceHideCutout = !root.forceHideCutout }
         function toggle(): void { root.showClock = !root.showClock }
         function show(on: bool): void { root.showClock = on }
+        function collapse(): void { root.showDigits = !root.showDigits }
+        function moveStart(): void { root.startMove() }
+        function toggleMove(): void { root.moveMode ? root.endMove(true) : root.startMove() }
+        function moveEnd(): void { root.endMove(true) }
+        function moveCancel(): void { root.endMove(false) }
+        function nudge(dx: int, dy: int): void { root.nudgeClock(dx, dy) }
+        function rotate(delta: int): void { root.rotateClock(delta) }
         function layout(mode: string): void { root.setMode(mode) }
         function unpin(): void { root.unpin() }
         // diagnostic: what the layer actually thinks it has
@@ -658,6 +796,8 @@ PanelWindow {
                 blurUrl: clock2.blurUrl,
                 glassOn: clock2.glassOn,
                 showClock: root.showClock,
+                showDigits: root.showDigits,
+                moveMode: root.moveMode,
                 showCutout: root.showCutout,
                 ratio: root.overlapRatio(),
                 coverage: root.cutCoverage,

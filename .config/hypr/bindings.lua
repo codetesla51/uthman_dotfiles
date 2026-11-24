@@ -220,5 +220,3 @@ hl.bind("SUPER + L", hl.dsp.exec_cmd(qs("lockscreen lock")), { description = "Lo
 -- Old chord kept as an alias while the new stack settles.
 hl.bind("SUPER + ALT + SHIFT + L", hl.dsp.exec_cmd(qs("lockscreen lock")), { description = "Lock screen (alias)" })
 
--- ── Release the free-games takeover overlay (SUPER+SHIFT+ESC) ────────────
-hl.bind("SUPER + SHIFT + Escape", hl.dsp.exec_cmd("hacked off"), { description = "Dismiss takeover overlay" })

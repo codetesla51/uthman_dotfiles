@@ -1,4 +1,0 @@
-#!/usr/bin/env bash
-# Compatibility alias: the GTK page was replaced by the Quickshell overlay.
-set -euo pipefail
-exec "$HOME/.local/bin/hacked"

@@ -177,6 +177,24 @@ hl.bind("SUPER + ALT + E", hl.dsp.exec_cmd(qs("earbuds toggle")))
 hl.bind("SUPER + ALT + D", hl.dsp.exec_cmd(qs("drives toggle")))
 hl.bind("SUPER + ALT + Y", hl.dsp.exec_cmd(qs("watchcat toggle")))
 
+-- Desktop clock — modal manual placement. The clock ignores nudges/rotation
+-- unless move mode is on, so nothing grabs input during normal use.
+-- SUPER ALT arrows used to be the rarely-used "move into group" binds.
+hl.unbind("SUPER + ALT + LEFT")
+hl.unbind("SUPER + ALT + RIGHT")
+hl.unbind("SUPER + ALT + UP")
+hl.unbind("SUPER + ALT + DOWN")
+hl.bind("SUPER + CTRL + M", hl.dsp.exec_cmd(qs("desktopclock toggleMove")), { description = "Desktop clock move" })
+hl.bind("SUPER + SHIFT + ALT + H", hl.dsp.exec_cmd(qs("desktopclock collapse")), { description = "Collapse desktop clock" })
+hl.bind("SUPER + ALT + LEFT", hl.dsp.exec_cmd(qs("desktopclock nudge -24 0")), { description = "Nudge clock left" })
+hl.bind("SUPER + ALT + RIGHT", hl.dsp.exec_cmd(qs("desktopclock nudge 24 0")), { description = "Nudge clock right" })
+hl.bind("SUPER + ALT + UP", hl.dsp.exec_cmd(qs("desktopclock nudge 0 -16")), { description = "Nudge clock up" })
+hl.bind("SUPER + ALT + DOWN", hl.dsp.exec_cmd(qs("desktopclock nudge 0 16")), { description = "Nudge clock down" })
+hl.bind("SUPER + ALT + PERIOD", hl.dsp.exec_cmd(qs("desktopclock rotate 2")), { description = "Rotate clock right" })
+hl.bind("SUPER + ALT + COMMA", hl.dsp.exec_cmd(qs("desktopclock rotate -2")), { description = "Rotate clock left" })
+hl.bind("SUPER + ALT + RETURN", hl.dsp.exec_cmd(qs("desktopclock moveEnd")), { description = "Lock clock position" })
+hl.bind("SUPER + ALT + ESCAPE", hl.dsp.exec_cmd(qs("desktopclock moveCancel")), { description = "Cancel clock move" })
+
 -- ── Tiling layout — SUPER ALT Z cycles dwindle → master → scrolling ───────
 -- vendor/bindings/tiling.lua binds `layout-toggle` on SUPER L, but this file
 -- unbinds SUPER L for the lock screen, which left the script orphaned.

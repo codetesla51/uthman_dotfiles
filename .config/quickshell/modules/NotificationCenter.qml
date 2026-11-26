@@ -4,8 +4,10 @@ import Quickshell.Services.Notifications
 import Quickshell.Wayland
 import QtQuick
 import QtQuick.Layouts
+import QtQuick.Window
 import QtQuick.Controls
 import "../components/Bloom.js" as Bloom
+import "DripKind.js" as Drip
 
 // Notification daemon + toast stack + center drawer.
 // Owns org.freedesktop.Notifications (replaces swaync).
@@ -24,6 +26,13 @@ Item {
 
     property int _idCounter: 0
     property var _live: ({})   // nid -> live Notification object (for invoking actions)
+
+    // Only 3 toasts at a time. Anything beyond waits in a circle and is
+    // released slowly after a card finishes retracting.
+    property var pending: []
+    property int waitingCount: 0
+    // 340 = 320px capsule + 10px headroom each side for the entrance bounce.
+    property int toastRailWidth: 340
 
     // Bar's PixelBot listens to this — the bot replaced the bell as the
     // ambient notification indicator.
@@ -69,97 +78,7 @@ Item {
 
     // per-app Phosphor fallback icon (avatar when the app ships no icon)
     function appGlyph(name) {
-        var n = String(name || "").toLowerCase()
-        if (n.indexOf("whatsapp") !== -1) return ""
-        if (n.indexOf("firefox") !== -1) return ""
-        if (n.indexOf("mozilla") !== -1) return ""
-        if (n.indexOf("chrome") !== -1) return ""
-        if (n.indexOf("chromium") !== -1) return ""
-        if (n.indexOf("spotify") !== -1) return ""
-        if (n.indexOf("telegram") !== -1) return ""
-        if (n.indexOf("discord") !== -1) return ""
-        if (n.indexOf("kitty") !== -1) return ""
-        if (n.indexOf("terminal") !== -1) return ""
-        if (n.indexOf("console") !== -1) return ""
-        if (n.indexOf("volume") !== -1) return ""
-        if (n.indexOf("audio") !== -1) return ""
-        if (n.indexOf("wpctl") !== -1) return ""
-        if (n.indexOf("pactl") !== -1) return ""
-        if (n.indexOf("speaker") !== -1) return ""
-        if (n.indexOf("mic") !== -1) return ""
-        if (n.indexOf("battery") !== -1) return ""
-        if (n.indexOf("power") !== -1) return ""
-        if (n.indexOf("tlp") !== -1) return ""
-        if (n.indexOf("wifi") !== -1) return ""
-        if (n.indexOf("network") !== -1) return ""
-        if (n.indexOf("nmcli") !== -1) return ""
-        if (n.indexOf("iwctl") !== -1) return ""
-        if (n.indexOf("earbuds") !== -1) return ""
-        if (n.indexOf("headset") !== -1) return ""
-        if (n.indexOf("headphone") !== -1) return ""
-        if (n.indexOf("tws") !== -1) return ""
-        if (n.indexOf("bluetooth") !== -1) return ""
-        if (n.indexOf("screenshot") !== -1) return ""
-        if (n.indexOf("shot") !== -1) return ""
-        if (n.indexOf("camera") !== -1) return ""
-        if (n.indexOf("clipboard") !== -1) return ""
-        if (n.indexOf("cliphist") !== -1) return ""
-        if (n.indexOf("music") !== -1) return ""
-        if (n.indexOf("mpv") !== -1) return ""
-        if (n.indexOf("video") !== -1) return ""
-        if (n.indexOf("mail") !== -1) return ""
-        if (n.indexOf("thunderbird") !== -1) return ""
-        if (n.indexOf("envelope") !== -1) return ""
-        if (n.indexOf("calendar") !== -1) return ""
-        if (n.indexOf("download") !== -1) return ""
-        if (n.indexOf("brightness") !== -1) return ""
-        if (n.indexOf("sunset") !== -1) return ""
-        if (n.indexOf("night") !== -1) return ""
-        if (n.indexOf("image") !== -1) return ""
-        if (n.indexOf("chat") !== -1) return ""
-        if (n.indexOf("note") !== -1) return ""
-        if (n.indexOf("github") !== -1) return ""
-        if (n.indexOf("git") !== -1) return ""
-        if (n.indexOf("brave") !== -1) return ""
-        if (n.indexOf("vivaldi") !== -1) return ""
-        if (n.indexOf("edge") !== -1) return ""
-        if (n.indexOf("opera") !== -1) return ""
-        if (n.indexOf("zen") !== -1) return ""
-        if (n.indexOf("grim") !== -1) return ""
-        if (n.indexOf("slurp") !== -1) return ""
-        if (n.indexOf("flameshot") !== -1) return ""
-        if (n.indexOf("swappy") !== -1) return ""
-        if (n.indexOf("obs") !== -1) return ""
-        if (n.indexOf("recorder") !== -1) return ""
-        if (n.indexOf("swayosd") !== -1) return ""
-        if (n.indexOf("upower") !== -1) return ""
-        if (n.indexOf("mpd") !== -1) return ""
-        if (n.indexOf("ncmpcpp") !== -1) return ""
-        if (n.indexOf("pacman") !== -1) return ""
-        if (n.indexOf("yay") !== -1) return ""
-        if (n.indexOf("paru") !== -1) return ""
-        if (n.indexOf("update") !== -1) return ""
-        if (n.indexOf("keepassxc") !== -1) return ""
-        if (n.indexOf("password") !== -1) return ""
-        if (n.indexOf("nautilus") !== -1) return ""
-        if (n.indexOf("thunar") !== -1) return ""
-        if (n.indexOf("dolphin") !== -1) return ""
-        if (n.indexOf("filemanager") !== -1) return ""
-        if (n.indexOf("nautilus") !== -1) return ""
-        if (n.indexOf("code") !== -1) return ""
-        if (n.indexOf("zed") !== -1) return ""
-        if (n.indexOf("nvim") !== -1) return ""
-        if (n.indexOf("neovim") !== -1) return ""
-        if (n.indexOf("phone") !== -1) return ""
-        if (n.indexOf("lock") !== -1) return ""
-        if (n.indexOf("weather") !== -1) return ""
-        if (n.indexOf("usb") !== -1) return ""
-        if (n.indexOf("udisk") !== -1) return ""
-        if (n.indexOf("timer") !== -1) return ""
-        if (n.indexOf("pomodoro") !== -1) return ""
-        if (n.indexOf("alarm") !== -1) return ""
-        if (n.indexOf("watchcat") !== -1) return ""
-        return ""
+        return Drip.glyphForApp(name)
     }
 
     function removeAt(nid) {
@@ -200,20 +119,81 @@ Item {
     // ── toast stack ──
     PanelWindow {
         id: toastWindow
-        anchors { top: true; right: true }
-        margins { top: 52; right: 8 }
+        // Start below the bar and position explicitly: implicitWidth alone
+        // drifted when the rail resized, which shifted notifications off-centre.
+        anchors { top: true; left: true }
+        margins {
+            top: 110
+            left: Math.max(0, (Screen.width - root.toastRailWidth) / 2)
+        }
         exclusionMode: ExclusionMode.Ignore
         color: "transparent"
         WlrLayershell.namespace: "qs-toasts"
         WlrLayershell.layer: WlrLayer.Overlay
-        implicitWidth: 380
-        implicitHeight: toastColumn.implicitHeight + 8
+        // No resident window: idle means zero input interception.
+        visible: openToasts().length > 0 || closingToasts().length > 0
+                 || root.waitingCount > 0
+        implicitWidth: root.toastRailWidth
+        implicitHeight: Math.max(340, toastColumn.implicitHeight + 180)
 
         Column {
             id: toastColumn
-            anchors { top: parent.top; right: parent.right }
-            width: 380
-            spacing: 8
+            anchors { top: parent.top; horizontalCenter: parent.horizontalCenter }
+            // Must match the toast item width, or Column left-aligns each
+            // 320px toast inside a wider column and the window clips half.
+            width: root.toastRailWidth
+            // Each toast owns its own bottom gap (height = card + gap), so the
+            // gap collapses with the card instead of jumping on destroy.
+            spacing: 0
+        }
+
+        // Waiting count: a circle below the stack, same near-black as the
+        // capsule, with the demo's slow ping ring.
+        Rectangle {
+            id: waitingCircle
+            anchors.horizontalCenter: parent.horizontalCenter
+            y: toastColumn.y + toastColumn.implicitHeight + 22
+            width: 46
+            height: 46
+            radius: 23
+            color: "#0a0a0a"
+            visible: root.waitingCount > 0
+
+            Text {
+                anchors.centerIn: parent
+                text: root.waitingCount
+                color: "#f5f5f0"
+                font.family: colors.fontSans
+                font.pixelSize: 15
+                font.weight: Font.Bold
+            }
+        }
+
+        Rectangle {
+            id: waitingPing
+            anchors.centerIn: waitingCircle
+            width: 46
+            height: 46
+            radius: 23
+            color: "transparent"
+            border.width: 2
+            border.color: "#0a0a0a"
+            visible: waitingCircle.visible
+
+            ParallelAnimation {
+                running: waitingCircle.visible
+                loops: Animation.Infinite
+                NumberAnimation {
+                    target: waitingPing; property: "scale"
+                    from: 0.7; to: 2.1; duration: 1800
+                    easing.type: Easing.OutCubic
+                }
+                NumberAnimation {
+                    target: waitingPing; property: "opacity"
+                    from: 0.4; to: 0; duration: 1800
+                    easing.type: Easing.OutCubic
+                }
+            }
         }
     }
 
@@ -222,12 +202,80 @@ Item {
         NotificationToast {}
     }
 
-    function popToast(n) {
-        let cards = toastColumn.children.filter(function(c) {
-            return c.toString().indexOf("NotificationToast") === 0
+    // Recompute each card's return-to-notch offset after the stack changes.
+    function syncToastOrigins() {
+        let y = 0
+        for (let i = 0; i < toastColumn.children.length; i++) {
+            let c = toastColumn.children[i]
+            // Never retarget a card that is already retracting into the notch.
+            if (c.state_ === "closing") continue
+            if (c.originY !== undefined) c.originY = -y
+            y += c.height
+        }
+    }
+
+    function openToasts() {
+        return toastColumn.children.filter(function(c) {
+            return c.toString().indexOf("NotificationToast") === 0 && c.state_ === "open"
         })
-        while (cards.length >= 5) cards.shift().destroy()
-        toastComp.createObject(toastColumn, { notification: n, colors: root.colors })
+    }
+
+    function closingToasts() {
+        return toastColumn.children.filter(function(c) {
+            return c.toString().indexOf("NotificationToast") === 0 && c.state_ === "closing"
+        })
+    }
+
+    function updateRailWidth() {
+        let w = 340
+        let cards = openToasts()
+        for (let i = 0; i < cards.length; i++)
+            if (cards[i].targetW !== undefined) w = Math.max(w, cards[i].targetW)
+        root.toastRailWidth = w
+    }
+
+    // Release ONE queued notification per tick, and only once every retract
+    // has finished. No overlap with closing cards, no batch reflow jump.
+    function drainQueue() {
+        if (closingToasts().length > 0) return
+        let open = openToasts()
+        if (open.length >= 3 || root.pending.length === 0) {
+            root.waitingCount = root.pending.length
+            return
+        }
+
+        let y = 0
+        for (let i = 0; i < open.length; i++) y += open[i].height
+
+        let n = root.pending.shift()
+        toastComp.createObject(toastColumn, {
+            notification: n,
+            colors: root.colors,
+            stackIndex: open.length,
+            railWidth: Qt.binding(function() { return root.toastRailWidth }),
+            originY: -y
+        }).expired.connect(function() { Qt.callLater(function() {
+            syncToastOrigins()
+            updateRailWidth()
+        }) })
+        updateRailWidth()
+        root.waitingCount = root.pending.length
+    }
+
+    function popToast(n) {
+        root.pending.push(n)
+        root.waitingCount = root.pending.length
+        queueTimer.restart()
+        drainQueue()
+    }
+
+    // Slow release: one queued notification per closed slot, never rushed.
+    Timer {
+        id: queueTimer
+        interval: 900
+        running: root.pending.length > 0
+        repeat: true
+        onTriggered: drainQueue()
     }
 
     // ────────────────────────────────────────────────
@@ -487,11 +535,17 @@ Item {
                                         Text {
                                             visible: !rowIcon.visible
                                             anchors.centerIn: parent
-                                            readonly property string ag: root.appGlyph(modelData.appName)
-                                            text: ag !== "" ? ag : (modelData.appName ? modelData.appName.charAt(0).toUpperCase() : "?")
-                                            color: colors.primary
-                                            font.family: ag !== "" ? "Phosphor" : colors.fontSans
-                                            font.pixelSize: ag !== "" ? 17 : 13
+                                            // Same classifier as the toast: history rows
+                                            // get the semantic icon and accent colour.
+                                            readonly property var drip: Drip.classify({
+                                                appName: modelData.appName,
+                                                summary: modelData.summary,
+                                                body: modelData.body
+                                            }, modelData.urgent)
+                                            text: drip.glyph
+                                            color: Drip.color(drip.kind)
+                                            font.family: "Phosphor"
+                                            font.pixelSize: 17
                                             font.weight: Font.Bold
                                         }
                                     }

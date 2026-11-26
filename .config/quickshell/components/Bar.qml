@@ -13,8 +13,27 @@ PanelWindow {
     id: bar
 
     anchors { top: true; left: true; right: true }
-    exclusionMode: ExclusionMode.Auto
-    implicitHeight: 54
+    property bool controlOpen: false
+
+    // Single progress value for the whole open/close: 0 closed, 1 open.
+    // One spring drives every visual, so a mid-flight toggle reverses from
+    // wherever it currently is instead of restarting.
+    property real t: controlOpen ? 1 : 0
+    Behavior on t {
+        SpringAnimation {
+            spring: 3.5
+            damping: bar.controlOpen ? 0.28 : 0.6
+            epsilon: 0.001
+        }
+    }
+    readonly property real tc: Math.max(0, t)
+
+    // The surface never changes size or what it reserves, so tiled windows
+    // never reflow. Input is restricted by `mask` at the bottom of this file.
+    exclusionMode: ExclusionMode.Normal
+    exclusiveZone: 54
+    implicitHeight: 680
+    focusable: controlOpen
     color: "transparent"
     WlrLayershell.namespace: "qs-bar"
     margins { top: 0; left: 8; right: 8 }
@@ -133,10 +152,22 @@ PanelWindow {
         function toggle(): void { bar.barsVisible = !bar.barsVisible }
         function toggleIsland(): void { bar.dynamicIsland = !bar.dynamicIsland; bar.pulseIsland() }
     }
+    IpcHandler {
+        target: "controlcenter"
+        function toggle(): void { bar.controlOpen = !bar.controlOpen }
+    }
 
     Item {
         id: content
         anchors.fill: parent
+
+        // Click-outside catcher. The window mask restricts it to the open
+        // surface, so it cannot swallow clicks while the bar is closed.
+        MouseArea {
+            anchors.fill: parent
+            enabled: bar.controlOpen
+            onClicked: bar.controlOpen = false
+        }
 
         RowLayout {
             id: leftRow
@@ -160,10 +191,15 @@ PanelWindow {
             // overshoots past 1 and settles, same as the reference easing.
             property real growT: 1
             // hoverT swells the island horizontally. Visual only — layout
-            // and hit targets stay stable.
-            property real hoverT: islandHover.hovered ? 1 : 0
-            width: 44 + (naturalWidth - 44) * growT + 12 * hoverT
-            height: 54
+            // and hit targets stay stable. It is suppressed while the panel
+            // is out so the swell cannot fight the width animation.
+            property real hoverT: !bar.controlOpen && islandHover.hovered ? 1 : 0
+            readonly property real closedWidth: 44 + (naturalWidth - 44) * growT + 12 * hoverT
+            // Width leads the height (2.2 exponent), so the tab stretches
+            // before it drops; above 1 it simply follows the spring overshoot.
+            readonly property real wf: bar.t < 1 ? 1 - Math.pow(1 - bar.tc, 2.2) : bar.t
+            width: closedWidth + (764 - closedWidth) * wf
+            height: 54 + (645 - 54) * bar.tc
             scale: 1 + 0.010 * hoverT
             transformOrigin: Item.Top
             HoverHandler { id: islandHover }
@@ -172,8 +208,11 @@ PanelWindow {
             // has velocity, not a fixed bezier duration.
             Behavior on growT { SpringAnimation { spring: Bloom.islandSpring; damping: Bloom.islandDamping; mass: Bloom.islandMass; epsilon: Bloom.islandEpsilon } }
             Behavior on naturalWidth { SpringAnimation { spring: Bloom.islandSpring; damping: Bloom.islandDamping; mass: Bloom.islandMass; epsilon: 0.1 } }
-            // trapezoid geometry — rounded bottom corners
-            readonly property real inset: 18         // horizontal inset of bottom edge
+            // trapezoid geometry — rounded bottom corners. The 18px slant is
+            // only for the closed tab: stretched over 645px it would make the
+            // box lean and the panel content look crooked, so it eases to 0
+            // as the panel opens and the body becomes a straight rectangle.
+            readonly property real inset: 18 * (1 - Math.min(1, bar.tc))
             readonly property real r: 14
             readonly property real len: Math.sqrt(inset*inset + height*height)
             readonly property real sx: inset / len
@@ -285,6 +324,10 @@ PanelWindow {
                 anchors.centerIn: parent
                 anchors.verticalCenterOffset: -1
                 spacing: 10
+                // The closed-tab content is gone by t=0.22, before the panel
+                // cards start appearing.
+                opacity: 1 - Math.min(1, bar.tc / 0.22)
+                visible: opacity > 0.01
                 scale: 1 + 0.010 * island.hoverT
                 Behavior on scale { NumberAnimation { duration: Bloom.fast; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.move } }
                 // NowPlaying focus — big centered, fills available width
@@ -328,8 +371,8 @@ PanelWindow {
                 anchors.rightMargin: island.inset + 8
                 anchors.topMargin: 0
                 height: 11
-                opacity: 0.78 + 0.22 * island.hoverT
-                Behavior on opacity { NumberAnimation { duration: Bloom.fast; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.out } }
+                opacity: (0.78 + 0.22 * island.hoverT) * (1 - Math.min(1, bar.tc / 0.22))
+                visible: opacity > 0.01
                 clip: true
 
                 Rectangle {
@@ -415,6 +458,26 @@ PanelWindow {
                     }
                 }
             }
+
+            // Panel body — clipped to the island's growing height. The
+            // trapezoid Shape above stays outside this clip, so the bar's
+            // flare keeps showing while the panel is open.
+            Item {
+                id: panelClip
+                anchors.fill: parent
+                clip: true
+
+                ControlCenter {
+                    id: ccPanel
+                    colors: palette
+                    open: bar.controlOpen
+                    t: bar.t
+                    anchors { top: parent.top; horizontalCenter: parent.horizontalCenter }
+                    // Centred in the open body: (645 - 571) / 2 = 37.
+                    anchors.topMargin: 37
+                    onCloseRequested: bar.controlOpen = false
+                }
+            }
         }
 
         RowLayout {
@@ -442,4 +505,15 @@ PanelWindow {
         }
 
     }
+
+    // Input region: only the tab and the two pill rows while closed, the
+    // whole surface while open (so click-outside can close the panel).
+    Region { id: openMask; item: content }
+    Region {
+        id: closedMask
+        Region { item: leftRow }
+        Region { item: island }
+        Region { item: rightRow }
+    }
+    mask: controlOpen ? openMask : closedMask
 }

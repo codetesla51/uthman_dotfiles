@@ -7,7 +7,7 @@ import QtQuick.Effects
 import Qt5Compat.GraphicalEffects
 import "../components/Bloom.js" as Bloom
 
-// Control Center — "Focus" layout. Regular floating window (SUPER ALT P).
+// Control Center — "Focus" layout. Lives inside the bar island (SUPER ALT P).
 //
 //   header   clock | weather | feels / humidity / wind
 //   middle   now playing (artist art as background) | volume, brightness, clock, network
@@ -18,10 +18,27 @@ import "../components/Bloom.js" as Bloom
 //
 // Same integrations as before: Mpris, cava, wttr.in, wpctl/brightnessctl,
 // `screentime --export`, NetRate, PixelBot, WeatherIcon.
-FloatingWindow {
+Item {
     id: root
     property var colors
     property bool open: false
+    // Progress handed down by the bar: 0 closed, 1 open. Every visual here is
+    // a pure function of it, so an interrupted open/close never jumps.
+    property real t: 0
+    signal closeRequested()
+
+    width: 980
+    height: 732
+    // The layout is untouched; scaling keeps the 980x732 design at ~764x571.
+    scale: 0.78
+    transformOrigin: Item.Top
+    visible: t > 0.02
+
+    // Staggered card reveal in reading order (left column, then right).
+    function reveal(i) {
+        var p = Math.max(0, Math.min(1, (t - 0.38 - i * 0.045) / 0.4))
+        return p * p * (3 - 2 * p)
+    }
 
     // Body copy follows the shared font knob (FiraCode Nerd Font), matching
     // the previous control panel. Glyphs stay on the same family so the
@@ -241,62 +258,27 @@ FloatingWindow {
 
     NetRate { id: netRate }
 
-    // ── window ───────────────────────────────────────────────────────────
-    title: "Control Center"
-    implicitWidth: 980
-    implicitHeight: 732
-    minimumSize: Qt.size(980, 732)
-    maximumSize: Qt.size(980, 732)
-    color: "transparent"
-    visible: root.open || closeAnim.running
-
+    // ── lifecycle ────────────────────────────────────────────────────────
     onOpenChanged: if (open) {
         weatherProc.running = true; volProbe.running = true
         activityFetcher.running = true
         root.buildWeek()
         Qt.callLater(function(){ card.forceActiveFocus() })
-        openAnim.restart()
-    } else closeAnim.restart()
+    }
 
     // ── small building blocks ────────────────────────────────────────────
-    // Cards enter in reading order instead of all snapping in at once.
-    // The outer card still owns the window open/close; this is a second,
-    // delayed layer so the panel feels assembled rather than dumped.
+    // Cards reveal in reading order straight from `t`, so scrubbing the
+    // animation backwards retracts them in reverse with no timers involved.
     component Card: Rectangle {
         id: cardRoot
         property int order: 0
-        property bool entered: false
+        readonly property real p: root.reveal(order)
         radius: 16
         color: root.colors.alpha(root.colors.surface, 0.45)
         border.width: 1
         border.color: root.colors.alpha(root.colors.outline, 0.10)
-        opacity: entered ? 1 : 0
-        scale: entered ? 1 : 0.98
-        transform: Translate {
-            y: cardRoot.entered ? 0 : 8
-            Behavior on y { NumberAnimation { duration: Bloom.row; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.move } }
-        }
-        Behavior on opacity { NumberAnimation { duration: Bloom.normal; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.out } }
-        Behavior on scale { NumberAnimation { duration: Bloom.row; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.move } }
-        Timer {
-            id: enterTimer
-            interval: Bloom.rowDelay + cardRoot.order * Bloom.stagger
-            onTriggered: cardRoot.entered = true
-        }
-        Connections {
-            target: root
-            function onOpenChanged() {
-                if (root.open) {
-                    cardRoot.entered = false
-                    enterTimer.interval = Bloom.rowDelay + cardRoot.order * Bloom.stagger
-                    enterTimer.restart()
-                } else {
-                    enterTimer.stop()
-                    cardRoot.entered = false
-                }
-            }
-        }
-        Component.onCompleted: if (root.open) Qt.callLater(function(){ cardRoot.entered = true })
+        opacity: p
+        transform: Translate { y: 10 * (1 - cardRoot.p) }
     }
 
     // 20-segment slider. Drag, click or scroll.
@@ -345,26 +327,15 @@ FloatingWindow {
     Rectangle {
         id: card
         anchors.fill: parent
-        radius: 16
-        color: colors.alpha(colors.surface, 0.52)
-        border.width: 1
-        border.color: colors.alpha(colors.outline, 0.15)
+        // The island's glass shape is the surface; this layer only carries
+        // the content and the keyboard focus.
+        radius: 0
+        color: "transparent"
+        border.width: 0
+        border.color: "transparent"
         clip: true
         focus: root.open
-        Keys.onEscapePressed: root.open = false
-
-        ParallelAnimation {
-            id: openAnim
-            NumberAnimation { target: card; property: "rotation"; from: Bloom.panelRotate; to: 0; duration: Bloom.panel; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.spring }
-            NumberAnimation { target: card; property: "opacity"; from: 0; to: 1; duration: Bloom.normal; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.out }
-            NumberAnimation { target: card; property: "scale"; from: Bloom.panelScale; to: 1; duration: Bloom.panel; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.spring }
-        }
-        ParallelAnimation {
-            id: closeAnim
-            NumberAnimation { target: card; property: "rotation"; to: Bloom.panelRotate; duration: Bloom.close; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.out }
-            NumberAnimation { target: card; property: "opacity"; to: 0; duration: Bloom.close; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.out }
-            NumberAnimation { target: card; property: "scale"; to: Bloom.panelScale; duration: Bloom.close; easing.type: Easing.Bezier; easing.bezierCurve: Bloom.out }
-        }
+        Keys.onEscapePressed: root.closeRequested()
 
         ColumnLayout {
             id: mainColumn

@@ -2,6 +2,12 @@
 
 Arch Linux, Hyprland, Quickshell, Matugen. Wallpaper sets the palette, everything else follows.
 
+## New stuff
+
+![New notification center states](assets/screenshots/new-stuff.png)
+
+The notification drawer picked up loading, empty, error and reconnecting states, unread dots, row actions and mark-all-read. This is today's screenshot.
+
 ![Desktop](assets/screenshots/desktop.png)
 
 Bar island, Zathura and kitty over a wallpaper-pulled palette. Every surface you see here (bar, OSD, toasts, login, terminals, editors) is recolored from that one image.
@@ -240,10 +246,6 @@ Unwired but still on disk: `QuickNotes` (scratch idea capture; nothing instantia
 ## Notifications
 
 The shell is its own notification daemon. Toasts carry action buttons, screenshot notifications carry a Save button that files the image into `~/Pictures/Screenshots`, and everything lands in the history drawer. When an app ships no icon, the row falls back to a per-app Phosphor glyph (40+ apps mapped, from Firefox and WhatsApp down to `brightnessctl` and `grim`), so rows never show bare initial letters. `notify-send -a <AppName>` is all a sender needs for a correct icon.
-
-### New stuff
-
-![New notification center states](assets/screenshots/new-stuff.png)
 
 The drawer no longer shows a blank list when nothing is happening. First open shows loading skeletons, an empty history shows "All clear", a missing daemon shows an error view with Retry, and a dropped connection shows a reconnecting spinner. Rows carry unread dots, a selected rail, an Open action when the sender supplied a default action, and per-row dismiss. The header adds mark-all-read and DND. Every state can be forced while testing: `quickshell -p ~/.config/quickshell ipc call notifications setState loading|error|reconnecting|ready`.
 

@@ -27,7 +27,7 @@ A handful of shots from today's session.
   </tr>
   <tr>
     <td><img src="assets/screenshots/showcase/shot-20261126-130646.jpg" alt="Showcase shot 5"></td>
-    <td></td>
+    <td><img src="assets/screenshots/showcase/shot-20261126-142129.jpg" alt="Showcase shot 6"></td>
   </tr>
 </table>
 

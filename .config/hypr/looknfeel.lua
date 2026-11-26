@@ -55,11 +55,11 @@ hl.curve("magnetSoft", { type = "bezier", points = { { 0.34, 1.06 }, { 0.64, 1.0
 hl.curve("easeOut", { type = "bezier", points = { { 0.32, 0.72 }, { 0.0, 1.0 } } })
 hl.curve("apple", { type = "bezier", points = { { 0.22, 1.0 }, { 0.36, 1.0 } } })
 
--- Windows pop in from 92% with a real overshoot, then settle. The old
--- apple curve had no bounce, so opens read as a plain alpha fade.
-hl.animation({ leaf = "windows", enabled = true, speed = 2.4, bezier = "magnetSoft", style = "popin 92%" })
-hl.animation({ leaf = "windowsIn", enabled = true, speed = 2.2, bezier = "magnet", style = "popin 92%" })
-hl.animation({ leaf = "windowsOut", enabled = true, speed = 1.3, bezier = "easeOut", style = "popin 96%" })
+-- Windows pop in from 90% with a real overshoot, then settle quickly. Exits
+-- collapse from 94% on a faster ease-out so closing never feels sluggish.
+hl.animation({ leaf = "windows", enabled = true, speed = 2.8, bezier = "magnetSoft", style = "popin 92%" })
+hl.animation({ leaf = "windowsIn", enabled = true, speed = 3.0, bezier = "magnet", style = "popin 90%" })
+hl.animation({ leaf = "windowsOut", enabled = true, speed = 2.0, bezier = "easeOut", style = "popin 94%" })
 hl.animation({ leaf = "windowsMove", enabled = true, speed = 1.9, bezier = "magnetSoft" })
 hl.animation({ leaf = "fadeIn", enabled = true, speed = 1.8, bezier = "apple" })
 hl.animation({ leaf = "fadeOut", enabled = true, speed = 1.2, bezier = "easeOut" })

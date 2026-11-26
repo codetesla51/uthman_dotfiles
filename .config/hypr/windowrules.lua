@@ -58,7 +58,7 @@ hl.window_rule({
   size = { 1100, 750 },
   border_size = 0,
   opaque = false,
-  opacity = "1.0 1.0 1.0",
+  opacity = "0.92 0.88 0.92",
 })
 
 -- mpv — centered floating popup.

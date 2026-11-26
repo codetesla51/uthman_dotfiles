@@ -256,15 +256,22 @@ PanelWindow {
                 anchors.rightMargin: 18
                 spacing: 12
 
-                Image {
-                    source: Quickshell.env("HOME") + "/.config/quickshell/assets/hk-mask-white.png"
-                    sourceClipRect: Qt.rect(131, 56, 237, 388)
+                // Live PixelBot instead of the static mask: idle/walk while
+                // the launcher is open, but no IPC target and no sounds — the
+                // bar instance still owns the `bot` handler.
+                Item {
                     Layout.preferredWidth: 44
                     Layout.preferredHeight: 44
-                    fillMode: Image.PreserveAspectFit
-                    mipmap: true
-                    asynchronous: true
-                    opacity: 0.95
+                    PixelBot {
+                        id: launcherBot
+                        anchors.centerIn: parent
+                        active: root.open
+                        registerIpc: false
+                        moodSounds: false
+                        colors: root.colors
+                        pixelScale: 2
+                        roamWidth: 16
+                    }
                 }
 
                 TextField {

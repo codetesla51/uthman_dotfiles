@@ -186,32 +186,31 @@ Item {
         }
     }
 
-    // Island.swift: fall Spring(0.62,0.2), grow Spring(0.5,0.15).
-    // Long spring for the drop, softer overshoot for the capsule, then the
+    // Short spring for the drop, softer overshoot for the capsule, then the
     // text lifts the last few pixels instead of popping in.
     ParallelAnimation {
         id: enterAnim
         NumberAnimation {
             target: card; property: "y"
-            from: root.originY; to: 0; duration: 620
-            easing.type: Easing.Bezier; easing.bezierCurve: Bloom.spring
+            from: root.originY; to: 0; duration: 300
+            easing.type: Easing.Bezier; easing.bezierCurve: Bloom.snap
         }
         NumberAnimation {
             target: card; property: "scale"
-            from: 0.08; to: 1; duration: 640
+            from: 0.08; to: 1; duration: 320
             easing.type: Easing.Bezier; easing.bezierCurve: [0.22, 1.18, 0.36, 1]
         }
         SequentialAnimation {
-            PauseAnimation { duration: 120 }
+            PauseAnimation { duration: 50 }
             ParallelAnimation {
                 NumberAnimation {
                     target: content; property: "opacity"
-                    from: 0; to: 1; duration: 260
+                    from: 0; to: 1; duration: 150
                     easing.type: Easing.Bezier; easing.bezierCurve: Bloom.out
                 }
                 NumberAnimation {
                     target: contentLift; property: "y"
-                    from: 6; to: 0; duration: 300
+                    from: 6; to: 0; duration: 180
                     easing.type: Easing.Bezier; easing.bezierCurve: Bloom.soft
                 }
             }
@@ -224,27 +223,27 @@ Item {
         id: exitAnim
         NumberAnimation {
             target: card; property: "scale"
-            to: 0.08; duration: 220
+            to: 0.08; duration: 130
             easing.type: Easing.Bezier; easing.bezierCurve: Bloom.soft
         }
         NumberAnimation {
             target: content; property: "opacity"
-            to: 0; duration: 120
+            to: 0; duration: 80
             easing.type: Easing.Bezier; easing.bezierCurve: Bloom.out
         }
         NumberAnimation {
             target: contentLift; property: "y"
-            to: 4; duration: 160
+            to: 4; duration: 100
             easing.type: Easing.Bezier; easing.bezierCurve: Bloom.out
         }
         NumberAnimation {
             target: card; property: "y"
-            to: root.originY; duration: 320
+            to: root.originY; duration: 190
             easing.type: Easing.Bezier; easing.bezierCurve: [0.4, 0, 0.2, 1]
         }
         NumberAnimation {
             target: root; property: "height"
-            to: 0; duration: 320
+            to: 0; duration: 190
             easing.type: Easing.Bezier; easing.bezierCurve: [0.4, 0, 0.2, 1]
         }
         onFinished: {

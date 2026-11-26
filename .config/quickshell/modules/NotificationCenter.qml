@@ -27,6 +27,14 @@ Item {
     property int _idCounter: 0
     property var _live: ({})   // nid -> live Notification object (for invoking actions)
 
+    // View states: loading on first open, then ready / error / reconnecting.
+    property bool loading: false
+    property bool hasLoaded: false
+    property string daemonState: "ready"   // ready | error | reconnecting
+    property int selectedNid: -1
+    readonly property int unreadCount: countUnread()
+    readonly property string viewState: loading ? "loading" : daemonState
+
     // Only 3 toasts at a time. Anything beyond waits in a circle and is
     // released slowly after a card finishes retracting.
     property var pending: []
@@ -43,12 +51,22 @@ Item {
 
     // drawer motion lives in openAnim/closeAnim below (bezier pair).
     // Close plays out before the window hides (visible binds running).
-    onPanelOpenChanged: if (panelOpen) openAnim.restart(); else closeAnim.restart()
+    onPanelOpenChanged: {
+        if (panelOpen) {
+            if (!hasLoaded) { loading = true; loadTimer.restart() }
+            openAnim.restart()
+        } else {
+            selectedNid = -1
+            closeAnim.restart()
+        }
+    }
 
     function addToArchive(n) {
         let acts = []
+        let hasDefault = false
         let alist = n.actions || []
         for (let ai = 0; ai < alist.length; ai++) {
+            if (alist[ai].identifier === "default") hasDefault = true
             if (alist[ai].identifier && alist[ai].identifier !== "default" && alist[ai].text)
                 acts.push({ id: alist[ai].identifier, label: alist[ai].text })
         }
@@ -60,6 +78,8 @@ Item {
             icon: n.appIcon,
             urgent: n.urgency === NotificationUrgency.Critical,
             time: Qt.formatDateTime(new Date(), "HH:mm"),
+            unread: true,
+            hasDefault: hasDefault,
             actions: acts
         }
         root._live[entry.nid] = n
@@ -72,6 +92,51 @@ Item {
     function clearHistory() {
         archive = []
         _live = ({})
+        selectedNid = -1
+    }
+
+    function countUnread() {
+        let n = 0
+        for (let i = 0; i < archive.length; i++) if (archive[i].unread) n++
+        return n
+    }
+
+    function markAllRead() {
+        let list = archive.slice()
+        for (let i = 0; i < list.length; i++) list[i].unread = false
+        archive = list
+    }
+
+    function markRead(nid) {
+        let list = archive.slice()
+        for (let i = 0; i < list.length; i++) {
+            if (list[i].nid !== nid) continue
+            if (!list[i].unread) return
+            list[i].unread = false
+            archive = list
+            return
+        }
+    }
+
+    // Default action is usually "Open"; dismiss is the honest fallback.
+    function invokeDefault(nid) {
+        let live = _live[nid]
+        if (!live) { removeAt(nid); return }
+        let list = live.actions || []
+        for (let i = 0; i < list.length; i++) {
+            if (list[i].identifier === "default") {
+                list[i].invoke()
+                removeAt(nid)
+                return
+            }
+        }
+        live.dismiss()
+        removeAt(nid)
+    }
+
+    function retryDaemon() {
+        daemonState = "reconnecting"
+        reconnectTimer.restart()
     }
 
 
@@ -114,6 +179,12 @@ Item {
         target: "notifications"
         function toggle(): void { root.togglePanel() }
         function toggleDnd(): void { root.toggleDnd() }
+        function markAllRead(): void { root.markAllRead() }
+        // Useful for forcing a state while testing the drawer.
+        function setState(s: string): void {
+            root.loading = s === "loading"
+            root.daemonState = (s === "error" || s === "reconnecting") ? s : "ready"
+        }
     }
 
     // ── toast stack ──
@@ -269,13 +340,25 @@ Item {
         drainQueue()
     }
 
-    // Slow release: one queued notification per closed slot, never rushed.
+    // One queued notification per closed slot, but without the old 900ms wait.
     Timer {
         id: queueTimer
-        interval: 900
+        interval: 380
         running: root.pending.length > 0
         repeat: true
         onTriggered: drainQueue()
+    }
+
+    Timer {
+        id: loadTimer
+        interval: 420
+        onTriggered: { root.hasLoaded = true; root.loading = false }
+    }
+
+    Timer {
+        id: reconnectTimer
+        interval: 1400
+        onTriggered: root.daemonState = "ready"
     }
 
     // ────────────────────────────────────────────────
@@ -380,17 +463,40 @@ Item {
                         width: countLabel.implicitWidth + 14
                         height: 20
                         radius: 10
-                        visible: root.historyCount > 0
+                        visible: root.unreadCount > 0
                         color: colors.alpha(colors.primary, 0.15)
 
                         Text {
                             id: countLabel
                             anchors.centerIn: parent
-                            text: root.historyCount
+                            text: root.unreadCount
                             color: colors.primary
                             font.family: colors.fontSans
                             font.pixelSize: 10
                             font.weight: Font.Bold
+                        }
+                    }
+
+                    Rectangle {
+                        width: 24; height: 24; radius: 12
+                        opacity: root.unreadCount > 0 ? 1 : 0.35
+                        color: markReadMouse.containsMouse && root.unreadCount > 0
+                               ? colors.alpha(colors.primary, 0.2) : "transparent"
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: ""
+                            color: colors.primary
+                            font.family: "Phosphor"
+                            font.pixelSize: 12
+                        }
+
+                        MouseArea {
+                            id: markReadMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            enabled: root.unreadCount > 0
+                            onClicked: root.markAllRead()
                         }
                     }
 
@@ -480,6 +586,7 @@ Item {
 
                 ScrollView {
                     id: historyScroll
+                    visible: root.viewState === "ready" && root.historyCount > 0
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
@@ -502,10 +609,19 @@ Item {
                                 Layout.fillWidth: true
                                 height: Math.max(56, rowContent.implicitHeight + 18)
                                 radius: 10
-                                color: itemMouse.containsMouse ? colors.alpha(colors.surfaceVariant, 0.3)
-                                                               : "transparent"
+                                color: modelData.nid === root.selectedNid
+                                       ? colors.alpha(colors.tertiary, 0.12)
+                                       : itemMouse.containsMouse ? colors.alpha(colors.surfaceVariant, 0.3)
+                                                                 : "transparent"
                                 border.width: modelData.urgent ? 1 : 0
                                 border.color: colors.alpha(colors.error, 0.45)
+
+                                Rectangle {
+                                    anchors { left: parent.left; leftMargin: 4; verticalCenter: parent.verticalCenter }
+                                    width: 2; height: 34; radius: 1
+                                    visible: modelData.nid === root.selectedNid
+                                    color: colors.tertiary
+                                }
 
                                 RowLayout {
                                     id: rowContent
@@ -568,6 +684,14 @@ Item {
                                                 elide: Text.ElideRight
                                             }
 
+                                            Rectangle {
+                                                Layout.preferredWidth: 6; Layout.preferredHeight: 6
+                                                radius: 3
+                                                visible: modelData.unread
+                                                color: colors.primary
+                                                Layout.alignment: Qt.AlignVCenter
+                                            }
+
                                             Text {
                                                 text: (modelData.appName ? modelData.appName : "") + (modelData.appName ? " · " : "") + modelData.time
                                                 color: colors.alpha(colors.outline, 0.55)
@@ -592,8 +716,37 @@ Item {
 
                                         // action chips — invoke the live notification's action
                                         Row {
-                                            visible: notifRow.modelData.actions && notifRow.modelData.actions.length > 0
+                                            visible: notifRow.modelData.hasDefault
+                                                     || (notifRow.modelData.actions && notifRow.modelData.actions.length > 0)
                                             spacing: 5
+
+                                            Rectangle {
+                                                visible: notifRow.modelData.hasDefault
+                                                width: openLbl.implicitWidth + 18
+                                                height: 20
+                                                radius: 10
+                                                color: openMa.containsMouse ? colors.alpha(colors.primary, 0.28)
+                                                                            : colors.alpha(colors.primary, 0.18)
+                                                border.width: 1
+                                                border.color: colors.alpha(colors.primary, 0.45)
+
+                                                Text {
+                                                    id: openLbl
+                                                    anchors.centerIn: parent
+                                                    text: "Open"
+                                                    color: colors.primary
+                                                    font.family: colors.fontSans
+                                                    font.pixelSize: 9
+                                                    font.weight: Font.Bold
+                                                }
+
+                                                MouseArea {
+                                                    id: openMa
+                                                    anchors.fill: parent
+                                                    hoverEnabled: true
+                                                    onClicked: root.invokeDefault(notifRow.modelData.nid)
+                                                }
+                                            }
 
                                             Repeater {
                                                 model: notifRow.modelData.actions || []
@@ -663,39 +816,202 @@ Item {
                                     id: itemMouse
                                     anchors.fill: parent
                                     hoverEnabled: true
-                                    acceptedButtons: Qt.NoButton
+                                    onClicked: {
+                                        root.selectedNid = modelData.nid
+                                        root.markRead(modelData.nid)
+                                    }
                                 }
                             }
                         }
 
-                        Item {
-                            visible: root.historyCount === 0
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: 220
+                    }
+                }
+                // Loading — four skeleton rows in the same footprint as
+                // the real list, so opening the drawer never jumps.
+                Item {
+                    visible: root.viewState === "loading"
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
 
-                            ColumnLayout {
-                                anchors.centerIn: parent
-                                spacing: 8
+                    ColumnLayout {
+                        anchors.fill: parent
+                        anchors.margins: 4
+                        spacing: 6
 
-                                Text {
-                                    text: ""
-                                    color: colors.alpha(colors.outline, 0.35)
-                                    font.family: "Phosphor"
-                                    font.pixelSize: 32
-                                    Layout.alignment: Qt.AlignHCenter
+                        Repeater {
+                            model: 4
+                            delegate: Rectangle {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 56
+                                radius: 10
+                                color: colors.alpha(colors.surfaceVariant, 0.18)
+
+                                Rectangle {
+                                    anchors { left: parent.left; leftMargin: 12; verticalCenter: parent.verticalCenter }
+                                    width: 34; height: 34; radius: 8
+                                    color: colors.alpha(colors.surfaceVariant, 0.4)
                                 }
 
-                                Text {
-                                    text: "No notifications"
-                                    color: colors.alpha(colors.outline, 0.6)
-                                    font.family: colors.fontSans
-                                    font.pixelSize: 11
-                                    Layout.alignment: Qt.AlignHCenter
+                                ColumnLayout {
+                                    anchors { left: parent.left; right: parent.right; verticalCenter: parent.verticalCenter }
+                                    anchors.leftMargin: 58
+                                    anchors.rightMargin: 14
+                                    spacing: 6
+
+                                    Rectangle {
+                                        Layout.preferredWidth: parent.width * 0.62
+                                        Layout.preferredHeight: 8; radius: 4
+                                        color: colors.alpha(colors.surfaceVariant, 0.5)
+                                    }
+                                    Rectangle {
+                                        Layout.preferredWidth: parent.width * 0.86
+                                        Layout.preferredHeight: 8; radius: 4
+                                        color: colors.alpha(colors.surfaceVariant, 0.35)
+                                    }
                                 }
                             }
                         }
                     }
                 }
+
+                // Empty — calm, useful, same height as the list.
+                Item {
+                    visible: root.viewState === "ready" && root.historyCount === 0
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+
+                    ColumnLayout {
+                        anchors.centerIn: parent
+                        spacing: 8
+
+                        Text {
+                            text: ""
+                            color: colors.alpha(colors.primary, 0.45)
+                            font.family: "Phosphor"
+                            font.pixelSize: 32
+                            Layout.alignment: Qt.AlignHCenter
+                        }
+                        Text {
+                            text: "All clear — nothing new"
+                            color: colors.alpha(colors.foreground, 0.7)
+                            font.family: colors.fontSans
+                            font.pixelSize: 11
+                            Layout.alignment: Qt.AlignHCenter
+                        }
+                        Text {
+                            text: "SHIFT , toggles Do Not Disturb"
+                            color: colors.alpha(colors.outline, 0.55)
+                            font.family: colors.fontSans
+                            font.pixelSize: 9
+                            Layout.alignment: Qt.AlignHCenter
+                        }
+                    }
+                }
+
+                // Error — service gone, with a real retry control.
+                Item {
+                    visible: root.viewState === "error"
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+
+                    Rectangle {
+                        anchors.centerIn: parent
+                        width: parent.width - 8
+                        height: 132
+                        radius: 12
+                        color: colors.alpha(colors.error, 0.1)
+                        border.width: 1
+                        border.color: colors.alpha(colors.error, 0.35)
+
+                        ColumnLayout {
+                            anchors.centerIn: parent
+                            spacing: 8
+
+                            Text {
+                                text: ""
+                                color: colors.error
+                                font.family: "Phosphor"
+                                font.pixelSize: 28
+                                Layout.alignment: Qt.AlignHCenter
+                            }
+                            Text {
+                                text: "Notification service unavailable"
+                                color: colors.error
+                                font.family: colors.fontSans
+                                font.pixelSize: 11
+                                font.weight: Font.DemiBold
+                                Layout.alignment: Qt.AlignHCenter
+                            }
+                            Text {
+                                text: "New alerts are paused until it returns."
+                                color: colors.alpha(colors.outline, 0.7)
+                                font.family: colors.fontSans
+                                font.pixelSize: 9
+                                Layout.alignment: Qt.AlignHCenter
+                            }
+                            Rectangle {
+                                width: 62; height: 24; radius: 12
+                                color: colors.alpha(colors.error, 0.2)
+                                border.width: 1
+                                border.color: colors.alpha(colors.error, 0.45)
+                                Layout.alignment: Qt.AlignHCenter
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: "Retry"
+                                    color: colors.error
+                                    font.family: colors.fontSans
+                                    font.pixelSize: 9
+                                    font.weight: Font.Bold
+                                }
+                                MouseArea {
+                                    anchors.fill: parent
+                                    onClicked: root.retryDaemon()
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Reconnecting — replaces the list, never pushes it.
+                Item {
+                    visible: root.viewState === "reconnecting"
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+
+                    ColumnLayout {
+                        anchors.centerIn: parent
+                        spacing: 10
+
+                        Rectangle {
+                            width: 22; height: 22; radius: 11
+                            color: colors.alpha(colors.secondary, 0.15)
+                            border.width: 2
+                            border.color: colors.secondary
+                            Layout.alignment: Qt.AlignHCenter
+
+                            NumberAnimation on rotation {
+                                running: parent.visible
+                                from: 0; to: 360; duration: 900
+                                loops: Animation.Infinite
+                            }
+                        }
+                        Text {
+                            text: "Reconnecting to notification service"
+                            color: colors.secondary
+                            font.family: colors.fontSans
+                            font.pixelSize: 11
+                            Layout.alignment: Qt.AlignHCenter
+                        }
+                        Text {
+                            text: "Trying again shortly…"
+                            color: colors.alpha(colors.outline, 0.6)
+                            font.family: colors.fontSans
+                            font.pixelSize: 9
+                            Layout.alignment: Qt.AlignHCenter
+                        }
+                            }
+                        }
             }
         }
     }

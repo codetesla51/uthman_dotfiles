@@ -206,7 +206,7 @@ Overlays are `PanelWindow` layer-shell popups. Larger tools are regular Hyprland
 | `WifiPanel` | Network manager, known networks, live throughput graph, Cloudflare speedtest | `SUPER+H`, network pill |
 | `SystemMonitor` | Per-core CPU, RAM, network, process list with kill | `SUPER+U`, cpu/memory pills |
 | `BatteryPanel` | Charge curve, power profile, time estimates | `SUPER ALT+B`, battery pill |
-| `NotificationCenter` | Notification drawer, history, DND toggle | `SUPER+,` |
+| `NotificationCenter` | Notification drawer with loading/empty/error/reconnecting states, unread tracking, actions, DND toggle | `SUPER+,` |
 | `ControlCenter` | Bento grid: Now Playing, weather, quick toggles, network, activity, live cava visualizer | `SUPER ALT+P` |
 | `AppLauncher` | Spotlight-style launcher, wheel scroll | `SUPER+Space` |
 | `PkgManager` | pacman + AUR search, queue, install progress, updates | `SUPER+I` |
@@ -240,6 +240,12 @@ Unwired but still on disk: `QuickNotes` (scratch idea capture; nothing instantia
 ## Notifications
 
 The shell is its own notification daemon. Toasts carry action buttons, screenshot notifications carry a Save button that files the image into `~/Pictures/Screenshots`, and everything lands in the history drawer. When an app ships no icon, the row falls back to a per-app Phosphor glyph (40+ apps mapped, from Firefox and WhatsApp down to `brightnessctl` and `grim`), so rows never show bare initial letters. `notify-send -a <AppName>` is all a sender needs for a correct icon.
+
+### New stuff
+
+![New notification center states](assets/screenshots/new-stuff.png)
+
+The drawer no longer shows a blank list when nothing is happening. First open shows loading skeletons, an empty history shows "All clear", a missing daemon shows an error view with Retry, and a dropped connection shows a reconnecting spinner. Rows carry unread dots, a selected rail, an Open action when the sender supplied a default action, and per-row dismiss. The header adds mark-all-read and DND. Every state can be forced while testing: `quickshell -p ~/.config/quickshell ipc call notifications setState loading|error|reconnecting|ready`.
 
 ## Screen time
 

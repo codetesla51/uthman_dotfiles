@@ -12,6 +12,25 @@ The notification drawer picked up loading, empty, error and reconnecting states,
 
 Bar island, Zathura and kitty over a wallpaper-pulled palette. Every surface you see here (bar, OSD, toasts, login, terminals, editors) is recolored from that one image.
 
+## Showcase
+
+A handful of shots from today's session.
+
+<table>
+  <tr>
+    <td><img src="assets/screenshots/showcase/shot-20261126-130454.jpg" alt="Showcase shot 1"></td>
+    <td><img src="assets/screenshots/showcase/shot-20261126-130502.jpg" alt="Showcase shot 2"></td>
+  </tr>
+  <tr>
+    <td><img src="assets/screenshots/showcase/shot-20261126-130509.jpg" alt="Showcase shot 3"></td>
+    <td><img src="assets/screenshots/showcase/shot-20261126-130555.jpg" alt="Showcase shot 4"></td>
+  </tr>
+  <tr>
+    <td><img src="assets/screenshots/showcase/shot-20261126-130646.jpg" alt="Showcase shot 5"></td>
+    <td></td>
+  </tr>
+</table>
+
 ## Fresh machine
 
 ```bash
